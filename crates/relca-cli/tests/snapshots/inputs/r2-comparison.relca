@@ -1,0 +1,57 @@
+model RecoveryComparisonRaw version "0.2" {
+  type Pay = enum {charged, rejected_duplicate}
+  type PaymentStatus = enum {committed_once, not_committed, still_unknown}
+  type Decision = enum {proceed, withdraw}
+  type Ack = enum {recorded}
+  observed case {charged_truth: bool = false}
+  actor Psp {capacity 1; control policy; state keys: set<CaseId>
+    capability charge_keyed(key: CaseId) -> Pay {
+      idempotency key key; commits; writes [keys,charged_truth]; duration fixed 1min
+      atomic {if key in keys {result rejected_duplicate} else {keys += key; charged_truth = true; result charged}}
+      cancel forbidden_after_start
+    }
+    capability query_status(key: CaseId) -> PaymentStatus {
+      duration fixed 2min; receipt_query charge_keyed key key availability available
+      cancel forbidden_after_start
+    }
+  }
+  actor CS {capacity 1; control policy
+    capability decide(s: PaymentStatus) -> Decision {duration fixed 3min; result nondet {proceed}}
+  }
+  actor Shop {capacity 1; control policy
+    capability instruct_ship(d: Decision) -> Ack {duration fixed 1min; result nondet {recorded}}
+    capability ship_known(p: Pay) -> Ack {duration fixed 1min; result nondet {recorded}}
+  }
+  process Flow {
+    pay = Psp.charge_keyed(case.id) response_loss sequence [unknown] on receipt_unknown {
+      status = Psp.query_status(case.id) for command pay
+      if status == committed_once {
+        decision = CS.decide(status)
+        if decision == proceed {
+          resolve effect pay using status
+          sh = Shop.instruct_ship(decision)
+          end shipped
+        } else {stop receipt_unknown}
+      } else {stop receipt_unknown}
+    }
+    normal = Shop.ship_known(pay)
+    end shipped
+  }
+  process Other {
+    pay = Psp.charge_keyed(case.id) response_loss sequence [unknown] on receipt_unknown {
+      status = Psp.query_status(case.id) for command pay
+      stop receipt_unknown
+    }
+    normal = Shop.ship_known(pay)
+    end shipped
+  }
+  cut C {include [Psp,CS,Shop]}
+  configuration A {cut C; process Flow}
+  configuration B {cut C; process Other}
+  arrivals fixed [0min]
+  policy fifo tie_by case_id
+  bounds {cases 1; live_tasks 2; clock 40min}
+  metrics {window 40min; currency "JPY"; breakdown waits}
+  simulation replications 4 seed 7 confidence 0.5
+  verify probability reached charged_truth == true >= 1
+}

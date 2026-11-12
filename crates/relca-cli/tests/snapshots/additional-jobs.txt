@@ -57,3 +57,17 @@ q6c-work-sensitivity: Q6c I18 hand S: explicit base/probability points bad1/10 a
 p2c-q9-range-stop: Cleanup hand Q9: target/refusal at1, later range stop at3; two replications preserve failed2 versus unresolved2 and no_samples versus unfinished. Fixed p2_cleanup_calculations.md, connected by p2c_snapshot_oracle.
 p2c-prefix-diff: Cleanup hand C1: only common_prefix changes Probe.check1..1 to2..2, both side dependencies unchanged; exact Count arrays in p2_cleanup_calculations.md.
 p2c-withdrawn-diff: Cleanup hand C4: both whole tables are not_derived multiple_case_interference; normal/degraded/common_prefix are three keyless not_comparable rows with exact owner reasons, never empty equality.
+r2-check-proceed: R2 raw: End7/work7, evidence3/resolve6, one charge; deadline6 remains violated. Hand derivation in r2-raw-notes.md.
+r2-check-clock: R2 raw: computational clock2, no query evidence or End; not a business unknown stop.
+r2-check-horizon: R2 raw: business horizon2, cut_off distinct from computational truncation.
+r2-simulate: R2 raw: each of four samples misses deadline6 at End7, so observed violation wins the normal fold; response coverage is sampled, not exhaustive.
+r2-explain: R2 raw: independently replay query3, decision6, resolve6 and the deadline6 violation at End7.
+r2-check-resolved: R2 raw: same seven-minute recovery without the late-deadline contract, so no unmet property.
+r2-check-unresolved: R2 raw: stop at3 after query, with no resolution or End; the charge fact alone is not completion.
+r2-compare-exhaustive: R2 raw: common lexical End inventory, A resolved and B unresolved; retain both child ledgers.
+r2-compare-simulation: R2 raw: distinct processes, sampled recovery children and no root waits comparison table.
+r2-diff: R2 raw: changed handler relation, evidence/End meaning and timing, with unresolved child B.
+r2-sensitivity: R2 raw: two identical finite controls, exact reached probability1 in each and difference0; no changed recovery policy.
+r2-mutate-refusal: ADR 0065 U12: recovery mutation is not connected, even when the baseline has a decidable violation.
+r2-conform-refusal: ADR 0065 U12: the log schema does not establish recovery history; model-feature gate must remain closed.
+r2-verify-refusal: External verify backend is unimplemented; recovery does not unlock it.

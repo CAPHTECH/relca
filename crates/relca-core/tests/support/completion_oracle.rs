@@ -224,6 +224,9 @@ fn inventory(
 ) {
     for (i, s) in block.iter().enumerate() {
         match &s.kind {
+            Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
+                panic!("receipt recovery is outside this oracle")
+            }
             Stmt::WaitUntil(_) => panic!("completion oracle does not handle condition waits"),
             Stmt::Response(_, _) => {
                 panic!("completion oracle does not cover receipt or retry semantics")

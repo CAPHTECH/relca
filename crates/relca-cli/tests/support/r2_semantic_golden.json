@@ -1,0 +1,11 @@
+{
+  "R01": {"exit":5,"kind":"end","end":"shipped","elapsed":{"min":7,"max":7},"work":{"min":7,"max":7},"observed_until":null,"observed_work":null,"receipt_resolution":"satisfied"},
+  "R02": {"exit":2,"kind":"receipt_unknown","end":null,"elapsed":null,"work":null,"observed_until":{"min":3,"max":3},"observed_work":{"min":3,"max":3},"receipt_resolution":"inconclusive"},
+  "R03": {"exit":2,"kind":"receipt_unknown","end":null,"elapsed":null,"work":null,"observed_until":{"min":1,"max":1},"observed_work":{"min":1,"max":1},"receipt_resolution":"inconclusive"},
+  "R04": {"exit":0,"kind":"end","end":"refunded","elapsed":{"min":9,"max":9},"work":{"min":9,"max":9},"observed_until":null,"observed_work":null,"receipt_resolution":"satisfied"},
+  "R05": {"exit":0,"kind":"end","end":"refunded","elapsed":{"min":10,"max":10},"work":{"min":10,"max":10},"observed_until":null,"observed_work":null,"receipt_resolution":"satisfied"},
+  "R06": {"exit":2,"kind":"receipt_unknown","end":null,"elapsed":null,"work":null,"observed_until":{"min":4,"max":4},"observed_work":{"min":4,"max":4},"receipt_resolution":"inconclusive"},
+  "R07": {"exit":5,"kind":"end","end":"shipped","elapsed":{"min":9,"max":9},"work":{"min":7,"max":7},"observed_until":null,"observed_work":null,"receipt_resolution":"satisfied"},
+  "R08": {"exit":5,"kind":"end","end":"shipped","elapsed":{"min":8,"max":8},"work":{"min":8,"max":8},"observed_until":null,"observed_work":null,"receipt_resolution":"satisfied"},
+  "R09": {"exit":2,"kind":"receipt_unknown","end":null,"elapsed":null,"work":null,"observed_until":{"min":8,"max":8},"observed_work":{"min":8,"max":8},"receipt_resolution":"inconclusive"}
+}

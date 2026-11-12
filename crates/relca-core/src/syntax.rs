@@ -37,6 +37,7 @@ fn parse_with_priority_context(src: &str) -> (Result<Model, Vec<Diagnostic>>, bo
         priority_declaration: false,
         degradations: Vec::new(),
         degradation_depth: 0,
+        recovery_depth: 0,
     };
     let result = parser.model().map_err(|diagnostic| vec![diagnostic]);
     (result, parser.priority_declaration)
@@ -50,6 +51,7 @@ struct Parser<'s> {
     priority_declaration: bool,
     degradations: Vec<Degradation>,
     degradation_depth: usize,
+    recovery_depth: usize,
 }
 
 impl<'s> Parser<'s> {
@@ -2768,6 +2770,25 @@ impl<'s> Parser<'s> {
                     }
                 }
                 CapItem::Reads(names)
+            } else if self.take("receipt_query") {
+                let target = self.ident().map_err(|_| self.recovery_error())?;
+                self.expect("key").map_err(|_| self.recovery_error())?;
+                let key = self.ident().map_err(|_| self.recovery_error())?;
+                self.expect("availability")
+                    .map_err(|_| self.recovery_error())?;
+                let availability = if self.take("available") {
+                    QueryAvailability::Available
+                } else if self.take("unavailable") {
+                    QueryAvailability::Unavailable
+                } else {
+                    self.expect("nondet").map_err(|_| self.recovery_error())?;
+                    QueryAvailability::Nondet
+                };
+                CapItem::ReceiptQuery {
+                    target,
+                    key,
+                    availability,
+                }
             } else if self.take("commits") {
                 CapItem::Commits
             } else if self.take("duration") {
@@ -2971,6 +2992,67 @@ impl<'s> Parser<'s> {
     }
 
     fn stmt(&mut self) -> Parsed<Spanned<Stmt>> {
+        if self.at("if") {
+            return self.if_statement();
+        }
+        if self.recovery_depth > 0
+            && [
+                "resolve", "stop", "fork", "cancel", "degrade", "retry", "on",
+            ]
+            .iter()
+            .any(|w| self.position_word(w))
+        {
+            return self.recovery_statement();
+        }
+        self.ordinary_statement()
+    }
+
+    // Separate recursive If and recovery-only frames preserve the existing
+    // depth limit on the default unoptimized test stack.
+    fn if_statement(&mut self) -> Parsed<Spanned<Stmt>> {
+        let start = self.expect("if")?.span.start;
+        let condition = self.cond()?;
+        let then_body = self.block()?;
+        self.separators();
+        self.expect("else")?;
+        let else_body = self.block()?;
+        Ok(Spanned {
+            value: Stmt::If {
+                condition,
+                then_body,
+                else_body,
+            },
+            span: self.span(start),
+        })
+    }
+
+    fn recovery_statement(&mut self) -> Parsed<Spanned<Stmt>> {
+        if self.position_word("resolve") {
+            let start = self.start();
+            self.expect("resolve")?;
+            self.expect("effect").map_err(|_| self.recovery_error())?;
+            let command = self.ident().map_err(|_| self.recovery_error())?;
+            self.expect("using").map_err(|_| self.recovery_error())?;
+            let evidence = self.ident().map_err(|_| self.recovery_error())?;
+            return Ok(Spanned {
+                value: Stmt::ResolveEffect { command, evidence },
+                span: self.span(start),
+            });
+        }
+        if self.position_word("stop") {
+            let start = self.start();
+            self.expect("stop")?;
+            self.expect("receipt_unknown")
+                .map_err(|_| self.recovery_error())?;
+            return Ok(Spanned {
+                value: Stmt::StopReceiptUnknown,
+                span: self.span(start),
+            });
+        }
+        Err(self.unsupported("unsupported recovery statement"))
+    }
+
+    fn ordinary_statement(&mut self) -> Parsed<Spanned<Stmt>> {
         if self.at("compare")
             && self
                 .tokens
@@ -3019,6 +3101,9 @@ impl<'s> Parser<'s> {
             self.take("wait");
             self.lines();
             if self.take("until") {
+                if self.recovery_depth > 0 {
+                    return Err(self.unsupported("condition wait in recovery"));
+                }
                 Stmt::WaitUntil(self.cond()?)
             } else {
                 if self.current().kind == Kind::Word {
@@ -3043,17 +3128,6 @@ impl<'s> Parser<'s> {
                 name,
                 branches,
                 join,
-            }
-        } else if self.take("if") {
-            let condition = self.cond()?;
-            let then_body = self.block()?;
-            self.separators();
-            self.expect("else")?;
-            let else_body = self.block()?;
-            Stmt::If {
-                condition,
-                then_body,
-                else_body,
             }
         } else if self.take("end") {
             Stmt::End(self.ident()?)
@@ -3223,7 +3297,56 @@ impl<'s> Parser<'s> {
             self.pos = saved;
             None
         };
+        let mut query_command = None;
+        let saved = self.pos;
+        if self.position_word("for") && self.take("for") && self.take("command") {
+            query_command = Some(Box::new(self.ident().map_err(|_| self.recovery_error())?));
+            let finite_retry = self.at("retry")
+                && self
+                    .tokens
+                    .iter()
+                    .skip(self.pos + 1)
+                    .find(|t| t.text != "\n")
+                    .is_some_and(|t| t.text == "max_attempts");
+            if self.at("response_loss") || finite_retry {
+                let mut d = self.error("recovery_feature_combination");
+                d.code = diag::U_SEM_0.into();
+                return Err(d);
+            }
+        } else {
+            self.pos = saved;
+        }
+        let mut recovery = None;
+        let saved = self.pos;
+        if self.take("on") {
+            if !self.take("receipt_unknown") {
+                self.pos = saved;
+            } else {
+                if self.recovery_depth > 0 {
+                    return Err(self.unsupported("nested recovery handler"));
+                }
+                self.recovery_depth += 1;
+                recovery = Some(Box::new(self.block().map_err(|mut d| {
+                    if d.code == diag::E_SYN_0 {
+                        d.message = "invalid_recovery_syntax".into();
+                    }
+                    d
+                })?));
+                self.recovery_depth -= 1;
+                let after = self.pos;
+                if self.take("on") && self.take("receipt_unknown") {
+                    let mut d = self.error("invalid_recovery_contract");
+                    d.code = diag::E_CON_0.into();
+                    return Err(d);
+                }
+                self.pos = after;
+            }
+        } else {
+            self.pos = saved;
+        }
         Ok(Call {
+            recovery,
+            query_command,
             binding,
             actor,
             capability,
@@ -3232,6 +3355,15 @@ impl<'s> Parser<'s> {
             retry,
             span: self.span(start),
         })
+    }
+
+    fn position_word(&self, word: &str) -> bool {
+        let mut next = self.tokens.iter().skip(self.pos).filter(|t| t.text != "\n");
+        next.next().is_some_and(|t| t.text == word) && next.next().is_none_or(|t| t.text != "=")
+    }
+
+    fn recovery_error(&self) -> Diagnostic {
+        self.error("invalid_recovery_syntax")
     }
 
     fn join(&mut self) -> Parsed<Spanned<Join>> {

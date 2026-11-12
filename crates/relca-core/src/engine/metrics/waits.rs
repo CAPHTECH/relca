@@ -67,7 +67,15 @@ fn inventory<'a>(
 ) {
     for s in body {
         match &s.kind {
-            ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => calls.push(c),
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
+            ir::Stmt::Response(c, r) => {
+                calls.push(c);
+                if r.attempt == 1
+                    && let Some(body) = &r.recovery
+                {
+                    inventory(body, calls, forks);
+                }
+            }
             ir::Stmt::Fork { branches, .. } => {
                 calls.extend(branches);
                 forks.push(&s.kind);

@@ -2148,10 +2148,22 @@ fn transition_inner(
                 rule,
                 retry,
                 failure,
+                recovery,
                 next,
             } => {
                 response::advance(&mut v, *binding, rule, *retry, *failure, *next)?;
+                recovery::enter(&mut v, rule.command, *recovery)?;
             }
+            Instruction::ResolveEffect {
+                command,
+                evidence,
+                site,
+                next,
+            } => {
+                recovery::resolve(&mut v, *command, *evidence, *site, m, k)?;
+                v.pc = *next;
+            }
+            Instruction::ReceiptUnknown => recovery::stop(&mut v)?,
             Instruction::Await { condition, next } => {
                 let true_now = condition_at(condition, &v.results, &v.state_values, k)?;
                 if true_now {
@@ -2210,10 +2222,20 @@ fn transition_inner(
                 f.per[k].observed.branch(*span, site, selected);
                 v.pc = if selected { *yes } else { *no }
             }
-            Instruction::End(e) => terminal = Some(*e),
+            Instruction::End(e) => {
+                if m.recovery().is_some()
+                    && v.response
+                        .as_ref()
+                        .is_some_and(|h| !h.unresolved.is_empty())
+                {
+                    return Err("invalid_recovery_ir".into());
+                }
+                terminal = Some(*e);
+            }
             Instruction::Wait { calls, .. } if !v.waiting => {
                 for call in calls {
                     response::capture(&mut v, call, m, k)?;
+                    recovery::queued(&mut v, call);
                 }
                 v.tasks.extend(calls.iter().map(|c| Task {
                     frozen_performance: None,
@@ -4342,7 +4364,61 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
         if !ranges.is_empty() {
             out.range_stops.push((rep, ranges));
         }
+        let response_recovery = m
+            .recovery()
+            .map(|_| {
+                use crate::recovery::Stop;
+                let rows: Vec<_> = s
+                    .cases
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(k, slot)| {
+                        slot.payload().map(|c| {
+                            (
+                                k,
+                                &c.local,
+                                if c.terminal.is_some() {
+                                    Stop::End
+                                } else if c.local.response.as_ref().is_some_and(|h| h.stopped) {
+                                    Stop::ReceiptUnknown
+                                } else if cut == Some(SimulationCut::Horizon) {
+                                    Stop::CutOff
+                                } else if range_stopped {
+                                    Stop::StateRange
+                                } else if cut.is_some() {
+                                    Stop::Truncated
+                                } else {
+                                    Stop::Deadlock
+                                },
+                            )
+                        })
+                    })
+                    .collect();
+                recovery::path(m, &rows)
+            })
+            .transpose();
+        let response_recovery = match response_recovery {
+            Ok(r) => r,
+            Err(h) => {
+                let message = match h {
+                    Halt::Unsupported(s) => s,
+                    Halt::Budget => "unexpected recovery observation limit",
+                };
+                out.diagnostics.clear();
+                out.diagnostics.push(simulation::runtime_diagnostic(
+                    m,
+                    rep,
+                    s.time,
+                    false,
+                    message,
+                    &sample.provenance,
+                ));
+                out.truncated_replications = None;
+                return out;
+            }
+        };
         out.replications.push(ReplicationOutcome {
+            response_recovery,
             contests: sampled_contests(&s, m, cut, range_stopped),
             admission: m.explicit_limits().then(|| {
                 let rejected = s
@@ -4423,11 +4499,85 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
         *out.truncated_replications.get_or_insert(0) +=
             u64::from(cut.is_some() && cut != Some(SimulationCut::Horizon));
     }
+    if m.recovery().is_some() && !out.replications.is_empty() {
+        out.response_recovery = Some(crate::recovery::Recovery::new(
+            out.replications
+                .iter()
+                .filter_map(|r| r.response_recovery.clone())
+                .collect(),
+            crate::recovery::Coverage::Sampled,
+        ));
+    }
     out.quality = m
         .quality
         .as_ref()
         .map(|_| crate::quality::simulation(m, &quality_observations, false));
     out
+}
+
+fn recovery_paths(
+    m: &ir::Model,
+    nodes: &[Node],
+) -> EngineResult<Option<Vec<crate::recovery::Path>>> {
+    use crate::recovery::Stop;
+    m.recovery()
+        .map(|_| {
+            nodes
+                .iter()
+                .filter(|n| n.actions.is_empty() || n.unknown)
+                .map(|n| {
+                    let rows: Vec<_> = n
+                        .state
+                        .cases
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(k, slot)| {
+                            slot.payload().map(|c| {
+                                let stop = if c.terminal.is_some() {
+                                    Stop::End
+                                } else if c.local.response.as_ref().is_some_and(|h| h.stopped) {
+                                    Stop::ReceiptUnknown
+                                } else {
+                                    match n.cut {
+                                        ProbabilityCut::Range => Stop::StateRange,
+                                        ProbabilityCut::Horizon => Stop::CutOff,
+                                        ProbabilityCut::Clock
+                                        | ProbabilityCut::LiveTasks
+                                        | ProbabilityCut::StateBudget => Stop::Truncated,
+                                        ProbabilityCut::Pending => {
+                                            if n.unknown {
+                                                Stop::Truncated
+                                            } else {
+                                                Stop::Deadlock
+                                            }
+                                        }
+                                    }
+                                };
+                                (k, &c.local, stop)
+                            })
+                        })
+                        .collect();
+                    #[cfg(test)]
+                    if crate::r2_test_adapter::active() {
+                        for (k, _, stop) in &rows {
+                            recovery::capture(
+                                m,
+                                &n.state.view(*k, m)?,
+                                *k,
+                                if n.cut == ProbabilityCut::Clock {
+                                    m.bounds.clock
+                                } else {
+                                    n.state.time
+                                },
+                                *stop,
+                            );
+                        }
+                    }
+                    recovery::path(m, &rows)
+                })
+                .collect()
+        })
+        .transpose()
 }
 
 pub(super) fn explore(m: &ir::Model, budget: usize) -> outcome::Outcome {
@@ -4447,11 +4597,20 @@ pub(super) fn explore_traced(
     };
     let mut f = Facts::new(a.len());
     f.trace = trace;
-    let result =
-        graph(m, &a, budget, &mut f).and_then(|nodes| topology(&nodes).map(|order| (nodes, order)));
-    let (nodes, order, abort) = match result {
-        Ok((n, o)) => (n, o, None),
-        Err(Halt::Unsupported(msg)) => (Vec::new(), Vec::new(), Some(msg)),
+    let result = graph(m, &a, budget, &mut f)
+        .and_then(|nodes| topology(&nodes).map(|order| (nodes, order)))
+        .and_then(|(nodes, order)| {
+            let paths = recovery_paths(m, &nodes)?;
+            Ok((nodes, order, paths))
+        });
+    let (nodes, order, abort, response_paths) = match result {
+        Ok((n, o, p)) => (n, o, None, p),
+        Err(Halt::Unsupported(msg)) => (
+            Vec::new(),
+            Vec::new(),
+            Some(msg),
+            m.recovery().map(|_| Vec::new()),
+        ),
         Err(Halt::Budget) => unreachable!(),
     };
     let mut properties = Vec::new();
@@ -4796,6 +4955,17 @@ pub(super) fn explore_traced(
     });
     (
         outcome::Outcome {
+            response_recovery: response_paths.map(|paths| {
+                use crate::recovery::{Coverage, Recovery};
+                Recovery::new(
+                    paths,
+                    if coverage == crate::obligation::Coverage::Complete {
+                        Coverage::Complete
+                    } else {
+                        Coverage::Partial
+                    },
+                )
+            }),
             response_exercise: if !m.response_attempts().is_empty()
                 && abort.is_none()
                 && !f.truncated

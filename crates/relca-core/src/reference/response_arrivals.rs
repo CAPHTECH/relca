@@ -94,6 +94,21 @@ impl<'a> Tree<'a> {
         actual: ValueId,
     ) -> Result<Vec<Bound>, StopReason> {
         let Some(r) = self.m.response_attempt(binding) else {
+            let frame = &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame;
+            let cap = frame
+                .tasks
+                .iter()
+                .find(|t| t.call.binding == binding)
+                .ok_or(StopReason::SemanticAbort)?
+                .call
+                .capability;
+            if self.m.capabilities[cap.0].receipt_query.is_some() {
+                let event =
+                    recovery::query(frame, self.m, binding, actual, &self.values(&w, k), k)?;
+                let mut next = w;
+                self.record_context(&mut next, k, event, None, (false, Some(binding)))?;
+                return self.walk(next);
+            }
             return self.walk(w);
         };
         use crate::ast::Receipt::{Delivered, Unknown};
@@ -121,6 +136,8 @@ impl<'a> Tree<'a> {
             let c = next.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
             let was_unknown = c.frame.trace.iter().any(|o| matches!(&o.event, Occurrence::Channel(old) if old.command == r.command && old.attempt < r.attempt && !old.resolved));
             let receipt = response::Receipt {
+                #[cfg(test)]
+                weight: choices[0].0.clone(),
                 command: r.command,
                 binding,
                 attempt: r.attempt,
@@ -143,6 +160,8 @@ impl<'a> Tree<'a> {
             let c = next.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
             let was_unknown = c.frame.trace.iter().any(|o| matches!(&o.event, Occurrence::Channel(old) if old.command == r.command && old.attempt < r.attempt && !old.resolved));
             let receipt = response::Receipt {
+                #[cfg(test)]
+                weight: p.clone(),
                 command: r.command,
                 binding,
                 attempt: r.attempt,

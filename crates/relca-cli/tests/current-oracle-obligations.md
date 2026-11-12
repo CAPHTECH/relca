@@ -79,6 +79,32 @@ addition controls exercise the same census predicate. Evidence JSON is written
 under `target/current-population-oracles`, covered by the committed `/target`
 ignore rule, never by private `.git/info/exclude` state.
 
+### R2: separate closed recovery raw population
+
+ADR 0065 adds exactly fourteen named `r2-*` snapshot invocations. Their full
+ordered argv, root exit/verdict and hand timelines are checked separately by
+`support/r2_snapshot_oracle.rs`, using the declarations and interval sums in
+`snapshots/inputs/r2-raw-notes.md`, not captured stdout. The classifier rejects
+a missing job, an extra recovery job and changed argv. It checks the financial
+evidence at3, decision/resolve at6, End/work7, the independent late-deadline
+violation, clock/horizon distinction, unfinished work3, sampled vocabulary,
+both comparison children, replay and explicit unsupported mutation/conformance.
+Typed decoding supplements these values; it is not their semantic oracle.
+
+These jobs must not enter the legacy graph walkers that deliberately reject
+recovery IR. All fourteen legacy CENSUS values, including the 4271 Report slots,
+3549 graph contexts and 77 modern-edit contexts, remain unchanged. The new lane
+counts and records all fourteen R2 jobs before removing just that new job count
+from the legacy census comparison. The old six conform jobs retain their exact
+set and checks; the new recovery conform refusal is checked in the R2 lane.
+An unknown conform job still fails the old closed registry.
+
+The raw delta audit separately recognizes the local R2 conclusion bundle on a
+recovery owner or its comparison/sensitivity parent, and validates point child
+ledgers as well. It does not allow arbitrary new bundle strings, normalize raw
+stdout, or waive stderr/exit equality. Its original seven fault controls remain;
+four additional hand bundle/ownership pairs reject the opposite bundle.
+
 ### U3: separate small independent-exploration lane
 
 `completion_population_oracle.rs` and core `support/completion_oracle.rs` call

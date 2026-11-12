@@ -112,7 +112,7 @@ fn before_start(
         b.work()?;
         match &stmt.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-            ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                 if let Some(f) = &mut finished {
                     b.copy(f.len())?;
                     before[c.binding.0] = f.clone();
@@ -159,7 +159,8 @@ fn before_start(
                     (l, r) => l.or(r),
                 };
             }
-            ir::Stmt::End(_) => finished = None,
+            ir::Stmt::ResolveEffect { .. } => {}
+            ir::Stmt::End(_) | ir::Stmt::StopReceiptUnknown => finished = None,
         }
     }
     Ok(finished)

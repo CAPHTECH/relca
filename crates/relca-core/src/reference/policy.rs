@@ -355,7 +355,15 @@ fn lexical(m: &Model) -> Result<Vec<BindingId>, StopReason> {
     fn visit(body: &Block, result: &mut Vec<BindingId>) {
         for statement in body {
             match &statement.kind {
-                Stmt::Call(call) | Stmt::Response(call, _) => result.push(call.binding),
+                Stmt::Call(call) | Stmt::Query(call, _) => result.push(call.binding),
+                Stmt::Response(call, r) => {
+                    result.push(call.binding);
+                    if r.attempt == 1
+                        && let Some(body) = &r.recovery
+                    {
+                        visit(body, result);
+                    }
+                }
                 Stmt::Fork { branches, .. } => {
                     result.extend(branches.iter().map(|call| call.binding))
                 }
@@ -379,6 +387,7 @@ fn lexical(m: &Model) -> Result<Vec<BindingId>, StopReason> {
         .as_ref()
         .is_some_and(|p| p.priority.is_some())
         || m.uses_work_profiles()
+        || m.recovery().is_some()
     {
         for (_, response) in m.response_attempts() {
             require(

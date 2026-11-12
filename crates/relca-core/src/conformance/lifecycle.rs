@@ -39,6 +39,7 @@ pub struct Features {
 /// explicit scope decision here before any log can be certified with it.
 pub fn features(c: &ir::Capability, m: &ir::Model) -> Features {
     let ir::Capability {
+        receipt_query,
         qualified_executors,
         performance,
         version_check,
@@ -80,6 +81,7 @@ pub fn features(c: &ir::Capability, m: &ir::Model) -> Features {
         .filter_map(|(field, present)| present.then_some(field))
         .collect(),
         unsupported: [
+            ("recovery_feature_combination", receipt_query.is_some()),
             ("q6_feature_combination", qualified_executors.is_some()),
             ("q6_feature_combination", performance.is_some()),
             ("requires", requires.is_some()),

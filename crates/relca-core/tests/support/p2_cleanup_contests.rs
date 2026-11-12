@@ -126,6 +126,7 @@ pub fn history(kind: &str, reverse: bool) -> SimulationOutcome {
             }
         }
         out.replications.push(ReplicationOutcome {
+            response_recovery: None,
             contests: vec![a, b],
             lost_updates: vec![],
             admission: None,

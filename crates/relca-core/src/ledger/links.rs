@@ -51,12 +51,16 @@ fn allowed(path: &str, v: &str) -> bool {
         }
         "/quality/rules" => v == "quality-cohort-p1-1",
         "/evaluation/rules" => v == "compare-evaluation-p1-1",
-        "/response_analysis/rules" => v == "response-p2-1",
+        "/response_analysis/rules" => matches!(v, "response-p2-1" | "response-p3a-recovery-1"),
+        "/response_recovery/rules" => v == crate::recovery::RULES,
         "/resource_time/rules" => v == "resource-time-v1",
         "/priority_policy/rules" => v == "priority-queues-v1",
         "/work_profiles/rules" => v == crate::report::work_profiles::RULES,
         "/uncertainty/rules" => v == "uncertainty-p2-1",
-        "/explanation/version" => v == "invoice-counterexample-v1",
+        "/explanation/version" => matches!(
+            v,
+            "invoice-counterexample-v1" | "invoice-counterexample-p3a-recovery-1"
+        ),
         "/schema" => matches!(
             v,
             "relca-conformance/v1"
@@ -117,6 +121,7 @@ pub(super) fn components(host: &Value) -> Result<Value, String> {
             "/quality/rules",
             "/evaluation/rules",
             "/response_analysis/rules",
+            "/response_recovery/rules",
             "/resource_time/rules",
             "/priority_policy/rules",
             "/work_profiles/rules",
@@ -271,6 +276,7 @@ pub(super) fn subjects(host: &Value, mode: &str) -> Result<Value, String> {
             "via_model_paths",
             "response_receipts",
             "response_analysis",
+            "response_recovery",
             "admission",
             "state_range_violations",
             "capability_refusals",

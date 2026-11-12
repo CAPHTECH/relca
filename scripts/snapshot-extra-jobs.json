@@ -639,5 +639,103 @@
     "expected_verdict": "satisfied",
     "expected_error_codes": [],
     "reason": "Cleanup hand C4: both whole tables are not_derived multiple_case_interference; normal/degraded/common_prefix are three keyless not_comparable rows with exact owner reasons, never empty equality."
+  },
+  {
+    "id": "r2-check-proceed",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Full"],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "reason": "R2 raw: End7/work7, evidence3/resolve6, one charge; deadline6 remains violated. Hand derivation in r2-raw-notes.md."
+  },
+  {
+    "id": "r2-check-clock",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Clock"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: computational clock2, no query evidence or End; not a business unknown stop."
+  },
+  {
+    "id": "r2-check-horizon",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Horizon"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: business horizon2, cut_off distinct from computational truncation."
+  },
+  {
+    "id": "r2-simulate",
+    "args": ["simulate", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Full"],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "reason": "R2 raw: each of four samples misses deadline6 at End7, so observed violation wins the normal fold; response coverage is sampled, not exhaustive."
+  },
+  {
+    "id": "r2-explain",
+    "args": ["explain", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Full"],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "reason": "R2 raw: independently replay query3, decision6, resolve6 and the deadline6 violation at End7."
+  },
+  {
+    "id": "r2-check-resolved",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca", "--configuration", "A"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "R2 raw: same seven-minute recovery without the late-deadline contract, so no unmet property."
+  },
+  {
+    "id": "r2-check-unresolved",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca", "--configuration", "B"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: stop at3 after query, with no resolution or End; the charge fact alone is not completion."
+  },
+  {
+    "id": "r2-compare-exhaustive",
+    "args": ["compare", "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca", "--plans", "A,B", "--mode", "exhaustive"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: common lexical End inventory, A resolved and B unresolved; retain both child ledgers."
+  },
+  {
+    "id": "r2-compare-simulation",
+    "args": ["compare", "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca", "--plans", "A,B", "--mode", "simulation"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: distinct processes, sampled recovery children and no root waits comparison table."
+  },
+  {
+    "id": "r2-diff",
+    "args": ["diff", "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca", "--from", "A", "--to", "B"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "R2 raw: changed handler relation, evidence/End meaning and timing, with unresolved child B."
+  },
+  {
+    "id": "r2-sensitivity",
+    "args": ["sensitivity", "crates/relca-cli/tests/snapshots/inputs/r2-sensitivity.json", "--mode", "exhaustive"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "R2 raw: two identical finite controls, exact reached probability1 in each and difference0; no changed recovery policy."
+  },
+  {
+    "id": "r2-mutate-refusal",
+    "args": ["mutate", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Full"],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "reason": "ADR 0065 U12: recovery mutation is not connected, even when the baseline has a decidable violation."
+  },
+  {
+    "id": "r2-conform-refusal",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca", "--scenario", "Full", "--log", "crates/relca-cli/tests/snapshots/inputs/r2-conform.jsonl", "--scope", "event-contracts"],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "reason": "ADR 0065 U12: the log schema does not establish recovery history; model-feature gate must remain closed."
+  },
+  {
+    "id": "r2-verify-refusal",
+    "args": ["verify", "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca"],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "reason": "External verify backend is unimplemented; recovery does not unlock it."
   }
 ]

@@ -1161,11 +1161,15 @@ fn collect<'a>(
         };
         match &stmt.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-            ir::Stmt::Call(c) => register(c)?,
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => register(c)?,
+            ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
             ir::Stmt::Response(c, metadata) => {
                 register(c)?;
                 if metadata.attempt == 1 {
                     register(&metadata.command_call)?;
+                    if let Some(body) = &metadata.recovery {
+                        collect(body, calls, model, depth + 1, budget)?;
+                    }
                 }
             }
             ir::Stmt::Fork { id, branches, join } => {
@@ -1235,7 +1239,7 @@ fn paths<'a>(
         budget.work()?;
         match &stmt.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-            ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                 if let Some(r) = recorder.as_deref_mut()
                     && viewpoints::precise_resources(model)
                     && viewpoints::infeasible_call(model, c)?
@@ -1448,6 +1452,8 @@ fn paths<'a>(
                     depth + 1,
                 )?);
             }
+            ir::Stmt::ResolveEffect { .. } => {}
+            ir::Stmt::StopReceiptUnknown => incoming.clear(),
             ir::Stmt::End(end) => {
                 if let Some(r) = recorder.as_deref_mut() {
                     for p in incoming.drain(..) {

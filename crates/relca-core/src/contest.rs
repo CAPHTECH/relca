@@ -289,7 +289,9 @@ pub(crate) fn control_within_limits(m: &ir::Model, cell_limit: usize) -> bool {
 pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
     fn may_end(b: &ir::Block) -> bool {
         b.iter().any(|s| match &s.kind {
-            ir::Stmt::Response(_, r) => r.exhausted.is_some(),
+            ir::Stmt::Response(_, r) => {
+                r.exhausted.is_some() || r.recovery.as_ref().is_some_and(may_end)
+            }
             ir::Stmt::End(_)
             | ir::Stmt::Fork {
                 join: ir::Join::Any { .. },
@@ -314,6 +316,12 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
         for s in b {
             match &s.kind {
                 ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {} // Condition releases are tracked separately below.
+                ir::Stmt::ResolveEffect { evidence, .. } => {
+                    if let Some(c) = cs.get(evidence) {
+                        guards.insert(c.capability);
+                    }
+                }
+                ir::Stmt::StopReceiptUnknown => alive = false,
                 ir::Stmt::If {
                     condition,
                     then_body,
@@ -363,8 +371,16 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
                         out.calls.insert(c.binding, guards.clone());
                     }
                 }
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     out.calls.insert(c.binding, guards.clone());
+                }
+                ir::Stmt::Response(c, r) => {
+                    out.calls.insert(c.binding, guards.clone());
+                    if let Some(body) = &r.recovery {
+                        let mut recovery_guards = guards.clone();
+                        recovery_guards.insert(c.capability);
+                        walk(m, cs, body, recovery_guards, out);
+                    }
                 }
                 ir::Stmt::End(e) => {
                     out.terminals
@@ -412,12 +428,23 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
                         (None, None) => return None,
                     };
                 }
-                ir::Stmt::Call(call) | ir::Stmt::Response(call, _) => {
+                ir::Stmt::Call(call) | ir::Stmt::Query(call, _) => {
                     if guards.waiting {
                         out.condition_calls
                             .entry(call.binding)
                             .or_default()
                             .extend(&guards.capabilities);
+                    }
+                }
+                ir::Stmt::Response(call, r) => {
+                    if guards.waiting {
+                        out.condition_calls
+                            .entry(call.binding)
+                            .or_default()
+                            .extend(&guards.capabilities);
+                    }
+                    if let Some(body) = &r.recovery {
+                        condition_walk(m, cs, body, guards.clone(), out);
                     }
                 }
                 ir::Stmt::Fork { branches, .. } => {
@@ -430,8 +457,8 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
                         }
                     }
                 }
-                ir::Stmt::End(_) => return None,
-                ir::Stmt::Wait(_) => (),
+                ir::Stmt::End(_) | ir::Stmt::StopReceiptUnknown => return None,
+                ir::Stmt::Wait(_) | ir::Stmt::ResolveEffect { .. } => (),
             }
         }
         Some(guards)
@@ -449,6 +476,20 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
         );
     }
     out
+}
+#[cfg(test)]
+#[test]
+fn round1_handler_end_has_query_and_decision_meaning() {
+    let m = crate::lower::lower(&crate::syntax::parse(&crate::r2_inputs::source("R01")).unwrap())
+        .unwrap();
+    let deps = control_dependencies(&m);
+    let end = ir::EndId(m.ends.iter().position(|s| s == "shipped").unwrap());
+    let names: BTreeSet<_> = deps.terminals[&end]
+        .iter()
+        .map(|id| m.capabilities[id.0].name.as_str())
+        .collect();
+    assert!(names.contains("query_status"), "{names:?}");
+    assert!(names.contains("decide"), "{names:?}");
 }
 pub(crate) fn derive(m: &ir::Model, c: &Contest) -> ContestPath {
     let all = control_dependencies(m);

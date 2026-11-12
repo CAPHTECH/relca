@@ -72,9 +72,12 @@ impl Capture {
                         if r.exhausted.is_some() {
                             spans.push(r.retry_span.unwrap_or(stmt.span));
                         }
+                        if let Some(body) = &r.recovery {
+                            walk(body, spans, calls);
+                        }
                         spans.push(stmt.span);
                     }
-                    ir::Stmt::Call(call) => {
+                    ir::Stmt::Call(call) | ir::Stmt::Query(call, _) => {
                         calls.insert(call.binding, call.clone());
                     }
                     ir::Stmt::Fork { branches, .. } => {
@@ -82,7 +85,11 @@ impl Capture {
                             calls.insert(call.binding, call.clone());
                         }
                     }
-                    ir::Stmt::End(_) | ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
+                    ir::Stmt::End(_)
+                    | ir::Stmt::Wait(_)
+                    | ir::Stmt::WaitUntil(_)
+                    | ir::Stmt::ResolveEffect { .. }
+                    | ir::Stmt::StopReceiptUnknown => {}
                 }
                 spans.push(stmt.span);
             }
@@ -166,6 +173,8 @@ impl Capture {
         kind: Kind,
     ) -> Result<Stage, ReplayReason> {
         Ok(Stage {
+            saved_key: None,
+            evidence_ref: None,
             command: None,
             attempt: None,
             observed_receipt: None,
@@ -604,6 +613,44 @@ impl Capture {
             )?;
             stage.location = self.location(self.spans[a.pc])?;
             return Ok(stage);
+        }
+        if let Some(new) = b.response.as_ref().and_then(|h| h.recovery.as_ref()) {
+            let old = a.response.as_ref().and_then(|h| h.recovery.as_ref());
+            if new.resolutions.len() > old.map_or(0, |h| h.resolutions.len()) {
+                let r = new
+                    .resolutions
+                    .last()
+                    .ok_or(ReplayReason::IllegalTransition)?;
+                let q = new
+                    .queries
+                    .iter()
+                    .find(|q| q.binding == r.query)
+                    .ok_or(ReplayReason::IllegalTransition)?;
+                let mut stage = self.stage(b, m, Kind::ResolveEffect)?;
+                stage.location = self.location(diag::Span {
+                    start: r.site.0,
+                    end: r.site.1,
+                })?;
+                stage.command = Some(m.site_name(r.command));
+                stage.binding = Some(m.site_name(r.query));
+                stage.saved_key = Some(q.key as u64 + 1);
+                stage.evidence_ref = Some(x::recovery_evidence_id(
+                    self.case_id,
+                    stage.command.as_deref().unwrap_or(""),
+                    stage.binding.as_deref().unwrap_or(""),
+                    q.at,
+                ));
+                let ty = m.process.bindings[r.query.0].ty;
+                stage.result = m.types[ty.0].members.get(r.value.0).cloned();
+                return Ok(stage);
+            }
+            if b.response.as_ref().is_some_and(|h| h.stopped)
+                && !a.response.as_ref().is_some_and(|h| h.stopped)
+            {
+                let mut stage = self.stage(b, m, Kind::Branch)?;
+                stage.location = self.location(self.spans[a.pc])?;
+                return Ok(stage);
+            }
         }
         if let (Some(old), Some(new)) = (&a.contest, &b.contest) {
             if old.business.is_none() && new.business.is_some() {

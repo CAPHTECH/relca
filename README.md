@@ -1,77 +1,146 @@
 # Relca
 
-業務の手順と制約を有限モデルにして、変更案ごとの結果と検査できない範囲を比べるツールです。
-人、AI、サービス、文書、規則、台帳、外部当事者を Actor として記述し、
-As-Is と To-Be の時間、費用、品質、人的負荷、構成差分を調べます。
+Relca は、業務の流れを小さなモデルに書き、起こりうる進み方を上限の範囲ですべて調べるツールです。
+モデルには、誰が何をどの順で行うか、どの資源を使うかを書きます。
+承認漏れ、職務分離の破れ、期限超過、資源の取り合い、デッドロックを、再生できる反例つきで見つけます。
+変更案を同じ条件で並べて、時間、費用、品質、人の負荷を比べることもできます。
 
-分析の対象は入力したモデルです。実業務や外部システムの正しさを認定しません。
-観測値と潜在値、業務の打切りと計算の切断、網羅探索と標本推定を別々に扱います。
-対応外の機能を省略して成功を返すことはありません。
+人、AI、サービス、文書、規則、台帳、外部の当事者を、どれも Actor として同じ形で書きます。
+調べる対象は入力したモデルです。実際の業務や外部システムが正しいと認定するものではありません。
+
+## できること
+
+| やりたいこと | コマンド |
+|---|---|
+| 1 つの業務モデルで、規則の破れや詰まりを網羅的に探す | `check`、`explain` |
+| 時間、費用、品質、人の負荷を標本で見積もる | `simulate` |
+| 現行と変更案など、複数の構成を同じ条件で並べる | `compare`、`diff` |
+| 到着量や所要時間などの前提を変えて、結論が変わるかを見る | `sensitivity` |
+| 検査そのものが誤りを捕まえるかを確かめる | `mutate` |
+| 実際の業務ログが、モデルの契約に沿っているかを照合する | `conform` |
+
+## 例: 入力した人が、そのまま承認できてしまう
+
+入力担当 `c1` と承認担当 `a1` がいます。承認の実行者に `c1` も入っているため、同じ人が入力と承認の両方をしうる、というモデルです。
+
+```relca
+model ExecSeparation version "0.2" {
+  type T = enum { ok }
+  people [c1,a1]
+  actor Clerk { executors [c1]; capability enter() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Approver { executors [a1,c1]; capability approve() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { x = Clerk.enter(); y = Approver.approve(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { separation Clerk.enter.finish, Approver.approve.finish }
+}
+```
+
+`relca check` は、職務分離の契約を `violated` と判定し、exit 1 で終わります。
+
+```console
+$ relca check fixtures/exec-separation.broken-shared-approver/model.relca
+```
+
+| 性質 | 判定 |
+|---|---|
+| `safety no_resource_overcommit` | `satisfied` |
+| `contract Controls #1 separation` | `violated` |
+
+`relca explain` は、破れに至る手順を反例として示します。要点は次のとおりです。
+
+| 時刻 | 出来事 |
+|---|---|
+| 0min | `c1` が入力を始める |
+| 1min | `c1` が入力を終え、続けて承認を始める |
+| 2min | `c1` が承認を終える。ここで分離の契約が破れる |
+
+承認の実行者を `[a1]` だけにしたモデル(`fixtures/exec-separation`)は、`satisfied`、exit 0 になります。
+出力は JSON で、反例の各段には時刻、Actor、操作、実行者、ソース上の位置が入ります。
+Cut(モデルから外したもの)を宣言していないと、stderr に警告 `W-CUT-0` が出ます。
+
+## 結果の読み方
+
+exit は次のとおりです。
+
+| exit | 判定 | 意味 |
+|---|---|---|
+| 0 | `satisfied` | 上限の範囲で、すべての性質が成り立った |
+| 1 | `violated` | 成り立たない性質があった |
+| 2 | `inconclusive` | 計算の上限に達したなどの理由で、判定できなかった |
+| 3 | `invalid` | 入力が誤っている |
+| 4 | `unsupported` | 未対応の構文や機能を含む |
+| 5 | `vacuous` | 性質の前件が一度も起きず、検査として働いていない |
+
+exit だけでなく、性質ごとの判定と、`assumptions` と `unchecked` の欄も読んでください。
+判定は、次の区別を守ります。
+
+- **計算の切断と業務の打切りを分ける。** 計算の上限に達したら `inconclusive` にします。終わっていない案件を、成功にも失敗にも数えません。
+- **網羅探索と標本推定を分ける。** `simulate` の結果を、すべての進み方で安全だという保証として扱いません。
+- **観測できる値と、本当の値(潜在の値)を分ける。** 業務の判断が潜在の値を読むモデルは、静的なエラーにします。
+- **黙って省略しない。** 未対応の機能は `unsupported` にします。確率が書かれていなければ一様分布、単価が書かれていなければ 0 円、とは扱いません。
+
+詳しくは [結果の読み方](docs/guide/results.md) と [保証の範囲](docs/guide/guarantees.md) を参照してください。
 
 ## 使い始める
 
-Rust 1.88 以降と Cargo、Python 3、bash が必要です。edition 2024 を使用します。
-オフラインで実行する場合は Cargo の依存ライブラリを事前にキャッシュしてください。
+Rust 1.88 以降と Cargo が必要です(edition 2024)。検査のスクリプトには Python 3 と bash も使います。
 
 ```sh
 cargo build
-cargo test --workspace
 ./target/debug/relca check fixtures/coop-cancel/model.relca
-./scripts/check.sh
 ```
 
-この例の check は `satisfied`、exit 0 です。一時ファイルは既定でソース木の `.tmp` に置きます。
-TMPDIR が木の外を指す場合も、その場所は使わず `.tmp` に置きます。
-`check.sh` は fmt、clippy（警告をエラー扱い）、workspace の試験、参照と受入表の検査を実行します。
-同じソースでの合格は記録され、`--force` で再実行できます。
-
-## 文書と例
-
-- [DSL の書き方](docs/guide/dsl.md): 最小モデルと主な構文。
-- [結果の読み方](docs/guide/results.md): verdict、exit、JSON の主要な欄。
-- [保証の範囲](docs/guide/guarantees.md): 分析モード、上限、未検査事項。
-- [請求書の例](examples/invoice/README.md): 入力、手計算、実行コマンドと境界。
-- [fixture の索引](fixtures/README.md): 正例と故障対照、手計算の読み方。
-- [受入対応表](docs/guide/acceptance.md): 39 の項目と根拠の所在。
-- [モデル記述の補助資料](skills/README.md): 構文の早見表と確認用ページ。
+この例は `satisfied`、exit 0 になります。
+モデルの書き方は [DSL の書き方](docs/guide/dsl.md) から読み始めてください。
 
 ## コマンド
 
 | コマンド | 対象と限界 |
 |---|---|
 | `check <path>` | 有限モデルの網羅探索。切断に関わる性質は判定を保留する |
-| `explain <path>` | check と同じ解析に、対応する契約・安全性・deadlock の反例と位置を加える。再生できない反例は採用しない |
-| `simulate <path>` | 宣言した反復数と seed による標本推定。未解決の非決定に遭遇したら拒否する |
-| `compare <path> --plans A,B --mode exhaustive\|simulation` | 同条件の構成を並べる。宣言された hard と目的は性質の検査と分けて評価する |
-| `diff <path> --from A --to B` | 構成、契約、Agency の差分。計算していない種類は unchecked に残す |
-| `mutate <path> [--set bpr-default]` | 既定の変更種を生成し、割り当てた検査で差を調べる。未対応種を含む生成 run は exit 4 |
-| `sensitivity <manifest.json> --mode exhaustive\|simulation` | 指定した有限の点だけを分析する。連続領域や未評価点は保証しない |
-| `conform <spec> --log <events.jsonl> --scope event-contracts\|approval-burden` | 観測ログの照合。欠測を成功に置き換えない。承認負担は明示した profile と sidecar を要する |
-| `verify <path>` | 外部バックエンドは未接続。`unsupported`、exit 4 |
+| `explain <path>` | check と同じ解析に、契約・安全性・デッドロックの反例と位置を加える。再生できない反例は採用しない |
+| `simulate <path>` | 宣言した反復数と seed による標本推定。解決されていない非決定に出会ったら拒否する |
+| `compare <path> --plans A,B[,C...] --mode exhaustive\|simulation` | 同じ条件の構成を並べる。宣言した必須条件と目的は、性質の検査と分けて評価する |
+| `diff <path> --from A --to B` | 構成、契約、Agency(判断の主体)の差分。計算していない種類は `unchecked` に残す |
+| `mutate <path> [--set bpr-default]` | 既定の変更を生成し、検査が差を捕まえるかを調べる。未対応の変更を含む run は exit 4 |
+| `sensitivity <manifest.json> --mode exhaustive\|simulation` | 指定した有限の点だけを分析する。連続した範囲や評価していない点は保証しない |
+| `conform <spec> --log <events.jsonl> --scope event-contracts\|approval-burden` | 観測ログの照合。欠けた記録を成功に置き換えない |
+| `verify <path>` | 外部の検証エンジンにはまだ接続していない。`unsupported`、exit 4 |
 
-exit は `satisfied=0`、`violated=1`、`inconclusive=2`、`invalid=3`、`unsupported=4`、`vacuous=5`。
-exit だけでなく、性質ごとの verdict、assumptions、unchecked も読んでください。
+## 文書と例
 
-## ソースの構成と検査
+- [DSL の書き方](docs/guide/dsl.md): 最小モデルと主な構文
+- [結果の読み方](docs/guide/results.md): 判定、exit、JSON の主な欄
+- [保証の範囲](docs/guide/guarantees.md): 分析モード、上限、検査していない事項
+- [請求書の例](examples/invoice/README.md): 入力、手計算、実行コマンドと境界
+- [fixture の索引](fixtures/README.md): 正しい例と、わざと壊した対、手計算の読み方
+- [受入対応表](docs/guide/acceptance.md): 受入の 39 項目と根拠の所在
+- [モデル記述の補助資料](skills/README.md): 構文の早見表と確認用ページ
+
+## 開発
 
 | path | 中身 |
 |---|---|
 | `crates/relca-core` | Parser、型検査、状態展開、参照実行、確率、品質、構成比較 |
-| `crates/relca-cli` | CLI と JSON 出力の照合試験 |
-| `fixtures/` | モデル、手計算、期待 JSON、呼出し条件 |
-| `examples/invoice/` | 請求書の模型と検算 |
+| `crates/relca-cli` | CLI と、JSON 出力の照合試験 |
+| `fixtures/` | モデル、手計算、期待する JSON、呼出し条件 |
+| `examples/invoice/` | 請求書のモデルと検算 |
 | `docs/guide/` | 利用ガイドと受入対応表 |
-| `scripts/` | 検査と snapshot 更新 |
+| `scripts/` | 検査と snapshot の更新 |
 
-stdout、stderr、exit の現行 golden は完全一致で回帰検査します。
-意図した出力変更では `CARGO_NET_OFFLINE=true TMPDIR=.tmp ./scripts/update-snapshots.sh` で更新します。
-snapshot の一致は手計算や独立参照の代わりにはなりません。
-過去の build と byte 単位で互換にすることは要求していません。
+変更したら `./scripts/check.sh` を通してください。fmt、clippy(警告をエラーとして扱う)、workspace の試験、参照と受入表の検査を順に実行します。
+同じソースで一度合格すると記録され、`--force` を付けると回し直します。
+一時ファイルはソース木の `.tmp` に置きます。TMPDIR が木の外を指していても、その場所は使いません。
+オフラインで回すときは、Cargo の依存ライブラリを先にキャッシュしてください。
+
+stdout、stderr、exit は、現行の golden と完全に一致するかで回帰を検査します。
+出力を意図して変えたときは、`CARGO_NET_OFFLINE=true TMPDIR=.tmp ./scripts/update-snapshots.sh` で更新します。
+snapshot の一致は、手計算や独立した参照実装の代わりにはなりません。
 
 ## ライセンスと貢献
 
-Apache-2.0（[LICENSE](LICENSE)）。Copyright 2026 CAPH TECH Inc.。
-公開先は <https://github.com/CAPHTECH/relca>。crates.io には公開しません。
-貢献の手順と DCO 署名は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
-バイナリの再配布には LICENSE と NOTICE を添付し、同梱する依存ライブラリの
-ライセンス条件と必要な表示も確認してください。
+Apache-2.0([LICENSE](LICENSE))。Copyright 2026 CAPH TECH Inc.
+公開先は <https://github.com/CAPHTECH/relca> です。crates.io には公開しません。
+貢献の手順と DCO の署名は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+バイナリを再配布するときは、LICENSE と NOTICE を添え、同梱する依存ライブラリのライセンス条件と、必要な表示も確認してください。

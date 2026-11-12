@@ -19,6 +19,8 @@ mod q6b;
 mod q6c;
 #[path = "support/q9_snapshot_oracle.rs"]
 mod q9;
+#[path = "support/r2_snapshot_oracle.rs"]
+mod r2;
 #[path = "support/response_snapshot_oracle.rs"]
 mod response;
 use oracle::conform_jobs;
@@ -42,6 +44,8 @@ fn evidence_dir(root: &Path) -> std::path::PathBuf {
 // source/IR categories remain bound to the pre-existing enumeration.
 // Cleanup adds exactly three closed hand jobs. These do not enter the legacy
 // state-IR graph oracle; its other thirteen census categories remain unchanged.
+// R2's fourteen closed hand jobs are checked separately, never fed to or
+// subtracted from an existing legacy Report category. CENSUS is unchanged.
 const CENSUS: [usize; 14] = [2535, 4271, 436, 64, 20, 8, 3549, 3549, 3151, 4, 4, 4, 4, 77];
 
 fn census_check(actual: &[usize; 14]) -> Result<(), String> {
@@ -282,7 +286,13 @@ fn current_population_requires_exact_independent_registered_surfaces() {
         &std::fs::read(root.join("crates/relca-cli/tests/snapshots/jobs.json")).unwrap(),
     )
     .unwrap();
-    conform_jobs::validate_set(&jobs).unwrap();
+    r2::validate_set(&jobs).unwrap();
+    let legacy: Vec<_> = jobs
+        .iter()
+        .filter(|j| !r2::IDS.contains(&j["id"].as_str().unwrap()))
+        .cloned()
+        .collect();
+    conform_jobs::validate_set(&legacy).unwrap();
     q4::validate_set(&jobs);
     q5::validate_set(&jobs);
     q6::validate_set(&jobs);
@@ -309,6 +319,7 @@ fn current_population_requires_exact_independent_registered_surfaces() {
             || q6b::IDS.contains(&job["id"].as_str().unwrap())
             || q6c::IDS.contains(&job["id"].as_str().unwrap())
             || p2c::IDS.contains(&job["id"].as_str().unwrap())
+            || r2::IDS.contains(&job["id"].as_str().unwrap())
         {
             continue;
         }
@@ -356,6 +367,7 @@ fn current_population_requires_exact_independent_registered_surfaces() {
     let conform_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let q4_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let q7_evidence = std::sync::Mutex::new(Vec::<String>::new());
+    let r2_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let totals = std::thread::scope(|scope| {
         let workers: Vec<_> = (0..4)
             .map(|worker| {
@@ -366,7 +378,8 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                  let response_reports=&response_reports;
                   let conform_evidence=&conform_evidence;
                    let q4_evidence=&q4_evidence;
-                   let q7_evidence=&q7_evidence;
+                    let q7_evidence=&q7_evidence;
+                    let r2_evidence=&r2_evidence;
                 scope.spawn(move || {
                     let mut counts = [0usize; 14];
                     for job in jobs.iter().skip(worker).step_by(4) {
@@ -378,7 +391,14 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                             .output()
                             .unwrap();
                         assert!(output.status.code().is_some_and(|c| (0..=5).contains(&c)));
-                          let mut doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+                           let mut doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+                           if r2::IDS.contains(&job["id"].as_str().unwrap()) {
+                               assert!(fault.is_none(),"legacy graph faults are not recovery hand jobs");
+                               r2::check(job["id"].as_str().unwrap(),&args,&doc,output.status.code().unwrap()).unwrap_or_else(|e|panic!("{}: {e}",job["id"]));
+                               r2_evidence.lock().unwrap().push(job["id"].as_str().unwrap().to_owned());
+                               counts[0]+=1;
+                               continue;
+                           }
                           if p2c::IDS.contains(&job["id"].as_str().unwrap()) {
                               assert!(fault.is_none(), "legacy graph faults do not apply to cleanup hand jobs");
                               p2c::check(job["id"].as_str().unwrap(), &args, &doc, output.status.code().unwrap(), &output.stderr);
@@ -636,6 +656,18 @@ fn current_population_requires_exact_independent_registered_surfaces() {
         totals[6], totals[7], totals[8], totals[9], totals[10], totals[11], totals[12], totals[13]
     );
     let mut state_ir_totals = totals;
+    let mut r2_checked = r2_evidence.into_inner().unwrap();
+    r2_checked.sort();
+    let mut expected_r2 = r2::IDS.map(str::to_owned).to_vec();
+    expected_r2.sort();
+    assert_eq!(r2_checked, expected_r2);
+    std::fs::write(
+        evidence.join("r2-oracle-jobs.json"),
+        serde_json::to_vec_pretty(&r2_checked).unwrap(),
+    )
+    .unwrap();
+    state_ir_totals[0] -= r2::IDS.len();
+    eprintln!("separate R2 recovery hand jobs=14; all 14 legacy census categories unchanged");
     let mut q7_checked = q7_evidence.into_inner().unwrap();
     q7_checked.sort();
     let mut expected_q7 = oracle::sensitivity_jobs::IDS.map(str::to_owned).to_vec();

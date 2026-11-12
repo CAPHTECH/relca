@@ -297,8 +297,14 @@ pub(crate) fn calls(m: &ir::Model) -> BTreeMap<ir::BindingId, &ir::Call> {
     fn visit<'a>(b: &'a ir::Block, out: &mut BTreeMap<ir::BindingId, &'a ir::Call>) {
         for s in b {
             match &s.kind {
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     out.insert(c.binding, c);
+                }
+                ir::Stmt::Response(c, r) => {
+                    out.insert(c.binding, c);
+                    if let Some(body) = &r.recovery {
+                        visit(body, out);
+                    }
                 }
                 ir::Stmt::Fork { branches, .. } => {
                     for c in branches {
@@ -1508,7 +1514,7 @@ fn time_guard_edges(
                         }
                     }
                 }
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                     time_charge(budget, guards.len() + 1, guards.len() + 1)?;
                     edges.insert(c.binding, guards.clone());
                 }
@@ -1523,6 +1529,8 @@ fn time_guard_edges(
                         guards.extend(branches.iter().map(|c| c.binding));
                     }
                 }
+                ir::Stmt::ResolveEffect { .. } => {}
+                ir::Stmt::StopReceiptUnknown => return Err("response_control"),
                 ir::Stmt::End(_) => {
                     may_end = true;
                     alive = false;

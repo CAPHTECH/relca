@@ -665,6 +665,13 @@ fn sampled_receipt<'a>(
     let c = w.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
     let binding = c.frame.tasks[j].call.binding;
     let Some(r) = tree.m.response_attempt(binding) else {
+        if tree.m.capabilities[c.frame.tasks[j].call.capability.0]
+            .receipt_query
+            .is_some()
+        {
+            let event = recovery::query(&c.frame, tree.m, binding, actual, &tree.values(&w, k), k)?;
+            append(tree, &mut w, k, event, None);
+        }
         return Ok(w);
     };
     use crate::ast::Receipt::{Delivered, Unknown};
@@ -693,6 +700,8 @@ fn sampled_receipt<'a>(
         &mut w,
         k,
         Occurrence::Channel(response::Receipt {
+            #[cfg(test)]
+            weight: Some(Rational::one()),
             command: r.command,
             binding,
             attempt: r.attempt,
@@ -1113,6 +1122,16 @@ fn run_rep<'a>(
                 }
                 *block = &block[1..];
                 match &stmt.kind {
+                    Stmt::ResolveEffect { command, evidence } => {
+                        let event =
+                            recovery::resolve(&c.frame, m, *command, *evidence, stmt.span, k)?;
+                        append(tree, &mut w, k, event, None);
+                    }
+                    Stmt::StopReceiptUnknown => {
+                        let event = recovery::stop(&c.frame, m)?;
+                        append(tree, &mut w, k, event, None);
+                        break;
+                    }
                     Stmt::WaitUntil(_) => return Err(StopReason::SemanticAbort),
                     Stmt::Wait(duration) => {
                         let wake = w
@@ -1154,7 +1173,7 @@ fn run_rep<'a>(
                             m.metrics.is_some(),
                         );
                     }
-                    Stmt::Call(call) => create(
+                    Stmt::Call(call) | Stmt::Query(call, _) => create(
                         c,
                         std::slice::from_ref(call),
                         None,
@@ -1277,6 +1296,8 @@ fn run_rep<'a>(
                     } else {
                         let selected = if reference_stale(t, cap) {
                             vec![cap.version_check.as_ref().unwrap().reject]
+                        } else if cap.receipt_query.is_some() {
+                            recovery::project(m, t.call.capability, &tree.values(&w, k), k)?
                         } else if let Some(a) = &cap.atomic {
                             vec![if tree.condition(&w, k, &a.condition)? == a.commit_when {
                                 a.commit
@@ -1292,6 +1313,19 @@ fn run_rep<'a>(
                                     *nondet = true;
                                     return Err(StopReason::SemanticAbort);
                                 }
+                                keep(
+                                    m,
+                                    &mut first,
+                                    Enabled::Response {
+                                        case: k,
+                                        task: *j,
+                                        value: *x,
+                                    },
+                                    nondet,
+                                )?;
+                                continue;
+                            }
+                            if cap.receipt_query.is_some() {
                                 keep(
                                     m,
                                     &mut first,
@@ -1864,6 +1898,7 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
         }
         let m = &realized;
         let mut tree = Tree {
+            recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
             first_closed: vec![
@@ -2203,7 +2238,47 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
             out.range_stops.push((replication, ranges));
         }
         out.add_refusals(refusals);
+        let response_recovery =
+            m.recovery()
+                .map(|_| {
+                    use crate::recovery::Stop;
+                    let rows: Vec<_> =
+                        w.cases
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(k, slot)| {
+                                slot.payload().map(|c| {
+                                    (
+                                        k,
+                                        &c.frame,
+                                        if c.end.is_some() {
+                                            Stop::End
+                                        } else if c.frame.trace.iter().any(|o| {
+                                            matches!(o.event, Occurrence::ResponseStopped(_))
+                                        }) {
+                                            Stop::ReceiptUnknown
+                                        } else if cut == Some(SimulationCut::Horizon) {
+                                            Stop::CutOff
+                                        } else if range_stopped {
+                                            Stop::StateRange
+                                        } else if cut.is_some() {
+                                            Stop::Truncated
+                                        } else {
+                                            Stop::Deadlock
+                                        },
+                                    )
+                                })
+                            })
+                            .collect();
+                    recovery::path(m, &rows)
+                })
+                .transpose();
+        let response_recovery = match response_recovery {
+            Ok(r) => r,
+            Err(_) => return observation_abort(out, m, replication, w.now),
+        };
         out.replications.push(ReplicationOutcome {
+            response_recovery,
             contests: sampled_contests(&w, m, cut, range_stopped),
             admission: m.explicit_limits().then(|| {
                 let declined = w
@@ -2267,6 +2342,15 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
         *out.truncated_replications.get_or_insert(0) +=
             u64::from(cut.is_some() && cut != Some(SimulationCut::Horizon));
     }
+    if m.recovery().is_some() && !out.replications.is_empty() {
+        out.response_recovery = Some(crate::recovery::Recovery::new(
+            out.replications
+                .iter()
+                .filter_map(|r| r.response_recovery.clone())
+                .collect(),
+            crate::recovery::Coverage::Sampled,
+        ));
+    }
     out.quality = m
         .quality
         .as_ref()
@@ -2327,6 +2411,7 @@ mod simulation_tests {
         let times = m.arrivals.clone().unwrap_or_else(|| vec![0]);
         let n = times.len();
         let tree = Tree {
+            recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
             first_hits: Vec::new(),

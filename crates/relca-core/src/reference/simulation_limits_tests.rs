@@ -9,6 +9,7 @@ fn setup(m: &Model) -> (Tree<'_>, World<'_>) {
     let times = m.arrivals.clone().unwrap();
     let n = times.len();
     let tree = Tree {
+        recovery_paths: Vec::new(),
         response_exercise: BTreeMap::new(),
         response_receipts: Vec::new(),
         first_hits: Vec::new(),

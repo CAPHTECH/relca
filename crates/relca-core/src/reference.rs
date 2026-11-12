@@ -904,6 +904,7 @@ fn explore_unprojected(model: &Model, limits: Limits, projection: Projection) ->
         outcome: Outcome {
             response_exercise: None,
             response_receipts: None,
+            response_recovery: None,
             scenario_observed_until: None,
             quality,
             state_range_violations: interpreter.statistics.ranges.clone(),
@@ -2009,7 +2010,9 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                 } else {
                     fn invokes(b: &Block, cap: CapabilityId) -> bool {
                         b.iter().any(|s| match &s.kind {
-                            Stmt::Call(c) | Stmt::Response(c, _) => c.capability == cap,
+                            Stmt::Call(c) | Stmt::Query(c, _) | Stmt::Response(c, _) => {
+                                c.capability == cap
+                            }
                             Stmt::Fork { branches, .. } => {
                                 branches.iter().any(|c| c.capability == cap)
                             }
@@ -2018,7 +2021,11 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                                 else_body,
                                 ..
                             } => invokes(then_body, cap) || invokes(else_body, cap),
-                            Stmt::End(_) | Stmt::Wait(_) | Stmt::WaitUntil(_) => false,
+                            Stmt::End(_)
+                            | Stmt::Wait(_)
+                            | Stmt::WaitUntil(_)
+                            | Stmt::ResolveEffect { .. }
+                            | Stmt::StopReceiptUnknown => false,
                         })
                     }
                     require(!invokes(&m.process.body, e.capability))?;
@@ -2278,13 +2285,18 @@ impl Validator<'_> {
                     known.insert(c.binding);
                     if r.attempt == 1 {
                         self.call(&r.command_call)?;
+                        if let Some(body) = &r.recovery {
+                            self.block(body, known.clone(), depth + 1)?;
+                        }
                     }
                     known.insert(r.command);
                 }
-                Stmt::Call(c) => {
+                Stmt::Call(c) | Stmt::Query(c, _) => {
                     self.call(c)?;
                     known.insert(c.binding);
                 }
+                Stmt::ResolveEffect { .. } => {}
+                Stmt::StopReceiptUnknown => flows = false,
                 Stmt::Fork { id, branches, join } => {
                     require(
                         id.0 < self.model.process.forks.len()
@@ -2450,6 +2462,9 @@ fn reference_notify(frame: &mut Frame<'_>, own: Option<usize>, writes: &[StateWr
 
 #[derive(Debug, Clone)]
 enum Occurrence {
+    RecoveryEnter(BindingId),
+    ReceiptQuery(recovery::QueryEvidence),
+    ResolveEffect(recovery::Resolution),
     ResponseDestination(EndId),
     ResponseStopped(BindingId),
     ResponseInput(BindingId, Vec<ValueId>),
@@ -2943,6 +2958,19 @@ struct Interpreter<'a> {
 }
 
 mod degradation;
+mod recovery;
+#[cfg(test)]
+pub(crate) fn r2_replay(fault: &str) -> serde_json::Value {
+    recovery::replay_probe(fault)
+}
+#[cfg(test)]
+pub(crate) fn r2_project(scenario: &str) -> serde_json::Value {
+    recovery::projection_probe(scenario)
+}
+#[cfg(test)]
+pub(crate) fn r2_resolve(fault: &str) -> serde_json::Value {
+    recovery::resolve_probe(fault)
+}
 mod response;
 
 #[derive(Clone)]
@@ -4426,6 +4454,25 @@ impl<'a> Interpreter<'a> {
                         let statement = &block[0];
                         *block = &block[1..];
                         match &statement.kind {
+                            Stmt::Query(call, _) => {
+                                self.create(&mut f, std::slice::from_ref(call), None)?
+                            }
+                            Stmt::ResolveEffect { command, evidence } => {
+                                let event = recovery::resolve(
+                                    &f,
+                                    self.model,
+                                    *command,
+                                    *evidence,
+                                    statement.span,
+                                    self.case_index,
+                                )?;
+                                self.record(&mut f, event, None)?;
+                            }
+                            Stmt::StopReceiptUnknown => {
+                                let event = recovery::stop(&f, self.model)?;
+                                self.record(&mut f, event, None)?;
+                                return self.probability_leaf(&f, None, ReferenceCut::None);
+                            }
                             Stmt::WaitUntil(_) => return Err(StopReason::SemanticAbort),
                             Stmt::Wait(duration) => {
                                 let wake = f
@@ -4524,6 +4571,13 @@ impl<'a> Interpreter<'a> {
                         } else {
                             let selected = if reference_stale(&f.tasks[i], cap) {
                                 vec![cap.version_check.as_ref().unwrap().reject]
+                            } else if cap.receipt_query.is_some() {
+                                recovery::project(
+                                    self.model,
+                                    f.tasks[i].call.capability,
+                                    &f.state_values,
+                                    self.case_index,
+                                )?
                             } else if let Some(a) = &cap.atomic {
                                 vec![if self.condition(&f, &a.condition, 0)? == a.commit_when {
                                     a.commit
@@ -4756,6 +4810,23 @@ impl<'a> Interpreter<'a> {
             let statement = &block[0];
             *block = &block[1..];
             match &statement.kind {
+                Stmt::Query(call, _) => self.create(&mut f, std::slice::from_ref(call), None)?,
+                Stmt::ResolveEffect { command, evidence } => {
+                    let event = recovery::resolve(
+                        &f,
+                        self.model,
+                        *command,
+                        *evidence,
+                        statement.span,
+                        self.case_index,
+                    )?;
+                    self.record(&mut f, event, None)?;
+                }
+                Stmt::StopReceiptUnknown => {
+                    let event = recovery::stop(&f, self.model)?;
+                    self.record(&mut f, event, None)?;
+                    return self.probability_leaf(&f, None, ReferenceCut::None);
+                }
                 Stmt::WaitUntil(_) => return Err(StopReason::SemanticAbort),
                 Stmt::Wait(duration) => {
                     let wake = f
@@ -5141,6 +5212,9 @@ impl<'a> Interpreter<'a> {
     }
 
     fn terminal(&mut self, f: &Frame<'a>, end: EndId, depth: usize) -> Execution {
+        if self.model.recovery().is_some() {
+            require(recovery::unresolved(f).is_empty())?;
+        }
         if self.model.contests().is_empty() {
             self.probability_leaf(f, Some(end), ReferenceCut::None)?;
         }

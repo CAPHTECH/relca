@@ -19209,5 +19209,167 @@
     "expected_exit": 0,
     "expected_verdict": "satisfied",
     "expected_error_codes": []
+  },
+  {
+    "id": "r2-check-proceed",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Full"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "r2-check-clock",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Clock"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-check-horizon",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Horizon"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-simulate",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Full"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "r2-explain",
+    "args": [
+      "explain",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Full"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "r2-check-resolved",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca",
+      "--configuration",
+      "A"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied"
+  },
+  {
+    "id": "r2-check-unresolved",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca",
+      "--configuration",
+      "B"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-compare-exhaustive",
+    "args": [
+      "compare",
+      "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca",
+      "--plans",
+      "A,B",
+      "--mode",
+      "exhaustive"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-compare-simulation",
+    "args": [
+      "compare",
+      "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca",
+      "--plans",
+      "A,B",
+      "--mode",
+      "simulation"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-diff",
+    "args": [
+      "diff",
+      "crates/relca-cli/tests/snapshots/inputs/r2-comparison.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive"
+  },
+  {
+    "id": "r2-sensitivity",
+    "args": [
+      "sensitivity",
+      "crates/relca-cli/tests/snapshots/inputs/r2-sensitivity.json",
+      "--mode",
+      "exhaustive"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied"
+  },
+  {
+    "id": "r2-mutate-refusal",
+    "args": [
+      "mutate",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Full"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported"
+  },
+  {
+    "id": "r2-conform-refusal",
+    "args": [
+      "conform",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca",
+      "--scenario",
+      "Full",
+      "--log",
+      "crates/relca-cli/tests/snapshots/inputs/r2-conform.jsonl",
+      "--scope",
+      "event-contracts"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported"
+  },
+  {
+    "id": "r2-verify-refusal",
+    "args": [
+      "verify",
+      "crates/relca-cli/tests/snapshots/inputs/r2-recovery.relca"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported"
   }
 ]

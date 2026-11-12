@@ -100,11 +100,18 @@ impl Shape {
     fn walk(&mut self, block: &ir::Block) {
         for s in block {
             match &s.kind {
-                ir::Stmt::Call(c) => self.call(c, CallMode::Sequential),
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => self.call(c, CallMode::Sequential),
+                ir::Stmt::ResolveEffect { evidence, .. } => {
+                    self.result_reads.insert(*evidence);
+                }
+                ir::Stmt::StopReceiptUnknown => {}
                 ir::Stmt::Response(_, r) => {
                     if r.attempt == 1 {
                         self.call(&r.command_call, CallMode::Sequential);
                         self.ends.extend(r.exhausted);
+                        if let Some(body) = &r.recovery {
+                            self.walk(body);
+                        }
                     }
                 }
                 ir::Stmt::Fork { branches, join, .. } => {

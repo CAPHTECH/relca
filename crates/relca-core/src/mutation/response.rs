@@ -263,7 +263,7 @@ fn compare_fault(
     }) || after
         .response_analysis
         .as_ref()
-        .is_some_and(|a| a.coverage != crate::obligation::Coverage::Complete)
+        .is_some_and(|a| a.coverage != report::ResponseCoverage::Complete)
     {
         if let Some(c) = comparison_failure(after) {
             return c;

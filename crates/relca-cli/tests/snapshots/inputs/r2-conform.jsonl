@@ -1,0 +1,1 @@
+{"kind":"header","schema":"relca-log/v1","clock":"modeled-clock","time_unit":"min","window":{"from":0,"to":40},"cases":[{"case_id":"c","from_case_start":true,"through_case_end":false}],"actor_map":[{"source_id":"psp","actor":"Psp"},{"source_id":"cs","actor":"CS"},{"source_id":"shop","actor":"Shop"}],"executor_map":[]}

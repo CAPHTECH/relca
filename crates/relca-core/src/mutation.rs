@@ -357,6 +357,25 @@ fn mutate_using_raw(
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
+    if syntax::parse(src).is_ok_and(|ast| {
+        ast.items.iter().any(|i| {
+            let ast::Item::Process(p) = i else {
+                return false;
+            };
+            let mut sites = Vec::new();
+            calls(&p.body, &mut sites);
+            sites.iter().any(|c| c.recovery.is_some())
+        })
+    }) {
+        r.verdict = Verdict::Unsupported;
+        r.diagnostics.push(diag::Diagnostic {
+            code: diag::U_SEM_0.into(),
+            severity: diag::Severity::Error,
+            message: "recovery_feature_combination".into(),
+            span: None,
+        });
+        return r;
+    }
     if !matches!(original.verdict, Verdict::Satisfied | Verdict::Violated) {
         return r;
     }
@@ -959,7 +978,12 @@ fn site(src: &str, span: diag::Span) -> Site {
 fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
     for stmt in block {
         match &stmt.value {
-            ast::Stmt::Call(c) => out.push(c),
+            ast::Stmt::Call(c) => {
+                out.push(c);
+                if let Some(body) = &c.recovery {
+                    calls(body, out);
+                }
+            }
             ast::Stmt::Fork { branches, .. } => out.extend(branches),
             ast::Stmt::If {
                 then_body,
@@ -969,7 +993,11 @@ fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
                 calls(then_body, out);
                 calls(else_body, out);
             }
-            ast::Stmt::End(_) | ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {}
+            ast::Stmt::End(_)
+            | ast::Stmt::Wait(_)
+            | ast::Stmt::WaitUntil(_)
+            | ast::Stmt::ResolveEffect { .. }
+            | ast::Stmt::StopReceiptUnknown => {}
         }
     }
 }

@@ -1054,6 +1054,7 @@ pub(crate) mod wait_test_support {
             outcome
                 .replications
                 .push(crate::outcome::ReplicationOutcome {
+                    response_recovery: None,
                     contests: Vec::new(),
                     lost_updates: vec![],
                     admission: None,

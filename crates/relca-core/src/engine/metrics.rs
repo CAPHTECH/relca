@@ -22,8 +22,16 @@ pub(super) fn validate(m: &ir::Model) -> Result<(), &'static str> {
     fn visit(b: &ir::Block, caps: &mut std::collections::BTreeSet<usize>) {
         for s in b {
             match &s.kind {
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     caps.insert(c.capability.0);
+                }
+                ir::Stmt::Response(c, r) => {
+                    caps.insert(c.capability.0);
+                    if r.attempt == 1
+                        && let Some(b) = &r.recovery
+                    {
+                        visit(b, caps);
+                    }
                 }
                 ir::Stmt::Fork { branches, .. } => {
                     caps.extend(branches.iter().map(|c| c.capability.0))
@@ -36,7 +44,11 @@ pub(super) fn validate(m: &ir::Model) -> Result<(), &'static str> {
                     visit(then_body, caps);
                     visit(else_body, caps);
                 }
-                ir::Stmt::End(_) | ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
+                ir::Stmt::End(_)
+                | ir::Stmt::Wait(_)
+                | ir::Stmt::WaitUntil(_)
+                | ir::Stmt::ResolveEffect { .. }
+                | ir::Stmt::StopReceiptUnknown => {}
             }
         }
     }
@@ -539,7 +551,16 @@ pub(super) fn snapshot_with_horizon(
         for s in b {
             match &s.kind {
                 ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => calls.push(c),
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
+                ir::Stmt::Response(c, r) => {
+                    calls.push(c);
+                    if r.attempt == 1
+                        && let Some(b) = &r.recovery
+                    {
+                        inventory(b, calls, ends);
+                    }
+                }
+                ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
                 ir::Stmt::Fork { branches, join, .. } => {
                     calls.extend(branches);
                     if let ir::Join::Any { if_none, .. } = join

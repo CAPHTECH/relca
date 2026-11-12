@@ -396,6 +396,7 @@ fn m2_feature_inputs_really_populate_the_named_ir_fields() {
             .unwrap_or_else(|d| panic!("{field}: {d:?}"));
         let cap = m.capabilities.iter().find(|c| c.name == "post").unwrap();
         let relca_core::ir::Capability {
+            receipt_query: _receipt_query,
             qualified_executors,
             performance,
             version_check,

@@ -681,12 +681,23 @@ pub(crate) fn validate_metrics(
     ) {
         for statement in block {
             match &statement.kind {
-                ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
+                ir::Stmt::Wait(_)
+                | ir::Stmt::WaitUntil(_)
+                | ir::Stmt::ResolveEffect { .. }
+                | ir::Stmt::StopReceiptUnknown => {}
                 ir::Stmt::End(e) => {
                     ends.insert(e.0);
                 }
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     calls.insert(c.binding.0, c.capability.0);
+                }
+                ir::Stmt::Response(c, r) => {
+                    calls.insert(c.binding.0, c.capability.0);
+                    if r.attempt == 1
+                        && let Some(body) = &r.recovery
+                    {
+                        inventory(body, ends, calls);
+                    }
                 }
                 ir::Stmt::Fork { branches, join, .. } => {
                     for c in branches {

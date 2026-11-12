@@ -147,6 +147,11 @@ pub fn adapt(m: &ir::Model) -> Result<OwnModel, NotCovered> {
         b.iter()
             .map(|s| {
                 Ok(match &s.kind {
+                    ir::Stmt::Query(_, _)
+                    | ir::Stmt::ResolveEffect { .. }
+                    | ir::Stmt::StopReceiptUnknown => {
+                        panic!("receipt recovery is outside this oracle")
+                    }
                     ir::Stmt::WaitUntil(_) => {
                         panic!("completion explorer adapter does not handle condition waits")
                     }

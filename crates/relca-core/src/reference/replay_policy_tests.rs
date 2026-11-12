@@ -37,6 +37,8 @@ fn queued(frames: &[Option<Frame<'_>>]) -> Vec<BTreeMap<BindingId, Tick>> {
 }
 fn stage(binding: &str, executor: Option<&str>, kind: Kind) -> Stage {
     Stage {
+        saved_key: None,
+        evidence_ref: None,
         command: None,
         attempt: None,
         observed_receipt: None,

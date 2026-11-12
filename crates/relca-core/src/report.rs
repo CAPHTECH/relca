@@ -90,6 +90,7 @@ macro_rules! declare_report {
                 report.ledger.validate(&serde_json::to_value(&report).map_err(E::custom)?)
                     .map_err(E::custom)?;
                 response::validate(&report).map_err(E::custom)?;
+                if let Some(recovery)=&report.response_recovery { recovery.validate_host(&serde_json::to_value(&report).map_err(E::custom)?).map_err(E::custom)?; }
                 priority::validate_report(&report).map_err(E::custom)?;
                 if let Some(table) = &report.work_profiles {
                     table.validate_host(&serde_json::to_value(&report).map_err(E::custom)?).map_err(E::custom)?;
@@ -107,6 +108,8 @@ macro_rules! declare_report {
     };
 }
 declare_report! {
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub response_recovery: Option<crate::recovery::Recovery>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_profiles: Option<work_profiles::WorkProfiles>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -169,7 +172,7 @@ pub mod priority;
 mod q4_review_tests;
 mod response;
 pub mod work_profiles;
-pub use response::ResponseAnalysis;
+pub use response::{ResponseAnalysis, ResponseCoverage};
 
 /// Exhaustive denotes the requested analysis mode, not proof that a stub ran it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -683,6 +686,8 @@ macro_rules! declare_simulation_report {
                 let r=Self { $( $field:wire.$field, )* };
                 r.ledger.validate(&serde_json::to_value(&r).map_err(serde::de::Error::custom)?)
                     .map_err(serde::de::Error::custom)?;
+                response::validate(&r).map_err(serde::de::Error::custom)?;
+                if let Some(recovery)=&r.response_recovery { recovery.validate_host(&serde_json::to_value(&r).map_err(serde::de::Error::custom)?).map_err(serde::de::Error::custom)?; }
                 if let Some(table) = &r.work_profiles {
                     table.validate_host(&serde_json::to_value(&r).map_err(serde::de::Error::custom)?)
                         .map_err(serde::de::Error::custom)?;
@@ -704,6 +709,10 @@ fn simulation_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<&'static st
 // The decoder interns only this closed constant; it never borrows input bytes.
 type SimulationModeName = &'static str;
 declare_simulation_report! {
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub response_recovery: Option<crate::recovery::Recovery>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub response_analysis: Option<Box<ResponseAnalysis>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_profiles: Option<work_profiles::WorkProfiles>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -965,6 +974,8 @@ fn simulation_base(mut base: Report) -> SimulationReport {
     };
     base.ledger.simulation_mode(base.model.sha256.is_none());
     SimulationReport {
+        response_recovery: None,
+        response_analysis: None,
         work_profiles: base.work_profiles,
         priority_policy: base.priority_policy,
         resource_time: base.resource_time,
@@ -1371,6 +1382,10 @@ fn simulate_model_raw(
         truncated: None,
     };
     let sampled = execute(m);
+    out.response_recovery = sampled.response_recovery.clone();
+    if out.response_recovery.is_some() {
+        out.response_analysis = Some(Box::new(response::sampled_analysis(m)));
+    }
     for (_, ranges) in &sampled.range_stops {
         for r in ranges {
             if !out.state_range_violations.contains(r) {
@@ -1870,6 +1885,10 @@ fn simulate_model_raw(
             }
         }
     }
+    if m.recovery().is_some() && out.response_recovery.is_none() {
+        out.diagnostics.push(recovery_transport_pending(m));
+        verdicts.push(Verdict::Unsupported);
+    }
     out.verdict = if aborted && m.responsibility.is_none() {
         Verdict::Unsupported
     } else {
@@ -2126,6 +2145,7 @@ fn empty_report(src: &str) -> Report {
         ledger: crate::ledger::Ledger::prelower("exhaustive", false),
         uncertainty: crate::uncertainty::Uncertainty::not_lowered(),
         response_receipts: None,
+        response_recovery: None,
         response_analysis: None,
         scenario: None,
         quality: None,
@@ -2516,6 +2536,7 @@ fn place_waiting_assumption(rows: &mut Vec<Assumption>) {
 fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Outcome) -> Report {
     let response_exercise = outcome.response_exercise.clone();
     mut_report.response_receipts = outcome.response_receipts.clone();
+    mut_report.response_recovery = outcome.response_recovery.clone();
     let response_incomplete = outcome.truncated
         || !outcome.state_range_violations.is_empty()
         || outcome
@@ -2692,6 +2713,12 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
                 arrival: c.arrival,
                 probability: None,
                 verdict: if response_incomplete
+                    || mut_report.response_recovery.as_ref().is_some_and(|r| {
+                        r.paths.iter().flat_map(|p| &p.commands).any(|r| {
+                            r.case_id == c.case_id
+                                && (r.unresolved || r.stop_reason == crate::recovery::Stop::CutOff)
+                        })
+                    })
                     || c.terminals.iter().any(|t| {
                         matches!(
                             t.kind,
@@ -2704,8 +2731,12 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
                 },
             })
             .collect();
-        let unresolved =
-            cases.iter().any(|c| c.verdict == Verdict::Inconclusive) || response_incomplete;
+        let unresolved = cases.iter().any(|c| c.verdict == Verdict::Inconclusive)
+            || response_incomplete
+            || mut_report
+                .response_recovery
+                .as_ref()
+                .is_some_and(crate::recovery::Recovery::unsettled);
         mut_report.properties.push(Property {
             id: "receipt_resolution".into(),
             verdict: if unresolved {
@@ -2722,7 +2753,7 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
             .into_iter()
             .filter(|(_, r)| r.attempt == 1)
         {
-            mut_report.assumptions.push(Assumption { field:format!("response.{}", model.site_name(r.command)), value:format!("max_attempts={}; backoff={}; loss={:?}",r.max_attempts,r.backoff,r.loss), affects:"retry_bounded; receipt_channel; receipt_not_success; atomic server-finish channel only; no asynchronous task, status query or correlated channel inference".into() });
+            mut_report.assumptions.push(Assumption { field:format!("response.{}", model.site_name(r.command)), value:format!("max_attempts={}; backoff={}; loss={:?}",r.max_attempts,r.backoff,r.loss), affects:if model.recovery().is_some(){"retry_bounded; exact modeled G finish-time query and evidence matching only; no general status query, asynchronous task, correlated channel or non-idempotent recovery inference"}else{"retry_bounded; receipt_channel; receipt_not_success; atomic server-finish channel only; no asynchronous task, status query or correlated channel inference"}.into() });
         }
     }
     let mut final_report = finish(
@@ -2734,7 +2765,30 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
             .collect(),
     );
     crate::agency::response::apply(&mut final_report, model, response_exercise.as_deref());
+    if model.recovery().is_some() && final_report.response_recovery.is_none() {
+        final_report.response_analysis = Some(Box::new(response::unavailable_transport(model)));
+        for p in final_report
+            .properties
+            .iter_mut()
+            .filter(|p| p.id == "receipt_resolution")
+        {
+            p.verdict = Verdict::Inconclusive;
+            for case in p.cases.as_mut().into_iter().flatten() {
+                case.verdict = Verdict::Inconclusive;
+            }
+        }
+        final_report = finish(final_report, vec![recovery_transport_pending(model)]);
+    }
     seal(final_report)
+}
+
+fn recovery_transport_pending(model: &ir::Model) -> diag::Diagnostic {
+    diag::Diagnostic {
+        code: diag::U_SEM_0.into(),
+        severity: diag::Severity::Error,
+        message: "recovery_feature_combination: recovery report transport is not connected".into(),
+        span: Some(model.process.span),
+    }
 }
 
 pub(crate) fn property_notes(m: &ir::Model, p: ir::Property) -> Option<Vec<String>> {
@@ -3298,6 +3352,7 @@ mod tests {
                 outcome::Outcome {
                     response_exercise: None,
                     response_receipts: None,
+                    response_recovery: None,
                     scenario_observed_until: None,
                     quality: None,
                     state_range_violations: Vec::new(),
@@ -3401,6 +3456,7 @@ mod tests {
                 outcome::Outcome {
                     response_exercise: None,
                     response_receipts: None,
+                    response_recovery: None,
                     scenario_observed_until: None,
                     quality: None,
                     state_range_violations: Vec::new(),

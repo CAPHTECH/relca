@@ -748,6 +748,7 @@ mod probability_tests {
             legacy_outcome_debug(outcome::Outcome {
                 response_exercise: None,
                 response_receipts: None,
+                response_recovery: None,
                 scenario_observed_until: None,
                 quality: None,
                 state_range_violations: Vec::new(),
@@ -2429,6 +2430,19 @@ mod degradation;
 mod effect_tests;
 #[cfg(test)]
 mod integer_tests;
+mod recovery;
+#[cfg(test)]
+pub(crate) fn r2_history(source: &str) -> serde_json::Value {
+    recovery::history_observe(source)
+}
+#[cfg(test)]
+pub(crate) fn r2_project(scenario: &str) -> serde_json::Value {
+    recovery::projection_probe(scenario)
+}
+#[cfg(test)]
+pub(crate) fn r2_resolve(fault: &str) -> serde_json::Value {
+    recovery::resolve_probe(fault)
+}
 mod response;
 
 /// Budget left for the successor states one step creates. Every producer takes
@@ -3122,6 +3136,7 @@ enum Instruction {
         rule: Box<ir::ResponseAttempt>,
         retry: Option<usize>,
         failure: Option<usize>,
+        recovery: Option<usize>,
         next: usize,
     },
     Sleep {
@@ -3140,6 +3155,13 @@ enum Instruction {
         yes: usize,
         no: usize,
     },
+    ResolveEffect {
+        command: ir::BindingId,
+        evidence: ir::BindingId,
+        site: diag::Span,
+        next: usize,
+    },
+    ReceiptUnknown,
     End(ir::EndId),
     Stop,
 }
@@ -3186,11 +3208,22 @@ fn compile_at(
                     pc
                 });
                 let receipt = program.len();
+                let recovery = rule.recovery.as_ref().map(|b| {
+                    let mut child = path.clone();
+                    child.push(2);
+                    compile_at(b, 0, program, &child)
+                });
+                let receipt = if recovery.is_some() {
+                    program.len()
+                } else {
+                    receipt
+                };
                 program.push(Instruction::Receipt {
                     binding: call.binding,
                     rule: rule.clone(),
                     retry,
                     failure,
+                    recovery,
                     next: suffix,
                 });
                 Instruction::Wait {
@@ -3199,7 +3232,7 @@ fn compile_at(
                     next: receipt,
                 }
             }
-            ir::Stmt::Call(call) => Instruction::Wait {
+            ir::Stmt::Call(call) | ir::Stmt::Query(call, _) => Instruction::Wait {
                 calls: vec![call.clone()],
                 join: ir::Join::All,
                 next,
@@ -3228,6 +3261,13 @@ fn compile_at(
                     compile_at(else_body, next, program, &child)
                 },
             },
+            ir::Stmt::ResolveEffect { command, evidence } => Instruction::ResolveEffect {
+                command: *command,
+                evidence: *evidence,
+                site: statement.span,
+                next,
+            },
+            ir::Stmt::StopReceiptUnknown => Instruction::ReceiptUnknown,
             ir::Stmt::End(end) => Instruction::End(*end),
         };
         next = program.len();
@@ -3360,7 +3400,8 @@ impl std::hash::Hash for State {
 impl State {
     fn initial(model: &ir::Model, pc: usize) -> Self {
         Self {
-            response: (!model.response_attempts().is_empty()).then(response::History::default),
+            response: (!model.response_attempts().is_empty())
+                .then(|| response::History::for_model(model)),
             lost_updates: Vec::new(),
             sleep_until: None,
             contest: (!model.contests().is_empty()).then(|| ContestState {
@@ -3649,6 +3690,7 @@ fn emit_in(
     exploration: &mut Exploration,
     case_index: usize,
 ) -> EngineResult<()> {
+    recovery::task_event(state, bundle, binding, model);
     // ADR 0040: a commit of a contested effect fixes that route's target time.
     #[cfg(test)]
     match bundle {
@@ -4612,6 +4654,7 @@ impl Exploration {
         let mut out = outcome::Outcome {
             response_exercise: None,
             response_receipts: None,
+            response_recovery: None,
             scenario_observed_until: None,
             quality: None,
             state_range_violations: self.ranges,
@@ -4725,6 +4768,7 @@ impl Exploration {
         let mut out = outcome::Outcome {
             response_exercise: None,
             response_receipts: None,
+            response_recovery: None,
             scenario_observed_until: None,
             quality: None,
             state_range_violations: self.ranges,
@@ -6012,11 +6056,15 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
         for statement in block {
             match &statement.kind {
                 ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-                ir::Stmt::Call(c) => call(c)?,
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => call(c)?,
+                ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
                 ir::Stmt::Response(c, r) => {
                     call(c)?;
                     if r.attempt == 1 {
                         call(&r.command_call)?;
+                        if let Some(body) = &r.recovery {
+                            blocks.push(body);
+                        }
                     }
                 }
                 ir::Stmt::Fork { id, branches, join } => {
@@ -7259,9 +7307,27 @@ fn step_observed_inner(
                 rule,
                 retry,
                 failure,
+                recovery,
                 next,
             } => {
                 response::advance(&mut state, *binding, rule, *retry, *failure, *next)?;
+                recovery::enter(&mut state, rule.command, *recovery)?;
+                room.take(1)?;
+                return Ok(Step::Next(vec![state]));
+            }
+            Instruction::ResolveEffect {
+                command,
+                evidence,
+                site,
+                next,
+            } => {
+                recovery::resolve(&mut state, *command, *evidence, *site, model, 0)?;
+                state.pc = *next;
+                room.take(1)?;
+                return Ok(Step::Next(vec![state]));
+            }
+            Instruction::ReceiptUnknown => {
+                recovery::stop(&mut state)?;
                 room.take(1)?;
                 return Ok(Step::Next(vec![state]));
             }
@@ -7305,7 +7371,17 @@ fn step_observed_inner(
                 room.take(1)?;
                 return Ok(Step::Next(vec![state]));
             }
-            Instruction::End(end) => return business_end(state, *end, model, room, exploration),
+            Instruction::End(end) => {
+                if model.recovery().is_some()
+                    && state
+                        .response
+                        .as_ref()
+                        .is_some_and(|h| !h.unresolved.is_empty())
+                {
+                    return Err("invalid_recovery_ir".into());
+                }
+                return business_end(state, *end, model, room, exploration);
+            }
             Instruction::Stop if crate::contest::has_effects(model) => {
                 (&[], &post_join, &post_next)
             }
@@ -7316,6 +7392,7 @@ fn step_observed_inner(
     if !state.waiting && ordinary_wait {
         for call in calls {
             response::capture(&mut state, call, model, 0)?;
+            recovery::queued(&mut state, call);
         }
         state.tasks.extend(calls.iter().map(|call| Task {
             frozen_performance: None,
@@ -7736,6 +7813,14 @@ fn record_refusal(
     m: &ir::Model,
     e: &mut Exploration,
 ) {
+    if let Some(t) = s
+        .response
+        .as_mut()
+        .and_then(|h| h.recovery.as_mut())
+        .and_then(|h| h.tasks.get_mut(&binding))
+    {
+        t.result = Some(value);
+    }
     let cap = &m.capabilities[capability.0];
     e.refusals
         .entry(binding)
@@ -7850,6 +7935,12 @@ fn complete_in(
         let cap = &model.capabilities[task.capability.0];
         if version_rejected(task, cap) {
             results.push(Some(cap.version_check.as_ref().unwrap().reject));
+        } else if cap.receipt_query.is_some() {
+            results.extend(
+                recovery::project(model, task.capability, &state.state_values, case_index)?
+                    .into_iter()
+                    .map(Some),
+            );
         } else if let Some(a) = &cap.atomic {
             let commit = condition_at(
                 &a.condition,
@@ -7885,6 +7976,16 @@ fn complete_in(
         metrics::observe(&mut completed, model);
         if let Some(value) = result {
             let cap = &model.capabilities[task.capability.0];
+            if cap.receipt_query.is_some() {
+                recovery::observe_query(
+                    &mut completed,
+                    task.binding,
+                    task.capability,
+                    value,
+                    model,
+                    case_index,
+                )?;
+            }
             let writes = if version_rejected(task, cap) {
                 &[][..]
             } else {
@@ -10266,6 +10367,7 @@ mod tests {
                 .into_iter()
                 .enumerate()
                 .map(|(i, duration)| ir::Capability {
+                    receipt_query: None,
                     qualified_executors: None,
                     performance: None,
                     version_check: None,

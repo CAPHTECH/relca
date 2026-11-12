@@ -240,6 +240,8 @@ pub(crate) fn replay_choices(
     case_id: Option<u64>,
     choices: &[Option<x::KernelChoice>],
 ) -> Result<()> {
+    #[cfg(test)]
+    super::recovery::clear_replay_observation();
     validate_target(steps, target)?;
     validate_d1_target(m, steps, target, case_id)?;
     validate_authority_target(m, steps, target)?;
@@ -833,7 +835,9 @@ pub(super) fn apply<'a>(
             legal(f.waiting.is_none())?;
             let stmt = next_statement(f)?;
             let (calls, join) = match &stmt.kind {
-                Stmt::Call(c) | Stmt::Response(c, _) => (std::slice::from_ref(c), None),
+                Stmt::Call(c) | Stmt::Query(c, _) | Stmt::Response(c, _) => {
+                    (std::slice::from_ref(c), None)
+                }
                 Stmt::Fork { branches, join, .. } => (branches.as_slice(), Some(join)),
                 _ => return Err(ReplayReason::IllegalTransition),
             };
@@ -946,6 +950,96 @@ pub(super) fn apply<'a>(
             f.tasks[n].phase = Phase::Refused(req.otherwise);
             f.tasks[n].stop = Some(f.now);
             reference(i.record_site(f, Occurrence::Refusal(id, req.otherwise), None, binding))?;
+        }
+        Kind::ReceiptQuery => {
+            let n = task_index(f, m, stage)?;
+            let t = &f.tasks[n];
+            let Phase::Finished(value) = t.phase else {
+                return Err(ReplayReason::IllegalTransition);
+            };
+            let cap = &m.capabilities[t.call.capability.0];
+            let binding = t.call.binding;
+            legal(
+                cap.receipt_query.is_some()
+                    && stage.location.span == t.call.span
+                    && stage.executor.is_none()
+                    && stage.actor.as_deref() == Some(m.actors[cap.actor.0].name.as_str())
+                    && stage.capability.as_deref() == Some(cap.name.as_str())
+                    && stage.result.as_deref()
+                        == Some(m.types[cap.return_type.0].members[value.0].as_str())
+                    && stage.events.is_empty(),
+            )?;
+            let event = reference(super::recovery::query(
+                f,
+                m,
+                binding,
+                value,
+                &f.state_values,
+                i.case_index,
+            ))?;
+            let Occurrence::ReceiptQuery(q) = event else {
+                return Err(ReplayReason::IllegalTransition);
+            };
+            let known = m.types[cap.return_type.0].members[value.0] != "still_unknown";
+            let evidence = known.then(|| {
+                x::recovery_evidence_id(
+                    q.case as u64 + 1,
+                    &m.site_name(q.command),
+                    &m.site_name(q.query),
+                    q.at,
+                )
+            });
+            legal(stage.saved_key == Some(q.key as u64 + 1) && stage.evidence_ref == evidence)?;
+            reference(i.record_site(f, Occurrence::ReceiptQuery(q), None, binding))?;
+        }
+        Kind::ResolveEffect => {
+            legal(
+                f.waiting.is_none()
+                    && stage.events.is_empty()
+                    && stage.actor.is_none()
+                    && stage.capability.is_none()
+                    && stage.executor.is_none(),
+            )?;
+            let statement = next_statement(f)?;
+            let Stmt::ResolveEffect { command, evidence } = &statement.kind else {
+                return Err(ReplayReason::IllegalTransition);
+            };
+            legal(
+                stage.location.span == statement.span
+                    && stage.binding.as_deref() == Some(m.site_name(*evidence).as_str()),
+            )?;
+            let event = reference(super::recovery::resolve(
+                f,
+                m,
+                *command,
+                *evidence,
+                statement.span,
+                i.case_index,
+            ))?;
+            let q = f
+                .trace
+                .iter()
+                .find_map(|o| match o.event {
+                    Occurrence::ReceiptQuery(q) if q.query == *evidence => Some(q),
+                    _ => None,
+                })
+                .ok_or(ReplayReason::IllegalTransition)?;
+            let ty = m.process.bindings[evidence.0].ty;
+            legal(
+                stage.result.as_deref() == Some(m.types[ty.0].members[q.value.0].as_str())
+                    && stage.saved_key == Some(q.key as u64 + 1)
+                    && stage.evidence_ref.as_deref()
+                        == Some(
+                            x::recovery_evidence_id(
+                                q.case as u64 + 1,
+                                &m.site_name(q.command),
+                                &m.site_name(q.query),
+                                q.at,
+                            )
+                            .as_str(),
+                        ),
+            )?;
+            reference(i.record(f, event, None))?;
         }
         Kind::Wait => {
             if f.sleep().is_some()
@@ -1074,6 +1168,18 @@ pub(super) fn apply<'a>(
                             branches.push(b.overrides.clone());
                         }
                     }
+                } else if cap.receipt_query.is_some() {
+                    if reference(super::recovery::project(
+                        m,
+                        cap_id,
+                        &f.state_values,
+                        i.case_index,
+                    ))?
+                    .contains(&result)
+                        && choice.is_none()
+                    {
+                        branches.push(Vec::new());
+                    }
                 } else if let Some(a) = &cap.atomic {
                     let expected = if reference(i.condition(f, &a.condition, 0))? == a.commit_when {
                         a.commit
@@ -1125,6 +1231,8 @@ pub(super) fn apply<'a>(
                     let observation = stage.observed_receipt.ok_or(ReplayReason::EventMismatch)?;
                     let was_unknown=f.trace.iter().any(|o|matches!(&o.event,Occurrence::Channel(old) if old.command==r.command && old.attempt<r.attempt && !old.resolved));
                     let receipt = super::response::Receipt {
+                        #[cfg(test)]
+                        weight: None,
                         command: r.command,
                         binding: f.tasks[n].call.binding,
                         attempt: r.attempt,
@@ -1248,6 +1356,14 @@ pub(super) fn apply<'a>(
         Kind::Join => {
             let wait = f.waiting.as_ref().ok_or(ReplayReason::IllegalTransition)?;
             legal(wait.tasks.clone().all(|n| f.tasks[n].terminal()))?;
+            for n in wait.tasks.clone() {
+                let t = &f.tasks[n];
+                if m.capabilities[t.call.capability.0].receipt_query.is_some()
+                    && matches!(t.phase, Phase::Finished(_))
+                {
+                    legal(f.trace.iter().any(|o|matches!(o.event,Occurrence::ReceiptQuery(q) if q.query==t.call.binding)))?;
+                }
+            }
             legal(!matches!(wait.join, Some(Join::Any { .. })) || wait.winner.is_some())?;
             if !(wait.join.is_none()
                 && wait.tasks.len() == 1
@@ -1279,6 +1395,15 @@ pub(super) fn apply<'a>(
                 f.control.pop();
             }
             if let Some(stmt) = f.control.last().and_then(|b| b.first())
+                && matches!(stmt.kind, Stmt::StopReceiptUnknown)
+            {
+                legal(stage.location.span == stmt.span)?;
+                next_statement(f)?;
+                let event = reference(super::recovery::stop(f, m))?;
+                reference(i.record(f, event, None))?;
+                return legal(stage.time == f.now && same_values(f, m, stage));
+            }
+            if let Some(stmt) = f.control.last().and_then(|b| b.first())
                 && let Stmt::WaitUntil(condition) = &stmt.kind
             {
                 legal(
@@ -1306,6 +1431,9 @@ pub(super) fn apply<'a>(
             f.control.push(body);
         }
         Kind::End => {
+            if m.recovery().is_some() {
+                legal(super::recovery::unresolved(f).is_empty())?;
+            }
             let exhausted = f.trace.last().and_then(|o| match o.event {
                 Occurrence::ResponseDestination(e) => Some(e),
                 _ => None,
@@ -1445,6 +1573,28 @@ fn validate_d1_target(
 }
 
 fn response_metadata(m: &Model, s: &Stage) -> Result<()> {
+    if matches!(s.kind, Kind::ReceiptQuery | Kind::ResolveEffect) {
+        let (_, body) = m.recovery().ok_or(ReplayReason::IllegalTransition)?;
+        let binding = m
+            .process
+            .bindings
+            .iter()
+            .position(|b| Some(b.name.as_str()) == s.binding.as_deref())
+            .map(BindingId)
+            .ok_or(ReplayReason::IllegalTransition)?;
+        let (_, command) =
+            super::recovery::source(body, binding).ok_or(ReplayReason::IllegalTransition)?;
+        return legal(
+            s.command.as_deref() == Some(m.site_name(command).as_str())
+                && s.saved_key == s.case_id
+                && s.case_id.is_some()
+                && s.attempt.is_none()
+                && s.observed_receipt.is_none()
+                && s.actual_result.is_none()
+                && s.retry_location.is_none(),
+        );
+    }
+    legal(s.saved_key.is_none() && s.evidence_ref.is_none())?;
     let descriptor = m
         .response_attempts()
         .into_iter()

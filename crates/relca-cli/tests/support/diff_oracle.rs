@@ -37,6 +37,9 @@ struct Shape {
 fn walk(block: &ir::Block, s: &mut Shape) {
     for statement in block {
         match &statement.kind {
+            ir::Stmt::Query(_, _)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown => panic!("receipt recovery is outside this oracle"),
             ir::Stmt::WaitUntil(_) => panic!("old-IR diff oracle does not handle condition waits"),
             ir::Stmt::Response(_, _) => {
                 panic!("old-IR diff oracle does not cover receipt or retry semantics")

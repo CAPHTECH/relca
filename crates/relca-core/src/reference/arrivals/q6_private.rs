@@ -140,6 +140,7 @@ fn tree(m: &Model, times: Vec<Tick>) -> Tree<'_> {
     let n = times.len();
     let limits = Limits::default();
     Tree {
+        recovery_paths: Vec::new(),
         response_exercise: BTreeMap::new(),
         response_receipts: vec![],
         first_hits: vec![],

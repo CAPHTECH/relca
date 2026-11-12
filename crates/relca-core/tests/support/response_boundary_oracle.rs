@@ -64,6 +64,9 @@ pub fn expected(source: &str) -> (Value, Vec<Value>) {
     ) {
         for s in b {
             match &s.value {
+                ast::Stmt::ResolveEffect { .. } | ast::Stmt::StopReceiptUnknown => {
+                    panic!("receipt recovery is outside this oracle")
+                }
                 ast::Stmt::WaitUntil(_) => {
                     panic!("response boundary oracle does not handle condition waits")
                 }

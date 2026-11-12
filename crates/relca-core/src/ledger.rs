@@ -137,6 +137,7 @@ impl Ledger {
 
     /// Resolve only the closed, type-owned evidence locations. No analysis runs.
     pub(crate) fn connect(&mut self, host: &Value) -> Result<(), String> {
+        self.derivation["bundle"] = serde_json::json!(conclusion_bundle(host));
         self.derivation["components"] = links::components(host)?;
         self.context = json!({"model":ref_at(host,"/model"),"mode":ref_at(host,"/mode"),
             "assumptions":refs(host,&["/assumptions","/explanation/assumptions"]),
@@ -160,7 +161,7 @@ impl Ledger {
         let canonical = Self::prelower("exhaustive", false);
         if self.producer != canonical.producer
             || self.backends["external"] != canonical.backends["external"]
-            || self.derivation["bundle"] != "relca-conclusions-p2-uncertainty-2"
+            || self.derivation["bundle"] != conclusion_bundle(host)
         {
             return Err("version_unavailable: producer, external backend or bundle".into());
         }
@@ -196,6 +197,28 @@ impl Ledger {
             return Err("context_mismatch: evidence or local version".into());
         }
         Ok(())
+    }
+}
+
+fn conclusion_bundle(host: &Value) -> &'static str {
+    fn recovery(v: &Value) -> bool {
+        v.get("response_recovery").is_some_and(Value::is_object)
+            || v["explanation"]["version"] == "invoice-counterexample-p3a-recovery-1"
+            || ["from", "to"].iter().any(|s| {
+                v.get(*s)
+                    .and_then(|s| s.get("report"))
+                    .is_some_and(recovery)
+            })
+            || ["plans", "points"].iter().any(|s| {
+                v.get(*s)
+                    .and_then(Value::as_array)
+                    .is_some_and(|rows| rows.iter().filter_map(|r| r.get("report")).any(recovery))
+            })
+    }
+    if recovery(host) {
+        "relca-conclusions-p3a-recovery-1"
+    } else {
+        "relca-conclusions-p2-uncertainty-2"
     }
 }
 

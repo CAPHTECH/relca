@@ -14,6 +14,9 @@ fn effects(body: &ir::Block, m: &ir::Model, out: &mut BTreeSet<String>) {
     }
     for statement in body {
         match &statement.kind {
+            ir::Stmt::Query(_, _)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown => panic!("receipt recovery is outside this oracle"),
             ir::Stmt::WaitUntil(_) => {
                 panic!("responsibility defaults oracle does not handle condition waits")
             }

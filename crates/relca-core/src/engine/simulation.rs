@@ -623,6 +623,7 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
             result.range_stops.push((rep, facts.ranges.clone()));
         }
         result.replications.push(ReplicationOutcome {
+            response_recovery: None,
             contests: Vec::new(),
             admission: None,
             lost_updates: facts.lost_updates.iter().copied().collect(),

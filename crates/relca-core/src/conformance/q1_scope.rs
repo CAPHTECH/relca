@@ -44,7 +44,11 @@ pub(super) fn declarations(model: &ast::Model) -> Vec<Feature> {
                     block(then_body, p, rows);
                     block(else_body, p, rows)
                 }
-                ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) | ast::Stmt::End(_) => {}
+                ast::Stmt::Wait(_)
+                | ast::Stmt::WaitUntil(_)
+                | ast::Stmt::End(_)
+                | ast::Stmt::ResolveEffect { .. }
+                | ast::Stmt::StopReceiptUnknown => {}
             }
         }
     }
@@ -56,6 +60,9 @@ pub(super) fn declarations(model: &ast::Model) -> Vec<Feature> {
                     if let ast::ActorItem::Capability(c) = item {
                         for item in &c.items {
                             let feature = match &item.value {
+                                ast::CapItem::ReceiptQuery { .. } => {
+                                    Some("recovery_feature_combination")
+                                }
                                 ast::CapItem::QualifiedExecutors(_)
                                 | ast::CapItem::OutcomesPerformance(_) => {
                                     Some("q6_feature_combination")

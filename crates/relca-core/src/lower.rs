@@ -45,6 +45,7 @@ use diag::{Diagnostic, E_CANCEL_0, E_CAP_0, E_NAME_0, E_TYPE_0, Span, U_SEM_0};
 
 mod arrival_distribution;
 mod priority;
+mod recovery;
 mod resource_time;
 mod response_loss;
 
@@ -488,11 +489,17 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
                 }
             }
             ast::Stmt::Call(c) => {
+                if let Some(body) = &c.recovery {
+                    collect_comparison_ends(body, names);
+                }
                 if let Some(retry) = &c.retry {
                     names.insert(retry.exhausted.value.clone());
                 }
             }
-            ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {}
+            ast::Stmt::Wait(_)
+            | ast::Stmt::WaitUntil(_)
+            | ast::Stmt::ResolveEffect { .. }
+            | ast::Stmt::StopReceiptUnknown => {}
         }
     }
 }
@@ -500,7 +507,12 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
 fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
     for statement in block {
         match &statement.value {
-            ast::Stmt::Call(call) => calls.push(call),
+            ast::Stmt::Call(call) => {
+                calls.push(call);
+                if let Some(body) = &call.recovery {
+                    collect_calls(body, calls);
+                }
+            }
             ast::Stmt::Fork { branches, .. } => calls.extend(branches),
             ast::Stmt::If {
                 then_body,
@@ -510,7 +522,11 @@ fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
                 collect_calls(then_body, calls);
                 collect_calls(else_body, calls);
             }
-            ast::Stmt::End(_) | ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {}
+            ast::Stmt::End(_)
+            | ast::Stmt::Wait(_)
+            | ast::Stmt::WaitUntil(_)
+            | ast::Stmt::ResolveEffect { .. }
+            | ast::Stmt::StopReceiptUnknown => {}
         }
     }
 }
@@ -669,6 +685,8 @@ mod tests {
     }
     fn call(binding: &str, capability: &str) -> ast::Call {
         ast::Call {
+            recovery: None,
+            query_command: None,
             response_loss: None,
             retry: None,
             args: Vec::new(),
@@ -1839,6 +1857,7 @@ struct Lower {
     binding_types: BTreeMap<String, BTreeSet<ir::TypeId>>,
     unknown_binding_types: BTreeSet<String>,
     check_flow: bool,
+    in_recovery_handler: bool,
     bindings: Vec<ir::Binding>,
     binding_names: BTreeMap<String, ir::BindingId>,
     calls: BTreeMap<String, ir::Call>,
@@ -4204,6 +4223,7 @@ impl Lower {
         if self.errors.iter().any(|d| d.message == "q6_capacity_limit") {
             return Err(self.errors);
         }
+        self.recovery_writers(model)?;
         for (actor_id, actor) in actor_declarations {
             let (mut contains, mut overlaps) = (None, None::<Vec<ir::ActorId>>);
             for field in &actor.items {
@@ -4249,6 +4269,29 @@ impl Lower {
             }
         }
 
+        for item in &model.items {
+            if let ast::Item::Actor(a) = item {
+                for field in &a.items {
+                    if let ast::ActorItem::Capability(c) = field
+                        && c.items
+                            .iter()
+                            .any(|i| matches!(i.value, ast::CapItem::ReceiptQuery { .. }))
+                        && let Some(id) = self
+                            .cap_names
+                            .get(&(a.name.value.clone(), c.name.value.clone()))
+                            .copied()
+                    {
+                        let cap = self.capabilities[id.0].clone();
+                        self.capabilities[id.0].receipt_query = self.query_declaration(
+                            c,
+                            cap.actor,
+                            &cap.params,
+                            Some(cap.return_type),
+                        );
+                    }
+                }
+            }
+        }
         self.performance_bindings();
         fn record_calls(block: &ast::Block, l: &mut Lower) {
             for s in block {
@@ -4320,6 +4363,9 @@ impl Lower {
                     match &s.value {
                         ast::Stmt::Call(c) => {
                             out.insert(c.binding.value.clone());
+                            if let Some(body) = &c.recovery {
+                                names(body, out);
+                            }
                         }
                         ast::Stmt::Fork { branches, .. } => {
                             out.extend(branches.iter().map(|c| c.binding.value.clone()));
@@ -4332,7 +4378,11 @@ impl Lower {
                             names(then_body, out);
                             names(else_body, out);
                         }
-                        ast::Stmt::End(_) | ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {}
+                        ast::Stmt::End(_)
+                        | ast::Stmt::Wait(_)
+                        | ast::Stmt::WaitUntil(_)
+                        | ast::Stmt::ResolveEffect { .. }
+                        | ast::Stmt::StopReceiptUnknown => {}
                     }
                 }
             }
@@ -4459,6 +4509,7 @@ impl Lower {
         let single_process = processes.len() == 1;
         let mut process = None;
         for p in processes {
+            self.recovery_ast(p)?;
             self.bindings.clear();
             self.binding_names.clear();
             self.binding_types.clear();
@@ -5756,9 +5807,10 @@ impl Lower {
                     .as_ref()
                     .is_some_and(|q| !q.quantiles.is_empty()))
         {
+            let recovery = lowered.recovery().is_some();
             let mut ds = lowered.diagnostics;
             ds.push(Diagnostic {code:U_SEM_0.into(),severity:diag::Severity::Error,
-                message:"retry_feature_combination: receipt/retry with contest or quantiles is unsupported".into(),span:Some(model.span)});
+                message:if recovery{"recovery_feature_combination: contest or quantiles are unsupported"}else{"retry_feature_combination: receipt/retry with contest or quantiles is unsupported"}.into(),span:Some(model.span)});
             return Err(ds);
         }
         if let Err(error) = crate::actor_table::validate(&lowered) {
@@ -8659,8 +8711,16 @@ impl Lower {
             fn calls(b: &ir::Block, caps: &mut BTreeSet<usize>) {
                 for s in b {
                     match &s.kind {
-                        ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                        ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                             caps.insert(c.capability.0);
+                        }
+                        ir::Stmt::Response(c, r) => {
+                            caps.insert(c.capability.0);
+                            if r.attempt == 1
+                                && let Some(b) = &r.recovery
+                            {
+                                calls(b, caps);
+                            }
                         }
                         ir::Stmt::Fork { branches, .. } => {
                             caps.extend(branches.iter().map(|c| c.capability.0))
@@ -8673,7 +8733,11 @@ impl Lower {
                             calls(then_body, caps);
                             calls(else_body, caps);
                         }
-                        ir::Stmt::End(_) | ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
+                        ir::Stmt::End(_)
+                        | ir::Stmt::Wait(_)
+                        | ir::Stmt::WaitUntil(_)
+                        | ir::Stmt::ResolveEffect { .. }
+                        | ir::Stmt::StopReceiptUnknown => {}
                     }
                 }
             }
@@ -8765,6 +8829,24 @@ impl Lower {
         cap: &ast::Capability,
         model_span: Span,
     ) {
+        if cap
+            .items
+            .iter()
+            .any(|i| matches!(i.value, ast::CapItem::ReceiptQuery { .. }))
+            && cap.items.iter().any(|i| {
+                !matches!(
+                    i.value,
+                    ast::CapItem::ReceiptQuery { .. }
+                        | ast::CapItem::DurationFixed(_)
+                        | ast::CapItem::DurationDistribution(_)
+                        | ast::CapItem::Cancel(_)
+                        | ast::CapItem::Uses(_)
+                )
+            })
+        {
+            self.unsupported("recovery_query_unmodeled", cap.span);
+            return;
+        }
         let key = (actor_name.to_owned(), cap.name.value.clone());
         if self.cap_names.contains_key(&key) {
             self.unsupported("duplicate Capability declaration", model_span);
@@ -8877,7 +8959,7 @@ impl Lower {
                     people.sort();
                     qualified_executors = Some(people);
                 }
-                ast::CapItem::OutcomesPerformance(_) => {}
+                ast::CapItem::OutcomesPerformance(_) | ast::CapItem::ReceiptQuery { .. } => {}
                 ast::CapItem::Idempotency(_) | ast::CapItem::EffectScopeModeled => {}
                 ast::CapItem::VersionCheck {
                     variables,
@@ -9155,7 +9237,9 @@ impl Lower {
             && !cap.items.iter().any(|i| {
                 matches!(
                     i.value,
-                    ast::CapItem::OutcomesKernel(_) | ast::CapItem::OutcomesPerformance(_)
+                    ast::CapItem::OutcomesKernel(_)
+                        | ast::CapItem::OutcomesPerformance(_)
+                        | ast::CapItem::ReceiptQuery { .. }
                 )
             })
         {
@@ -9275,7 +9359,21 @@ impl Lower {
                 self.unsupported("version_check with kernel outcomes is unsupported", v.span);
             }
         }
+        let receipt_query = None;
+        if cap
+            .items
+            .iter()
+            .any(|i| matches!(i.value, ast::CapItem::ReceiptQuery { .. }))
+            && results.is_none()
+        {
+            results = ty.map(|t| {
+                (0..self.types[t.0].members.len())
+                    .map(ir::ValueId)
+                    .collect()
+            });
+        }
         self.capabilities.push(ir::Capability {
+            receipt_query,
             performance,
             qualified_executors,
             version_check,
@@ -9301,7 +9399,13 @@ impl Lower {
             cancel: cancel.unwrap_or(ir::Cancel::Unspecified),
             span: cap.span,
         });
-        self.response_capability(id, cap);
+        if !cap
+            .items
+            .iter()
+            .any(|i| matches!(i.value, ast::CapItem::ReceiptQuery { .. }))
+        {
+            self.response_capability(id, cap);
+        }
         self.cap_context = None;
     }
 
@@ -9485,7 +9589,12 @@ impl Lower {
     fn collect(&mut self, block: &ast::Block) {
         for stmt in block {
             match &stmt.value {
-                ast::Stmt::Call(call) => self.collect_call(call),
+                ast::Stmt::Call(call) => {
+                    self.collect_call(call);
+                    if let Some(body) = &call.recovery {
+                        self.collect(body);
+                    }
+                }
                 ast::Stmt::Fork { name, branches, .. } => {
                     if self.fork_names.contains_key(&name.value) {
                         if self.ambiguous_forks.insert(name.value.clone()) {
@@ -9524,7 +9633,11 @@ impl Lower {
                     self.collect(then_body);
                     self.collect(else_body);
                 }
-                ast::Stmt::End(_) | ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {} // Already collected model-wide.
+                ast::Stmt::End(_)
+                | ast::Stmt::Wait(_)
+                | ast::Stmt::WaitUntil(_)
+                | ast::Stmt::ResolveEffect { .. }
+                | ast::Stmt::StopReceiptUnknown => {} // Already collected model-wide.
             }
         }
     }
@@ -9548,6 +9661,9 @@ impl Lower {
                     self.collect_ends(else_body);
                 }
                 ast::Stmt::Call(call) => {
+                    if let Some(body) = &call.recovery {
+                        self.collect_ends(body);
+                    }
                     if let Some(r) = &call.retry {
                         let name = &r.exhausted;
                         if !self.end_names.contains_key(&name.value) {
@@ -9557,7 +9673,11 @@ impl Lower {
                         }
                     }
                 }
-                ast::Stmt::Fork { .. } | ast::Stmt::Wait(_) | ast::Stmt::WaitUntil(_) => {}
+                ast::Stmt::Fork { .. }
+                | ast::Stmt::Wait(_)
+                | ast::Stmt::WaitUntil(_)
+                | ast::Stmt::ResolveEffect { .. }
+                | ast::Stmt::StopReceiptUnknown => {}
             }
         }
     }
@@ -9675,13 +9795,60 @@ impl Lower {
         let mut resolved = Vec::new();
         for stmt in block {
             let kind = match &stmt.value {
+                ast::Stmt::ResolveEffect { command, evidence } => {
+                    match (
+                        self.binding_names.get(&command.value).copied(),
+                        self.binding_names.get(&evidence.value).copied(),
+                    ) {
+                        (Some(command), Some(evidence)) => {
+                            Some(ir::Stmt::ResolveEffect { command, evidence })
+                        }
+                        _ => {
+                            self.error(E_NAME_0, "unknown_recovery_reference", stmt.span);
+                            None
+                        }
+                    }
+                }
+                ast::Stmt::StopReceiptUnknown => {
+                    flow.histories.clear();
+                    Some(ir::Stmt::StopReceiptUnknown)
+                }
                 ast::Stmt::WaitUntil(c) => self.condition(c, flow).map(ir::Stmt::WaitUntil),
                 ast::Stmt::Wait(d) => self.ticks(d).map(ir::Stmt::Wait),
                 ast::Stmt::Call(ast_call) => {
                     if let Some(call) = self.call_arguments(ast_call, flow) {
                         flow.available.insert(call.binding);
-                        if ast_call.response_loss.is_some() || ast_call.retry.is_some() {
-                            resolved.extend(self.expand_response(ast_call, call));
+                        if let Some(command) = &ast_call.query_command {
+                            self.binding_names
+                                .get(&command.value)
+                                .copied()
+                                .map(|command| ir::Stmt::Query(call, command))
+                                .or_else(|| {
+                                    self.error(
+                                        E_NAME_0,
+                                        "unknown_recovery_reference",
+                                        command.span,
+                                    );
+                                    None
+                                })
+                        } else if ast_call.response_loss.is_some()
+                            || ast_call.retry.is_some()
+                            || ast_call.recovery.is_some()
+                        {
+                            let mut expanded = self.expand_response(ast_call, call);
+                            if let Some(body) = &ast_call.recovery {
+                                let mut handler_flow = flow.clone();
+                                let previous = self.in_recovery_handler;
+                                self.in_recovery_handler = true;
+                                let handler = self.block(body, &mut handler_flow);
+                                self.in_recovery_handler = previous;
+                                for s in &mut expanded {
+                                    if let ir::Stmt::Response(_, r) = &mut s.kind {
+                                        r.recovery = Some(handler.clone());
+                                    }
+                                }
+                            }
+                            resolved.extend(expanded);
                             None
                         } else {
                             Some(ir::Stmt::Call(call))
@@ -9853,7 +10020,10 @@ impl Lower {
                     .state_names
                     .get(&arg.value)
                     .is_some_and(|v| self.state_variables[v.0].kind == ir::StateKind::ObservedCase);
-            if self.check_flow && !flow.available.contains(&id) && !current_observed_alias {
+            if self.check_flow
+                && !flow.available.contains(&id)
+                && (self.in_recovery_handler || !current_observed_alias)
+            {
                 self.unsupported("argument result is not definitely available", arg.span);
             }
             args.push(id);

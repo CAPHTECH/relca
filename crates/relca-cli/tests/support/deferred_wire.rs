@@ -642,6 +642,9 @@ pub fn validate_deferred_metrics_with_source(
         };
         for stmt in b {
             match &stmt.value {
+                ast::Stmt::ResolveEffect { .. } | ast::Stmt::StopReceiptUnknown => {
+                    panic!("receipt recovery is outside this oracle")
+                }
                 ast::Stmt::WaitUntil(_) => {
                     panic!("deferred wire walker does not handle condition waits")
                 }

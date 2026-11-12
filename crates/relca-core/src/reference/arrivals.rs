@@ -243,6 +243,7 @@ impl Bound {
     }
 }
 struct Tree<'a> {
+    recovery_paths: Vec<crate::recovery::Path>,
     response_exercise: BTreeMap<CapabilityId, (usize, usize)>,
     response_receipts: Vec<crate::outcome::ResponseReceipt>,
     first_hits: Vec<Vec<Option<u128>>>,
@@ -709,6 +710,10 @@ impl<'a> Tree<'a> {
             return Err(StopReason::SemanticAbort);
         };
         c.frame.state_values = values;
+        #[cfg(test)]
+        if let Occurrence::ResolveEffect(r) = &event {
+            recovery::before_resolve(&c.frame, r.site);
+        }
         // Unlike legacy trace elision, arrivals traces also retain Dispatch for
         // historical admission accounting even without requested properties.
         let result_values = response::visible_values(&c.frame, self.m, Some(&event));
@@ -742,6 +747,12 @@ impl<'a> Tree<'a> {
         self.cases[k].condition(&frame, c, 0)
     }
     fn ending(&mut self, w: &mut World<'a>, k: usize, end: EndId) -> Execution {
+        if self.m.recovery().is_some() {
+            require(
+                recovery::unresolved(&w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame)
+                    .is_empty(),
+            )?;
+        }
         self.record(w, k, Occurrence::Terminal(end), None, true)?;
         let overflow = matches!(w.cases[k], CaseSlot::Overflow(_));
         let Some(c) = w.cases[k].payload_mut() else {
@@ -977,6 +988,45 @@ impl<'a> Tree<'a> {
         }
     }
     fn leaf(&mut self, w: &World<'a>, cut: ReferenceCut) -> Result<Vec<Bound>, StopReason> {
+        if self.m.recovery().is_some() && self.stats.projection == Projection::Full {
+            use crate::recovery::Stop;
+            let rows: Vec<_> = w
+                .cases
+                .iter()
+                .enumerate()
+                .filter_map(|(k, slot)| {
+                    slot.payload().map(|c| {
+                        let stop = if c.end.is_some() {
+                            Stop::End
+                        } else if c
+                            .frame
+                            .trace
+                            .iter()
+                            .any(|o| matches!(o.event, Occurrence::ResponseStopped(_)))
+                        {
+                            Stop::ReceiptUnknown
+                        } else {
+                            match cut {
+                                ReferenceCut::Horizon => Stop::CutOff,
+                                ReferenceCut::Range => Stop::StateRange,
+                                ReferenceCut::None => Stop::Deadlock,
+                                _ => Stop::Truncated,
+                            }
+                        };
+                        (k, &c.frame, stop)
+                    })
+                })
+                .collect();
+            #[cfg(test)]
+            if crate::r2_test_adapter::active() {
+                for (k, f, stop) in &rows {
+                    let mut frame = (*f).clone();
+                    frame.state_values = self.values(w, *k);
+                    recovery::capture(self.m, &frame, *k, *stop);
+                }
+            }
+            self.recovery_paths.push(recovery::path(self.m, &rows)?);
+        }
         if cut == ReferenceCut::None && !self.m.response_attempts().is_empty() {
             for id in 0..self.m.capabilities.len() {
                 for slot in &w.cases {
@@ -2112,6 +2162,15 @@ impl<'a> Tree<'a> {
         let statement = &block[0];
         *block = &block[1..];
         match &statement.kind {
+            Stmt::ResolveEffect { command, evidence } => {
+                let event =
+                    recovery::resolve(&c.frame, self.m, *command, *evidence, statement.span, k)?;
+                self.record(&mut next, k, event, None, false)?;
+            }
+            Stmt::StopReceiptUnknown => {
+                let event = recovery::stop(&c.frame, self.m)?;
+                self.record(&mut next, k, event, None, false)?;
+            }
             Stmt::WaitUntil(_) => return Err(StopReason::SemanticAbort),
             Stmt::Wait(duration) => {
                 let wake = w
@@ -2160,7 +2219,7 @@ impl<'a> Tree<'a> {
                         .map(|task| QueueEntry { task, at: w.now }),
                 );
             }
-            Stmt::Call(call) => {
+            Stmt::Call(call) | Stmt::Query(call, _) => {
                 self.cases[k].create(&mut c.frame, std::slice::from_ref(call), None)?;
                 c.queue.extend(
                     c.frame
@@ -2491,6 +2550,25 @@ impl<'a> Tree<'a> {
                 }
                 *block = &block[1..];
                 match &statement.kind {
+                    Stmt::ResolveEffect { command, evidence } => {
+                        let frame = &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame;
+                        let event = recovery::resolve(
+                            frame,
+                            self.m,
+                            *command,
+                            *evidence,
+                            statement.span,
+                            k,
+                        )?;
+                        self.record(&mut w, k, event, None, false)?;
+                    }
+                    Stmt::StopReceiptUnknown => {
+                        let event = recovery::stop(
+                            &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame,
+                            self.m,
+                        )?;
+                        self.record(&mut w, k, event, None, false)?;
+                    }
                     Stmt::WaitUntil(_) => return Err(StopReason::SemanticAbort),
                     Stmt::Wait(duration) => {
                         let wake = w
@@ -2541,7 +2619,7 @@ impl<'a> Tree<'a> {
                                 .map(|task| QueueEntry { task, at: w.now }),
                         );
                     }
-                    Stmt::Call(call) => {
+                    Stmt::Call(call) | Stmt::Query(call, _) => {
                         self.cases[k].create(&mut c.frame, std::slice::from_ref(call), None)?;
                         let range = c.frame.waiting.as_ref().unwrap().tasks.clone();
                         c.queue
@@ -2665,6 +2743,11 @@ impl<'a> Tree<'a> {
                                 .filter(|b| !b.probability.is_zero())
                                 .map(|b| (b.probability.clone(), b.result, b.overrides.clone()))
                                 .collect::<Vec<_>>()
+                        } else if cap.receipt_query.is_some() {
+                            recovery::project(self.m, t.call.capability, &self.values(&w, k), k)?
+                                .into_iter()
+                                .map(|x| (Rational::one(), x, Vec::new()))
+                                .collect()
                         } else if let Some(a) = &cap.atomic {
                             let x = if self.condition(&w, k, &a.condition)? == a.commit_when {
                                 a.commit
@@ -2991,6 +3074,7 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
     });
     let n = times.len();
     let mut tree = Tree {
+        recovery_paths: Vec::new(),
         response_exercise: BTreeMap::new(),
         response_receipts: Vec::new(),
         first_closed: vec![
@@ -3370,6 +3454,22 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
     }
     ReferenceRun {
         outcome: Outcome {
+            response_recovery: m
+                .recovery()
+                .filter(|_| projection == Projection::Full)
+                .map(|_| {
+                    crate::recovery::Recovery::new(
+                        std::mem::take(&mut tree.recovery_paths),
+                        if stop == StopReason::Complete
+                            && !tree.truncated
+                            && tree.cases.iter().all(|i| i.statistics.ranges.is_empty())
+                        {
+                            crate::recovery::Coverage::Complete
+                        } else {
+                            crate::recovery::Coverage::Partial
+                        },
+                    )
+                }),
             response_exercise: if !m.response_attempts().is_empty()
                 && stop == StopReason::Complete
                 && !tree.truncated
@@ -4089,6 +4189,7 @@ mod arrivals_tests {
     fn tree(m: &Model, limits: Limits, times: Vec<Tick>) -> Tree<'_> {
         let n = times.len();
         Tree {
+            recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
             first_hits: Vec::new(),

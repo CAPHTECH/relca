@@ -43,6 +43,8 @@ pub enum Scope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
+    ReceiptQuery,
+    ResolveEffect,
     Horizon,
     RangeViolation,
     Refuse,
@@ -185,6 +187,10 @@ impl Location {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct Stage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved_key: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_ref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -451,6 +457,10 @@ fn explain_selected(src: &str, scenario: Option<&str>, limit: usize) -> ExplainR
     });
     let mut explanation = Explanation::blocked();
     if let Some((model, trace)) = captured {
+        if model.recovery().is_some() {
+            explanation.version = "invoice-counterexample-p3a-recovery-1";
+            explanation.assumptions.push(ir::Assumption{field:"explanation.recovery_events".into(),value:"atomic query finish with a distinct zero-time evidence event".into(),affects:"The shortest captured graph witness is expanded into observed events; query evidence and resolve are not extra Tasks, commits or business decisions.".into()});
+        }
         explanation.status = Status::Complete;
         if trace.failure == Some(ReplayReason::CaptureLimit) {
             explanation.status = Status::Unsupported;
@@ -647,7 +657,8 @@ fn add_counterexample(
     let mapped_property = span.map(|s| trace.location(s)).transpose();
     let mapping_failure = mapped_property.as_ref().err().copied();
     let property_location = mapped_property.ok().flatten();
-    let (mut steps, target_case, choices) = trace.shortest(id).unwrap_or_default();
+    let (mut steps, target_case, mut choices) = trace.shortest(id).unwrap_or_default();
+    expand_recovery_events(model, &mut steps, &mut choices);
     let case_id = if id == "diagnostic:W-DEADLOCK-0" || id == "safety no_resource_overcommit" {
         None
     } else {
@@ -767,6 +778,84 @@ fn add_counterexample(
         steps,
         replay: ReplayResult { status, reason },
     });
+}
+
+pub(crate) fn recovery_evidence_id(case: u64, command: &str, binding: &str, at: u64) -> String {
+    format!("case{case}:{command}:{binding}:{at}")
+}
+fn expand_recovery_events(
+    m: &ir::Model,
+    steps: &mut Vec<Stage>,
+    choices: &mut Vec<Option<KernelChoice>>,
+) {
+    let Some((_, body)) = m.recovery() else {
+        return;
+    };
+    if steps.len() != choices.len() {
+        return;
+    }
+    fn queries(b: &ir::Block, rows: &mut Vec<(ir::BindingId, ir::BindingId)>) {
+        for s in b {
+            match &s.kind {
+                ir::Stmt::Query(c, command) => rows.push((c.binding, *command)),
+                ir::Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    queries(then_body, rows);
+                    queries(else_body, rows);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut rows = Vec::new();
+    queries(body, &mut rows);
+    let old = std::mem::take(steps);
+    let old_choices = std::mem::take(choices);
+    for (stage, choice) in old.into_iter().zip(old_choices) {
+        let query = (stage.kind == Kind::Finish)
+            .then(|| {
+                rows.iter().find(|(binding, _)| {
+                    stage.binding.as_deref() == Some(m.site_name(*binding).as_str())
+                })
+            })
+            .flatten();
+        let extra = query.map(|(binding, command)| {
+            let mut q = stage.clone();
+            q.kind = Kind::ReceiptQuery;
+            q.command = Some(m.site_name(*command));
+            q.saved_key = q.case_id;
+            q.evidence_ref = (q.result.as_deref() != Some("still_unknown")).then(|| {
+                recovery_evidence_id(
+                    q.case_id.unwrap_or(0),
+                    q.command.as_deref().unwrap_or(""),
+                    &m.site_name(*binding),
+                    q.time,
+                )
+            });
+            q.events.clear();
+            q.resource = None;
+            q.shared_resources.clear();
+            q.executor = None;
+            q.actual_result = None;
+            q.observed_receipt = None;
+            q.attempt = None;
+            q.retry_location = None;
+            q.violation = None;
+            q
+        });
+        steps.push(stage);
+        choices.push(choice);
+        if let Some(q) = extra {
+            steps.push(q);
+            choices.push(None);
+        }
+    }
+    for (index, step) in steps.iter_mut().enumerate() {
+        step.index = index;
+    }
 }
 
 fn business(stage: &Stage, case_id: Option<u64>) -> impl Iterator<Item = &BusinessEvent> {

@@ -333,6 +333,7 @@ impl Builder {
     fn call(&mut self, duration: u64, actor: usize, results: &[usize], cancel: Cancel) -> Call {
         let id = self.0.capabilities.len();
         self.0.capabilities.push(Capability {
+            receipt_query: None,
             qualified_executors: None,
             performance: None,
             version_check: None,
@@ -1090,6 +1091,9 @@ fn model_identity(mut m: Model) -> Model {
         for s in body {
             s.span = SPAN;
             match &mut s.kind {
+                Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
+                    panic!("receipt recovery is outside this oracle")
+                }
                 Stmt::WaitUntil(_) => {
                     panic!("differential renaming walker does not handle condition waits")
                 }
@@ -2427,6 +2431,9 @@ fn render(m: &Model) -> String {
     fn block(s: &mut String, m: &Model, body: &Block) {
         for statement in body {
             match &statement.kind {
+                Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
+                    panic!("receipt recovery is outside this oracle")
+                }
                 Stmt::WaitUntil(_) => {
                     panic!("differential conversion walker does not handle condition waits")
                 }

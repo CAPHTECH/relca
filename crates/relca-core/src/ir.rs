@@ -690,14 +690,22 @@ impl Model {
         }
         fn intersects(b: &Block, d: &DeferredMetrics) -> bool {
             b.iter().any(|s| match &s.kind {
-                Stmt::Call(c) | Stmt::Response(c, _) => d.capability(c.capability),
+                Stmt::Call(c) | Stmt::Query(c, _) => d.capability(c.capability),
+                Stmt::Response(c, r) => {
+                    d.capability(c.capability)
+                        || r.recovery.as_ref().is_some_and(|b| intersects(b, d))
+                }
                 Stmt::Fork { branches, .. } => branches.iter().any(|c| d.capability(c.capability)),
                 Stmt::If {
                     then_body,
                     else_body,
                     ..
                 } => intersects(then_body, d) || intersects(else_body, d),
-                Stmt::Wait(_) | Stmt::WaitUntil(_) | Stmt::End(_) => false,
+                Stmt::Wait(_)
+                | Stmt::WaitUntil(_)
+                | Stmt::End(_)
+                | Stmt::ResolveEffect { .. }
+                | Stmt::StopReceiptUnknown => false,
             })
         }
         layers.process = layers.opaque
@@ -1027,6 +1035,7 @@ pub enum Debtor {
 /// No result is chosen or made observable until normal completion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Capability {
+    pub receipt_query: Option<ReceiptQuery>,
     pub performance: Option<PerformanceSource>,
     /// Modelled eligibility, independent of permission and Actor declaration order.
     pub qualified_executors: Option<Vec<PersonId>>,
@@ -1216,10 +1225,16 @@ impl Model {
     pub fn has_requires(&self) -> bool {
         fn block(b: &Block, m: &Model) -> bool {
             b.iter().any(|s| match &s.kind {
-                Stmt::Call(c) | Stmt::Response(c, _) => m
+                Stmt::Call(c) | Stmt::Query(c, _) => m
                     .capabilities
                     .get(c.capability.0)
                     .is_some_and(|c| c.requires.is_some()),
+                Stmt::Response(c, r) => {
+                    m.capabilities
+                        .get(c.capability.0)
+                        .is_some_and(|c| c.requires.is_some())
+                        || r.recovery.as_ref().is_some_and(|b| block(b, m))
+                }
                 Stmt::Fork { branches, .. } => branches.iter().any(|c| {
                     m.capabilities
                         .get(c.capability.0)
@@ -1264,7 +1279,10 @@ impl Model {
         fn block(b: &Block) -> bool {
             b.iter().any(|s| match &s.kind {
                 Stmt::Wait(_) => true,
-                Stmt::Response(_, r) => r.retry_span.is_some() && r.max_attempts > 1,
+                Stmt::Response(_, r) => {
+                    (r.retry_span.is_some() && r.max_attempts > 1)
+                        || r.recovery.as_ref().is_some_and(block)
+                }
                 Stmt::If {
                     then_body,
                     else_body,
@@ -1407,6 +1425,12 @@ pub struct Statement {
 /// End terminates control immediately; suffix statements are not executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    Query(Call, BindingId),
+    ResolveEffect {
+        command: BindingId,
+        evidence: BindingId,
+    },
+    StopReceiptUnknown,
     WaitUntil(Cond),
     Wait(Tick),
     Call(Call),
@@ -1438,6 +1462,7 @@ pub struct Call {
 /// distinct; no unknown receipt is represented as an enum result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResponseAttempt {
+    pub recovery: Option<Block>,
     /// Explicit declaration, distinct from the independently checked mechanism.
     pub idempotency: Option<String>,
     pub effect_modeled: bool,
@@ -1464,6 +1489,24 @@ pub enum ResponseLoss {
         probability: crate::probability::Rational,
         basis: String,
     },
+}
+
+/// An exact, read-only finish-time projection of one G backing set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceiptQuery {
+    pub target: CapabilityId,
+    pub key_parameter: usize,
+    pub availability: crate::ast::QueryAvailability,
+}
+
+impl Model {
+    pub fn recovery(&self) -> Option<(BindingId, &Block)> {
+        self.response_attempts().into_iter().find_map(|(_, r)| {
+            (r.attempt == 1)
+                .then_some(r)
+                .and_then(|r| r.recovery.as_ref().map(|b| (r.command, b)))
+        })
+    }
 }
 
 impl Model {

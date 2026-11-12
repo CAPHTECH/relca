@@ -21,7 +21,15 @@ pub(super) fn scalar(n: BigInt) -> Value {
 pub(super) fn calls<'a>(b: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
     for s in b {
         match &s.kind {
-            ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => out.push(c),
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => out.push(c),
+            ir::Stmt::Response(c, r) => {
+                out.push(c);
+                if r.attempt == 1
+                    && let Some(b) = &r.recovery
+                {
+                    calls(b, out);
+                }
+            }
             ir::Stmt::Fork { branches, .. } => out.extend(branches),
             ir::Stmt::If {
                 then_body,
@@ -31,7 +39,11 @@ pub(super) fn calls<'a>(b: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
                 calls(then_body, out);
                 calls(else_body, out);
             }
-            ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) | ir::Stmt::End(_) => (),
+            ir::Stmt::Wait(_)
+            | ir::Stmt::WaitUntil(_)
+            | ir::Stmt::End(_)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown => (),
         }
     }
 }

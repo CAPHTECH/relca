@@ -203,6 +203,30 @@ impl Names<'_> {
                 .filter(|s| !matches!(&s.kind, ir::Stmt::Response(_, r) if r.attempt != 1))
                 .map(|s| Ok(match &s.kind {
                     ir::Stmt::Call(c) => json!(["call", self.call(c)?]),
+                    ir::Stmt::Query(c, command) => {
+                        let source = self.0.capabilities[c.capability.0]
+                            .receipt_query
+                            .as_ref()
+                            .ok_or_else(|| unsupported("query source"))?;
+                        json!([
+                            "receipt_query",
+                            self.call(c)?,
+                            self.binding(*command)?,
+                            self.capability(source.target)?,
+                            source.key_parameter,
+                            match source.availability {
+                                crate::ast::QueryAvailability::Available => "available",
+                                crate::ast::QueryAvailability::Unavailable => "unavailable",
+                                crate::ast::QueryAvailability::Nondet => "nondet",
+                            }
+                        ])
+                    }
+                    ir::Stmt::ResolveEffect { command, evidence } => json!([
+                        "resolve_effect",
+                        self.binding(*command)?,
+                        self.binding(*evidence)?
+                    ]),
+                    ir::Stmt::StopReceiptUnknown => json!(["stop_receipt_unknown"]),
                     ir::Stmt::End(e) => json!(["end", self.end(*e)?]),
                     ir::Stmt::Wait(t) => json!(["wait", t]),
                     ir::Stmt::WaitUntil(c) => json!(["wait_until", self.condition(c, 0)?]),
@@ -275,7 +299,16 @@ impl Names<'_> {
                         if matches!(r.loss, ir::ResponseLoss::Probability { .. }) {
                             control["loss"] = json!({"kind":"probability"});
                         }
-                        json!(["response", self.call(&r.command_call)?, control])
+                        if let Some(body) = &r.recovery {
+                            json!([
+                                "response",
+                                self.call(&r.command_call)?,
+                                control,
+                                ["recovery", self.block(body, depth + 1)?]
+                            ])
+                        } else {
+                            json!(["response", self.call(&r.command_call)?, control])
+                        }
                     }
                 }))
                 .collect::<Result<Vec<_>>>()?

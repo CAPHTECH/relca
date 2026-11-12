@@ -186,6 +186,7 @@ impl Lower {
             _ => ir::ResponseLoss::Nondet,
         };
         let mut template = ir::ResponseAttempt {
+            recovery: None,
             idempotency: self
                 .response_cap_declarations(call.capability)
                 .0

@@ -159,7 +159,16 @@ fn inventory<'a>(block: &'a ir::Block, calls: &mut Vec<&'a ir::Call>, ends: &mut
         match &statement.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
             ir::Stmt::End(e) => end = Some(*e),
-            ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => calls.push(c),
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
+            ir::Stmt::Response(c, r) => {
+                calls.push(c);
+                if r.attempt == 1
+                    && let Some(b) = &r.recovery
+                {
+                    inventory(b, calls, ends);
+                }
+            }
+            ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
             ir::Stmt::If {
                 then_body,
                 else_body,

@@ -3,12 +3,22 @@ use super::*;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub(super) struct History {
+    pub recovery: Option<recovery::History>,
     pub started: BTreeMap<ir::BindingId, ir::CapabilityId>,
     pub actuals: BTreeMap<ir::BindingId, ir::ValueId>,
     pub rows: Vec<Observation>,
     pub inputs: BTreeMap<ir::BindingId, Vec<ir::ValueId>>,
     pub unresolved: BTreeSet<ir::BindingId>,
     pub stopped: bool,
+}
+
+impl History {
+    pub(super) fn for_model(m: &ir::Model) -> Self {
+        Self {
+            recovery: m.recovery().map(|_| recovery::History::default()),
+            ..Self::default()
+        }
+    }
 }
 
 pub(super) fn deliver(
@@ -66,6 +76,10 @@ pub(super) fn deliver(
         .map(|(weight, receipt)| {
             let mut next = state.clone();
             let h = next.response.as_mut().ok_or("missing receipt history")?;
+            #[cfg(test)]
+            if let Some(r) = &mut h.recovery {
+                r.weights.push(weight.clone());
+            }
             if receipt == Unknown {
                 h.unresolved.insert(r.command);
             } else if r.idempotent {
@@ -262,6 +276,7 @@ pub(super) fn advance(
 }
 
 pub(super) fn validate(m: &ir::Model) -> EngineResult<()> {
+    recovery::validate(m)?;
     let attempts = m.response_attempts();
     if attempts.is_empty() {
         return Ok(());

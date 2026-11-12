@@ -16,6 +16,9 @@ pub mod diff;
 pub mod engine;
 pub mod evaluation;
 #[cfg(test)]
+#[path = "../tests/support/r2_round2_inputs.rs"]
+mod r2_round2_inputs;
+#[cfg(test)]
 pub(crate) mod evaluation_population {
     pub(crate) fn fixture(name: &str) -> bool {
         include!("../tests/support/evaluation_names.rs").contains(&name)
@@ -91,6 +94,15 @@ pub(crate) mod quantile_population;
 mod quantile_private_contract;
 #[cfg(test)]
 mod quantile_test_support;
+#[cfg(test)]
+#[path = "../tests/support/r2_inputs.rs"]
+mod r2_inputs;
+#[cfg(test)]
+#[path = "../tests/support/r2_private.rs"]
+mod r2_private;
+#[cfg(test)]
+mod r2_test_adapter;
+pub mod recovery;
 pub mod reference;
 pub mod report;
 pub mod response_inputs;

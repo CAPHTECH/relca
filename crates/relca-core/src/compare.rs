@@ -1128,7 +1128,13 @@ fn common_random(plans: &[&str], metadata: &[lower::SelectedConfiguration]) -> C
     fn calls<'a>(block: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
         for s in block {
             match &s.kind {
-                ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => out.push(c),
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => out.push(c),
+                ir::Stmt::Response(c, r) => {
+                    out.push(c);
+                    if let Some(body) = &r.recovery {
+                        calls(body, out);
+                    }
+                }
                 ir::Stmt::Fork { branches, .. } => out.extend(branches),
                 ir::Stmt::If {
                     then_body,
@@ -1223,6 +1229,32 @@ mod tests {
     use serde_json::{Value, json};
     const CASES: &str = include_str!("../../../fixtures/compare-case-diff/model.relca");
     const RANDOM: &str = include_str!("../../../fixtures/compare-random/model.relca");
+    #[test]
+    fn round1_handler_random_sites_are_not_silently_omitted() {
+        let s = crate::r2_inputs::paired("R01", "R01");
+        let s = crate::r2_inputs::edit(&s, "result nondet {proceed}", "outcomes kernel Choice");
+        let s = crate::r2_inputs::edit(
+            &s,
+            "duration fixed 2min; receipt_query",
+            "duration {2min: 1}; receipt_query",
+        );
+        let s = crate::r2_inputs::append(&s, "kernel Choice { * -> { 1: proceed } }");
+        let ast = syntax::parse(&s).unwrap();
+        let metadata = [
+            lower::lower_configuration(&ast, "A").unwrap(),
+            lower::lower_configuration(&ast, "B").unwrap(),
+        ];
+        let actual = common_random(&["A", "B"], &metadata);
+        assert_eq!(actual.independent[0].kernel_sites, ["kernel.Flow.decision"]);
+        assert_eq!(
+            actual.independent[0].duration_sites,
+            ["duration.Flow.status"]
+        );
+        assert_eq!(
+            actual.independent[1].kernel_sites,
+            ["kernel.Other.decision"]
+        );
+    }
     #[test]
     fn q6_performance_simulation_lists_the_actual_kernel_draw_sites() {
         // Implementation-side wiring check, not the independent hand oracle.

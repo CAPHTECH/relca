@@ -91,6 +91,7 @@ fn q9_i8_real_reducer_accepts_hand_assembled_histories_not_dedup_frequencies() {
         };
         let filed = duration != 0;
         out.replications.push(ReplicationOutcome {
+            response_recovery: None,
             contests: vec![ContestObservation {
                 contest: 0,
                 case_id: 1,

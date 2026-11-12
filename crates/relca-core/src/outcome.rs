@@ -6,6 +6,8 @@ use serde::Serialize;
 /// Replication-level audit, kept out of the user-facing aggregate report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct SimulationOutcome {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_recovery: Option<crate::recovery::Recovery>,
     #[serde(skip)]
     pub stochastic_arrivals: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,6 +51,8 @@ impl SimulationOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReplicationOutcome {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_recovery: Option<crate::recovery::Path>,
     /// Per-clause, per-case observations, before any deduplication or statistics.
     #[serde(skip)]
     pub contests: Vec<ContestObservation>,
@@ -136,6 +140,7 @@ pub enum SimulationTerminalKind {
 /// must not disguise an incomplete exploration as an empty successful result.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Outcome {
+    pub response_recovery: Option<crate::recovery::Recovery>,
     pub response_exercise: Option<Vec<CapabilityExercise>>,
     pub response_receipts: Option<Vec<ResponseReceipt>>,
     pub scenario_observed_until: Option<crate::metrics::Scalar>,

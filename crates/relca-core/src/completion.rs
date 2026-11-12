@@ -352,6 +352,15 @@ impl Observed {
                 if std::ptr::eq(s, target) {
                     return Some(path);
                 }
+                if let ir::Stmt::Response(_, r) = &s.kind
+                    && let Some(body) = &r.recovery
+                {
+                    let mut child = path.clone();
+                    child.push(2);
+                    if let Some(p) = find(body, target, &child) {
+                        return Some(p);
+                    }
+                }
                 if let ir::Stmt::If {
                     then_body,
                     else_body,
@@ -397,8 +406,11 @@ impl Observed {
                 let mut path = prefix.to_vec();
                 path.push(i);
                 match &s.kind {
-                    ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
-                    ir::Stmt::Call(c) | ir::Stmt::Response(c, _) => {
+                    ir::Stmt::Wait(_)
+                    | ir::Stmt::WaitUntil(_)
+                    | ir::Stmt::ResolveEffect { .. }
+                    | ir::Stmt::StopReceiptUnknown => {}
+                    ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                         calls.insert(c.capability);
                     }
                     ir::Stmt::Fork { branches, join, .. } => {

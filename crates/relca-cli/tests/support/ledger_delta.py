@@ -29,8 +29,10 @@ def owners(v):
     if "from" in v and "to" in v:
         for side in ("from", "to"):
             result[f"/{side}/report"] = v[side]["report"]
-    for n, plan in enumerate(v.get("plans", [])):
-        result[f"/plans/{n}/report"] = plan["report"]
+    for kind in ("plans", "points"):
+        for n, plan in enumerate(v.get(kind, [])):
+            if plan.get("report") is not None:
+                result[f"/{kind}/{n}/report"] = plan["report"]
     if v.get("original") is not None:
         result["/original"] = v["original"]
     for k, kind in enumerate(v.get("mutations", [])):
@@ -47,6 +49,20 @@ def pointer(v, at):
     return v
 
 
+def expected_bundle(report):
+    # Closed R2 ownership contract, not a whitelist of captured bundle strings.
+    if isinstance(report.get("response_recovery"), dict):
+        return "relca-conclusions-p3a-recovery-1"
+    if report.get("explanation", {}).get("version") == "invoice-counterexample-p3a-recovery-1":
+        return "relca-conclusions-p3a-recovery-1"
+    children = [report[s]["report"] for s in ("from", "to") if s in report]
+    children += [p["report"] for k in ("plans", "points") for p in report.get(k, [])
+                 if p.get("report") is not None]
+    if any(expected_bundle(child) == "relca-conclusions-p3a-recovery-1" for child in children):
+        return "relca-conclusions-p3a-recovery-1"
+    return "relca-conclusions-p2-uncertainty-2"
+
+
 def check_ledgers(v):
     for at, report in owners(v).items():
         require("ledger" in report, f"LEDGER_MISSING at {at}/ledger")
@@ -57,7 +73,7 @@ def check_ledgers(v):
         require(producer == {"name": "relca", "version": "0.0.0", "version_source": "cargo_package",
                             "build_identity": {"status": "not_recorded", "value": None,
                                                "reason": "package_version_only"}}, "producer mismatch")
-        require(ledger["derivation"]["bundle"] == "relca-conclusions-p2-uncertainty-2", "bundle mismatch")
+        require(ledger["derivation"]["bundle"] == expected_bundle(report), "bundle mismatch")
         require(ledger["backends"]["external"] == {"status": "not_connected", "name": None,
                                                     "version": None,
                                                     "reason": "external_backend_not_connected"},
@@ -193,13 +209,48 @@ def unpack(path):
     return raw[:a], raw[a:a+b], raw[a+b:a+b+c]
 
 
+def calibrate_recovery():
+    # New hand contracts supplement the unchanged seven legacy fault pairs.
+    def ledger(bundle):
+        return {"schema": "relca-conclusion-ledger/v1",
+                "producer": {"name": "relca", "version": "0.0.0", "version_source": "cargo_package",
+                             "build_identity": {"status": "not_recorded", "value": None,
+                                                "reason": "package_version_only"}},
+                "backends": {"external": {"status": "not_connected", "name": None,
+                                           "version": None, "reason": "external_backend_not_connected"}},
+                "derivation": {"bundle": bundle, "components": []},
+                "execution": {}, "actor_versions": {}, "context": {}, "subjects": []}
+    old = "relca-conclusions-p2-uncertainty-2"
+    new = "relca-conclusions-p3a-recovery-1"
+    child = {"ledger": ledger(new), "response_recovery": {"rules": "response-recovery-p3a-1"}}
+    cases = [(child, 1),
+             ({"ledger": ledger(new), "plans": [{"report": child}]}, 2),
+             ({"ledger": ledger(new), "points": [{"report": child}]}, 2),
+             ({"ledger": ledger(old), "original": child}, 2)]
+    for host, count in cases:
+        require(check_ledgers(host) == count, "recovery owner omitted")
+        broken = json.loads(json.dumps(host))
+        broken["ledger"]["derivation"]["bundle"] = old if host["ledger"]["derivation"]["bundle"] == new else new
+        try:
+            check_ledgers(broken)
+        except ValueError as error:
+            require(str(error) == "bundle mismatch", "wrong recovery fault")
+        else:
+            raise ValueError("wrong recovery bundle escaped")
+    print("recovery bundle calibration: positive=4 rejected_faults=4")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--calibrate", action="store_true")
+    parser.add_argument("--calibrate-recovery", action="store_true")
     parser.add_argument("--binary", type=Path)
     args = parser.parse_args()
     if args.calibrate:
         calibrate()
+        return
+    if args.calibrate_recovery:
+        calibrate_recovery()
         return
     require(args.binary is not None, "binary required")
     counts = Counter()

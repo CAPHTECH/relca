@@ -8,6 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 fn calls<'a>(block: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
     for statement in block {
         match &statement.kind {
+            ir::Stmt::Query(_, _)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown => panic!("receipt recovery is outside this oracle"),
             ir::Stmt::WaitUntil(_) => panic!("common-cause oracle does not handle condition waits"),
             ir::Stmt::Response(_, _) => {
                 panic!("independent common-cause oracle does not cover receipt or retry control")
@@ -34,6 +37,9 @@ fn must_before(
 ) -> Option<BTreeSet<ir::BindingId>> {
     for s in block {
         match &s.kind {
+            ir::Stmt::Query(_, _)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown => panic!("receipt recovery is outside this oracle"),
             ir::Stmt::WaitUntil(_) => panic!("must-before oracle does not handle condition waits"),
             ir::Stmt::Response(_, _) => {
                 panic!("independent must-before oracle does not cover receipt or retry control")

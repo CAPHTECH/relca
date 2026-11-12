@@ -3,6 +3,8 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct Receipt {
+    #[cfg(test)]
+    pub weight: Option<Rational>,
     pub command: BindingId,
     pub binding: BindingId,
     pub attempt: u64,
@@ -12,6 +14,7 @@ pub(super) struct Receipt {
 }
 
 pub(super) fn validate(m: &Model) -> Execution {
+    recovery::validate(m)?;
     let attempts = m.response_attempts();
     if attempts.is_empty() {
         return Ok(());
@@ -235,9 +238,9 @@ pub(super) fn input(
     Ok(Some(Occurrence::ResponseInput(r.command, args)))
 }
 
-pub(super) fn progress(
-    f: &mut Frame<'_>,
-    m: &Model,
+pub(super) fn progress<'a>(
+    f: &mut Frame<'a>,
+    m: &'a Model,
     now: Tick,
 ) -> Result<(Progress, Vec<Occurrence>), StopReason> {
     let wait = f.waiting.as_ref().ok_or(StopReason::SemanticAbort)?;
@@ -277,6 +280,16 @@ pub(super) fn progress(
         })
         .unwrap_or(false);
     if unknown || unresolved {
+        if let Some(body) = &r.recovery {
+            require(
+                !f.trace
+                    .iter()
+                    .any(|o| matches!(o.event, Occurrence::RecoveryEnter(_))),
+            )?;
+            f.control.clear();
+            f.control.push(body);
+            return Ok((Progress::Next, vec![Occurrence::RecoveryEnter(r.command)]));
+        }
         return Ok((
             Progress::Unknown,
             vec![Occurrence::ResponseStopped(r.command)],
@@ -301,9 +314,32 @@ pub(super) fn progress(
 }
 
 impl<'a> Interpreter<'a> {
-    pub(super) fn response_finish(&mut self, f: Frame<'a>, i: usize, depth: usize) -> Execution {
+    pub(super) fn response_finish(
+        &mut self,
+        mut f: Frame<'a>,
+        i: usize,
+        depth: usize,
+    ) -> Execution {
         let task = &f.tasks[i];
         let Some(r) = self.model.response_attempt(task.call.binding) else {
+            if self.model.capabilities[task.call.capability.0]
+                .receipt_query
+                .is_some()
+            {
+                let Phase::Finished(actual) = task.phase else {
+                    return Err(StopReason::SemanticAbort);
+                };
+                let binding = task.call.binding;
+                let event = recovery::query(
+                    &f,
+                    self.model,
+                    binding,
+                    actual,
+                    &f.state_values,
+                    self.case_index,
+                )?;
+                self.record_site(&mut f, event, None, binding)?;
+            }
             return self.run(f, depth);
         };
         let Phase::Finished(actual) = task.phase else {
@@ -329,10 +365,12 @@ impl<'a> Interpreter<'a> {
         let probabilistic = choices.iter().all(|(p, _)| p.is_some());
         let weights: Vec<_> = choices.iter().filter_map(|(p, _)| p.clone()).collect();
         self.probability_stack.push(ReferenceChoices::default());
-        for (_, observation) in choices {
+        for (_weight, observation) in choices {
             let mut next = self.successor(&f, depth)?;
             let was_unknown = next.trace.iter().any(|o| matches!(&o.event, Occurrence::Channel(p) if p.command == r.command && p.attempt < r.attempt && !p.resolved));
             let receipt = Receipt {
+                #[cfg(test)]
+                weight: _weight,
                 command: r.command,
                 binding: task.call.binding,
                 attempt: r.attempt,
@@ -399,6 +437,7 @@ mod tests {
         };
         assert!(visible_values(&f, &m, None).iter().all(Option::is_none));
         let receipt = Receipt {
+            weight: None,
             command: rule.command,
             binding: call.binding,
             attempt: 1,

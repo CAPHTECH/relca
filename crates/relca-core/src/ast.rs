@@ -812,6 +812,11 @@ pub struct PerformanceBand {
 /// Empty/repeated cap_item lists are representable, never silently defaulted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CapItem {
+    ReceiptQuery {
+        target: Ident,
+        key: Ident,
+        availability: QueryAvailability,
+    },
     OutcomesPerformance(Ident),
     QualifiedExecutors(Vec<Ident>),
     Idempotency(Ident),
@@ -895,6 +900,11 @@ pub type Block = Vec<Spanned<Stmt>>;
 /// Fork owns its mandatory immediately following join; branches are only calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    ResolveEffect {
+        command: Ident,
+        evidence: Ident,
+    },
+    StopReceiptUnknown,
     WaitUntil(Spanned<Cond>),
     Wait(Duration),
     Call(Call),
@@ -914,6 +924,8 @@ pub enum Stmt {
 /// Binding is the result/branch name; actor and capability are unresolved names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
+    pub recovery: Option<Box<Block>>,
+    pub query_command: Option<Box<Ident>>,
     pub binding: Ident,
     pub actor: Ident,
     pub capability: Ident,
@@ -929,6 +941,13 @@ pub struct Call {
 pub enum Receipt {
     Delivered,
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QueryAvailability {
+    Available,
+    Unavailable,
+    Nondet,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

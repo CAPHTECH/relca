@@ -261,6 +261,7 @@ fn supported(m: &ir::Model) -> Result<()> {
     } = m;
     for c in &m.capabilities {
         let ir::Capability {
+            receipt_query: _,
             qualified_executors: _,
             performance: _,
             version_check: _,

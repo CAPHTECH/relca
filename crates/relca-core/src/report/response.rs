@@ -12,11 +12,34 @@ const UNCHECKED: [&str; 5] = [
 ];
 const SCOPE: &str = "declared sequential channels and observed transitions under selected bounds; exploration coverage is not business completion";
 
+/// Response coverage is local: sampling must not widen the closed obligation
+/// coverage vocabulary used by exhaustive-only tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseCoverage {
+    Complete,
+    Truncated,
+    Aborted,
+    RangeStopped,
+    Sampled,
+}
+impl From<crate::obligation::Coverage> for ResponseCoverage {
+    fn from(c: crate::obligation::Coverage) -> Self {
+        use crate::obligation::Coverage as C;
+        match c {
+            C::Complete => Self::Complete,
+            C::Truncated => Self::Truncated,
+            C::Aborted => Self::Aborted,
+            C::RangeStopped => Self::RangeStopped,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResponseAnalysis {
     pub rules: String,
-    pub coverage: crate::obligation::Coverage,
+    pub coverage: ResponseCoverage,
     pub business_horizon: bool,
     pub scope: String,
     pub checked: Vec<String>,
@@ -24,13 +47,36 @@ pub struct ResponseAnalysis {
 }
 
 pub(super) fn analysis(m: &ir::Model, coverage: crate::obligation::Coverage) -> ResponseAnalysis {
+    let recovery = m.recovery().is_some();
     ResponseAnalysis {
-        rules: "response-p2-1".into(),
-        coverage,
+        rules: if recovery {
+            "response-p3a-recovery-1"
+        } else {
+            "response-p2-1"
+        }
+        .into(),
+        coverage: coverage.into(),
         business_horizon: m.horizon.is_some(),
         scope: SCOPE.into(),
-        checked: CHECKED.map(String::from).to_vec(),
-        unchecked: UNCHECKED.map(String::from).to_vec(),
+        checked: CHECKED
+            .into_iter()
+            .chain(
+                recovery
+                    .then_some([
+                        "exact_g_query",
+                        "recovery_evidence_matching",
+                        "recovery_incomplete_case",
+                    ])
+                    .into_iter()
+                    .flatten(),
+            )
+            .map(String::from)
+            .collect(),
+        unchecked: UNCHECKED
+            .into_iter()
+            .chain(recovery.then_some("non_idempotent_recovery"))
+            .map(String::from)
+            .collect(),
     }
 }
 
@@ -40,7 +86,92 @@ pub(super) fn nullable<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
     Option::deserialize(d)
 }
 
-pub(super) fn validate(report: &Report) -> Result<(), &'static str> {
+pub(super) fn unavailable_transport(m: &ir::Model) -> ResponseAnalysis {
+    ResponseAnalysis {
+        rules: "response-p2-1".into(),
+        coverage: ResponseCoverage::Aborted,
+        business_horizon: m.horizon.is_some(),
+        scope: SCOPE.into(),
+        checked: CHECKED.map(String::from).to_vec(),
+        unchecked: UNCHECKED.map(String::from).to_vec(),
+    }
+}
+
+pub(super) fn sampled_analysis(m: &ir::Model) -> ResponseAnalysis {
+    let mut a = analysis(m, crate::obligation::Coverage::Complete);
+    a.coverage = ResponseCoverage::Sampled;
+    a.checked = a
+        .checked
+        .into_iter()
+        .map(|s| format!("sampled_{}", s.strip_prefix("exact_").unwrap_or(&s)))
+        .collect();
+    a.unchecked.push("unobserved_paths".into());
+    a
+}
+pub(super) enum Host<'a> {
+    Check(&'a Report),
+    Simulation(&'a SimulationReport),
+}
+impl<'a> From<&'a Report> for Host<'a> {
+    fn from(r: &'a Report) -> Self {
+        Self::Check(r)
+    }
+}
+impl<'a> From<&'a SimulationReport> for Host<'a> {
+    fn from(r: &'a SimulationReport) -> Self {
+        Self::Simulation(r)
+    }
+}
+pub(super) fn validate<'a>(host: impl Into<Host<'a>>) -> Result<(), &'static str> {
+    match host.into() {
+        Host::Check(report) => validate_check(report),
+        Host::Simulation(report) => {
+            let recovery = report.response_recovery.is_some();
+            if recovery != report.response_analysis.is_some() {
+                return Err("sampled recovery analysis missing or unpaired");
+            }
+            if let Some(a) = &report.response_analysis {
+                let checked: Vec<_> = CHECKED
+                    .into_iter()
+                    .chain([
+                        "exact_g_query",
+                        "recovery_evidence_matching",
+                        "recovery_incomplete_case",
+                    ])
+                    .map(|s| format!("sampled_{}", s.strip_prefix("exact_").unwrap_or(s)))
+                    .collect();
+                let unchecked: Vec<_> = UNCHECKED
+                    .into_iter()
+                    .chain(["non_idempotent_recovery", "unobserved_paths"])
+                    .map(String::from)
+                    .collect();
+                if a.rules != "response-p3a-recovery-1"
+                    || a.coverage != ResponseCoverage::Sampled
+                    || a.scope != SCOPE
+                    || a.checked != checked
+                    || a.unchecked != unchecked
+                {
+                    return Err("invalid sampled response scope or checked vocabulary");
+                }
+                if !a.business_horizon
+                    && report
+                        .case_outcomes
+                        .iter()
+                        .any(|c| c["cut_off_count"].as_u64().unwrap_or(0) > 0)
+                {
+                    return Err("sampled response cutoff without a horizon");
+                }
+            }
+            Ok(())
+        }
+    }
+}
+fn validate_check(report: &Report) -> Result<(), &'static str> {
+    if report.response_recovery.is_some()
+        && (report.response_receipts.is_none() || report.response_analysis.is_none())
+    {
+        return Err("recovery requires receipts and response analysis");
+    }
     let Some(receipts) = &report.response_receipts else {
         if report.response_analysis.is_some() {
             return Err("response analysis without a channel");
@@ -60,10 +191,35 @@ pub(super) fn validate(report: &Report) -> Result<(), &'static str> {
         .response_analysis
         .as_ref()
         .ok_or("response analysis missing")?;
-    if analysis.rules != "response-p2-1"
+    let recovery = report.response_recovery.is_some();
+    let checked: Vec<_> = CHECKED
+        .into_iter()
+        .chain(
+            recovery
+                .then_some([
+                    "exact_g_query",
+                    "recovery_evidence_matching",
+                    "recovery_incomplete_case",
+                ])
+                .into_iter()
+                .flatten(),
+        )
+        .map(String::from)
+        .collect();
+    let unchecked: Vec<_> = UNCHECKED
+        .into_iter()
+        .chain(recovery.then_some("non_idempotent_recovery"))
+        .map(String::from)
+        .collect();
+    if analysis.rules
+        != if recovery {
+            "response-p3a-recovery-1"
+        } else {
+            "response-p2-1"
+        }
         || analysis.scope != SCOPE
-        || analysis.checked != CHECKED
-        || analysis.unchecked != UNCHECKED
+        || analysis.checked != checked
+        || analysis.unchecked != unchecked
     {
         return Err("invalid response scope or checked vocabulary");
     }
@@ -76,6 +232,7 @@ pub(super) fn validate(report: &Report) -> Result<(), &'static str> {
             report.bounds.truncated == Some(true),
             !report.state_range_violations.is_empty(),
         )
+        .into()
     {
         return Err("response exploration coverage mismatch");
     }
@@ -153,7 +310,7 @@ pub(super) fn validate(report: &Report) -> Result<(), &'static str> {
                 CaseTerminalKind::ReceiptUnknown | CaseTerminalKind::CutOff
             )
         })
-    }) || analysis.coverage != crate::obligation::Coverage::Complete;
+    }) || analysis.coverage != ResponseCoverage::Complete;
     if unresolved && automatic[0].verdict != Verdict::Inconclusive {
         return Err("unresolved receipt promoted to success");
     }
@@ -163,6 +320,57 @@ pub(super) fn validate(report: &Report) -> Result<(), &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn round2_sampled_coverage_keeps_cutoff_in_the_verdict() {
+        for id in ["T04", "T05"] {
+            let source = crate::r2_inputs::source(id);
+            let r = crate::report::simulate_with_selection(
+                &source,
+                None,
+                (id == "T05").then_some("Day"),
+            );
+            assert_eq!(
+                r.verdict,
+                Verdict::Inconclusive,
+                "{id}: {:?}",
+                r.diagnostics
+            );
+            assert_eq!(
+                r.response_analysis.as_ref().unwrap().coverage,
+                ResponseCoverage::Sampled
+            );
+            assert_eq!(r.bounds.truncated, Some(id == "T04"));
+        }
+    }
+    #[test]
+    fn round2_recovery_coexistence_is_a_local_check_not_a_ledger_accident() {
+        let mut r = crate::report::check(&crate::r2_inputs::source("R01"));
+        r.response_receipts = None;
+        r.response_analysis = None;
+        assert_eq!(
+            validate(&r),
+            Err("recovery requires receipts and response analysis")
+        );
+    }
+    #[test]
+    fn r2_unconnected_report_transport_fails_closed() {
+        let checked = crate::report::check_using(&crate::r2_inputs::source("R04"), |m| {
+            let mut o = crate::engine::explore(m);
+            o.response_recovery = None;
+            o
+        });
+        assert_eq!(checked.verdict, Verdict::Unsupported);
+        assert!(checked.diagnostics.iter().any(|d| d.message
+            == "recovery_feature_combination: recovery report transport is not connected"));
+        serde_json::from_value::<crate::report::Report>(serde_json::to_value(checked).unwrap())
+            .expect("closed refusal report");
+        let sampled = super::super::simulate_using(&crate::r2_inputs::source("R01"), None, |m| {
+            let mut o = crate::engine::simulate(m);
+            o.response_recovery = None;
+            o
+        });
+        assert_eq!(sampled.verdict, Verdict::Unsupported);
+    }
     #[test]
     fn typed_receipt_wire_rejects_missing_null_and_promoted_completion() {
         let s = r#"model M version "0.2" { type V=enum {ok}

@@ -855,6 +855,11 @@ pub(super) fn replay(
                     target,
                     case_id,
                 )?;
+                #[cfg(test)]
+                super::recovery::observe_replay(
+                    m,
+                    frames[k].as_ref().ok_or(ReplayReason::ViolationMismatch)?,
+                );
                 local::validate_response_ledger(
                     &mut interpreters[k],
                     frames[k].as_ref().ok_or(ReplayReason::ViolationMismatch)?,
@@ -1094,6 +1099,8 @@ fn global_instant(
                     .unwrap_or_else(|| vec![None])
                 {
                     let s = Stage {
+                        saved_key: None,
+                        evidence_ref: None,
                         command: None,
                         attempt: None,
                         observed_receipt: None,
