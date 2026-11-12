@@ -88,8 +88,8 @@ declare_diff_report! {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgencySides {
-    pub from: Option<crate::agency::Agency>,
-    pub to: Option<crate::agency::Agency>,
+    pub from: Option<crate::agency::AgencyDerivation>,
+    pub to: Option<crate::agency::AgencyDerivation>,
     pub differences: crate::agency::Differences,
 }
 
@@ -794,11 +794,19 @@ impl DiffReport {
         } else {
             compare(
                 ComparisonSide {
-                    agency: self.agency.from.as_ref(),
+                    agency: self
+                        .agency
+                        .from
+                        .as_ref()
+                        .and_then(crate::agency::AgencyDerivation::as_derived),
                     responsibilities: self.from.report.responsibilities.as_deref(),
                 },
                 ComparisonSide {
-                    agency: self.agency.to.as_ref(),
+                    agency: self
+                        .agency
+                        .to
+                        .as_ref()
+                        .and_then(crate::agency::AgencyDerivation::as_derived),
                     responsibilities: self.to.report.responsibilities.as_deref(),
                 },
             )

@@ -33,7 +33,11 @@ pub(crate) fn apply(
         value: "not_derived(response_control)".into(),
         affects: "応答の受信と採用を含む読取り経路は未導出。via model宣言の有無にかかわらず、空の経路集合を検証したことにはならない。".into(),
     });
-    let Some(agency) = &mut report.agency else {
+    let Some(agency) = report
+        .agency
+        .as_mut()
+        .and_then(AgencyDerivation::as_derived_mut)
+    else {
         return;
     };
     agency.rules = "agency-p2-response-1".into();
@@ -56,7 +60,11 @@ pub(crate) fn apply(
     // must not become extra kernel executions in either derived table. A
     // dependency on an adopted result refers to its real lexical attempts,
     // not to an additional execution of the command binding.
-    if let Some(causes) = &mut agency.common_causes {
+    if let Some(causes) = agency
+        .common_causes
+        .as_mut()
+        .and_then(CommonCauseDerivation::as_derived_mut)
+    {
         for cause in &mut causes.causes {
             cause.targets.retain(|t| !commands.contains(&t.call));
         }
@@ -65,6 +73,7 @@ pub(crate) fn apply(
     if agency
         .common_causes
         .as_ref()
+        .and_then(CommonCauseDerivation::as_derived)
         .is_some_and(|c| c.causes.is_empty())
     {
         agency.common_causes = None;

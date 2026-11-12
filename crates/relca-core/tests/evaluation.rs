@@ -224,11 +224,17 @@ fn tables_agency_transport_keeps_both_sides_responsibilities_and_declared_direct
         let b: relca_core::report::Report = serde_json::from_value(p[1]["report"].clone()).unwrap();
         let want = serde_json::to_value(differences(
             ComparisonSide {
-                agency: a.agency.as_ref(),
+                agency: a
+                    .agency
+                    .as_ref()
+                    .and_then(relca_core::agency::AgencyDerivation::as_derived),
                 responsibilities: a.responsibilities.as_deref(),
             },
             ComparisonSide {
-                agency: b.agency.as_ref(),
+                agency: b
+                    .agency
+                    .as_ref()
+                    .and_then(relca_core::agency::AgencyDerivation::as_derived),
                 responsibilities: b.responsibilities.as_deref(),
             },
         ))

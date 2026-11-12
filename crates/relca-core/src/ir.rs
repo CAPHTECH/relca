@@ -97,7 +97,7 @@ pub struct Model {
     /// matching Contract request in verify, including inactive clauses.
     pub contracts: Vec<ContractClause>,
     /// Static ADR 0009 summary; execution does not consult it.
-    pub agency: crate::agency::Agency,
+    pub agency: crate::agency::AgencyDerivation,
     pub name: String,
     pub version: String,
     pub types: Vec<EnumType>,

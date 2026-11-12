@@ -124,7 +124,10 @@ fn i17_not_derived_side_is_not_a_known_equal_dependency() {
         let (from, to) = if reverse { (&z, &a) } else { (&a, &z) };
         fn side(r: &report::Report) -> agency::ComparisonSide<'_> {
             agency::ComparisonSide {
-                agency: r.agency.as_ref(),
+                agency: r
+                    .agency
+                    .as_ref()
+                    .and_then(agency::AgencyDerivation::as_derived),
                 responsibilities: r.responsibilities.as_deref(),
             }
         }
@@ -154,11 +157,17 @@ fn i17_derived_degradation_difference_carries_counts_and_observation() {
     let z = report::check(&b_input::source("other"));
     let v = serde_json::to_value(agency::differences(
         agency::ComparisonSide {
-            agency: a.agency.as_ref(),
+            agency: a
+                .agency
+                .as_ref()
+                .and_then(agency::AgencyDerivation::as_derived),
             responsibilities: None,
         },
         agency::ComparisonSide {
-            agency: z.agency.as_ref(),
+            agency: z
+                .agency
+                .as_ref()
+                .and_then(agency::AgencyDerivation::as_derived),
             responsibilities: None,
         },
     ))

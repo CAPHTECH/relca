@@ -274,7 +274,10 @@ fn r1_static_response_changes_are_original_command_meaning_not_fake_actors() {
 fn agency_diff(a: &report::Report, b: &report::Report) -> Value {
     fn side(r: &report::Report) -> agency::ComparisonSide<'_> {
         agency::ComparisonSide {
-            agency: r.agency.as_ref(),
+            agency: r
+                .agency
+                .as_ref()
+                .and_then(agency::AgencyDerivation::as_derived),
             responsibilities: r.responsibilities.as_deref(),
         }
     }

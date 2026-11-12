@@ -31,11 +31,17 @@ impl SelectedReport {
     fn agency_side(&self) -> crate::agency::ComparisonSide<'_> {
         match self {
             Self::Exhaustive(r) => crate::agency::ComparisonSide {
-                agency: r.agency.as_ref(),
+                agency: r
+                    .agency
+                    .as_ref()
+                    .and_then(crate::agency::AgencyDerivation::as_derived),
                 responsibilities: r.responsibilities.as_deref(),
             },
             Self::Simulation(r) => crate::agency::ComparisonSide {
-                agency: r.agency.as_ref(),
+                agency: r
+                    .agency
+                    .as_ref()
+                    .and_then(crate::agency::AgencyDerivation::as_derived),
                 responsibilities: r.responsibilities.as_deref(),
             },
         }
@@ -768,6 +774,28 @@ fn compare_using(
                 result.tables = Tables::default();
                 result.diagnostic(diag::U_SEM_0, message);
                 return result.finish();
+            }
+            // A main Agency limit is disclosed even on an ordinary comparison
+            // without a declared objective family. Do not silently omit its pair.
+            if result.tables.agency.is_none()
+                && metadata.iter().any(|m| m.model.agency.limit().is_some())
+            {
+                let mut pairs = Vec::new();
+                for i in 0..plans.len() {
+                    for j in i + 1..plans.len() {
+                        pairs.push(AgencyPair {
+                            from: plans[i].into(),
+                            to: plans[j].into(),
+                            differences: crate::agency::differences_for_models(
+                                result.plans[i].report.agency_side(),
+                                &metadata[i].model,
+                                result.plans[j].report.agency_side(),
+                                &metadata[j].model,
+                            ),
+                        });
+                    }
+                }
+                result.tables.agency = Some(pairs);
             }
             if declaration.is_some() {
                 match crate::evaluation::evaluate(&result.plans, &metadata, analysis) {

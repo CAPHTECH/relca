@@ -10346,7 +10346,7 @@ mod tests {
             people: Vec::new(),
             authorities: Vec::new(),
             contracts: Vec::new(),
-            agency: crate::agency::Agency::empty(),
+            agency: crate::agency::Agency::empty().into(),
             name: "hand-built".into(),
             version: "0.2".into(),
             types: vec![ir::EnumType {

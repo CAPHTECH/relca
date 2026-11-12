@@ -44,7 +44,7 @@ fn lineage_pair(from_guard: bool, to_guard: bool) {
             "{:?}",
             r.diagnostics
         );
-        let a = r.agency.as_ref().unwrap();
+        let a = r.agency.as_ref().unwrap().as_derived().unwrap();
         assert_eq!(a.rules, "agency-p2-response-1");
         assert_eq!(
             a.lineage.iter().any(|j| j.capability == "Check.judge"),
@@ -54,7 +54,10 @@ fn lineage_pair(from_guard: bool, to_guard: bool) {
     }
     fn side(r: &report::Report) -> agency::ComparisonSide<'_> {
         agency::ComparisonSide {
-            agency: r.agency.as_ref(),
+            agency: r
+                .agency
+                .as_ref()
+                .and_then(agency::AgencyDerivation::as_derived),
             responsibilities: r.responsibilities.as_deref(),
         }
     }

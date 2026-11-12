@@ -860,6 +860,9 @@ fn condition_name(m: &ir::Model, c: &ir::Cond) -> String {
     out
 }
 fn derive_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Responsibility {
+    if m.agency.as_derived().is_none() {
+        return empty_row(m, d, id);
+    }
     let mut row = empty_row(m, d, id);
     let mut budget = Budget {
         limits,
@@ -879,6 +882,7 @@ fn derive_row_into(
     row: &mut Responsibility,
     budget: &mut Budget,
 ) -> Limited<()> {
+    let agency = m.agency.as_derived().ok_or(())?;
     budget.charge(m.process.bindings.len(), m.process.bindings.len())?;
     budget.charge(m.actors.len(), m.actors.len().checked_mul(2).ok_or(())?)?;
     let graph_cells = crate::contest::control_cells(m).ok_or(())?;
@@ -952,7 +956,7 @@ fn derive_row_into(
         .collect();
     let mut direct = BTreeSet::new();
     let mut indirect = BTreeSet::new();
-    for o in &m.agency.origin {
+    for o in &agency.origin {
         budget.charge(row.actors.len().checked_add(1).ok_or(())?, 0)?;
         if row.actors.contains(&o.actor) {
             let cells = o.direct.len().checked_add(o.indirect.len()).ok_or(())?;
@@ -1022,8 +1026,7 @@ fn derive_row_into(
             }
         }
         // Refusal carries guard judgement candidates as well as argument ancestry.
-        let refusal = m
-            .agency
+        let refusal = agency
             .refusal
             .iter()
             .find(|r| r.call == m.process.bindings[call.binding.0].name);
@@ -1317,7 +1320,7 @@ fn time_witness(m: &ir::Model, row: &Responsibility, budget: &mut Budget) -> Tim
         .collect();
     // Consume only guard relations certified by Agency's existing refusal
     // analysis. Argument dependencies above retain every intermediate call.
-    for effect in &m.agency.refusal {
+    for effect in &m.agency.as_derived().ok_or("derivation_limit")?.refusal {
         if let Some(to) = named.get(effect.call.as_str()) {
             for judgement in effect
                 .judgements
@@ -1552,15 +1555,15 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
     if m.people.is_empty()
         && !m
             .agency
-            .unchecked
+            .unchecked()
             .iter()
             .any(|s| s == "responsibility_people_undeclared")
     {
         m.agency
-            .unchecked
+            .unchecked_mut()
             .push("responsibility_people_undeclared".into());
     }
-    if let Some(view) = &m.agency.viewpoints
+    if let Some(view) = m.agency.as_derived().and_then(|a| a.viewpoints.as_ref())
         && let Some(crate::agency::effects::Effects::NotDerived { reason, .. }) = &view.effects
     {
         // ADR 0054: legacy candidates remain known, but cannot make a failed
@@ -1571,8 +1574,8 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
             "responsibility_default_candidates: process {}: U/E not_derived ({reason})",
             m.process.name
         );
-        if !m.agency.unchecked.contains(&disclosure) {
-            m.agency.unchecked.push(disclosure);
+        if !m.agency.unchecked().contains(&disclosure) {
+            m.agency.unchecked_mut().push(disclosure);
         }
     }
     let Some(meta) = m.responsibility.as_ref() else {
@@ -1613,7 +1616,7 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
         }
     }
     warnings.extend(undeclared_responsibility(m));
-    let unchecked = &mut m.agency.unchecked;
+    let unchecked = m.agency.unchecked_mut();
     if !rows.is_empty() {
         unchecked.retain(|v| v != "W-RESP-1");
         if rows.iter().any(|r| r.time_frame.status == "unchecked") {
@@ -1666,9 +1669,12 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
 }
 
 fn undeclared_responsibility(m: &ir::Model) -> Vec<diag::Diagnostic> {
+    let Some(agency) = m.agency.as_derived() else {
+        return Vec::new();
+    };
     let mut warnings = Vec::new();
     let mut actors = BTreeSet::new();
-    for r in &m.agency.refusal {
+    for r in &agency.refusal {
         if r.reachable {
             actors.insert(r.effect.split('.').next().unwrap_or(""));
             for j in r
@@ -1682,7 +1688,7 @@ fn undeclared_responsibility(m: &ir::Model) -> Vec<diag::Diagnostic> {
             }
         }
     }
-    if let Some(view) = &m.agency.viewpoints
+    if let Some(view) = &agency.viewpoints
         && let Some(crate::agency::effects::Effects::Derived { rows, .. }) = &view.effects
     {
         for row in rows {
@@ -1927,8 +1933,19 @@ pub(crate) fn validate(m: &ir::Model) -> Result<(), diag::Diagnostic> {
     if let Some(diagnostic) = crate::contest::condition_wait_refusal(m) {
         return Err(diagnostic);
     }
-    let (agency, _) = crate::agency::derive(m)?;
-    if agency.origin != m.agency.origin || agency.refusal != m.agency.refusal {
+    let (agency, _) = crate::agency::derive_for_model(m)?;
+    let matches = match (&agency, &m.agency) {
+        (
+            crate::agency::AgencyDerivation::Derived(a),
+            crate::agency::AgencyDerivation::Derived(b),
+        ) => a.origin == b.origin && a.refusal == b.refusal,
+        (
+            crate::agency::AgencyDerivation::NotDerived(a),
+            crate::agency::AgencyDerivation::NotDerived(b),
+        ) => a.limit == b.limit && a.degradation == b.degradation,
+        _ => false,
+    };
+    if !matches {
         return Err(invalid());
     }
     if meta.contest_paths
@@ -2513,7 +2530,7 @@ mod tests {
                 .agency
                 .as_ref()
                 .unwrap()
-                .unchecked
+                .unchecked()
                 .contains(&"responsibility_derivation_limit".into())
         );
         drop(reset);
@@ -2552,7 +2569,7 @@ mod tests {
     }
 
     #[test]
-    fn r_agency_hard_limit_is_not_the_responsibility_soft_limit() {
+    fn r_agency_limit_does_not_prevent_property_or_responsibility_reporting() {
         let guards = "if x == pass {} else {};".repeat(14);
         let source = format!(
             r#"model M version "0.2" {{
@@ -2566,19 +2583,63 @@ mod tests {
             verify safety no_resource_overcommit
         }}"#
         );
-        let _reset = use_limits(vec![Limits { work: 0, ..DEFAULT }]);
+        assert_eq!(row_limits(0).work, DEFAULT.work);
         let report = crate::report::check(&source);
-        assert_eq!(report.verdict, crate::Verdict::Unsupported);
+        // ADR 0067 B1 supersedes the old hard lowering gate for Agency limits.
+        // The input and its execution are unchanged: x1 + e1 < clock10.
+        assert_eq!(report.verdict, crate::Verdict::Satisfied);
         assert!(
             report
                 .diagnostics
                 .iter()
-                .any(|d| d.code == diag::U_SEM_0 && d.message.contains("Agency"))
+                .any(|d| d.code == diag::W_AGY_4 && d.severity == diag::Severity::Warning)
         );
-        assert!(report.agency.is_none());
-        assert!(report.responsibilities.is_none());
-        assert!(report.contest_paths.is_none());
-        assert!(report.properties.is_empty());
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|d| d.severity != diag::Severity::Error)
+        );
+        assert!(report.agency.as_ref().unwrap().limit().is_some());
+        let rows = report.responsibilities.as_ref().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].observation.status, "not_derived");
+        assert_eq!(
+            rows[0].observation.reason.as_deref(),
+            Some("derivation_limit")
+        );
+        assert_eq!(rows[0].refusal.status, "not_derived");
+        assert_eq!(report.contest_paths, Some(Vec::new()));
+        assert_eq!(report.properties.len(), 1);
+        assert_eq!(report.properties[0].verdict, crate::Verdict::Satisfied);
+        assert_eq!(report.bounds.truncated, Some(false));
+        let ordinary = source.replace(&guards, "");
+        let control = crate::report::check(&ordinary);
+        assert!(control.agency.as_ref().unwrap().as_derived().is_some());
+        assert_ne!(
+            control.responsibilities.as_ref().unwrap()[0]
+                .observation
+                .reason
+                .as_deref(),
+            Some("derivation_limit")
+        );
+        let _reset = use_limits(vec![Limits { work: 0, ..DEFAULT }]);
+        let responsibility_limit = crate::report::check(&ordinary);
+        assert!(
+            responsibility_limit
+                .agency
+                .as_ref()
+                .unwrap()
+                .as_derived()
+                .is_some()
+        );
+        assert_eq!(
+            responsibility_limit.responsibilities.as_ref().unwrap()[0]
+                .observation
+                .reason
+                .as_deref(),
+            Some("derivation_limit")
+        );
     }
 
     #[test]

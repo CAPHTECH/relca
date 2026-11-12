@@ -39,7 +39,7 @@ fn injected(s: &str, block: &str, dimension: &str, n: usize, config: bool) -> Va
         original_lower.as_slice()
     );
     let (agency, warnings) = derive_with_new_limits(&m, DEFAULT, limits, effect_limit).unwrap();
-    m.agency = agency;
+    m.agency = agency.into();
     m.diagnostics.retain(|d| {
         ![
             diag::W_AGY_0,
@@ -204,11 +204,11 @@ fn unavailable_mismatch_equal_unknown_and_one_sided_effect_are_distinct() {
     ] {
         let d = differences(
             ComparisonSide {
-                agency: left,
+                agency: left.and_then(AgencyDerivation::as_derived),
                 responsibilities: None,
             },
             ComparisonSide {
-                agency: right,
+                agency: right.and_then(AgencyDerivation::as_derived),
                 responsibilities: None,
             },
         );
@@ -241,11 +241,19 @@ fn unavailable_mismatch_equal_unknown_and_one_sided_effect_are_distinct() {
     );
     let unknown = differences(
         ComparisonSide {
-            agency: diff.agency.to.as_ref(),
+            agency: diff
+                .agency
+                .to
+                .as_ref()
+                .and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
         ComparisonSide {
-            agency: diff.agency.to.as_ref(),
+            agency: diff
+                .agency
+                .to
+                .as_ref()
+                .and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
     );
@@ -262,11 +270,11 @@ fn unavailable_mismatch_equal_unknown_and_one_sided_effect_are_distinct() {
     let z = crate::report::check(&s.replace("commits;", ""));
     let v = serde_json::to_value(differences(
         ComparisonSide {
-            agency: a.agency.as_ref(),
+            agency: a.agency.as_ref().and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
         ComparisonSide {
-            agency: z.agency.as_ref(),
+            agency: z.agency.as_ref().and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
     ))
@@ -360,11 +368,11 @@ fn public_ast_keep_shape_and_incomplete_resource_framing_remain_fail_closed() {
     let r = crate::report::check(s);
     let d = differences(
         ComparisonSide {
-            agency: r.agency.as_ref(),
+            agency: r.agency.as_ref().and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
         ComparisonSide {
-            agency: r.agency.as_ref(),
+            agency: r.agency.as_ref().and_then(AgencyDerivation::as_derived),
             responsibilities: None,
         },
     );

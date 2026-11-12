@@ -805,7 +805,7 @@ fn diff_copies_agency_on_success_static_failure_and_cut_mismatch() {
 }
 
 #[test]
-fn public_default_derivation_budget_rejects_before_engine_with_no_partial_summary() {
+fn public_default_derivation_budget_keeps_properties_without_a_partial_agency() {
     // 24 binary condition bindings: 2^24 combinations, above the agreed
     // 65,536-context / 1,000,000-work domain. No injected internal Limits API.
     let calls = (0..24)
@@ -819,5 +819,35 @@ fn public_default_derivation_budget_rejects_before_engine_with_no_partial_summar
         .replace("approval = Reviewer.review(entry)", &calls)
         .replace("approval == pass", &condition)
         .replace("Ledger.post(approval)", "Ledger.post(v0)");
-    static_failure(&check(&source), "U-SEM-0");
+    // ADR 0067 B1: the one Or remains inseparable, but its Agency limit no
+    // longer stops execution. The separate engine's 1M-state budget cannot
+    // cover 2^24 result tuples. All paths need at most 1+24+1=26 < clock32,
+    // so this is a computation cut, not a business horizon or a violation.
+    let actual = check(&source);
+    assert_eq!(actual["agency"]["status"], "not_derived");
+    assert_eq!(actual["agency"]["reason"], "derivation_limit");
+    for field in ["origin", "lineage", "lineage_groups", "refusal"] {
+        assert!(actual["agency"][field].is_null());
+    }
+    assert!(
+        actual["agency"]["limit"]["requested"].as_u64().unwrap()
+            > actual["agency"]["limit"]["limit"].as_u64().unwrap()
+    );
+    assert!(has_code(&actual, "W-AGY-4"));
+    assert!(has_code(&actual, "W-BUDGET-0"));
+    assert!(!has_code(&actual, "U-SEM-0"));
+    assert_eq!(actual["ledger"]["execution"]["status"], "ran");
+    assert_eq!(actual["properties"].as_array().unwrap().len(), 2);
+    assert!(
+        actual["properties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| matches!(p["verdict"].as_str(), Some("satisfied" | "inconclusive")))
+    );
+    assert_eq!(
+        actual["bounds"],
+        json!({"cases":1,"live_tasks":4,"clock":32,"truncated":true})
+    );
+    assert_eq!(actual["verdict"], "inconclusive");
 }

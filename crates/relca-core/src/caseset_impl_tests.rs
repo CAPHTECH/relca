@@ -249,20 +249,36 @@ fn case_person_kernel_inputs_and_overrides_are_rejected_by_both_ir_guards() {
 fn case_id_only_argument_is_not_a_judgement_input() {
     let s = "model M version \"0.2\" {type T=enum{ok,no};actor Doc{source record};actor A{capacity 1;capability check(k:CaseId)->T{reads[Doc];duration fixed 1min;result nondet{ok,no}};capability post()->T{commits;duration fixed 1min;result nondet{ok}}};process P{a=A.check(case.id);if a==ok{b=A.post();end done}else{end no}};bounds{cases 1;live_tasks 1;clock 5min};verify safety no_resource_overcommit}";
     let m = model(s);
-    assert!(m.agency.lineage.is_empty());
-    assert!(m.agency.refusal.iter().all(|r| r.judgements.is_empty()));
+    assert!(m.agency.as_derived().unwrap().lineage.is_empty());
+    assert!(
+        m.agency
+            .as_derived()
+            .unwrap()
+            .refusal
+            .iter()
+            .all(|r| r.judgements.is_empty())
+    );
 }
 
 #[test]
 fn membership_requires_is_unknown_not_an_initial_empty_set_constant() {
     let m = model(include_str!("../../../fixtures/aset-agency/model.relca"));
-    assert!(m.agency.refusal.iter().all(|r| r.effect != "Poster.post"));
+    assert!(
+        m.agency
+            .as_derived()
+            .unwrap()
+            .refusal
+            .iter()
+            .all(|r| r.effect != "Poster.post")
+    );
     let control = model(include_str!(
         "../../../fixtures/aset-agency.broken-scalar-requires/model.relca"
     ));
     assert!(
         control
             .agency
+            .as_derived()
+            .unwrap()
             .refusal
             .iter()
             .find(|r| r.effect == "Poster.post")
@@ -326,12 +342,26 @@ fn explicit_null_notes_cannot_be_laundered_into_an_absent_key() {
 fn concurrent_atomic_writers_and_any_results_remain_unknown_for_later_refusal() {
     let s = "model M version \"0.2\" {type T=enum{ok,no};observed case{d:T=ok};actor A{capacity 2;capability choose()->T{writes d;atomic{if d==ok{d=no;result ok}else{result no}};duration fixed 1min;cancel forbidden_after_start};capability post()->T{requires d==ok else no;commits;duration fixed 1min;result nondet{ok};cancel forbidden_after_start}};process P{fork f{a=A.choose();b=A.post()};join all f;end done};bounds{cases 1;live_tasks 2;clock 5min};verify safety no_resource_overcommit}";
     let m = model(s);
-    assert!(m.agency.refusal.iter().all(|r| r.call != "b"));
+    assert!(
+        m.agency
+            .as_derived()
+            .unwrap()
+            .refusal
+            .iter()
+            .all(|r| r.call != "b")
+    );
     let s = "model M version \"0.2\" {type T=enum{ok,no};observed case{d:T=ok};actor A{capacity 2;capability choose()->T{writes d;atomic{if d==ok{d=no;result ok}else{result no}};duration fixed 1min;cancel forbidden_after_start};capability fast()->T{duration fixed 1min;result nondet{ok};cancel forbidden_after_start};capability post()->T{commits;duration fixed 1min;result nondet{ok}}};process P{fork f{a=A.choose();b=A.fast()};join any f where result==ok tie by[b,a] remaining drain if none -> no_match;c=A.post();end done};bounds{cases 1;live_tasks 2;clock 5min};verify safety no_resource_overcommit}";
     let s = s.replace(
         "c=A.post();end done",
         "c=A.post();if d==ok{end done}else{end no_match}",
     );
     let m = model(&s);
-    assert!(m.agency.refusal.iter().all(|r| r.call != "c"));
+    assert!(
+        m.agency
+            .as_derived()
+            .unwrap()
+            .refusal
+            .iter()
+            .all(|r| r.call != "c")
+    );
 }

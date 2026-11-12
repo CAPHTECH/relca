@@ -3,8 +3,10 @@ use crate::ir;
 use serde::{Deserialize, Serialize};
 
 mod derive;
+mod indices;
 mod validate;
 pub(crate) use derive::derive;
+pub(super) use indices::validate as validate_indices;
 pub(super) use validate::known_reason;
 pub(crate) use validate::{validate_cut, validate_host};
 

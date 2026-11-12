@@ -10,12 +10,14 @@ fn require(ok: bool, reason: &str) -> Result<(), String> {
     }
 }
 pub(crate) fn validate_cut(
-    agency: Option<&crate::agency::Agency>,
+    assumptions: &[ir::Assumption],
     truncated: Option<bool>,
     verdict: crate::Verdict,
 ) -> Result<(), String> {
     require(
-        !(agency.is_some_and(|a| a.degradation.is_some())
+        !(assumptions
+            .iter()
+            .any(|a| a.field == "agency.degradation.declarations")
             && truncated == Some(true)
             && matches!(verdict, crate::Verdict::Satisfied | crate::Verdict::Vacuous)),
         "truncated degradation cannot be satisfied or vacuous",
@@ -172,7 +174,7 @@ impl Degradation {
 }
 
 pub(crate) fn validate_host(
-    agency: Option<&crate::agency::Agency>,
+    agency: Option<&crate::agency::AgencyDerivation>,
     actors: Option<&[crate::actor_table::Actor]>,
     assumptions: &[ir::Assumption],
     work_profiles: Option<&crate::report::work_profiles::WorkProfiles>,
@@ -181,7 +183,7 @@ pub(crate) fn validate_host(
         .iter()
         .filter(|a| a.field == "agency.degradation.declarations")
         .collect();
-    let Some(t) = agency.and_then(|a| a.degradation.as_ref()) else {
+    let Some(t) = agency.and_then(crate::agency::AgencyDerivation::degradation) else {
         require(declared.is_empty(), "declaration without degradation table")?;
         return Ok(());
     };

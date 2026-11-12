@@ -31,6 +31,7 @@ pub const W_AGY_0: &str = "W-AGY-0";
 pub const W_AGY_1: &str = "W-AGY-1";
 pub const W_AGY_2: &str = "W-AGY-2";
 pub const W_AGY_3: &str = "W-AGY-3";
+pub const W_AGY_4: &str = "W-AGY-4";
 pub const W_LIN_2: &str = "W-LIN-2";
 pub const W_RESP_0: &str = "W-RESP-0";
 pub const W_RESP_1: &str = "W-RESP-1";
@@ -97,6 +98,7 @@ pub const CODES: &[&str] = &[
     W_AGY_1,
     W_AGY_2,
     W_AGY_3,
+    W_AGY_4,
     W_LIN_2,
     W_RESP_0,
     W_RESP_1,

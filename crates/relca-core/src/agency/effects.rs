@@ -346,7 +346,7 @@ fn atomic_judgements(
                         .map(|(id, v)| (*id, *v))
                         .collect();
                     if !contexts.contains(&context) {
-                        Budget::add(&mut b.contexts, 1, b.limits.contexts)?;
+                        b.context()?;
                         b.cells(1)?;
                         contexts.insert(context);
                     }

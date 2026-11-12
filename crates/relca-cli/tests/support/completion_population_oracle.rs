@@ -27,7 +27,7 @@ fn execution_key(model: &ir::Model) -> String {
             .all(|d| d.severity == relca_core::diag::Severity::Warning)
     );
     let mut key = model.clone();
-    key.agency = relca_core::agency::Agency::empty();
+    key.agency = relca_core::agency::Agency::empty().into();
     key.assumptions.clear();
     key.diagnostics.clear();
     for cap in &mut key.capabilities {
@@ -77,7 +77,7 @@ fn execution_cache_does_not_equate_changed_operational_capacity() {
     let source = include_str!("../../../../fixtures/serial-time/model.relca");
     let model = relca_core::lower::lower(&relca_core::syntax::parse(source).unwrap()).unwrap();
     let mut metadata = model.clone();
-    metadata.agency.rules = "different static description".into();
+    metadata.agency.as_derived_mut().unwrap().rules = "different static description".into();
     metadata.assumptions.clear();
     assert_eq!(execution_key(&model), execution_key(&metadata));
     metadata.actors[0].capacity = Some(99);

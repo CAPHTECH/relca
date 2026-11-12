@@ -31,7 +31,7 @@ fn derive_json(m: &ir::Model, limit: usize) -> serde_json::Value {
 mod hand;
 #[cfg(test)]
 #[path = "../tests/support/q6b_inputs.rs"]
-mod input;
+pub(crate) mod input;
 
 #[cfg(test)]
 mod tests {
@@ -268,6 +268,8 @@ mod tests {
                 "observation" => {
                     bad.agency
                         .as_mut()
+                        .unwrap()
+                        .as_derived_mut()
                         .unwrap()
                         .degradation
                         .as_mut()

@@ -450,14 +450,27 @@ fn c6int_expiry_editor_clones_rule_change_grants_and_not_by_exactly() {
 fn c6int_rule_judgement_is_not_reinterpreted_as_a_process_call() {
     let mut before = crate::report::check(&integration_inputs::rule(false, false));
     assert_eq!(before.verdict, crate::Verdict::Satisfied);
-    let refusal = &mut before.agency.as_mut().unwrap().refusal;
+    let refusal = &mut before
+        .agency
+        .as_mut()
+        .unwrap()
+        .as_derived_mut()
+        .unwrap()
+        .refusal;
     for r in refusal.iter_mut() {
         r.judgements
             .retain(|j| matches!(j, crate::agency::Judgement::Rule(_)));
     }
     assert!(refusal.iter().any(|r| !r.judgements.is_empty()));
     let mut after = before.clone();
-    for r in &mut after.agency.as_mut().unwrap().refusal {
+    for r in &mut after
+        .agency
+        .as_mut()
+        .unwrap()
+        .as_derived_mut()
+        .unwrap()
+        .refusal
+    {
         for j in &mut r.judgements {
             if let crate::agency::Judgement::Rule(rule) = j {
                 rule.version = "r2".into();

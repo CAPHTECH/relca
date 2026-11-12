@@ -44,7 +44,7 @@ fn effects(body: &ir::Block, m: &ir::Model, out: &mut BTreeSet<String>) {
 }
 pub fn expected(m: &ir::Model) -> Vec<diag::Diagnostic> {
     let mut actors = BTreeSet::new();
-    for row in &m.agency.refusal {
+    for row in &m.agency.as_derived().unwrap().refusal {
         if row.reachable {
             actors.insert(row.effect.split('.').next().unwrap().to_owned());
             for p in row.judgements.iter().filter_map(agency::Judgement::process) {
@@ -54,7 +54,7 @@ pub fn expected(m: &ir::Model) -> Vec<diag::Diagnostic> {
             }
         }
     }
-    if let Some(view) = &m.agency.viewpoints {
+    if let Some(view) = &m.agency.as_derived().unwrap().viewpoints {
         // The public field's private enum is serialized to inspect only the
         // unchanged status/U surface. The new E candidate set above is IR-only.
         let block = json!(view.effects);
@@ -99,7 +99,7 @@ pub fn expected(m: &ir::Model) -> Vec<diag::Diagnostic> {
 /// ADR 0054, "取り込み前レビューで追加する開示": an incomplete effects
 /// derivation is not an empty responsibility candidate set.
 pub fn expected_disclosures(m: &ir::Model) -> Vec<String> {
-    let effects = json!(m.agency.viewpoints)
+    let effects = json!(m.agency.as_derived().unwrap().viewpoints)
         .get("effects")
         .cloned()
         .unwrap_or_default();

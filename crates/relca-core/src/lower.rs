@@ -5746,7 +5746,7 @@ impl Lower {
             people: self.people,
             authorities: self.authorities,
             contracts,
-            agency: crate::agency::Agency::empty(),
+            agency: crate::agency::Agency::empty().into(),
             name: model.name.value.clone(),
             version: model.version.value.clone(),
             types: self.types,
@@ -5941,7 +5941,7 @@ impl Lower {
                 span: Some(span),
             }]);
         }
-        match crate::agency::derive(&lowered) {
+        match crate::agency::derive_for_model(&lowered) {
             Ok((agency, warnings)) => {
                 lowered.agency = agency;
                 fn has_kernel(b: &ir::Block, m: &ir::Model) -> bool {
@@ -5961,12 +5961,15 @@ impl Lower {
                     })
                 }
                 if has_kernel(&lowered.process.body, &lowered) {
-                    lowered.agency.unchecked.push("kernel_correlations".into());
+                    lowered
+                        .agency
+                        .unchecked_mut()
+                        .push("kernel_correlations".into());
                 }
                 if self.multi_case {
                     lowered
                         .agency
-                        .unchecked
+                        .unchecked_mut()
                         .push("multi_case_interference".into());
                 }
                 lowered.diagnostics.extend(warnings);
@@ -6139,12 +6142,12 @@ impl Lower {
                     lowered.assumptions.splice(at..at, feature);
                     if let Some(at) = lowered
                         .agency
-                        .unchecked
+                        .unchecked()
                         .iter()
                         .position(|s| s == "multi_case_interference")
                     {
-                        let word = lowered.agency.unchecked.remove(at);
-                        lowered.agency.unchecked.push(word);
+                        let word = lowered.agency.unchecked_mut().remove(at);
+                        lowered.agency.unchecked_mut().push(word);
                     }
                 }
                 // New responsibility assumptions precede the duration block,
@@ -6185,13 +6188,13 @@ impl Lower {
                 if lowered.resource_time.is_some() {
                     lowered
                         .agency
-                        .unchecked
+                        .unchecked_mut()
                         .push("calendar_time_feasibility_not_derived".into());
                 }
                 if lowered.has_condition_wait() {
                     lowered
                         .agency
-                        .unchecked
+                        .unchecked_mut()
                         .push("condition_wait_feasibility_not_derived".into());
                 }
                 if let Some(d) = &lowered.arrival_distribution {
@@ -11106,7 +11109,8 @@ mod actor_declaration_diagnostic_tests {
             assert_eq!(warnings, [diag::W_CONF_0, diag::W_CUT_1]);
         }
         // Exercise the pre-assembly error exit and the existing post-assembly
-        // Agency failure exit with the same independently generated warnings.
+        // ADR 0067: an Agency limit now continues lowering, while the same
+        // independently generated configuration/Cut warnings must survive.
         let duplicate = src.replace(
             "capacity 1; capability run",
             "capacity 1; capacity 1; capability run",
@@ -11124,10 +11128,24 @@ mod actor_declaration_diagnostic_tests {
                     "if a == ok {} else {} ".repeat(13)
                 ),
             );
-        for source in [duplicate, agency] {
+        for (source, agency_limit) in [(duplicate, false), (agency, true)] {
             let ast = syntax::parse(&source).unwrap();
-            let ds = lower::lower_configuration(&ast, "Plan").err().unwrap();
-            assert!(ds.iter().any(|d| d.code == diag::U_SEM_0));
+            let result = lower::lower_configuration(&ast, "Plan");
+            let ds = if agency_limit {
+                let m = result.unwrap().model;
+                assert!(m.agency.limit().is_some());
+                assert!(m.diagnostics.iter().any(|d| d.code == diag::W_AGY_4));
+                assert!(
+                    m.diagnostics
+                        .iter()
+                        .all(|d| d.severity != diag::Severity::Error)
+                );
+                m.diagnostics
+            } else {
+                let ds = result.err().unwrap();
+                assert!(ds.iter().any(|d| d.code == diag::U_SEM_0));
+                ds
+            };
             for code in [diag::W_CONF_0, diag::W_CUT_1] {
                 assert_eq!(ds.iter().filter(|d| d.code == code).count(), 1, "{ds:?}");
             }

@@ -45,14 +45,33 @@ fn alias_only_common_cause_becomes_none_not_empty_table() {
     let r = report::check(input::SINGLE_COMMON);
     assert_eq!(r.verdict, Verdict::Satisfied, "{:?}", r.diagnostics);
     assert!(
-        r.agency.as_ref().unwrap().common_causes.is_none(),
+        r.agency
+            .as_ref()
+            .unwrap()
+            .as_derived()
+            .unwrap()
+            .common_causes
+            .is_none(),
         "{:?}",
-        r.agency.as_ref().unwrap().common_causes
+        r.agency
+            .as_ref()
+            .unwrap()
+            .as_derived()
+            .unwrap()
+            .common_causes
     );
     assert!(json!(r)["agency"].get("common_causes").is_none());
     // No actual pair exists even without a response alias.
     let ordinary = report::check(&input::SINGLE_COMMON.replace(" response_loss none", ""));
-    assert!(ordinary.agency.unwrap().common_causes.is_none());
+    assert!(
+        ordinary
+            .agency
+            .unwrap()
+            .as_derived()
+            .unwrap()
+            .common_causes
+            .is_none()
+    );
 }
 
 #[test]

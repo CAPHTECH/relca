@@ -96,7 +96,7 @@ macro_rules! declare_report {
                     table.validate_host(&serde_json::to_value(&report).map_err(E::custom)?).map_err(E::custom)?;
                 }
                 crate::agency::degradation::validate_host(report.agency.as_ref(),report.actors.as_deref(),&report.assumptions,report.work_profiles.as_ref()).map_err(E::custom)?;
-                crate::agency::degradation::validate_cut(report.agency.as_ref(),report.bounds.truncated,report.verdict).map_err(E::custom)?;
+                crate::agency::degradation::validate_cut(&report.assumptions,report.bounds.truncated,report.verdict).map_err(E::custom)?;
                 if let Some(quality) = &report.quality {
                     let deferred = matches!(&report.cut, Cut::Declared(cut)
                         if !cut.defer.is_empty() && cut.checked.iter().any(|v| v == "deferred_metrics"));
@@ -152,7 +152,7 @@ declare_report! {
     pub case_outcomes: Option<Vec<CaseOutcome>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admission: Option<AdmissionSummary>,
-    pub agency: Option<crate::agency::Agency>,
+    pub agency: Option<crate::agency::AgencyDerivation>,
     pub verdict: Verdict,
     pub mode: Mode,
     pub unit: Unit,
@@ -165,6 +165,8 @@ declare_report! {
     pub terminals: Vec<Terminal>,
 }
 
+#[cfg(test)]
+mod agency_limit_gate_tests;
 mod preflight;
 pub mod priority;
 #[cfg(test)]
@@ -693,7 +695,7 @@ macro_rules! declare_simulation_report {
                         .map_err(serde::de::Error::custom)?;
                 }
                 crate::agency::degradation::validate_host(r.agency.as_ref(),r.actors.as_deref(),&r.assumptions,r.work_profiles.as_ref()).map_err(serde::de::Error::custom)?;
-                crate::agency::degradation::validate_cut(r.agency.as_ref(),r.bounds.truncated,r.verdict).map_err(serde::de::Error::custom)?;
+                crate::agency::degradation::validate_cut(&r.assumptions,r.bounds.truncated,r.verdict).map_err(serde::de::Error::custom)?;
                 Ok(r)
             }
         }
@@ -741,7 +743,7 @@ declare_simulation_report! {
     pub responsibilities: Option<Vec<crate::responsibility::Responsibility>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contest_paths: Option<Vec<crate::contest::ContestPath>>,
-    pub agency: Option<crate::agency::Agency>,
+    pub agency: Option<crate::agency::AgencyDerivation>,
     pub verdict: Verdict,
     #[serde(deserialize_with="simulation_mode")]
     pub mode: SimulationModeName,
@@ -1350,6 +1352,9 @@ fn simulate_model_raw(
         .as_ref()
         .map(|a| Rational(&a.0 / BigRational::from_integer(rows.clone())));
     base.agency = Some(m.agency.clone());
+    if m.agency.as_derived().is_none() {
+        base.unchecked.extend(m.agency.unchecked().iter().cloned());
+    }
     base.cut_context = CutContext::resolved(m);
     base.responsibilities = m
         .responsibility
@@ -2092,6 +2097,11 @@ fn analyze_model(
     let prepare_analysis = |report: &mut Report| {
         report.diagnostics.extend(model.diagnostics.clone());
         report.agency = Some(model.agency.clone());
+        if model.agency.as_derived().is_none() {
+            report
+                .unchecked
+                .extend(model.agency.unchecked().iter().cloned());
+        }
         report.responsibilities = model
             .responsibility
             .as_ref()
@@ -2563,6 +2573,11 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
         mut_report.assumptions.push(quality_scheduler());
     }
     mut_report.unchecked = outcome.unchecked.clone();
+    if model.agency.as_derived().is_none() {
+        mut_report
+            .unchecked
+            .extend(model.agency.unchecked().iter().cloned());
+    }
     authority_record(&mut mut_report, model);
     mut_report.contest_runtime = outcome.contest_runtime.clone();
     mut_report.contest_summary = outcome.contest_summary.clone();
@@ -2576,7 +2591,7 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
         // ADR 0042 integration ruling (kept by ADR 0043's integration (c)):
         // obligation_debtor is appended once, after every lower marker,
         // including C5's responsibility_people_undeclared.
-        agency.unchecked.push("obligation_debtor".into());
+        agency.unchecked_mut().push("obligation_debtor".into());
     }
     mut_report.metrics = outcome.metrics.clone();
     // Alternate exhaustive drivers (notably explain's trace collector) also
@@ -2841,10 +2856,12 @@ fn range(value: outcome::Range) -> Range {
 fn degradation_cut_verdict(
     verdict: Verdict,
     truncated: Option<bool>,
-    agency: Option<&crate::agency::Agency>,
+    assumptions: &[Assumption],
 ) -> Verdict {
     if truncated == Some(true)
-        && agency.is_some_and(|a| a.degradation.is_some())
+        // Lowered from process.degradations before any Agency pass. Unlike an
+        // optional analysis table this survives unavailable Agency and decoding.
+        && assumptions.iter().any(|a| a.field == "agency.degradation.declarations")
         && matches!(verdict, Verdict::Satisfied | Verdict::Vacuous)
     {
         Verdict::Inconclusive
@@ -2877,11 +2894,8 @@ fn finish(mut report: Report, diagnostics: Vec<diag::Diagnostic>) -> Report {
     report.verdict = fold_verdict(&report.properties, &report.diagnostics);
     // A witnessed reachable End does not close an unfinished degradation path.
     // Keep old input verdicts byte-stable; this is the ADR 0064 whole-run gate.
-    report.verdict = degradation_cut_verdict(
-        report.verdict,
-        report.bounds.truncated,
-        report.agency.as_ref(),
-    );
+    report.verdict =
+        degradation_cut_verdict(report.verdict, report.bounds.truncated, &report.assumptions);
     seal(report)
 }
 
@@ -2898,11 +2912,8 @@ fn simulation_driver(mut report: SimulationReport) -> SimulationReport {
 pub fn seal_simulation(mut report: SimulationReport) -> SimulationReport {
     // Both the driver and direct/early simulation paths seal here. Apply the
     // same whole-run gate before serializing evidence for the ledger/decoder.
-    report.verdict = degradation_cut_verdict(
-        report.verdict,
-        report.bounds.truncated,
-        report.agency.as_ref(),
-    );
+    report.verdict =
+        degradation_cut_verdict(report.verdict, report.bounds.truncated, &report.assumptions);
     let host = serde_json::to_value(&report).expect("simulation uncertainty context");
     report.uncertainty.refresh(&host, true);
     let host = serde_json::to_value(&report).expect("simulation wire");
@@ -3132,7 +3143,7 @@ mod tests {
             people: Vec::new(),
             authorities: Vec::new(),
             contracts: Vec::new(),
-            agency: crate::agency::Agency::empty(),
+            agency: crate::agency::Agency::empty().into(),
             name: "Example".into(),
             version: "0.2".into(),
             types: Vec::new(),

@@ -327,7 +327,7 @@ impl Builder {
                 span: None,
             }],
             cut: None,
-            agency: empty_agency(&[]),
+            agency: empty_agency(&[]).into(),
         })
     }
     fn call(&mut self, duration: u64, actor: usize, results: &[usize], cancel: Cancel) -> Call {
@@ -391,7 +391,7 @@ impl Builder {
             }
         }
         self.0.process.body = body;
-        self.0.agency = empty_agency(&self.0.actors);
+        self.0.agency = empty_agency(&self.0.actors).into();
         self.0
     }
 }
@@ -1086,7 +1086,7 @@ fn property_name(model: &Model, p: Property) -> String {
 fn model_identity(mut m: Model) -> Model {
     // ADR 0034: the handwritten IR corpus does not model agency viewpoints;
     // they are derived output, compared by the agency_viewpoints acceptance.
-    m.agency.viewpoints = None;
+    m.agency.as_derived_mut().unwrap().viewpoints = None;
     fn block(body: &mut Block) {
         for s in body {
             s.span = SPAN;
@@ -1181,21 +1181,22 @@ fn assert_same_selected_model(id: &str, model: &Model, source: &str, configurati
     // (empty_agency): executors leaves unchecked only when the bridge's effects
     // viewpoint is derived (rest unchanged), and a model without people gets
     // responsibility_people_undeclared appended last.
-    if expected.agency.viewpoints.is_none() {
-        let effects = serde_json::to_value(&bridge.agency.viewpoints).unwrap();
+    if expected.agency.as_derived().unwrap().viewpoints.is_none() {
+        let effects =
+            serde_json::to_value(&bridge.agency.as_derived().unwrap().viewpoints).unwrap();
         if effects["effects"]["status"] == "derived" {
-            expected.agency.unchecked.retain(|x| x != "executors");
+            expected.agency.unchecked_mut().retain(|x| x != "executors");
         }
         if expected.people.is_empty()
             && !expected
                 .agency
-                .unchecked
+                .unchecked()
                 .iter()
                 .any(|x| x == "responsibility_people_undeclared")
         {
             expected
                 .agency
-                .unchecked
+                .unchecked_mut()
                 .push("responsibility_people_undeclared".into());
         }
     }

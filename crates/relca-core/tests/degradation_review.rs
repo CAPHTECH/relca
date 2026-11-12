@@ -15,7 +15,7 @@ fn checked(src: &str) -> report::Report {
         "{:?}",
         r.diagnostics
     );
-    assert!(r.agency.as_ref().unwrap().degradation.is_some());
+    assert!(r.agency.as_ref().unwrap().degradation().is_some());
     r
 }
 fn table(src: &str) -> Value {
@@ -197,7 +197,12 @@ fn m7_complete_declaration_and_scope_wire_is_valid() {
 #[test]
 fn m7_declaration_without_table_is_rejected() {
     let mut r = checked(&input::base());
-    r.agency.as_mut().unwrap().degradation = None;
+    r.agency
+        .as_mut()
+        .unwrap()
+        .as_derived_mut()
+        .unwrap()
+        .degradation = None;
     assert!(
         decode(reseal(r)).is_err(),
         "declared degradation cannot disappear from wire"

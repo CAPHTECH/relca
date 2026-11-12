@@ -32,7 +32,10 @@ fn q7_public_stochastic_check_has_only_mode_refusal_and_consistent_ledger() {
 fn compare(a: &report::Report, z: &report::Report) -> Value {
     fn side(r: &report::Report) -> agency::ComparisonSide<'_> {
         agency::ComparisonSide {
-            agency: r.agency.as_ref(),
+            agency: r
+                .agency
+                .as_ref()
+                .and_then(agency::AgencyDerivation::as_derived),
             responsibilities: None,
         }
     }
@@ -83,8 +86,7 @@ fn c1_prefix_only_change_has_one_typed_count_row_in_both_directions() {
         a.agency
             .as_ref()
             .unwrap()
-            .degradation
-            .as_ref()
+            .degradation()
             .unwrap()
             .routes
             .as_ref()
@@ -118,7 +120,12 @@ fn c1_prefix_only_change_has_one_typed_count_row_in_both_directions() {
 fn c1_missing_table_adds_prefix_not_comparable_not_a_side_payload() {
     let a = report::check(input::DEGRADE);
     let mut z = a.clone();
-    z.agency.as_mut().unwrap().degradation = None;
+    z.agency
+        .as_mut()
+        .unwrap()
+        .as_derived_mut()
+        .unwrap()
+        .degradation = None;
     for reverse in [false, true] {
         let v = if reverse {
             compare(&z, &a)
@@ -207,7 +214,7 @@ fn c4_whole_table_withdrawal_has_exact_owner_reason_with_and_without_call() {
     let a = report::check(input::DEGRADE);
     let z = report::check(&input::withdrawn());
     assert_eq!(
-        json!(z.agency.as_ref().unwrap().degradation)["reason"],
+        json!(z.agency.as_ref().unwrap().degradation())["reason"],
         "multiple_case_interference"
     );
     for (from, to, both) in [(&a, &z, false), (&z, &a, false), (&z, &z, true)] {
@@ -222,7 +229,7 @@ fn c4_whole_table_withdrawal_has_exact_owner_reason_with_and_without_call() {
                 if both { None } else { Some(json!("Manual")) }
             );
             for (owner, rep) in [("from", from), ("to", to)] {
-                if json!(rep.agency.as_ref().unwrap().degradation)["status"] == "not_derived" {
+                if json!(rep.agency.as_ref().unwrap().degradation())["status"] == "not_derived" {
                     assert_eq!(
                         r[owner],
                         json!({"status":"not_derived","reason":format!("{owner}.agency.degradation:multiple_case_interference")})

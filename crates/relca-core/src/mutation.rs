@@ -477,11 +477,12 @@ fn mutate_using_raw(
         stage(&mut r, "quality_denominator");
     }
     r.verdict = fold(&r.mutations);
-    let incomplete = r
-        .mutations
-        .iter()
-        .flat_map(|x| &x.mutants)
-        .any(|m| matches!(m.result, "inconclusive" | "invalid_mutant" | "not_run"));
+    let incomplete = r.mutations.iter().flat_map(|x| &x.mutants).any(|m| {
+        matches!(
+            m.result,
+            "unsupported" | "inconclusive" | "invalid_mutant" | "not_run"
+        )
+    });
     r.run.completion = if incomplete {
         "inconclusive"
     } else {
@@ -774,7 +775,10 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
     }
 }
 fn fold(rows: &[KindRow]) -> Verdict {
-    if rows.iter().any(|r| r.status == "unsupported") {
+    if rows
+        .iter()
+        .any(|r| r.status == "unsupported" || r.mutants.iter().any(|m| m.result == "unsupported"))
+    {
         return Verdict::Unsupported;
     }
     let results: Vec<_> = rows
@@ -1567,7 +1571,7 @@ fn compare_summary(
     call: &str,
     capability: &str,
 ) -> Comparison {
-    if let Some(c) = comparison_failure(after) {
+    if let Some(c) = comparison_failure(before, after, true) {
         return c;
     }
     let mut c = Comparison {
@@ -1577,11 +1581,15 @@ fn compare_summary(
         other: vec![],
     };
     other_changes(before, after, &mut c.other);
-    let b = before.agency.as_ref().and_then(|a| {
-        a.lineage
-            .iter()
-            .find(|l| l.call == call && l.capability == capability)
-    });
+    let b = before
+        .agency
+        .as_ref()
+        .and_then(crate::agency::AgencyDerivation::as_derived)
+        .and_then(|a| {
+            a.lineage
+                .iter()
+                .find(|l| l.call == call && l.capability == capability)
+        });
     let Some(b) = b else { return c };
     let subject = normalized(&b.subject_sources);
     let independent = normalized(&b.independent_sources);
@@ -1594,6 +1602,7 @@ fn compare_summary(
     let group = |r: &report::Report, subject: &BTreeSet<String>| {
         r.agency
             .as_ref()
+            .and_then(crate::agency::AgencyDerivation::as_derived)
             .and_then(|a| {
                 a.lineage_groups
                     .iter()
@@ -1604,11 +1613,15 @@ fn compare_summary(
     let Some(bg) = group(before, &subject) else {
         return c;
     };
-    let a = after.agency.as_ref().and_then(|a| {
-        a.lineage
-            .iter()
-            .find(|l| l.call == call && l.capability == capability)
-    });
+    let a = after
+        .agency
+        .as_ref()
+        .and_then(crate::agency::AgencyDerivation::as_derived)
+        .and_then(|a| {
+            a.lineage
+                .iter()
+                .find(|l| l.call == call && l.capability == capability)
+        });
     let Some(a) = a else { return c };
     let new_subject = normalized(&a.subject_sources);
     let new_independent = normalized(&a.independent_sources);
@@ -1679,11 +1692,21 @@ fn compare_summary(
     c
 }
 
-fn comparison_failure(after: &report::Report) -> Option<Comparison> {
+fn comparison_failure(
+    before: &report::Report,
+    after: &report::Report,
+    agency_required: bool,
+) -> Option<Comparison> {
     let (result, reason) = if after.verdict == Verdict::Invalid {
         ("invalid_mutant", "static_invalid")
     } else if after.verdict == Verdict::Unsupported && after.agency.is_none() {
         ("invalid_mutant", "static_unsupported")
+    } else if agency_required
+        && [&before.agency, &after.agency]
+            .into_iter()
+            .any(|a| a.as_ref().is_some_and(|a| a.limit().is_some()))
+    {
+        ("unsupported", "agency_not_derived")
     } else if after.bounds.truncated.is_none() {
         ("inconclusive", "runtime_unsupported")
     } else if after.bounds.truncated == Some(true) {
@@ -1709,7 +1732,11 @@ fn comparison_failure(after: &report::Report) -> Option<Comparison> {
     })
 }
 fn compare(kind: usize, before: &report::Report, after: &report::Report) -> Comparison {
-    if let Some(c) = comparison_failure(after) {
+    if let Some(c) = comparison_failure(
+        before,
+        after,
+        checks(kind).iter().any(|c| c.starts_with("agency.")),
+    ) {
         return c;
     }
     let mut assigned = vec![];
@@ -1774,7 +1801,16 @@ fn compare(kind: usize, before: &report::Report, after: &report::Report) -> Comp
             );
         }
     }
-    if let (Some(b), Some(a)) = (&before.agency, &after.agency) {
+    if let (Some(b), Some(a)) = (
+        before
+            .agency
+            .as_ref()
+            .and_then(crate::agency::AgencyDerivation::as_derived),
+        after
+            .agency
+            .as_ref()
+            .and_then(crate::agency::AgencyDerivation::as_derived),
+    ) {
         for bl in &b.lineage {
             let al = a
                 .lineage
@@ -2376,6 +2412,8 @@ mod default_tests {
             .agency
             .as_mut()
             .unwrap()
+            .as_derived_mut()
+            .unwrap()
             .lineage
             .iter_mut()
             .find(|l| l.call == "a")
@@ -2384,6 +2422,8 @@ mod default_tests {
         let mut a = b.clone();
         a.agency
             .as_mut()
+            .unwrap()
+            .as_derived_mut()
             .unwrap()
             .lineage
             .iter_mut()
@@ -2794,6 +2834,31 @@ mod tests {
         r
     }
     #[test]
+    fn r1_unsupported_mutant_does_not_need_an_unsupported_kind_to_close_fold() {
+        let mut rows = uncomputed("invalid_arguments", 128).mutations;
+        for r in &mut rows {
+            r.status = "generated";
+            r.reason = None;
+            r.mutants = row(&["detected"]).mutants;
+        }
+        // In particular stale_definition_write (index 5) is now supported.
+        assert_eq!(rows[5].status, "generated");
+        rows[0].mutants[0].result = "unsupported";
+        assert_eq!(fold(&rows), Verdict::Unsupported);
+    }
+    #[test]
+    fn r1_unsupported_agency_checks_leave_the_run_incomplete() {
+        let r = mutate(&crate::agency::limit_test_inputs::work());
+        assert!(
+            r.mutations
+                .iter()
+                .flat_map(|k| &k.mutants)
+                .any(|m| m.result == "unsupported")
+        );
+        assert_eq!(r.run.completion, "inconclusive");
+        assert_eq!(r.run.reason, Some("mutant_incomplete"));
+    }
+    #[test]
     fn m_fold_all_combinations() {
         for unsupported in [false, true] {
             for a in [
@@ -2967,18 +3032,38 @@ mod tests {
     fn m_lineage_set_identity_regroup_and_subject_only() {
         let b = fixture("mut-evidence");
         let mut a = b.clone();
-        a.agency.as_mut().unwrap().lineage[0].independent_sources = vec!["Replacement".into()];
+        a.agency.as_mut().unwrap().as_derived_mut().unwrap().lineage[0].independent_sources =
+            vec!["Replacement".into()];
         assert_eq!(
             compare(0, &b, &a).result,
             "detected",
             "same cardinality loses original source"
         );
         a = b.clone();
-        a.agency.as_mut().unwrap().lineage_groups.reverse();
+        a.agency
+            .as_mut()
+            .unwrap()
+            .as_derived_mut()
+            .unwrap()
+            .lineage_groups
+            .reverse();
         assert_eq!(compare(0, &b, &a).result, "undetected");
-        let mut split = a.agency.as_ref().unwrap().lineage_groups[0].clone();
+        let mut split = a
+            .agency
+            .as_ref()
+            .unwrap()
+            .as_derived()
+            .unwrap()
+            .lineage_groups[0]
+            .clone();
         split.subject_sources = vec!["RegroupedSubject".into()];
-        a.agency.as_mut().unwrap().lineage_groups.push(split);
+        a.agency
+            .as_mut()
+            .unwrap()
+            .as_derived_mut()
+            .unwrap()
+            .lineage_groups
+            .push(split);
         let regrouped = compare(0, &b, &a);
         assert_eq!(regrouped.result, "undetected");
         assert!(
@@ -2986,10 +3071,11 @@ mod tests {
             "regrouping is recorded without inventing source loss"
         );
         a = b.clone();
-        a.agency.as_mut().unwrap().lineage[0].subject_sources = vec!["OtherSubject".into()];
+        a.agency.as_mut().unwrap().as_derived_mut().unwrap().lineage[0].subject_sources =
+            vec!["OtherSubject".into()];
         assert_eq!(compare(0, &b, &a).result, "undetected");
         a = b.clone();
-        let l = &mut a.agency.as_mut().unwrap().lineage[0];
+        let l = &mut a.agency.as_mut().unwrap().as_derived_mut().unwrap().lineage[0];
         l.subject_sources.append(&mut l.independent_sources);
         assert_eq!(
             compare(0, &b, &a).result,
@@ -3002,7 +3088,7 @@ mod tests {
         let b = fixture("mut-guard");
         for mode in 0..3 {
             let mut a = b.clone();
-            let r = &mut a.agency.as_mut().unwrap().refusal[0];
+            let r = &mut a.agency.as_mut().unwrap().as_derived_mut().unwrap().refusal[0];
             let crate::agency::Judgement::Process(j) = &mut r.judgements[0] else {
                 panic!("legacy process judgement")
             };

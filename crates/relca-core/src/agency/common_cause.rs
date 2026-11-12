@@ -24,6 +24,33 @@ pub struct CommonCauses {
     pub causes: Vec<CommonCause>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CommonCauseDerivation {
+    Derived(CommonCauses),
+    NotDerived(NotDerivedCommonCauses),
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NotDerivedCommonCauses {
+    pub status: NotDerivedStatus,
+    pub reason: LimitReason,
+    pub limit: DerivationLimit,
+}
+impl CommonCauseDerivation {
+    pub fn as_derived(&self) -> Option<&CommonCauses> {
+        match self {
+            Self::Derived(c) => Some(c),
+            Self::NotDerived(_) => None,
+        }
+    }
+    pub fn as_derived_mut(&mut self) -> Option<&mut CommonCauses> {
+        match self {
+            Self::Derived(c) => Some(c),
+            Self::NotDerived(_) => None,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommonCause {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -105,10 +132,9 @@ fn before_start(
     b: &mut Budget,
     depth: usize,
 ) -> Result<Option<BTreeSet<ir::BindingId>>> {
-    if depth > b.limits.depth {
-        return Err(invalid());
-    }
+    b.depth(depth)?;
     for stmt in block {
+        b.location.span = Some(stmt.span);
         b.work()?;
         match &stmt.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
@@ -169,19 +195,52 @@ fn before_start(
 pub(super) fn derive(
     m: &ir::Model,
     calls: &[&ir::Call],
-    ancestors: &[BTreeSet<ir::BindingId>],
+    ancestors: &[Ancestors],
     subjects: &[BTreeSet<ir::ActorId>],
     agency: &mut Agency,
     warnings: &mut Vec<diag::Diagnostic>,
 ) -> Result<()> {
-    with_limits(m, calls, ancestors, subjects, agency, warnings, LIMITS)
+    soft_with_limits(m, calls, ancestors, subjects, agency, warnings, LIMITS)
+}
+
+fn soft_with_limits(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    ancestors: &[Ancestors],
+    subjects: &[BTreeSet<ir::ActorId>],
+    agency: &mut Agency,
+    warnings: &mut Vec<diag::Diagnostic>,
+    limits: Limits,
+) -> Result<()> {
+    let before = warnings.len();
+    match with_limits(m, calls, ancestors, subjects, agency, warnings, limits) {
+        Ok(()) => Ok(()),
+        Err(Error::Limit(limit)) => {
+            // The pass may have produced rows or warnings before the limit.
+            // Withdraw all dependent output atomically, not just its last row.
+            warnings.truncate(before);
+            agency.common_causes =
+                Some(CommonCauseDerivation::NotDerived(NotDerivedCommonCauses {
+                    status: NotDerivedStatus::NotDerived,
+                    reason: LimitReason::DerivationLimit,
+                    limit: *limit,
+                }));
+            agency.model_uncertainties = None;
+            agency.unchecked.extend([
+                "common_causes: not_derived (derivation_limit)".into(),
+                "model_uncertainties: not_derived (derivation_limit)".into(),
+            ]);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn with_limits(
     m: &ir::Model,
     calls: &[&ir::Call],
-    ancestors: &[BTreeSet<ir::BindingId>],
+    ancestors: &[Ancestors],
     subjects: &[BTreeSet<ir::ActorId>],
     agency: &mut Agency,
     warnings: &mut Vec<diag::Diagnostic>,
@@ -217,6 +276,7 @@ fn with_limits(
         cells: 0,
         contexts: 0,
         paths: 0,
+        location: Location::model(m, "common_cause"),
     };
     let n = calls.len();
     table_cells(&mut b, n, 7)?;
@@ -246,9 +306,7 @@ fn with_limits(
         level: usize,
     ) -> Result<usize> {
         b.work()?;
-        if level > b.limits.depth {
-            return Err(invalid());
-        }
+        b.depth(level)?;
         if let Some(d) = memo[i] {
             return Ok(d);
         }
@@ -269,9 +327,7 @@ fn with_limits(
                 .ok_or_else(invalid)?,
             );
         }
-        if d > b.limits.depth {
-            return Err(invalid());
-        }
+        b.depth(d)?;
         memo[i] = Some(d);
         Ok(d)
     }
@@ -348,15 +404,15 @@ fn with_limits(
                 b.insert(&mut result_vars[i], w.variable)?;
             }
         }
-        for p in &ancestors[i] {
+        for p in ancestors[i].iter() {
             b.work()?;
             let producer = &m.capabilities[calls[p.0].capability.0];
             for id in &producer.kernel_writes {
                 b.steps(k.given.len().checked_add(1).ok_or_else(invalid)?)?;
                 if k.given.contains(id) {
                     b.cells(2)?;
-                    b.insert(errors[i].entry(*p).or_default(), *id)?;
-                    b.insert(groups.entry(*p).or_default(), i)?;
+                    b.insert(errors[i].entry(p).or_default(), *id)?;
+                    b.insert(groups.entry(p).or_default(), i)?;
                 }
             }
         }
@@ -378,12 +434,13 @@ fn with_limits(
             targets: users.into_iter().map(|i| target(m, calls[i])).collect(),
         });
     }
-    agency.common_causes = (!rows.is_empty()).then_some(CommonCauses {
-        rules: "common-cause-p1-1".into(),
-        scope: SCOPE.into(),
-        notice: CAUSE_NOTICE.into(),
-        causes: rows,
-    });
+    agency.common_causes =
+        (!rows.is_empty()).then_some(CommonCauseDerivation::Derived(CommonCauses {
+            rules: "common-cause-p1-1".into(),
+            scope: SCOPE.into(),
+            notice: CAUSE_NOTICE.into(),
+            causes: rows,
+        }));
     let mut items = Vec::new();
     for (i, c) in calls.iter().enumerate() {
         b.work()?;
@@ -673,11 +730,12 @@ mod tests {
                 cells: 0,
                 contexts: 0,
                 paths: 0,
+                location: Location::model(&m, "common_cause"),
             };
             b.cells(4)?;
             let mut before = vec![BTreeSet::new(); 4];
             before_start(&block, Some(BTreeSet::new()), &mut before, &mut b, 0)?;
-            Ok::<_, diag::Diagnostic>(before)
+            Ok::<_, Error>(before)
         };
         for (join, expected) in [
             (ir::Join::All, vec![0, 1, 2]),
@@ -747,6 +805,60 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn common_cause_limit_withdraws_only_dependent_output_and_not_invalid_ir() {
+        let m = model();
+        let mut agency = super::super::derive(&m).unwrap().0;
+        let origin = agency.origin.clone();
+        let refusal = agency.refusal.clone();
+        let mut indexed = vec![None; m.process.bindings.len()];
+        collect(
+            &m.process.body,
+            &mut indexed,
+            &m,
+            0,
+            &mut viewpoints::budget(DEFAULT),
+        )
+        .unwrap();
+        let calls: Vec<_> = indexed.into_iter().collect::<Option<_>>().unwrap();
+        let ancestors = vec![Ancestors::Reference(BTreeSet::new()); calls.len()];
+        let subjects = vec![BTreeSet::new(); calls.len()];
+        let mut warnings = Vec::new();
+        soft_with_limits(
+            &m,
+            &calls,
+            &ancestors,
+            &subjects,
+            &mut agency,
+            &mut warnings,
+            Limits { work: 0, ..LIMITS },
+        )
+        .unwrap();
+        assert_eq!(agency.origin, origin);
+        assert_eq!(agency.refusal, refusal);
+        assert!(agency.model_uncertainties.is_none());
+        assert!(warnings.is_empty());
+        let CommonCauseDerivation::NotDerived(l) = agency.common_causes.as_ref().unwrap() else {
+            panic!();
+        };
+        assert_eq!(l.limit.counter, "work");
+        assert_eq!(l.limit.phase, "common_cause");
+        let mut bad = m.clone();
+        bad.actors[0].metadata.source_description = Some("not tacit".into());
+        assert!(matches!(
+            soft_with_limits(
+                &bad,
+                &calls,
+                &ancestors,
+                &subjects,
+                &mut agency,
+                &mut warnings,
+                Limits { work: 0, ..LIMITS }
+            ),
+            Err(Error::InvalidIr(_))
+        ));
+    }
+
     fn run(m: &ir::Model, limits: Limits) -> Result<(Agency, Vec<diag::Diagnostic>)> {
         let mut old = Budget {
             limits: DEFAULT,
@@ -754,6 +866,7 @@ mod tests {
             cells: 0,
             contexts: 0,
             paths: 0,
+            location: Location::model(m, "common_cause"),
         };
         let mut indexed = vec![None; m.process.bindings.len()];
         collect(&m.process.body, &mut indexed, m, 0, &mut old)?;
@@ -775,6 +888,7 @@ mod tests {
         }
         let mut agency = Agency::empty();
         let mut warnings = Vec::new();
+        let ancestors: Vec<_> = ancestors.into_iter().map(Ancestors::Reference).collect();
         with_limits(
             m,
             &calls,
@@ -824,21 +938,30 @@ mod tests {
             for bad_base in [ir::TypeId(m.types.len()), ir::TypeId(usize::MAX - 2)] {
                 let mut bad = valid.clone();
                 bad.state_variables.last_mut().unwrap().base = bad_base;
-                assert_eq!(run(&bad, LIMITS).unwrap_err().code, diag::U_SEM_0);
+                assert_eq!(
+                    run(&bad, LIMITS).unwrap_err().diagnostic().code,
+                    diag::U_SEM_0
+                );
                 assert_eq!(super::super::derive(&bad).unwrap_err().code, diag::U_SEM_0);
             }
             let mut mixed = valid.clone();
             let v = mixed.state_variables.last_mut().unwrap();
             v.case_set_size = Some(1);
             v.integer_max = Some(3);
-            assert_eq!(run(&mixed, LIMITS).unwrap_err().code, diag::U_SEM_0);
+            assert_eq!(
+                run(&mixed, LIMITS).unwrap_err().diagnostic().code,
+                diag::U_SEM_0
+            );
             let mut wrong_tag = valid;
             wrong_tag.state_variables.last_mut().unwrap().base = if set_size.is_some() {
                 ir::TypeId(usize::MAX)
             } else {
                 ir::CASE_ID_TYPE
             };
-            assert_eq!(run(&wrong_tag, LIMITS).unwrap_err().code, diag::U_SEM_0);
+            assert_eq!(
+                run(&wrong_tag, LIMITS).unwrap_err().diagnostic().code,
+                diag::U_SEM_0
+            );
         }
         for bad_base in [
             ir::TypeId(m.types.len()),
@@ -848,7 +971,10 @@ mod tests {
         ] {
             let mut bad = m.clone();
             bad.state_variables[0].base = bad_base;
-            assert_eq!(run(&bad, LIMITS).unwrap_err().code, diag::U_SEM_0);
+            assert_eq!(
+                run(&bad, LIMITS).unwrap_err().diagnostic().code,
+                diag::U_SEM_0
+            );
             assert_eq!(super::super::derive(&bad).unwrap_err().code, diag::U_SEM_0);
         }
     }
@@ -880,10 +1006,19 @@ mod tests {
                 "{field} spare unit"
             );
             assert_eq!(
-                run(&m, with(k - 1)).unwrap_err().code,
+                run(&m, with(k - 1)).unwrap_err().diagnostic().code,
                 diag::U_SEM_0,
                 "{field} k+1 required units do not fit k"
             );
+            let Error::Limit(l) = run(&m, with(k - 1)).unwrap_err() else {
+                panic!("expected typed common_cause limit");
+            };
+            assert_eq!(l.counter, field);
+            assert_eq!(l.limit, k - 1);
+            assert!(l.requested.unwrap() >= k);
+            assert_eq!(l.phase, "common_cause");
+            assert_eq!(l.process, m.process.name);
+            assert!(l.span.is_some());
         }
         // Check the actual production counter ceilings, not only tiny injected limits.
         let mut b = Budget {
@@ -892,6 +1027,7 @@ mod tests {
             cells: 0,
             contexts: 0,
             paths: 0,
+            location: Location::model(&m, "common_cause"),
         };
         b.steps(LIMITS.work).unwrap();
         assert!(b.work().is_err());
@@ -907,6 +1043,7 @@ mod tests {
             cells: usize::MAX,
             contexts: 0,
             paths: 0,
+            location: Location::model(&m, "common_cause"),
         };
         assert!(overflow.work().is_err());
         assert!(overflow.cells(1).is_err());
@@ -916,6 +1053,7 @@ mod tests {
             cells: 0,
             contexts: 0,
             paths: 0,
+            location: Location::model(&m, "common_cause"),
         };
         assert!(table_cells(&mut product, usize::MAX, 5).is_err());
         assert_eq!(
@@ -958,7 +1096,10 @@ mod tests {
                 assert!(run(&m, LIMITS).is_ok());
             }
         }
-        assert_eq!(run(&m, LIMITS).unwrap_err().code, diag::U_SEM_0);
+        assert_eq!(
+            run(&m, LIMITS).unwrap_err().diagnostic().code,
+            diag::U_SEM_0
+        );
     }
 
     #[test]

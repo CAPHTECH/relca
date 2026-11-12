@@ -521,7 +521,7 @@ fn override_check_within(
     let mut unknown = false;
     let mut failed = false;
     let mut effects = Vec::new();
-    if !crate::contest::control_within_limits(m, cell_limit) {
+    if m.agency.as_derived().is_none() || !crate::contest::control_within_limits(m, cell_limit) {
         // Candidates cannot be derived: every effect-like call is unknown.
         unknown = true;
         effects.extend(
@@ -532,7 +532,10 @@ fn override_check_within(
         );
     } else {
         let control = crate::contest::control_dependencies(m);
-        let state_unknown = m.agency.unchecked.iter().any(|u| u == "state_guards");
+        let state_unknown = m
+            .agency
+            .as_derived()
+            .is_none_or(|a| a.unchecked.iter().any(|u| u == "state_guards"));
         let mut work = 0usize;
         for (index, call) in calls.iter().enumerate() {
             let mut ancestry = BTreeSet::new();
@@ -562,8 +565,9 @@ fn override_check_within(
             }
             let refusal = m
                 .agency
-                .refusal
-                .iter()
+                .as_derived()
+                .into_iter()
+                .flat_map(|a| &a.refusal)
                 .find(|r| r.call == m.process.bindings[call.binding.0].name);
             let candidate = !ancestry.is_disjoint(&seeds)
                 || control
@@ -698,6 +702,45 @@ fn override_check_within(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn r1_unavailable_agency_cannot_make_a_removed_override_vacuous() {
+        let mut sources = vec![crate::agency::limit_test_inputs::work()];
+        // 1500*1499/2 read-graph comparisons exceed its 1M work ceiling.
+        // No writes or commits: there are genuinely zero effect-like calls.
+        sources.push(format!("model NoEffects version \"0.2\" {{ type V=enum{{pass}} observed case {{x:V=pass}} actor A{{capacity 1; capability read()->V{{reads[x];duration fixed 1min;result nondet{{pass}}}}}} process Flow{{{} end done}} cut C{{include[A]}} bounds{{cases 1;live_tasks 2;clock 2000min}} verify safety no_resource_overcommit }}", (0..1500).map(|i| format!("a{i}=A.read();")).collect::<String>()));
+        for source in sources {
+            let m = crate::lower::lower(&crate::syntax::parse(&source).unwrap()).unwrap();
+            assert!(m.agency.limit().is_some());
+            let d = Difference {
+                kind: Kind::Relation,
+                target: "Retired.old".into(),
+                change: Change::Removed,
+                reason: None,
+                loses: None,
+                from: None,
+                to: None,
+                annotations: vec![],
+            };
+            let Annotation::Override {
+                verdict, effects, ..
+            } = override_check_within(&d, &m, "nobody", None, usize::MAX, usize::MAX)
+            else {
+                panic!()
+            };
+            assert_eq!(verdict, Verdict::Unsupported);
+            let expected = crate::responsibility::calls(&m)
+                .values()
+                .filter(|c| effect_like(&m.capabilities[c.capability.0]))
+                .count();
+            assert_eq!(effects.len(), expected);
+            assert!(
+                effects
+                    .iter()
+                    .all(|e| e.stops == "unknown" && e.bypasses.is_none())
+            );
+        }
+    }
 
     #[test]
     fn q4_override_cell_boundary_does_not_count_condition_walk_twice() {

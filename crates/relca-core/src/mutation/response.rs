@@ -265,7 +265,7 @@ fn compare_fault(
         .as_ref()
         .is_some_and(|a| a.coverage != report::ResponseCoverage::Complete)
     {
-        if let Some(c) = comparison_failure(after) {
+        if let Some(c) = comparison_failure(before, after, false) {
             return c;
         }
         return Comparison {
@@ -293,7 +293,7 @@ fn compare_fault(
                 )
             })
         && after.state_range_violations.is_empty();
-    if !complete_receipt_exception && let Some(c) = comparison_failure(after) {
+    if !complete_receipt_exception && let Some(c) = comparison_failure(before, after, false) {
         return c;
     }
     let mut c = Comparison {

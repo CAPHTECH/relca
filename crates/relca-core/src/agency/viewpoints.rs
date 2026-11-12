@@ -248,14 +248,12 @@ pub(super) fn budget(limits: Limits) -> Budget {
         cells: 0,
         contexts: 0,
         paths: 0,
+        location: Location::default(),
     }
 }
 pub(super) fn depth(b: &mut Budget, n: usize) -> Result<()> {
     b.work()?;
-    if n > b.limits.depth {
-        return Err(invalid());
-    }
-    Ok(())
+    b.depth(n)
 }
 pub(super) fn condition_depth(c: &ir::Cond, b: &mut Budget, n: usize) -> Result<()> {
     depth(b, n)?;
@@ -1196,7 +1194,7 @@ fn framing(m: &ir::Model, b: &mut Budget) -> Result<Framing> {
                             .map(|(id, v)| (*id, *v))
                             .collect();
                         if !contexts.contains(&context) {
-                            Budget::add(&mut b.contexts, 1, b.limits.contexts)?;
+                            b.context()?;
                             b.cells(1)?;
                             contexts.insert(context);
                         }
@@ -1555,7 +1553,7 @@ mod tests {
         crate::lower::lower(&crate::syntax::parse(s).unwrap()).unwrap()
     }
     fn value(m: &ir::Model) -> Value {
-        serde_json::to_value(derive(m, &m.agency).0).unwrap()
+        serde_json::to_value(derive(m, m.agency.as_derived().unwrap()).0).unwrap()
     }
     fn old_four_blocks(mut v: Value) -> Value {
         v.as_object_mut().unwrap().remove("effects");
@@ -1583,7 +1581,12 @@ mod tests {
                 _ => l.work = n,
             }
             let mut r = report.clone();
-            r.agency.as_mut().unwrap().viewpoints = Some(with_limits(&m, &m.agency, limits));
+            r.agency
+                .as_mut()
+                .unwrap()
+                .as_derived_mut()
+                .unwrap()
+                .viewpoints = Some(with_limits(&m, m.agency.as_derived().unwrap(), limits));
             let mut r = serde_json::to_value(r).unwrap();
             r["agency"]["viewpoints"] = old_four_blocks(r["agency"]["viewpoints"].clone());
             r
@@ -1610,7 +1613,7 @@ mod tests {
             assert_eq!(b.cells, max);
             assert!(b.path().is_err());
             assert_eq!(b.paths, max);
-            assert!(Budget::add(&mut b.contexts, 1, max).is_err());
+            assert!(Budget::add(&mut b.contexts, 1, max, "contexts", &b.location).is_err());
             assert_eq!(b.contexts, max);
             let mut set = BTreeSet::new();
             b.work = 0;
@@ -1765,7 +1768,7 @@ mod tests {
                     "work" => ls[0].work = n,
                     _ => ls[0].depth = n,
                 }
-                serde_json::to_value(with_limits(&m, &m.agency, ls)).unwrap()
+                serde_json::to_value(with_limits(&m, m.agency.as_derived().unwrap(), ls)).unwrap()
             };
             let mut low = 0;
             let mut high = 1_000_000;
@@ -1800,15 +1803,15 @@ mod tests {
             m, before,
             "new static derivation must not mutate execution IR/state"
         );
-        m.agency.viewpoints = None;
+        m.agency.as_derived_mut().unwrap().viewpoints = None;
         assert_eq!(
             value(&m),
             expected,
             "a missing cache is not a missing contract"
         );
-        m.agency.viewpoints = Some(with_limits(
+        m.agency.as_derived_mut().unwrap().viewpoints = Some(with_limits(
             &m,
-            &m.agency,
+            m.agency.as_derived().unwrap(),
             [Limits { work: 0, ..DEFAULT }; 3],
         ));
         assert_eq!(

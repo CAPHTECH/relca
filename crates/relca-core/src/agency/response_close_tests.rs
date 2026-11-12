@@ -12,13 +12,22 @@ fn alias_only_uncertainty_becomes_none_not_empty_table() {
         .agency
         .as_mut()
         .unwrap()
+        .as_derived_mut()
+        .unwrap()
         .model_uncertainties
         .as_mut()
         .unwrap();
     u.items.retain(|row| row.call == "bV");
     assert_eq!(u.items.len(), 1, "precondition: alias row exists");
     super::response::apply(&mut r, &m, None);
-    assert!(r.agency.unwrap().model_uncertainties.is_none());
+    assert!(
+        r.agency
+            .unwrap()
+            .as_derived()
+            .unwrap()
+            .model_uncertainties
+            .is_none()
+    );
 }
 
 #[test]

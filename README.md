@@ -87,11 +87,12 @@ exit だけでなく、性質ごとの判定と、`assumptions` と `unchecked` 
 Rust 1.88 以降と Cargo が必要です(edition 2024)。検査のスクリプトには Python 3 と bash も使います。
 
 ```sh
-cargo build
-./target/debug/relca check fixtures/coop-cancel/model.relca
+cargo build --release
+./target/release/relca check fixtures/coop-cancel/model.relca
 ```
 
 この例は `satisfied`、exit 0 になります。
+モデルを調べるときは release build を使ってください。最適化しない debug build(`cargo build`)は、大きなモデルで数倍遅くなります。
 モデルの書き方は [DSL の書き方](docs/guide/dsl.md) から読み始めてください。
 
 ## コマンド

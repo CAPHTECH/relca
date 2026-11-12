@@ -5,7 +5,21 @@ use crate::{diag, ir};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+mod ancestors;
 mod common_cause;
+use ancestors::Ancestors;
+mod factor;
+use factor::Factorization;
+mod derivation;
+mod derivation_error;
+#[cfg(test)]
+mod factor_tests;
+pub(crate) use derivation::derive_for_model;
+#[cfg(test)]
+pub(crate) use derivation::test_input as limit_test_inputs;
+pub use derivation::{AgencyDerivation, LimitReason, NotDerivedAgency, NotDerivedStatus};
+pub use derivation_error::DerivationLimit;
+use derivation_error::{Error, Location};
 pub(crate) mod degradation;
 pub use degradation::Degradation;
 mod differences;
@@ -22,7 +36,9 @@ mod second_half_budget;
 #[cfg(test)]
 #[path = "agency/second_half_tests.rs"]
 mod second_half_tests;
-pub use common_cause::{CommonCauses, ModelUncertainties, SourceDescription};
+pub use common_cause::{
+    CommonCauseDerivation, CommonCauses, ModelUncertainties, SourceDescription,
+};
 pub(crate) use read_graph::{concurrent_read, lexical_has_capability};
 mod viewpoints;
 pub use viewpoints::Viewpoints;
@@ -56,7 +72,7 @@ pub struct Agency {
     pub refusal: Vec<Refusal>,
     pub unchecked: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub common_causes: Option<CommonCauses>,
+    pub common_causes: Option<CommonCauseDerivation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_uncertainties: Option<ModelUncertainties>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -268,6 +284,10 @@ pub struct ViaModelPaths {
     pub path_count_lower_bound: u64,
     pub paths: Vec<ViaPath>,
     pub unchecked: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<DerivationLimit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invalid_ir: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -350,6 +370,12 @@ mod via_limit_tests {
                 "{category}: {short:?}"
             );
             assert!(short.path_count_lower_bound >= short.paths.len() as u64);
+            let limit = short.limit.as_ref().expect("typed via limit");
+            assert_eq!(limit.counter, category);
+            assert_eq!(limit.limit, k - 1);
+            assert!(limit.requested.unwrap() >= k);
+            assert!(limit.phase.starts_with("via"));
+            assert!(limit.span.is_some());
         }
         let no_via = crate::lower::lower(
             &crate::syntax::parse(&src.replace("via model \"doc@v3\"; ", "")).unwrap(),
@@ -393,16 +419,38 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         ]
         .map(String::from)
         .to_vec(),
+        limit: None,
+        invalid_ir: None,
     };
-    fn truncated(r: &mut ViaModelPaths, why: &str) {
+    fn failed(r: &mut ViaModelPaths, error: Error) {
         r.truncated = true;
+        let why = match error {
+            Error::Limit(l) => {
+                let why = match l.counter.as_str() {
+                    "paths" => "path_enumeration_limit",
+                    "cells" => "path_cell_limit",
+                    "depth" => "path_depth_limit",
+                    _ => "path_work_limit",
+                };
+                r.limit = Some(*l);
+                why
+            }
+            Error::InvalidIr(reason) => {
+                r.invalid_ir = Some(reason);
+                "invalid_static_ir"
+            }
+        };
         if !r.unchecked.iter().any(|s| s == why) {
             r.unchecked.push(why.into());
         }
     }
+    let location = Location::model(m, "via paths");
     let n = m.process.bindings.len();
     let Some(mut cells) = n.checked_mul(4).filter(|n| *n <= limits.cells) else {
-        truncated(&mut result, "path_cell_limit");
+        failed(
+            &mut result,
+            location.limit("cells", limits.cells, n.saturating_mul(4)),
+        );
         return Some(result);
     };
     let mut budget = Budget {
@@ -411,22 +459,26 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         cells: 0,
         contexts: 0,
         paths: 0,
+        location: Location::model(m, "via graph collection"),
     };
     let mut indexed = vec![None; n];
-    if collect(&m.process.body, &mut indexed, m, 0, &mut budget).is_err() {
-        truncated(&mut result, "path_work_limit");
+    if let Err(e) = collect(&m.process.body, &mut indexed, m, 0, &mut budget) {
+        failed(&mut result, e);
         return Some(result);
     }
     let Some(calls) = indexed.into_iter().collect::<Option<Vec<_>>>() else {
-        truncated(&mut result, "path_work_limit");
+        failed(
+            &mut result,
+            Error::InvalidIr("missing lexical call in via graph".into()),
+        );
         return Some(result);
     };
     let mut edges = vec![Vec::new(); n];
     let mut targets = vec![Vec::new(); n];
     let extra = match read_graph::read_parents(m, &calls) {
         Ok(p) => p,
-        Err(_) => {
-            truncated(&mut result, "path_work_limit");
+        Err(e) => {
+            failed(&mut result, e);
             return Some(result);
         }
     };
@@ -440,7 +492,10 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
                 continue;
             }
             if cells >= limits.cells {
-                truncated(&mut result, "path_cell_limit");
+                failed(
+                    &mut result,
+                    location.limit("cells", limits.cells, cells.saturating_add(1)),
+                );
                 return Some(result);
             }
             cells += 1;
@@ -450,16 +505,19 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         if m.capabilities[c.capability.0].commits {
             targets[c.binding.0].push(ViaTarget::E { call: name.clone() });
         }
-        for effect in &m.agency.refusal {
+        for effect in m.agency.as_derived().into_iter().flat_map(|a| &a.refusal) {
             for j in effect.judgements.iter().filter_map(Judgement::process) {
                 work += 1;
                 if work > limits.work {
-                    truncated(&mut result, "path_work_limit");
+                    failed(&mut result, location.limit("work", limits.work, work));
                     return Some(result);
                 }
                 if j.call == *name && j.stops != Stops::None {
                     if cells >= limits.cells {
-                        truncated(&mut result, "path_cell_limit");
+                        failed(
+                            &mut result,
+                            location.limit("cells", limits.cells, cells.saturating_add(1)),
+                        );
                         return Some(result);
                     }
                     cells += 1;
@@ -476,6 +534,11 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         next.sort_unstable();
         next.dedup();
     }
+    if m.agency.as_derived().is_none() {
+        result
+            .unchecked
+            .push("refusal_targets_not_derived_derivation_limit".into());
+    }
     struct Walker<'a> {
         m: &'a ir::Model,
         calls: &'a [&'a ir::Call],
@@ -488,13 +551,22 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
     }
     impl Walker<'_> {
         fn walk(&mut self, start: usize, node: usize, path: &mut Vec<usize>) -> bool {
+            let mut location = Location::model(self.m, "via paths");
+            location.call = Some(self.m.process.bindings[node].name.clone());
+            location.span = Some(self.calls[node].span);
             if self.work >= self.limits.work {
-                truncated(self.result, "path_work_limit");
+                failed(
+                    self.result,
+                    location.limit("work", self.limits.work, self.work.saturating_add(1)),
+                );
                 return false;
             }
             self.work += 1;
             if path.len() >= self.limits.depth {
-                truncated(self.result, "path_depth_limit");
+                failed(
+                    self.result,
+                    location.limit("depth", self.limits.depth, path.len().saturating_add(1)),
+                );
                 return false;
             }
             // The lexical read graph is a DAG, already validated by Agency.
@@ -502,7 +574,14 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
             for target in &self.targets[node] {
                 self.result.path_count_lower_bound += 1;
                 if self.result.paths.len() >= self.limits.paths {
-                    truncated(self.result, "path_enumeration_limit");
+                    failed(
+                        self.result,
+                        location.limit(
+                            "paths",
+                            self.limits.paths,
+                            self.result.paths.len().saturating_add(1),
+                        ),
+                    );
                     path.pop();
                     return false;
                 }
@@ -511,7 +590,14 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
                     .checked_add(path.len() + 1)
                     .filter(|n| *n <= self.limits.cells)
                 else {
-                    truncated(self.result, "path_cell_limit");
+                    failed(
+                        self.result,
+                        location.limit(
+                            "cells",
+                            self.limits.cells,
+                            self.cells.saturating_add(path.len().saturating_add(1)),
+                        ),
+                    );
                     path.pop();
                     return false;
                 };
@@ -586,14 +672,15 @@ const DEFAULT: Limits = Limits {
     cells: 1_000_000,
     work: 1_000_000,
 };
-type Result<T> = std::result::Result<T, diag::Diagnostic>;
-fn invalid() -> diag::Diagnostic {
-    diag::Diagnostic {
-        code: diag::U_SEM_0.into(),
-        severity: diag::Severity::Error,
-        message: "Agency derivation limit exceeded or invalid static IR".into(),
-        span: None,
-    }
+type Result<T> = std::result::Result<T, Error>;
+#[track_caller]
+fn invalid() -> Error {
+    let at = std::panic::Location::caller();
+    Error::InvalidIr(format!(
+        "inconsistent index, type, graph or arithmetic at {}:{}",
+        at.file(),
+        at.line()
+    ))
 }
 struct Budget {
     limits: Limits,
@@ -601,26 +688,63 @@ struct Budget {
     cells: usize,
     contexts: usize,
     paths: usize,
+    location: Location,
 }
 impl Budget {
-    fn add(counter: &mut usize, n: usize, max: usize) -> Result<()> {
-        *counter = counter
+    fn add(
+        counter: &mut usize,
+        n: usize,
+        max: usize,
+        name: &str,
+        location: &Location,
+    ) -> Result<()> {
+        let requested = counter
             .checked_add(n)
-            .filter(|v| *v <= max)
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| location.unrepresentable(name, max))?;
+        if requested > max {
+            return Err(location.limit(name, max, requested));
+        }
+        *counter = requested;
         Ok(())
     }
     fn work(&mut self) -> Result<()> {
         self.steps(1)
     }
     fn steps(&mut self, n: usize) -> Result<()> {
-        Self::add(&mut self.work, n, self.limits.work)
+        Self::add(&mut self.work, n, self.limits.work, "work", &self.location)
     }
     fn cells(&mut self, n: usize) -> Result<()> {
-        Self::add(&mut self.cells, n, self.limits.cells)
+        Self::add(
+            &mut self.cells,
+            n,
+            self.limits.cells,
+            "cells",
+            &self.location,
+        )
     }
     fn path(&mut self) -> Result<()> {
-        Self::add(&mut self.paths, 1, self.limits.paths)
+        Self::add(
+            &mut self.paths,
+            1,
+            self.limits.paths,
+            "paths",
+            &self.location,
+        )
+    }
+    fn context(&mut self) -> Result<()> {
+        Self::add(
+            &mut self.contexts,
+            1,
+            self.limits.contexts,
+            "contexts",
+            &self.location,
+        )
+    }
+    fn depth(&self, requested: usize) -> Result<()> {
+        if requested > self.limits.depth {
+            return Err(self.location.limit("depth", self.limits.depth, requested));
+        }
+        Ok(())
     }
     fn insert<T: Ord>(&mut self, set: &mut BTreeSet<T>, value: T) -> Result<()> {
         self.work()?;
@@ -852,6 +976,7 @@ mod caseset_budget_test {
             cells: 0,
             contexts: 0,
             paths: 0,
+            location: Location::model(&m, "writers"),
         };
         assert!(apply_writers(&mut p, c, &m, &mut b).is_err());
         assert!(p.store.is_empty());
@@ -1076,9 +1201,7 @@ fn condition_support(
     depth: usize,
     budget: &mut Budget,
 ) -> Result<()> {
-    if depth > budget.limits.depth {
-        return Err(invalid());
-    }
+    budget.depth(depth)?;
     budget.work()?;
     match cond {
         ir::Cond::Contains { set, .. } => {
@@ -1146,16 +1269,15 @@ fn collect<'a>(
     depth: usize,
     budget: &mut Budget,
 ) -> Result<()> {
-    if depth > budget.limits.depth {
-        return Err(invalid());
-    }
+    budget.depth(depth)?;
     for stmt in block {
+        budget.location.span = Some(stmt.span);
         budget.work()?;
         let mut register = |c: &'a ir::Call| -> Result<()> {
             budget.work()?;
             let slot = calls.get_mut(c.binding.0).ok_or_else(invalid)?;
             if slot.replace(c).is_some() {
-                return Err(invalid());
+                return Err(Error::InvalidIr("duplicate binding registration".into()));
             }
             Ok(())
         };
@@ -1233,9 +1355,18 @@ fn paths<'a>(
     depth: usize,
 ) -> Result<Vec<Path<'a>>> {
     if recorder.is_some() && depth >= budget.limits.depth {
-        return Err(invalid());
+        return Err(budget
+            .location
+            .limit("depth", budget.limits.depth, depth.saturating_add(1)));
     }
     for stmt in block {
+        budget.location.span = Some(stmt.span);
+        budget.location.call = match &stmt.kind {
+            ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
+                Some(model.process.bindings[c.binding.0].name.clone())
+            }
+            _ => None,
+        };
         budget.work()?;
         match &stmt.kind {
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
@@ -1627,9 +1758,15 @@ fn assignments(
 /// Derive the static subset once, after name/type/availability resolution.
 /// Invalid graph indices, cycles, nesting, or computational limits fail closed
 /// with U-SEM-0; no partial summary is returned. This is not runtime exploration.
-pub fn derive(model: &ir::Model) -> Result<(Agency, Vec<diag::Diagnostic>)> {
+/// This raw API reports limits as errors. Lowering instead uses the typed
+/// `derive_for_model` boundary: limits become `not_derived` plus W-AGY-4 and do
+/// not stop property analysis; malformed IR still stops lowering with U-SEM-0.
+pub fn derive(
+    model: &ir::Model,
+) -> std::result::Result<(Agency, Vec<diag::Diagnostic>), diag::Diagnostic> {
     let _timer = crate::perf::span("agency.derive");
-    crate::actor_table::validate(model).map_err(|_| invalid())?;
+    crate::actor_table::validate(model)
+        .map_err(|reason| Error::InvalidIr(reason.message.into()).diagnostic())?;
     derive_with_limits(model, DEFAULT)
 }
 
@@ -1643,8 +1780,8 @@ struct Group {
 fn derive_with_limits(
     model: &ir::Model,
     limits: Limits,
-) -> Result<(Agency, Vec<diag::Diagnostic>)> {
-    derive_with_new_limits(model, limits, [DEFAULT; 3], DEFAULT)
+) -> std::result::Result<(Agency, Vec<diag::Diagnostic>), diag::Diagnostic> {
+    derive_with_new_limits(model, limits, [DEFAULT; 3], DEFAULT).map_err(Error::diagnostic)
 }
 
 fn derive_with_new_limits(
@@ -1653,12 +1790,52 @@ fn derive_with_new_limits(
     viewpoint_limits: [Limits; 3],
     effects_limits: Limits,
 ) -> Result<(Agency, Vec<diag::Diagnostic>)> {
+    // This pass is independent of the main graph/refusal budget. In particular
+    // its existence must never be used to decide the whole-run cut gate.
+    let degradation = degradation_for_model(model)?;
+    derive_main(model, limits, viewpoint_limits, effects_limits, degradation)
+}
+
+fn degradation_for_model(model: &ir::Model) -> Result<Option<Degradation>> {
+    if model.process.degradations.is_empty() {
+        return Ok(None);
+    }
+    degradation::validate_indices(model)?;
+    Ok(Some(degradation::derive(model, 1_000_000)))
+}
+
+fn derive_main(
+    model: &ir::Model,
+    limits: Limits,
+    viewpoint_limits: [Limits; 3],
+    effects_limits: Limits,
+    degradation: Option<Degradation>,
+) -> Result<(Agency, Vec<diag::Diagnostic>)> {
+    derive_strategy(
+        model,
+        limits,
+        viewpoint_limits,
+        effects_limits,
+        degradation,
+        false,
+    )
+}
+
+fn derive_strategy(
+    model: &ir::Model,
+    limits: Limits,
+    viewpoint_limits: [Limits; 3],
+    effects_limits: Limits,
+    degradation: Option<Degradation>,
+    reference: bool,
+) -> Result<(Agency, Vec<diag::Diagnostic>)> {
     let mut budget = Budget {
         limits,
         work: 0,
         cells: 0,
         contexts: 0,
         paths: 0,
+        location: Location::model(model, "graph collection"),
     };
     budget.path()?;
     let n = model.process.bindings.len();
@@ -1728,7 +1905,9 @@ fn derive_with_new_limits(
         }
     }
     let mut source_sets = vec![BTreeSet::new(); n];
-    let mut ancestors = vec![BTreeSet::new(); n];
+    let mut ancestors = (0..n)
+        .map(|_| Ancestors::new(n, reference, &mut budget))
+        .collect::<Result<Vec<_>>>()?;
     let mut subjects = vec![BTreeSet::new(); n];
     let mut ready: VecDeque<_> = degree
         .iter()
@@ -1748,12 +1927,7 @@ fn derive_with_new_limits(
             for s in &source_sets[arg.0] {
                 budget.insert(&mut subjects[i], *s)?;
             }
-            budget.copy(ancestors[arg.0].len())?;
-            let inherited = ancestors[arg.0].clone();
-            for a in inherited {
-                budget.insert(&mut ancestors[i], a)?;
-            }
-            budget.insert(&mut ancestors[i], *arg)?;
+            Ancestors::inherit(&mut ancestors, i, *arg, &mut budget)?;
         }
         budget.copy(subjects[i].len())?;
         source_sets[i] = subjects[i].clone();
@@ -1781,9 +1955,7 @@ fn derive_with_new_limits(
         format!("{}.{}", model.actors[cap.actor.0].name, cap.name)
     };
     let mut agency = Agency::empty();
-    if !model.process.degradations.is_empty() {
-        agency.degradation = Some(degradation::derive(model, 1_000_000));
-    }
+    agency.degradation = degradation;
     if block_has_state_guard(&model.process.body, model) {
         agency.rules = "agency-p1-state-1".into();
         agency.unchecked.push("state_guards".into());
@@ -1847,6 +2019,7 @@ fn derive_with_new_limits(
         })
         .collect();
     let mut effect_paths = BTreeMap::new();
+    budget.location = Location::model(model, "path expansion");
     // Models without effects need no path expansion.
     if calls
         .iter()
@@ -1868,6 +2041,10 @@ fn derive_with_new_limits(
         .iter()
         .filter(|c| model.capabilities[c.capability.0].commits)
     {
+        budget.location = Location::model(model, "refusal reachability");
+        budget.location.effect = Some(model.process.bindings[effect.binding.0].name.clone());
+        budget.location.capability = Some(cap_name(effect));
+        budget.location.span = Some(effect.span);
         if model.capabilities[effect.capability.0].history_dependent_result() {
             if !agency.unchecked.iter().any(|s| s == "state_guards") {
                 agency.unchecked.push("state_guards".into());
@@ -1892,20 +2069,36 @@ fn derive_with_new_limits(
         let mut support = BTreeSet::new();
         let mut reachable_paths = Vec::new();
         let mut path_supports = Vec::new();
+        let mut factorizations = Vec::new();
+        let judgement = |id: ir::BindingId| {
+            calls[id.0].args.iter().any(|a| *a != ir::CURRENT_CASE) || !extra[id.0].is_empty()
+        };
+        let argument_judgement = ancestors[effect.binding.0].iter().any(judgement);
         for p in ps {
             let local = path_support(p, model, &mut budget)?;
             if !local.is_subset(&p.defined) {
                 return Err(invalid());
             }
             let vars: Vec<_> = local.iter().copied().collect();
-            if !assignments(
-                &vars,
-                &Values::new(),
-                &calls,
-                model,
-                &mut budget,
-                |values, b| satisfied(p, values, b),
-            )? {
+            let factors =
+                if reference || !(argument_judgement || local.iter().copied().any(judgement)) {
+                    None
+                } else {
+                    Factorization::build(p, &local, &calls, model, &mut budget)?
+                };
+            let reachable = if let Some(f) = &factors {
+                f.exists(&Values::new(), &mut budget)?
+            } else {
+                assignments(
+                    &vars,
+                    &Values::new(),
+                    &calls,
+                    model,
+                    &mut budget,
+                    |values, b| satisfied(p, values, b),
+                )?
+            };
+            if !reachable {
                 continue;
             }
             // Only satisfiable paths contribute guard-based J candidates and
@@ -1916,13 +2109,19 @@ fn derive_with_new_limits(
             budget.cells(1)?;
             reachable_paths.push(p);
             path_supports.push(local);
+            factorizations.push(factors);
         }
         let mut candidates = BTreeSet::new();
-        for b in ancestors[effect.binding.0].union(&support) {
+        for b in ancestors[effect.binding.0].iter().chain(
+            support
+                .iter()
+                .filter(|b| !ancestors[effect.binding.0].contains(b))
+                .copied(),
+        ) {
             budget.work()?;
             if calls[b.0].args.iter().any(|a| *a != ir::CURRENT_CASE) || !extra[b.0].is_empty() {
-                budget.insert(&mut candidates, *b)?;
-                budget.insert(&mut all_j, *b)?;
+                budget.insert(&mut candidates, b)?;
+                budget.insert(&mut all_j, b)?;
             }
         }
         let mut row = Refusal {
@@ -1933,17 +2132,25 @@ fn derive_with_new_limits(
         };
         if row.reachable {
             for j in candidates {
-                let mut contexts = BTreeSet::<Values>::new();
-                for p in &reachable_paths {
-                    budget.copy(support.len())?;
-                    let vars: Vec<_> = support.intersection(&p.defined).copied().collect();
-                    assignments(
-                        &vars,
-                        &Values::new(),
-                        &calls,
-                        model,
+                budget.location.phase = "refusal contexts".into();
+                budget.location.judgement = Some(model.process.bindings[j.0].name.clone());
+                let product = if reachable_paths.len() == 1 {
+                    factorizations[0].as_ref()
+                } else {
+                    None
+                };
+                let (stopping, bypasses) = if let Some(f) = product {
+                    f.counts(
+                        j,
+                        &model.capabilities[calls[j.0].capability.0].finish_results(),
                         &mut budget,
-                        |values, b| {
+                    )?
+                } else {
+                    let mut contexts = BTreeSet::<Values>::new();
+                    for (p, factors) in reachable_paths.iter().zip(&factorizations) {
+                        budget.copy(support.len())?;
+                        let vars: Vec<_> = support.intersection(&p.defined).copied().collect();
+                        let visit = |values: &Values, b: &mut Budget| {
                             if satisfied(p, values, b)? {
                                 b.copy(values.len())?;
                                 let c: Values = values
@@ -1952,59 +2159,75 @@ fn derive_with_new_limits(
                                     .map(|(id, v)| (*id, *v))
                                     .collect();
                                 if !contexts.contains(&c) {
-                                    Budget::add(&mut b.contexts, 1, b.limits.contexts)?;
+                                    b.context()?;
                                     contexts.insert(c);
                                 }
                             }
                             Ok(false)
-                        },
-                    )?;
-                }
-                let mut stopping = 0;
-                let mut bypasses = 0;
-                for context in &contexts {
-                    let mut may = false;
-                    let mut cannot = false;
-                    for value in &model.capabilities[calls[j.0].capability.0].finish_results() {
-                        let mut reaches = false;
-                        for (p, local) in reachable_paths.iter().zip(&path_supports) {
-                            budget.work()?;
-                            // Missing bindings on an alternative path are not
-                            // ghost constraints. New bindings are existential in
-                            // may_reach, hence universal for the stopping claim.
-                            budget.copy(context.len())?;
-                            let mut fixed: Values = context
+                        };
+                        if let Some(f) = factors {
+                            f.enumerate(&vars, &calls, model, &mut budget, visit)?;
+                        } else {
+                            assignments(&vars, &Values::new(), &calls, model, &mut budget, visit)?;
+                        }
+                    }
+                    let mut stopping = 0;
+                    budget.location.phase = "refusal stopping".into();
+                    let mut bypasses = 0;
+                    for context in &contexts {
+                        let mut may = false;
+                        let mut cannot = false;
+                        for value in &model.capabilities[calls[j.0].capability.0].finish_results() {
+                            let mut reaches = false;
+                            for ((p, local), factors) in reachable_paths
                                 .iter()
-                                .filter(|(id, _)| p.defined.contains(id))
-                                .map(|(id, v)| (*id, *v))
-                                .collect();
-                            budget.copy(1)?;
-                            fixed.insert(j, *value);
-                            budget.copy(local.len())?;
-                            let vars: Vec<_> = local.iter().copied().collect();
-                            if assignments(
-                                &vars,
-                                &fixed,
-                                &calls,
-                                model,
-                                &mut budget,
-                                |values, b| satisfied(p, values, b),
-                            )? {
-                                reaches = true;
-                                break;
+                                .zip(&path_supports)
+                                .zip(&factorizations)
+                            {
+                                budget.work()?;
+                                // Missing bindings on an alternative path are not
+                                // ghost constraints. New bindings are existential in
+                                // may_reach, hence universal for the stopping claim.
+                                budget.copy(context.len())?;
+                                let mut fixed: Values = context
+                                    .iter()
+                                    .filter(|(id, _)| p.defined.contains(id))
+                                    .map(|(id, v)| (*id, *v))
+                                    .collect();
+                                budget.copy(1)?;
+                                fixed.insert(j, *value);
+                                budget.copy(local.len())?;
+                                let vars: Vec<_> = local.iter().copied().collect();
+                                let reaches_path = if let Some(f) = factors {
+                                    f.exists(&fixed, &mut budget)?
+                                } else {
+                                    assignments(
+                                        &vars,
+                                        &fixed,
+                                        &calls,
+                                        model,
+                                        &mut budget,
+                                        |values, b| satisfied(p, values, b),
+                                    )?
+                                };
+                                if reaches_path {
+                                    reaches = true;
+                                    break;
+                                }
+                            }
+                            may |= reaches;
+                            cannot |= !reaches;
+                        }
+                        if may {
+                            if cannot {
+                                stopping += 1;
+                            } else {
+                                bypasses += 1;
                             }
                         }
-                        may |= reaches;
-                        cannot |= !reaches;
                     }
-                    if may {
-                        if cannot {
-                            stopping += 1;
-                        } else {
-                            bypasses += 1;
-                        }
-                    }
-                }
+                    (stopping, bypasses)
+                };
                 let stops = if stopping == 0 {
                     Stops::None
                 } else if bypasses == 0 {
@@ -2077,6 +2300,7 @@ fn derive_with_new_limits(
         }
     }
     let mut groups: Vec<Group> = Vec::new();
+    budget.location = Location::model(model, "lineage");
     for j in all_j {
         let cap = &model.capabilities[calls[j.0].capability.0];
         let mut independent = BTreeSet::new();
@@ -2239,7 +2463,7 @@ mod tests {
     #[test]
     fn counters_reject_overflow_instead_of_wrapping() {
         let mut counter = usize::MAX;
-        assert!(Budget::add(&mut counter, 1, usize::MAX).is_err());
+        assert!(Budget::add(&mut counter, 1, usize::MAX, "work", &Location::default()).is_err());
     }
 
     #[test]
@@ -2334,3 +2558,7 @@ mod tests {
 }
 #[cfg(test)]
 mod response_close_tests;
+
+#[cfg(test)]
+#[path = "../tests/support/agency_limit_private.rs"]
+mod derivation_limit_acceptance;

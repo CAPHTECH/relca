@@ -435,7 +435,7 @@ fn direct_ir_owner_capacity_initial_and_kernel_guards_fail_closed_without_panics
     m.state_variables[0].kind = removed_owner;
     m.capabilities[0].writes.clear();
     m.cut = None;
-    m.agency = relca_core::agency::Agency::empty();
+    m.agency = relca_core::agency::Agency::empty().into();
     // All remaining calls/targets have valid IDs. Only the unused state owner
     // is out of range, so a different malformed Capability cannot mask it.
     reject_ir(&m);
