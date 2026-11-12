@@ -1,0 +1,10 @@
+model Writer version "0.2" {
+  type V = enum { pass,fail }
+  observed case { x: V = pass }
+  actor W { capacity 1; capability write() -> V { writes x; duration fixed 1min; result nondet { pass } } }
+  actor R { capacity 1; capability read() -> V { reads [x]; duration fixed 1min; result nondet { pass } } }
+  process P { fork f { w = W.write(); r = R.read() }; join all f; end done }
+  cut K { include [W,R] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

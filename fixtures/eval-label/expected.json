@@ -1,0 +1,106 @@
+{
+  "verdict": "satisfied",
+  "evaluation": {
+    "rules": "compare-evaluation-p1-1",
+    "declared": {
+      "plans": [
+        "Zulu",
+        "Alpha"
+      ],
+      "under": null,
+      "scenario": null,
+      "cut": "C"
+    },
+    "hard": [
+      {
+        "constraint": "cohort.Z1 >= 1/2",
+        "cohort": "Z1",
+        "op": ">=",
+        "bound": "1/2",
+        "values": [
+          {
+            "configuration": "Zulu",
+            "verdict": "satisfied",
+            "basis": "exact",
+            "interval": {
+              "lower": "1/2",
+              "upper": "1/2"
+            },
+            "reason": null,
+            "source_reason": null
+          },
+          {
+            "configuration": "Alpha",
+            "verdict": "satisfied",
+            "basis": "exact",
+            "interval": {
+              "lower": "1",
+              "upper": "1"
+            },
+            "reason": null,
+            "source_reason": null
+          }
+        ]
+      }
+    ],
+    "plans": [
+      {
+        "configuration": "Zulu",
+        "verify_verdict": "satisfied",
+        "hard_verdict": "satisfied",
+        "status": "admissible",
+        "reasons": []
+      },
+      {
+        "configuration": "Alpha",
+        "verify_verdict": "satisfied",
+        "hard_verdict": "satisfied",
+        "status": "admissible",
+        "reasons": []
+      }
+    ],
+    "objectives": [
+      {
+        "objective": "minimize metrics.overall.work",
+        "direction": "minimize",
+        "values": [
+          {
+            "configuration": "Zulu",
+            "lower": "6",
+            "upper": "6",
+            "basis": "path_range",
+            "reason": null
+          },
+          {
+            "configuration": "Alpha",
+            "lower": "8",
+            "upper": "8",
+            "basis": "path_range",
+            "reason": null
+          }
+        ]
+      }
+    ],
+    "pareto": {
+      "status": "computed",
+      "reason": null,
+      "among": [
+        "Zulu",
+        "Alpha"
+      ],
+      "non_dominated": [
+        "Zulu"
+      ],
+      "dominated": [
+        {
+          "configuration": "Alpha",
+          "dominated_by": [
+            "Zulu"
+          ]
+        }
+      ],
+      "undetermined_pairs": [],
+      "not_evaluated": []
+    }
+  }
+}

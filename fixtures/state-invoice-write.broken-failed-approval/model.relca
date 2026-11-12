@@ -1,0 +1,14 @@
+model StateInvoiceWrite version "0.2" {
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  observed case { approval: optional<Verdict>; registered: bool = false }
+  actor Approver { capacity 1; capability approve() -> Verdict { duration fixed 1min; result nondet { fail }; writes approval } }
+  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+  process Flow { checked = Approver.approve(); posted = Ledger.post(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    invariant Approver.approve.finish -> approval == pass
+    invariant Ledger.post.finish -> approval == pass && registered == true
+  }
+}

@@ -1,0 +1,10 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { begun: bool = false; finished: bool = false }
+  actor Fast { capacity 1; capability win() -> T { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { capacity 1; capability work() -> T { duration fixed 5min; result nondet { ok }; start { begun = true }; writes finished; finish { finished = true }; cancel forbidden_after_start } }
+  process Flow { fork f { fast = Fast.win(); slow = Slow.work() }; join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected; if begun == true && finished == false { end cancelled } else { end finished }; end rejected }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,847 @@
+[
+  {
+    "job": "fx-aobs-capacity",
+    "source_sha256": "540f625a6c4c296a63fce6bf5e37eee62f44f5be230fab868151a36f86457af7",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-capacity.broken-two-writers",
+    "source_sha256": "0c7682f86720aabf4dcdd22e6ecb8286ca3a0a62aeb02dbf7ae9db3108ed7d02",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-labels",
+    "source_sha256": "540f625a6c4c296a63fce6bf5e37eee62f44f5be230fab868151a36f86457af7",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-labels.broken-renamed",
+    "source_sha256": "051f0464dd51f769804938ca8aa8f9be8581cabe83d1e7f3b858369eaeb4219c",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Registry.posted: Registry.post -> Registry.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-late",
+    "source_sha256": "3956289bfbbd1ca91c8e55cb32bbf44f4df41d93ec0bead5b14b199f27685939",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-read-write-order",
+    "source_sha256": "48e5332407ff9b975dd4ea59b485212785432b1caa2652dd3d04158cec2fe1e6",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Desk.ready: process.P@if:327 -> Desk.work"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-read-write-order.broken-later-arrival",
+    "source_sha256": "2b0285d003b5d4422059d69ba9f1c111d6279d79cc1f6875978ac8680d838444",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Desk.ready: process.P@if:327 -> Desk.work"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-shared-order",
+    "source_sha256": "540f625a6c4c296a63fce6bf5e37eee62f44f5be230fab868151a36f86457af7",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-start-visible",
+    "source_sha256": "4c60043a320b433ac38df2010dce70c408c2b96d318b69ddc849fececef6788c",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Desk.busy: process.P@if:348 -> Desk.work"
+      }
+    ]
+  },
+  {
+    "job": "fx-aobs-start-visible.broken-no-start",
+    "source_sha256": "fdec6ae7b4d5f982fcdb91991406f6661e3eb71a3c5b9901a80682d7c1c18a89",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Desk.busy: process.P@if:326 -> Desk.work"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-branch-sharing",
+    "source_sha256": "c26007cadff69adb0705c0c2bcca4929d3f7600b7225d0bc1eeb3fa3b7c1a550",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      },
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: process.Flow@if:538 -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-branch-sharing.broken-scalar-guard",
+    "source_sha256": "bffd98daa3b7f39ab6f0608ac84a3c0ba5211a5112bb908162274f5c0476a190",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-cases",
+    "source_sha256": "f9be44298d946345760e5d2ad90a6a3e60bde1c55a2d6d95ab85bf6523b45ff6",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-cases.broken-capacity",
+    "source_sha256": "cc9920ffb9e68b1d69d60ce10574982ec19a298522d4e95946777f0004b959ef",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-clock",
+    "source_sha256": "f9be44298d946345760e5d2ad90a6a3e60bde1c55a2d6d95ab85bf6523b45ff6",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-clock.broken-short",
+    "source_sha256": "ebe9b4d0b87298a256595a59fa0c362b0579390be47c7a68fe9c02701fb2042e",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-cut-rg",
+    "source_sha256": "fcc98933a978eaad625a679310452a9125d4cac2dd88b731b5641b50979c4ff3",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-replay-display",
+    "source_sha256": "271e155829bf6f8a71df1f7141be80b02d9f50d79a19f0dd7e9437ff97ebdc95",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-replay-display.broken-shorter-wait",
+    "source_sha256": "f02f23d8554589f6eae58090f435b47fb20b874e94a245b6b8d79c6087e06187",
+    "index": 10,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-static-capacity-with-resource",
+    "source_sha256": "503b88cb8d8bb9bf5d42ad6164d702bdc91f8b8ac63c3f34a8a2aaeaaa29ae0a",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-aset-static-capacity-with-resource.broken-capacity-with-resource",
+    "source_sha256": "c0b3a4ecb3215a3e17411a2552838d9298874a38b8e3a5916ef705f904140114",
+    "index": 8,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-cf-atomic-cap2",
+    "source_sha256": "fe6d1d1f66f0d48c74470da4fe70ad72365a0d446625980b37eb97b1ae3b5e81",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-cf-race",
+    "source_sha256": "540f625a6c4c296a63fce6bf5e37eee62f44f5be230fab868151a36f86457af7",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-cf-race.broken-two-writers",
+    "source_sha256": "0c7682f86720aabf4dcdd22e6ecb8286ca3a0a62aeb02dbf7ae9db3108ed7d02",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-cf-version-atomic",
+    "source_sha256": "4a17d5bda7bf4e611f671527a7a30ed752d59f6ca34727a3cca0a9b0b4c27834",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-cf-version-atomic.broken-no-check",
+    "source_sha256": "5874fc3974c193a8ffe8027114679ab4e69a282168bc2f792d7b29f4b35207c4",
+    "index": 7,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-pol-refuse",
+    "source_sha256": "4cde71a45fecb1560a482c26e3dc59d91521742c9853d36cb1c9d2f445e6c0bc",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-sinv-label",
+    "source_sha256": "01083f508720db0d3c6a66a3076f5419dc870de0f715b27ca4ac6940e47bcc07",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-sinv-label.broken-person",
+    "source_sha256": "a5f365a65f0b1f10fb3d85324919282aa6711f85c69c437fa53d7378fe779f7f",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "fx-sinv-shared",
+    "source_sha256": "65b094bc156d771be6e54f6c7153f85243d456e7cd33409f485943e53ae6606c",
+    "index": 6,
+    "rows": [
+      {
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "field": "concurrency.read_write",
+        "value": "Ledger.posted: Ledger.post -> Ledger.post"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-False-Left-check",
+    "source_sha256": "ff4f4d1a38af97366f809c8c29a6bec5447c438531e29a4d0e6843ae51ba165b",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-False-Left-simulate",
+    "source_sha256": "ff4f4d1a38af97366f809c8c29a6bec5447c438531e29a4d0e6843ae51ba165b",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-False-Right-check",
+    "source_sha256": "ff4f4d1a38af97366f809c8c29a6bec5447c438531e29a4d0e6843ae51ba165b",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-False-Right-simulate",
+    "source_sha256": "ff4f4d1a38af97366f809c8c29a6bec5447c438531e29a4d0e6843ae51ba165b",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-True-Left-check",
+    "source_sha256": "16680f4197affc5505a6f7fe0ab896b9633f23535cfdf55a26b329065b3d4c89",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-True-Left-simulate",
+    "source_sha256": "16680f4197affc5505a6f7fe0ab896b9633f23535cfdf55a26b329065b3d4c89",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-True-Right-check",
+    "source_sha256": "16680f4197affc5505a6f7fe0ab896b9633f23535cfdf55a26b329065b3d4c89",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-False-True-Right-simulate",
+    "source_sha256": "16680f4197affc5505a6f7fe0ab896b9633f23535cfdf55a26b329065b3d4c89",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-False-Left-check",
+    "source_sha256": "d5af86c2794323c0dbd307ddb456910b85b14587091bd588fb7f0b8e3048d7c3",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-False-Left-simulate",
+    "source_sha256": "d5af86c2794323c0dbd307ddb456910b85b14587091bd588fb7f0b8e3048d7c3",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-False-Right-check",
+    "source_sha256": "d5af86c2794323c0dbd307ddb456910b85b14587091bd588fb7f0b8e3048d7c3",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-False-Right-simulate",
+    "source_sha256": "d5af86c2794323c0dbd307ddb456910b85b14587091bd588fb7f0b8e3048d7c3",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-True-Left-check",
+    "source_sha256": "656ca68d0630e7b305432c8630ad424ca829ebd5965f079e80ad3265890902be",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-True-Left-simulate",
+    "source_sha256": "656ca68d0630e7b305432c8630ad424ca829ebd5965f079e80ad3265890902be",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-True-Right-check",
+    "source_sha256": "656ca68d0630e7b305432c8630ad424ca829ebd5965f079e80ad3265890902be",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-False-True-True-Right-simulate",
+    "source_sha256": "656ca68d0630e7b305432c8630ad424ca829ebd5965f079e80ad3265890902be",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-False-Left-check",
+    "source_sha256": "12b1f29363bcfa83d3f00618396f0fb88e8b4b77c158917d464f1e3209c858c5",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-False-Left-simulate",
+    "source_sha256": "12b1f29363bcfa83d3f00618396f0fb88e8b4b77c158917d464f1e3209c858c5",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-False-Right-check",
+    "source_sha256": "12b1f29363bcfa83d3f00618396f0fb88e8b4b77c158917d464f1e3209c858c5",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-False-Right-simulate",
+    "source_sha256": "12b1f29363bcfa83d3f00618396f0fb88e8b4b77c158917d464f1e3209c858c5",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-True-Left-check",
+    "source_sha256": "ae2ca722693467479bec1e790a0cfb48b9984a26cc3812dfa507a296fffede03",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-True-Left-simulate",
+    "source_sha256": "ae2ca722693467479bec1e790a0cfb48b9984a26cc3812dfa507a296fffede03",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-True-Right-check",
+    "source_sha256": "ae2ca722693467479bec1e790a0cfb48b9984a26cc3812dfa507a296fffede03",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-False-True-Right-simulate",
+    "source_sha256": "ae2ca722693467479bec1e790a0cfb48b9984a26cc3812dfa507a296fffede03",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:840 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-False-Left-check",
+    "source_sha256": "4917d4e13dd9c6cfdfba445c18c3d3e3a72aa9121f0de5e62d67d23e9d6e221e",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-False-Left-simulate",
+    "source_sha256": "4917d4e13dd9c6cfdfba445c18c3d3e3a72aa9121f0de5e62d67d23e9d6e221e",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-False-Right-check",
+    "source_sha256": "4917d4e13dd9c6cfdfba445c18c3d3e3a72aa9121f0de5e62d67d23e9d6e221e",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-False-Right-simulate",
+    "source_sha256": "4917d4e13dd9c6cfdfba445c18c3d3e3a72aa9121f0de5e62d67d23e9d6e221e",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-True-Left-check",
+    "source_sha256": "9aff74a16b33574cb612b79241204e017603193f2c157b545558d0ca150ba894",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-True-Left-simulate",
+    "source_sha256": "9aff74a16b33574cb612b79241204e017603193f2c157b545558d0ca150ba894",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-True-Right-check",
+    "source_sha256": "9aff74a16b33574cb612b79241204e017603193f2c157b545558d0ca150ba894",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-d06-True-True-True-True-Right-simulate",
+    "source_sha256": "9aff74a16b33574cb612b79241204e017603193f2c157b545558d0ca150ba894",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.Q@if:950 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-DESK-None-check",
+    "source_sha256": "2a74b6ac3178d8c9a2c74b807858caf864da11124d50c7dc2155e641c4eac98a",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-DESK-None-simulate",
+    "source_sha256": "2a74b6ac3178d8c9a2c74b807858caf864da11124d50c7dc2155e641c4eac98a",
+    "index": 8,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Desk.seen: process.P@if:462 -> Desk.first",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-atomic-quality-False-Left-check",
+    "source_sha256": "6d19d692da02d0a4cab060e4cef98244cec8ce6316513e2eae5fd6ed7adda4f2",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-atomic-quality-False-Right-check",
+    "source_sha256": "6d19d692da02d0a4cab060e4cef98244cec8ce6316513e2eae5fd6ed7adda4f2",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-atomic-quality-True-Left-check",
+    "source_sha256": "a9ff7f7860c7a5284fa14913725eaac18fc25543ca5c052e62744e2872b623c7",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-atomic-quality-True-Right-check",
+    "source_sha256": "a9ff7f7860c7a5284fa14913725eaac18fc25543ca5c052e62744e2872b623c7",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-waiting-cf-version-atomic-None-check",
+    "source_sha256": "d7131d0a81399d6c88ca3888c8f226089a9330b8097388f451355f7c4b34e523",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  },
+  {
+    "job": "inline-waiting-cf-version-atomic-masked-None-check",
+    "source_sha256": "caac64a1cd4ec255b8aa5729c359aaadc103639081a395d1b188d35493e63e02",
+    "index": 7,
+    "rows": [
+      {
+        "field": "concurrency.read_write",
+        "value": "Ledger.keys: Ledger.post -> Ledger.post",
+        "affects": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。"
+      }
+    ]
+  }
+]

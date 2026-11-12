@@ -1,0 +1,106 @@
+[
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-wide-b"
+  },
+  {
+    "base": "wait-person",
+    "broken": "wait-person.broken-shared-person"
+  },
+  {
+    "base": "wait-external",
+    "broken": "wait-external.broken-horizon"
+  },
+  {
+    "base": "wait-resource",
+    "broken": "wait-resource.broken-no-resource"
+  },
+  {
+    "base": "wait-combined",
+    "broken": "wait-combined.broken-same-cause"
+  },
+  {
+    "base": "wait-intentional",
+    "broken": "wait-intentional.broken-no-wait"
+  },
+  {
+    "base": "wait-any",
+    "broken": "wait-any.broken-all"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-short-clock"
+  },
+  {
+    "base": "wait-person",
+    "broken": "wait-person.broken-short-clock"
+  },
+  {
+    "base": "wait-contest",
+    "broken": "wait-contest.broken-no-contest"
+  },
+  {
+    "base": "wait-label",
+    "broken": "wait-label.broken-original-labels"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-queue-quantiles"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-missing"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-duplicate"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-waits-by-cause"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-quantiles"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-p95"
+  },
+  {
+    "base": "wait-fifo",
+    "broken": "wait-fifo.broken-outside"
+  },
+  {
+    "base": "wait-horizon-queue",
+    "broken": "wait-horizon-queue.broken-clock"
+  },
+  {
+    "base": "wait-sample",
+    "broken": "wait-sample.broken-short-horizon"
+  },
+  {
+    "base": "wait-one-task-combined",
+    "broken": "wait-one-task-combined.broken-wide-actor"
+  },
+  {
+    "base": "wait-reject",
+    "broken": "wait-reject.broken-overflow"
+  },
+  {
+    "base": "wait-zero-window-observation",
+    "broken": "wait-zero-window-observation.broken-wait"
+  },
+  {
+    "base": "wait-compare-diff",
+    "broken": "wait-compare-diff.broken-no-breakdown"
+  },
+  {
+    "base": "wait-no-policy-sample",
+    "broken": "wait-no-policy-sample.broken-no-policy"
+  },
+  {
+    "base": "wait-duration-support",
+    "broken": "wait-duration-support.broken-zero-mass"
+  }
+]

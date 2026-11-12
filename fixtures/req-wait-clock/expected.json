@@ -1,0 +1,20 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 12,
+        "max": 12
+      },
+      "work": {
+        "min": 8,
+        "max": 8
+      },
+      "result_at": null
+    }
+  ]
+}

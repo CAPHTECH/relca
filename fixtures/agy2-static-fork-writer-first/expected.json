@@ -1,0 +1,16 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      }
+    }
+  }
+}

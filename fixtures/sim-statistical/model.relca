@@ -1,0 +1,12 @@
+model Statistical version "0.2" {
+  type T = enum { ok }
+  observed case { hit:bool = false }
+  kernel K { * -> {0.5:ok with hit=true;0.5:ok with hit=false} }
+  actor A { capacity 1; capability c() -> T { duration fixed 1min; outcomes kernel K; writes hit } }
+  process P { a = A.c(); end done }
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify probability reached hit == true <= 0.75
+  verify probability reached hit == true >= 0.25
+  verify probability reached hit == true >= 0.5
+  simulation replications 10000 seed 0 confidence 0.999999999999
+}

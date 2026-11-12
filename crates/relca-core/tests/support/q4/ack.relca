@@ -1,0 +1,22 @@
+model AckAcrossClose version "0.2" {
+  type R = enum { ok }
+  calendar Always through 21min on_close continue { [0min, 21min) capacity 1 }
+  calendar Day through 21min on_close continue { [0min, 1min) capacity 1; [1min, 21min) capacity 0 }
+  actor A { capacity 1; calendar Always
+    capability short() -> R { duration fixed 1min; result nondet { ok }; cancel forbidden_after_start }
+  }
+  actor B { capacity 1; calendar Day
+    capability long() -> R { duration fixed 5min; result nondet { ok }; cancel cooperative ack_within 1min }
+  }
+  process Flow {
+    fork checks { a = A.short(); b = B.long() }
+    join any checks where result == ok tie by [a, b] remaining cancel_then_drain if none -> no_match
+    if a == ok { end done } else { end no_match }
+  }
+  cut C { include [A, B] }
+  arrivals fixed [0min]
+  bounds { cases 1; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; rate A per_minute 1; rate B per_minute 1; rate B overtime_per_minute 3; rate A.short per_start 0; rate B.long per_start 0; breakdown waits }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

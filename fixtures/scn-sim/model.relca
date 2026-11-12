@@ -1,0 +1,30 @@
+model M version "0.2" {
+type T = enum { ok }
+observed case { hit: bool = false }
+actor A {
+  capacity 1
+  capability run() -> T {
+    duration fixed 3min
+    result nondet { ok }
+    writes hit
+    finish { hit = true }
+  }
+}
+process Flow { r = A.run(); end done }
+cut C { include [A] }
+policy fifo tie_by case_id
+scenario Day {
+  simulation replications 4 seed 1 confidence 0.5
+  arrivals fixed_every 2min during [0min, 6min)
+  horizon 8min
+  bounds { cases 3; live_tasks 1; clock 8min }
+
+}
+metrics {
+  window 30min
+  currency "JPY"
+  rate A per_minute 1
+  rate A.run per_start 0
+}
+verify probability reached hit == true >= 0.5
+}

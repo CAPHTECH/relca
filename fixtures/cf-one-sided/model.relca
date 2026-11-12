@@ -1,0 +1,9 @@
+model Pair version "0.2" {
+ type Pick=enum{left,right};type R=enum{committed,conflict};type H=enum{free,taken}
+ actor Picker{capacity 2;capability choose()->Pick{duration fixed 1min;result nondet{left,right}}}
+ actor Ledger{capacity 2;state holder:H=free;
+ capability a()->R{version_check [holder] else conflict;commits;writes holder;finish{holder=taken};duration fixed 1min;result nondet{committed}}
+ capability b()->R{version_check [holder] else conflict;commits;writes holder;finish{holder=taken};duration fixed 1min;result nondet{committed}}}
+ process P{p=Picker.choose();if p==left {a=Ledger.a()} else {b=Ledger.b()};end done}
+ cut C{include[Picker,Ledger]};bounds{cases 2;live_tasks 1;clock 10min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify safety no_resource_overcommit
+}

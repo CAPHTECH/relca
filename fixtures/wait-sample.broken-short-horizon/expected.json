@@ -1,0 +1,18 @@
+{
+  "verdict": "inconclusive",
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "metrics": {
+    "overall": {
+      "queue_wait_observed": {
+        "min": "3",
+        "max": "3",
+        "reason": null,
+        "mean": "3",
+        "samples": 4
+      }
+    }
+  }
+}

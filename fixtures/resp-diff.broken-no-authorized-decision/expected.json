@@ -1,0 +1,23 @@
+{
+  "verdict":"violated",
+  "from":{"configuration":"A","report":{
+    "verdict":"satisfied","bounds":{"truncated":false},
+    "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 contest","verdict":"satisfied"},{"id":"contract Controls #1 contest_response","verdict":"satisfied"}],
+    "obligations":[],
+    "contest_summary":{"business_ended_open":{"min":"0","max":"0","reason":null}},
+    "contest_runtime":[{"case_id":1,"coverage":"complete","alternatives":[{"filed":false,"target_at":2,"status":"not_filed","closed_at":2},{"filed":true,"target_at":2,"deadline":7,"status":"responded","response_at":3,"executor":"c1","result":"pass"},{"filed":true,"target_at":2,"deadline":7,"status":"responded","response_at":3,"executor":"c1","result":"fail"}]}],
+    "terminals":[{"end":"returned","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null},{"end":"posted","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+    "responsibilities":[{"id":1,"person":"a1","observation":{"status":"missing","required_sources":["Invoice"],"direct":[],"indirect":["Invoice"],"missing_sources":["Invoice"]},"refusal":{"status":"not_derived","effects":[],"reason":"no_reachable_effect"},"warnings":["W-RESP-1"]},{"id":2,"person":"a1","observation":{"status":"not_derived","reason":"target_not_called"},"refusal":{"status":"not_derived","effects":[],"reason":"target_not_called"},"warnings":[]}],
+    "contest_paths":[{"id":"contract Controls #1 contest","checks":{"route_exists":{"satisfied":true},"reversal_authority":{"satisfied":true,"quantifier":"exists_decision_per_person","people":[{"person":"a1","satisfied":true,"decisions":[{"capability":"Approver.approve","executor":true,"included":true,"permission":true,"authorities":["ApprovalGrant"]}],"reason":null}]},"deadline_defined":{"satisfied":true}},"verdict":"satisfied","basis":"構造上存在","missing":[]}]
+  ,"diagnostics":[{"code":"W-RESP-1","severity":"warning","span":{"start":849,"end":884}},{"code":"W-UNREACH-0","severity":"warning","span":{"end":637,"start":547}}]}},
+  "to":{"configuration":"B","report":{
+    "verdict":"violated","bounds":{"truncated":false},
+    "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 contest","verdict":"violated"},{"id":"contract Controls #1 contest_response","verdict":"satisfied"}],
+    "obligations":[],
+    "contest_summary":{"business_ended_open":{"min":"0","max":"0","reason":null}},
+    "contest_runtime":[{"case_id":1,"coverage":"complete","alternatives":[{"filed":false,"target_at":2,"status":"not_filed","closed_at":2},{"filed":true,"target_at":2,"deadline":7,"status":"responded","response_at":3,"executor":"c1","result":"pass"},{"filed":true,"target_at":2,"deadline":7,"status":"responded","response_at":3,"executor":"c1","result":"fail"}]}],
+    "terminals":[{"end":"returned","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null},{"end":"posted","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+    "responsibilities":[{"id":1,"person":"a1","observation":{"status":"not_derived","reason":"target_not_called"},"refusal":{"status":"not_derived","effects":[],"reason":"target_not_called"},"warnings":[]},{"id":2,"person":"a1","observation":{"status":"missing","required_sources":["Invoice"],"direct":[],"indirect":["Invoice"],"missing_sources":["Invoice"]},"refusal":{"status":"not_derived","effects":[],"reason":"no_reachable_effect"},"warnings":["W-RESP-1"]}],
+    "contest_paths":[{"id":"contract Controls #1 contest","checks":{"route_exists":{"satisfied":true},"reversal_authority":{"satisfied":false,"quantifier":"exists_decision_per_person","people":[{"person":"a1","satisfied":false,"decisions":[{"capability":"Approver.second","executor":true,"included":true,"permission":true,"authorities":[]}],"reason":"Permission あり、Authority 未接続"}]},"deadline_defined":{"satisfied":true}},"verdict":"violated","basis":"構造の不足","missing":["reversal_authority"]}]
+  ,"diagnostics":[{"code":"W-RESP-1","severity":"warning","span":{"start":887,"end":921}},{"code":"W-UNREACH-0","severity":"warning","span":{"end":542,"start":451}}]}}
+}

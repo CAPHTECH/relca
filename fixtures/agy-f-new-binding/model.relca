@@ -1,0 +1,10 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor Judge { capacity 1; capability draw() -> V {  duration fixed 1min; result nondet { pass,fail } } }
+  actor Other { capacity 1; capability draw() -> V {  duration fixed 1min; result nondet { pass,fail } } }
+  process Flow { j = Judge.draw(); if j == pass { end done } else { x = Other.draw(); if x == pass { end done } else { end returned } } }
+  cut K { include [Judge,Other] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

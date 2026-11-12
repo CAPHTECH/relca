@@ -1,0 +1,13 @@
+{
+  "verdict": "unsupported",
+  "properties": [],
+  "terminals": [],
+  "diagnostics": [
+    {
+      "code": "U-SYN-0"
+    },
+    {
+      "code": "W-CUT-0"
+    }
+  ]
+}

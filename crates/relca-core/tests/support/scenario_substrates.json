@@ -1,0 +1,507 @@
+[
+  {
+    "name": "scn-fixed-every",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-select",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-select.broken-busy",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 1min, 2min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-horizon",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-horizon.broken-earlier",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-horizon-equal-clock",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 12min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-horizon-equal-clock.broken-no-horizon",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n  bounds { cases 3; live_tasks 1; clock 12min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-obligation",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\ncontract K { response case.received -> one_of(end.done) by 9min after case.received otherwise unresolved }\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-obligation.broken-short",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\ncontract K { response case.received -> one_of(end.done) by 7min after case.received otherwise unresolved }\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-drain",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-drain.broken-short-horizon",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-sim",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 0.5\n\n  simulation replications 4 seed 1 confidence 0.5\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 8min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-sim.broken-no-horizon",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 0.5\n\n  simulation replications 4 seed 1 confidence 0.5\n  arrivals fixed [0min, 2min, 4min]\n  bounds { cases 3; live_tasks 1; clock 8min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-sim-clock30",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 0.5\n\n  simulation replications 4 seed 1 confidence 0.5\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-sim-clock30.broken-earlier",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 0.5\n\n  simulation replications 4 seed 1 confidence 0.5\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-compare",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-compare.broken-busy",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 1min, 2min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-compare-cutoff",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n  rate A.fast per_start 0\n}\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-compare-cutoff.broken-full-drain",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n  rate A.fast per_start 0\n}\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-diff-cutoff",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n  rate A.fast per_start 0\n}\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-diff-cutoff.broken-full-drain",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n  rate A.fast per_start 0\n}\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-shared",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 1min, 2min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-unselected",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-label",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-label.broken-renamed",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor Desk {\n  grain team\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = Desk.run(); end done }\ncut C { include [Desk] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-equivalent",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-equivalent.broken-first",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [1min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-route",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\n\nverify probability reached hit == true within 4min >= 1\n\n  bounds { cases 1; live_tasks 1; clock 10min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-route.broken-no-scenario",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\nbounds { cases 1; live_tasks 1; clock 10min }\nverify probability reached hit == true within 4min >= 1\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-clock-priority",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 12min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-clock-priority.broken-short-clock",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 11min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-inclusive",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-inclusive.broken-earlier",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-future-arrival",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 1min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 4min, 12min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-within",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true within 6min >= 1\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-within.broken-long-window",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true within 9min >= 1\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-diff",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-diff.broken-busy",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 1min, 2min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-unselected-window",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-direct-every",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\narrivals fixed [0min, 4min, 8min]\nbounds { cases 3; live_tasks 1; clock 30min }\nverify probability reached hit == true within 4min >= 1\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-cut-record",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A]; horizon received..done within 1min }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-cut-record.broken-record",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A]; horizon received..done within 2min }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-missing-price",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-missing-price.broken-unset",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A.run per_start 0\n}\nverify reachable end.done\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-explain",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\ncontract K { response case.received -> one_of(end.done) by 8min after case.received otherwise unresolved }\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-explain.broken-later-deadline",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\ncontract K { response case.received -> one_of(end.done) by 9min after case.received otherwise unresolved }\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-simulation-fifo",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 0.5\nsimulation replications 4 seed 1 confidence 0.5\n\n  arrivals fixed [0min, 1min, 2min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-random-name",
+    "source": "model Keys version \"0.2\" {\n  type T = enum { first, second }\n  latent case { z:T ~ { second:0.5, first:0.5 } }\n  observed case { y:T = second }\n  kernel K { * -> { 0.5:first; 0.5:second } }\n  actor A { capacity 1; capability c() -> T { duration fixed 1min; outcomes kernel K; writes y } }\n  process P { a = A.c(); if a == first { end yes } else { end no } }\n  \n  \n  verify probability reached z == first >= 0.5\n  verify probability reached y == first <= 1\n  simulation replications 4 seed 0 confidence 0.75\n bounds { cases 1; live_tasks 1; clock 2min } \n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-random-name.broken-renamed",
+    "source": "model Keys version \"0.2\" {\n  type T = enum { first, second }\n  latent case { z:T ~ { second:0.5, first:0.5 } }\n  observed case { y:T = second }\n  kernel K { * -> { 0.5:first; 0.5:second } }\n  actor A { capacity 1; capability c() -> T { duration fixed 1min; outcomes kernel K; writes y } }\n  process P { a = A.c(); if a == first { end yes } else { end no } }\n  \n  \n  verify probability reached z == first >= 0.5\n  verify probability reached y == first <= 1\n  simulation replications 4 seed 0 confidence 0.75\n bounds { cases 1; live_tasks 1; clock 2min } \n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-set-limit",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nactor L { state keys: set<CaseId> }\nactor A { capacity 1; capability c() -> T { duration fixed 1min; result nondet { ok } } }\nprocess P { r = A.c(); end done }\ncut C { include [L,A] }\n\n\nverify reachable end.done\n\n  arrivals fixed [0min, 0min]\n  bounds { cases 2; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-case-mix",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-resources",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-analysis",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-input",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-stop",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-warmup",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-calendar",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-queue-old",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-metrics",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-process",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-actor",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-configuration",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-cut",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-verify",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-contract",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-right-closed",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-left-open",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-direct-horizon",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-poisson",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-bounds-queue",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-bounds-live-old",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-config-scenario",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-static-duplicate-name",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-duplicate-bounds",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-duplicate-simulation",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-duplicate-arrivals",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-step-zero",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-equal-interval",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-reverse-interval",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-horizon-zero",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-missing-name",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-missing-duration",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-missing-during",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-missing-brace",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-static-expansion",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-duplicate-common-arrivals",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\narrivals fixed [0min, 4min, 8min]\nverify probability reached hit == true within 4min >= 1\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-duplicate-common-bounds",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nbounds { cases 3; live_tasks 1; clock 30min }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-duplicate-common-simulation",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nsimulation replications 4 seed 1 confidence 0.5\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-duplicate-common-queue",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nqueue capacity 3 on_overflow reject\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-select-required-check",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-select-required-simulate",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 0.5\nsimulation replications 4 seed 1 confidence 0.5\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-select-required-compare",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-select-required-diff",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-select-required-explain",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-unknown",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-no-simulation",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nverify probability reached hit == true within 4min >= 0.5\n simulation replications 4 seed 1 confidence 0.5\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-compare-many",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 3min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }\n}\nprocess Q { q = A.fast(); end done }\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\n\nconfiguration Slow { cut C; process Flow }\nconfiguration Fast { cut C; process Q }\nverify probability reached hit == true within 4min >= 1\n\n  arrivals fixed [0min, 4min, 8min]\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": "Slow"
+  },
+  {
+    "name": "scn-probability-mass",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration {1min:0.5,3min:0.5}\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 1\n\n  bounds { cases 1; live_tasks 1; clock 5min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-probability-mass.broken-full-window",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration {1min:0.5,3min:0.5}\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nmetrics {\n  window 30min\n  currency \"JPY\"\n  rate A per_minute 1\n  rate A.run per_start 0\n}\nverify probability reached hit == true >= 1\n\n  bounds { cases 1; live_tasks 1; clock 5min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-rejected-not-cutoff",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nqueue capacity 0 on_overflow reject\nverify probability reached hit == true >= 1\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  },
+  {
+    "name": "scn-rejected-not-cutoff.broken-admit",
+    "source": "model M version \"0.2\" {\ntype T = enum { ok }\nobserved case { hit: bool = false }\nactor A {\n  capacity 1\n  capability run() -> T {\n    duration fixed 5min\n    result nondet { ok }\n    writes hit\n    finish { hit = true }\n  }\n}\nprocess Flow { r = A.run(); end done }\ncut C { include [A] }\npolicy fifo tie_by case_id\n\nqueue capacity 3 on_overflow reject\nverify probability reached hit == true >= 1\n\n  arrivals fixed [0min, 2min, 4min]\n\n  bounds { cases 3; live_tasks 1; clock 30min }\n\n\n}\n",
+    "configuration": null
+  }
+]

@@ -1,0 +1,30 @@
+model AnyDrain version "0.2" {
+  type Verdict = enum { pass }
+  actor Office {
+    capacity 2
+    capability short() -> Verdict {
+      duration fixed 3min
+      result nondet { pass }
+      cancel forbidden_after_start
+    }
+    capability long() -> Verdict {
+      duration fixed 5min
+      result nondet { pass }
+      cancel forbidden_after_start
+    }
+  }
+  process Check {
+    fork checks {
+      a = Office.short()
+      b = Office.long()
+    }
+    join any checks where result == pass
+      tie by [a, b]
+      remaining cancel_then_drain
+      if none -> no_match
+    if a == pass { end done } else { end no_match }
+  }
+  bounds { cases 1; live_tasks 2; clock 5min }
+  verify reachable end.done
+metrics { window 5min; currency "JPY"; breakdown waits }
+}

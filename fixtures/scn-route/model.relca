@@ -1,0 +1,20 @@
+model M version "0.2" {
+type T = enum { ok }
+observed case { hit: bool = false }
+actor A {
+  capacity 1
+  capability run() -> T {
+    duration fixed 3min
+    result nondet { ok }
+    writes hit
+    finish { hit = true }
+  }
+}
+process Flow { r = A.run(); end done }
+cut C { include [A] }
+scenario One {
+  bounds { cases 1; live_tasks 1; clock 10min }
+
+}
+verify probability reached hit == true within 4min >= 1
+}

@@ -1,0 +1,10 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor Desk { capacity 1; state busy: bool = false; capability work() -> R { start { busy = true }; writes busy; finish { busy = false }; duration fixed 5min; result nondet { ok } } }
+  actor Alt { capacity 1; capability other() -> R { duration fixed 3min; result nondet { ok } } }
+  process P { if Desk.busy == true { a = Alt.other() } else { b = Desk.work() }; end done }
+  cut C { include [Desk,Alt] }
+  bounds { cases 2; live_tasks 1; clock 20min }
+  arrivals fixed [0min,2min]
+  verify safety no_resource_overcommit
+}

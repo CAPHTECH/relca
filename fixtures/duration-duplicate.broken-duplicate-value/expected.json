@@ -1,0 +1,1 @@
+{"verdict":"invalid","mode":"exhaustive","unit":"min","cut":"undeclared","bounds":{"cases":null,"live_tasks":null,"clock":null,"truncated":null},"diagnostics":[{"code":"E-PROB-0","severity":"error"}],"properties":[],"terminals":[],"agency":null,"absent_diagnostics":["W-BUDGET-0","W-DEADLOCK-0","U-SEM-0","E-CAP-0"]}

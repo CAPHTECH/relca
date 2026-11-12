@@ -1,0 +1,8 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  actor A { capacity 1; capability short() -> T { duration fixed 3min; result nondet { ok } }; capability long() -> T { duration fixed 5min; result nondet { ok } } }
+  process Flow { a = A.short(); wait 2min; b = A.long(); end done }
+  bounds { cases 1; live_tasks 4; clock 30min }
+  metrics { window 30min; currency "JPY"; rate A per_minute 2; rate A.short per_start 3; rate A.long per_start 3 }
+  verify safety no_resource_overcommit
+}

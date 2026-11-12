@@ -1,0 +1,11 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { flag: bool = true; outcome: optional<T> }
+  kernel K { * -> { 0.5: ok; 0.5: bad } }
+  actor A { capacity 1; capability run() -> T { duration fixed 4min; outcomes kernel K; writes outcome; requires flag == true else denied } }
+  process Flow { r = A.run(); if r == denied { if outcome == none { end denied } else { end wrong } } else { if r == ok { end accepted } else { end bad } } }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+  verify probability reached end.denied >= 1
+}

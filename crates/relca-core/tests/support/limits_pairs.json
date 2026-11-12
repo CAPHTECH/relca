@@ -1,0 +1,310 @@
+[
+  {
+    "good": "lim-queue-wait",
+    "bad": "lim-queue-wait.broken-narrow",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "queue capacity 1 on_overflow wait_external fifo",
+    "invocation": null
+  },
+  {
+    "good": "lim-readmit",
+    "bad": "lim-readmit.broken-wide",
+    "old": "queue capacity 1 on_overflow wait_external fifo",
+    "new": "queue capacity 2 on_overflow wait_external fifo",
+    "invocation": null
+  },
+  {
+    "good": "lim-overflow",
+    "bad": "lim-overflow.broken-hidden",
+    "old": "end.done, end.overflowed",
+    "new": "end.done",
+    "invocation": null
+  },
+  {
+    "good": "lim-concurrent-wait",
+    "bad": "lim-concurrent-wait.broken-short",
+    "old": "by 6min",
+    "new": "by 5min",
+    "invocation": null
+  },
+  {
+    "good": "lim-count",
+    "bad": "lim-count.broken-queue",
+    "old": "concurrent cases 2",
+    "new": "queue capacity 2",
+    "invocation": null
+  },
+  {
+    "good": "lim-within",
+    "bad": "lim-within.broken-strict",
+    "old": "within 6min",
+    "new": "within 5min",
+    "invocation": null
+  },
+  {
+    "good": "lim-clock",
+    "bad": "lim-clock.broken-short-clock",
+    "old": "clock 20min",
+    "new": "clock 3min",
+    "invocation": null
+  },
+  {
+    "good": "lim-mass",
+    "bad": "lim-mass.broken-clock",
+    "old": "clock 20min",
+    "new": "clock 8min",
+    "invocation": null
+  },
+  {
+    "good": "lim-label",
+    "bad": "lim-label.broken-relabel",
+    "label": true
+  },
+  {
+    "good": "lim-legacy-route",
+    "bad": "lim-legacy-route.broken-no-limit",
+    "old": "  concurrent cases 1 on_overflow reject\n",
+    "new": "",
+    "invocation": null
+  },
+  {
+    "good": "lim-both",
+    "bad": "lim-both.broken-disagree",
+    "old": "concurrent cases 2 on_overflow reject",
+    "new": "concurrent cases 2 on_overflow wait_external fifo",
+    "invocation": null
+  },
+  {
+    "good": "lim-counts",
+    "bad": "lim-counts.broken-reject",
+    "old": "on_overflow end overflowed",
+    "new": "on_overflow reject",
+    "invocation": null
+  },
+  {
+    "good": "lim-counts-bare",
+    "bad": "lim-counts-bare.broken-reject",
+    "old": "on_overflow end overflowed",
+    "new": "on_overflow reject",
+    "invocation": null
+  },
+  {
+    "good": "lim-counts-obligations",
+    "bad": "lim-counts-obligations.broken-reject",
+    "old": "on_overflow end overflowed",
+    "new": "on_overflow reject",
+    "invocation": null
+  },
+  {
+    "good": "lim-sim",
+    "bad": "lim-sim.broken-no-policy",
+    "old": "  policy fifo tie_by case_id\n",
+    "new": "",
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "lim-admitted-deadline",
+    "bad": "lim-admitted-deadline.broken-receipt",
+    "old": "case.admitted",
+    "new": "case.received",
+    "invocation": null
+  },
+  {
+    "good": "lim-zero-deadline-overflow",
+    "bad": "lim-zero-deadline-overflow.broken-target",
+    "old": "one_of(end.spill)",
+    "new": "one_of(end.done)",
+    "invocation": null
+  },
+  {
+    "good": "lim-deadlock-held",
+    "bad": "lim-deadlock-held.broken-zero-capacity",
+    "old": "actor A { capacity 1",
+    "new": "actor A { capacity 0",
+    "invocation": null
+  },
+  {
+    "good": "lim-same-time-boundary",
+    "bad": "lim-same-time-boundary.broken-later",
+    "old": "[0min, 2min, 2min]",
+    "new": "[0min, 3min, 3min]",
+    "invocation": null
+  },
+  {
+    "good": "lim-both-end-id",
+    "bad": "lim-both-end-id.broken-other-end",
+    "old": "concurrent cases 2 on_overflow end spill",
+    "new": "concurrent cases 2 on_overflow end other",
+    "invocation": null
+  },
+  {
+    "good": "lim-delayed-arrival",
+    "bad": "lim-delayed-arrival.broken-short",
+    "old": "by 6min",
+    "new": "by 5min",
+    "invocation": null
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-missing-fifo",
+    "old": "wait_external fifo",
+    "new": "wait_external",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-lifo",
+    "old": "wait_external fifo",
+    "new": "wait_external lifo",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-process",
+    "old": "wait_external fifo",
+    "new": "process Flow",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-actor-queue",
+    "old": "actor A {",
+    "new": "actor A { queue capacity 2 on_overflow reject;",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-reject-and-count",
+    "old": "wait_external fifo",
+    "new": "reject_and_count",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-bounds-queue",
+    "old": "live_tasks 1",
+    "new": "live_tasks 1; queue 2",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-live-tasks-per-case",
+    "old": "live_tasks 1",
+    "new": "live_tasks_per_case 1",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-zero-queue",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "queue capacity 0 on_overflow wait_external fifo",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-zero-concurrent",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "concurrent cases 0 on_overflow wait_external fifo",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-end-conflict",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "queue capacity 2 on_overflow end done",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-duplicate-queue",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "queue capacity 2 on_overflow wait_external fifo\n  queue capacity 2 on_overflow wait_external fifo",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-duplicate-concurrent",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "concurrent cases 1 on_overflow wait_external fifo\n  concurrent cases 1 on_overflow wait_external fifo",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-end-missing-name",
+    "old": "queue capacity 2 on_overflow wait_external fifo",
+    "new": "queue capacity 2 on_overflow end",
+    "static": true
+  },
+  {
+    "good": "lim-static",
+    "bad": "lim-static.broken-arrivals-missing",
+    "old": "arrivals fixed [0min, 0min, 0min]",
+    "new": "concurrent cases 2 on_overflow wait_external fifo",
+    "static": true
+  },
+  {
+    "good": "lim-admitted-reject",
+    "bad": "lim-admitted-reject.broken-context",
+    "old": "case.received",
+    "new": "case.admitted",
+    "invocation": null
+  },
+  {
+    "good": "lim-admitted-after",
+    "bad": "lim-admitted-after.broken-context",
+    "old": "after case.admitted",
+    "new": "after case.received",
+    "invocation": null
+  },
+  {
+    "good": "lim-admitted-invariant",
+    "bad": "lim-admitted-invariant.broken-context",
+    "old": "A.run.finish",
+    "new": "case.admitted",
+    "invocation": null
+  },
+  {
+    "good": "lim-admitted-excludes",
+    "bad": "lim-admitted-excludes.broken-context",
+    "old": ", A.run.start",
+    "new": ", case.admitted",
+    "invocation": null
+  },
+  {
+    "good": "lim-zero-limit",
+    "bad": "lim-zero-limit.broken-end",
+    "old": "on_overflow reject",
+    "new": "on_overflow end spill",
+    "invocation": null
+  },
+  {
+    "good": "lim-overflow-admitted",
+    "bad": "lim-overflow-admitted.broken-receipt",
+    "old": "case.admitted",
+    "new": "case.received",
+    "invocation": null
+  },
+  {
+    "good": "lim-instant",
+    "bad": "lim-instant.broken-clock-zero",
+    "old": "clock 20min",
+    "new": "clock 0min",
+    "invocation": null
+  },
+  {
+    "good": "lim-standing",
+    "bad": "lim-standing.broken-overflow",
+    "old": "standing over [end.done]",
+    "new": "standing over [end.overflowed]",
+    "invocation": null
+  },
+  {
+    "good": "lim-contest-overflow",
+    "bad": "lim-contest-overflow.broken-target",
+    "old": "contest Party on end.done",
+    "new": "contest Party on end.overflowed",
+    "invocation": null
+  }
+]

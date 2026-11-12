@@ -1,0 +1,9 @@
+model Records version "0.2" {
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: Entry = Entry { confidence = high } }
+process Flow { end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.done
+}

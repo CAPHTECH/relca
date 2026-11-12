@@ -1,0 +1,9 @@
+model DurationDuplicate version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1; capability sample() -> T { duration {3min:0.25,3min:0.75}; result nondet { ok }; writes hit; finish { hit = true } } }
+  process Flow { s = A.sample(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true within 3min <= 0.25
+}

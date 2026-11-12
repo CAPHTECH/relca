@@ -1,0 +1,13 @@
+model RuleQualityMutation version "0.2" {
+ type T = enum { ok }
+ actor ApprovalRule { version "r1"; decides enabled: bool = true }
+ actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+ process P { if ApprovalRule.enabled == true { x = A.run(); end done } else { end off } }
+ cut C { include [ApprovalRule,A] }
+ property case.Hit = reached(end.done)
+ metric cohort.Rate = expected(count(case.Hit)) / arrivals
+ metric quantile.All = quantile(0.5, case.Hit)
+ bounds { cases 1; live_tasks 1; clock 5min }
+ simulation replications 3 seed 7 confidence 0.5
+ verify safety no_resource_overcommit
+}

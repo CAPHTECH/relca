@@ -1,0 +1,294 @@
+[
+  {
+    "base": "rec-proxy",
+    "broken": "rec-proxy.broken-latent-route"
+  },
+  {
+    "base": "rec-kernel",
+    "broken": "rec-kernel.broken-sum"
+  },
+  {
+    "base": "rec-case-var",
+    "broken": "rec-case-var.broken-no-write"
+  },
+  {
+    "base": "rec-approval",
+    "broken": "rec-approval.broken-bypass"
+  },
+  {
+    "base": "rec-explain",
+    "broken": "rec-explain.broken-bypass"
+  },
+  {
+    "base": "rec-label",
+    "broken": "rec-label.broken-unrenamed"
+  },
+  {
+    "base": "rec-fork",
+    "broken": "rec-fork.broken-reextract"
+  },
+  {
+    "base": "rec-lineage",
+    "broken": "rec-lineage.broken-relay"
+  },
+  {
+    "base": "rec-inline-result",
+    "broken": "rec-inline-result.broken-write-declared"
+  },
+  {
+    "base": "rec-nominal",
+    "broken": "rec-nominal.broken-same-members"
+  },
+  {
+    "base": "rec-size",
+    "broken": "rec-size.broken-oversize"
+  },
+  {
+    "base": "rec-requires",
+    "broken": "rec-requires.broken-latent-requires"
+  },
+  {
+    "base": "rec-none",
+    "broken": "rec-none.broken-order"
+  },
+  {
+    "base": "rec-none-base",
+    "broken": "rec-none-base.broken-missing-write"
+  },
+  {
+    "base": "rec-agency-f",
+    "broken": "rec-agency-f.broken-case-guard"
+  },
+  {
+    "base": "rec-default",
+    "broken": "rec-default.broken-default-field"
+  },
+  {
+    "base": "rec-start-finish",
+    "broken": "rec-start-finish.broken-no-start"
+  },
+  {
+    "base": "rec-finish",
+    "broken": "rec-finish.broken-wrong-finish"
+  },
+  {
+    "base": "rec-record-refusal",
+    "broken": "rec-record-refusal.broken-no-guard"
+  },
+  {
+    "base": "rec-product",
+    "broken": "rec-product.broken-one-value"
+  },
+  {
+    "base": "rec-singleton",
+    "broken": "rec-singleton.broken-present"
+  },
+  {
+    "base": "rec-prob-field",
+    "broken": "rec-prob-field.broken-bound"
+  },
+  {
+    "base": "rec-alias",
+    "broken": "rec-alias.broken-stale-binding"
+  },
+  {
+    "base": "rec-legacy-arrival",
+    "broken": "rec-legacy-arrival.broken-clock"
+  },
+  {
+    "base": "rec-s01-latent-case",
+    "broken": "rec-s01-latent-case.broken-unsupported"
+  },
+  {
+    "base": "rec-s02-latent-actor",
+    "broken": "rec-s02-latent-actor.broken-unsupported"
+  },
+  {
+    "base": "rec-s03-optional-field",
+    "broken": "rec-s03-optional-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s04-integer-field",
+    "broken": "rec-s04-integer-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s05-person-field",
+    "broken": "rec-s05-person-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s06-caseid-field",
+    "broken": "rec-s06-caseid-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s07-set-field",
+    "broken": "rec-s07-set-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s08-nested-field",
+    "broken": "rec-s08-nested-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s09-inline-record-field",
+    "broken": "rec-s09-inline-record-field.broken-unsupported"
+  },
+  {
+    "base": "rec-s11-whole-compare",
+    "broken": "rec-s11-whole-compare.broken-unsupported"
+  },
+  {
+    "base": "rec-s16-inline-record-result",
+    "broken": "rec-s16-inline-record-result.broken-unsupported"
+  },
+  {
+    "base": "rec-s17-actor-state",
+    "broken": "rec-s17-actor-state.broken-unsupported"
+  },
+  {
+    "base": "rec-s20-missing",
+    "broken": "rec-s20-missing.broken-invalid"
+  },
+  {
+    "base": "rec-s21-duplicate",
+    "broken": "rec-s21-duplicate.broken-invalid"
+  },
+  {
+    "base": "rec-s22-unknown",
+    "broken": "rec-s22-unknown.broken-invalid"
+  },
+  {
+    "base": "rec-s23-undefined-field",
+    "broken": "rec-s23-undefined-field.broken-invalid"
+  },
+  {
+    "base": "rec-s24-ambiguous",
+    "broken": "rec-s24-ambiguous.broken-invalid"
+  },
+  {
+    "base": "rec-s25-member",
+    "broken": "rec-s25-member.broken-invalid"
+  },
+  {
+    "base": "rec-s27-field-default",
+    "broken": "rec-s27-field-default.broken-unsupported"
+  },
+  {
+    "base": "rec-s27-field-distribution",
+    "broken": "rec-s27-field-distribution.broken-unsupported"
+  },
+  {
+    "base": "rec-s32-empty-declaration",
+    "broken": "rec-s32-empty-declaration.broken-invalid"
+  },
+  {
+    "base": "rec-s33-duplicate-declaration",
+    "broken": "rec-s33-duplicate-declaration.broken-unsupported"
+  },
+  {
+    "base": "rec-s34-nominal-literal",
+    "broken": "rec-s34-nominal-literal.broken-invalid"
+  },
+  {
+    "base": "rec-s28-operator-0",
+    "broken": "rec-s28-operator-0.broken-comparison"
+  },
+  {
+    "base": "rec-s28-operator-1",
+    "broken": "rec-s28-operator-1.broken-comparison"
+  },
+  {
+    "base": "rec-s28-operator-2",
+    "broken": "rec-s28-operator-2.broken-comparison"
+  },
+  {
+    "base": "rec-s28-operator-3",
+    "broken": "rec-s28-operator-3.broken-comparison"
+  },
+  {
+    "base": "rec-s28-operator-4",
+    "broken": "rec-s28-operator-4.broken-comparison"
+  },
+  {
+    "base": "rec-s12-none",
+    "broken": "rec-s12-none.broken-non-eq"
+  },
+  {
+    "base": "rec-s13-case",
+    "broken": "rec-s13-case.broken-inline"
+  },
+  {
+    "base": "rec-s15-state",
+    "broken": "rec-s15-state.broken-inline"
+  },
+  {
+    "base": "rec-s15-latent-case",
+    "broken": "rec-s15-latent-case.broken-inline"
+  },
+  {
+    "base": "rec-s15-latent-actor",
+    "broken": "rec-s15-latent-actor.broken-inline"
+  },
+  {
+    "base": "rec-s13-optional",
+    "broken": "rec-s13-optional.broken-inline"
+  },
+  {
+    "base": "rec-s14-parameter",
+    "broken": "rec-s14-parameter.broken-inline"
+  },
+  {
+    "base": "rec-s31-default",
+    "broken": "rec-s31-default.broken-missing-default"
+  },
+  {
+    "base": "rec-s26-distribution",
+    "broken": "rec-s26-distribution.broken-distribution"
+  },
+  {
+    "base": "rec-s10-field-write",
+    "broken": "rec-s10-field-write.broken-field"
+  },
+  {
+    "base": "rec-s30-field-arithmetic",
+    "broken": "rec-s30-field-arithmetic.broken-field"
+  },
+  {
+    "base": "rec-s18-given",
+    "broken": "rec-s18-given.broken-record"
+  },
+  {
+    "base": "rec-s19-given-field",
+    "broken": "rec-s19-given-field.broken-record"
+  },
+  {
+    "base": "rec-context-requires",
+    "broken": "rec-context-requires.broken-parameter"
+  },
+  {
+    "base": "rec-context-scope",
+    "broken": "rec-context-scope.broken-binding"
+  },
+  {
+    "base": "rec-context-probability",
+    "broken": "rec-context-probability.broken-binding"
+  },
+  {
+    "base": "rec-context-event",
+    "broken": "rec-context-event.broken-binding-control"
+  },
+  {
+    "base": "rec-context-duty-compare",
+    "broken": "rec-context-duty-compare.broken-binding"
+  },
+  {
+    "base": "rec-context-duty-and",
+    "broken": "rec-context-duty-and.broken-binding"
+  },
+  {
+    "base": "rec-context-duty-or",
+    "broken": "rec-context-duty-or.broken-binding"
+  },
+  {
+    "base": "rec-context-duty-implies",
+    "broken": "rec-context-duty-implies.broken-binding"
+  }
+]

@@ -1,0 +1,9 @@
+model DurationClock version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1; capability sample() -> T { duration {1min:0.5,3min:0.5}; result nondet { ok }; writes hit; finish { hit = true } } }
+  process Flow { s = A.sample(); end done }
+  bounds { cases 1; live_tasks 2; clock 2min }
+  verify probability reached hit == true within 2min <= 0.5
+  verify probability reached hit == true within 3min >= 0.75
+}

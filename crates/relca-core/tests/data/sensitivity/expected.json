@@ -1,0 +1,22 @@
+{
+  "values": {
+    "base": {"wrong": "1/250", "accepted": "123/125", "rejected": "2/125", "elapsed": 1, "work": 1},
+    "high": {"wrong": "1/125", "accepted": "121/125", "rejected": "4/125", "elapsed": 1, "work": 1},
+    "miss": {"wrong": "1/200", "accepted": "197/200", "rejected": "3/200", "elapsed": 1, "work": 1}
+  },
+  "extrema": {"kind": "finite_point_extrema", "min": "1/250", "max": "1/125"},
+  "nonmonotone": {"p0": "0", "phalf": "1/4", "p1": "0"},
+  "zero": {
+    "n": 4, "hits": 0, "confidence": "7/8",
+    "single": {"rows": 1, "alpha": "1/16", "lower": "0", "upper": "1/2", "verdict": "satisfied", "exit": 0},
+    "pair": {"rows": 2, "alpha": "1/32", "lower": "0", "upper": "607705/1048576", "verdict": "inconclusive", "exit": 2}
+  },
+  "abort": {"attempted": 3, "completed": 2, "planned_rows": 4, "alpha": "1/64", "verdict": "unsupported", "exit": 4},
+  "limits": {"points": 256, "manifest_bytes": 1048576, "source_bytes": 4194304, "total_source_bytes": 67108864},
+  "source_sha256": {
+    "base": "c1ebdb187f62f6f2d7fdc037e7920ab4b09b7c1194d1f696a1b6bcfcfe5615de",
+    "high": "a8e18c33d4aabfd10da83e36a39bb55d0214ccc18a51b3fe6d8210d343bfbed2",
+    "miss": "7e7bbc1bd45bdd15f177bf654550ef47a040ed35009941ce16497debbfd16f08"
+  },
+  "values_manifest_sha256": "e5d4e1f56b6ca068dec0d76ff4d7388bd543564e502c6ac8a033e5f6f7d8d4e5"
+}

@@ -1,0 +1,10 @@
+model ZeroObservation version "0.2" {
+type T = enum { ok }
+observed case { flag: bool = false }
+actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+process P { if flag == true { r = A.run(); end unused } else { wait 1min; end done } }
+cut C { include [A] }
+bounds { cases 1; live_tasks 1; clock 10min }
+metrics { window 10min; currency "JPY"; breakdown waits }
+verify reachable end.done
+}

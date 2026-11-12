@@ -1,0 +1,22 @@
+model Approval version "0.2" {
+type Proposal = enum { yes, no }
+type Decision = enum { approved, returned, pending }
+type Checked = enum { checked }
+people [p,q]
+actor P { executors [p,q]; capability propose() -> Proposal {
+ duration fixed 1min; result nondet { yes, no }; cancel cooperative ack_within 1min
+} }
+actor A { executors [p,q]; capability decide() -> Decision {
+ duration fixed 1min; result nondet { approved, returned, pending }; cancel cooperative ack_within 1min
+} }
+actor R { executors [p,q]; capability check() -> Checked {
+ duration fixed 2min; result nondet { checked }; cancel cooperative ack_within 1min
+} capability scan() -> Checked {
+ duration fixed 3min; result nondet { checked }; cancel cooperative ack_within 1min
+} }
+process Flow { x = P.propose(); y = R.check(); z = A.decide(); end done }
+cut C { include [P,A,R] }
+contract Scope { excludes P.propose.finish, P.propose.start }
+arrivals fixed [0min,0min,0min]
+bounds { cases 3; live_tasks 3; clock 30000min }
+}

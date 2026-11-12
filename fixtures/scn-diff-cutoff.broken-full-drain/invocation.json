@@ -1,0 +1,6 @@
+{
+  "command": "diff",
+  "scenario": "Day",
+  "from": "Slow",
+  "to": "Fast"
+}

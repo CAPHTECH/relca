@@ -1,0 +1,13 @@
+model M version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed }
+people [p,q]
+actor Clerk { executors [p,q]; capability enter() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+actor Approver { executors [p,q]; capability approve() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+actor Poster { executors [p,q]; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+process Flow { e = Clerk.enter(); a = Approver.approve(); z = Poster.post(); end done }
+cut C { include [Clerk,Approver,Poster] }
+contract Controls { requires_event Poster.post.start after Approver.approve.finish(pass) }
+arrivals fixed [0min,0min]
+bounds { cases 2; live_tasks 2; clock 20000min }
+}

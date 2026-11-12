@@ -1,0 +1,13 @@
+{
+  "verdict": "unsupported",
+  "original_verdict": "satisfied",
+  "run": {
+    "completion": "complete",
+    "reason": null,
+    "mutant_limit": 128,
+    "limit_reached": false
+  },
+  "original": {
+    "diagnostics": []
+  }
+}

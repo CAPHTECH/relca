@@ -1,0 +1,21 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "accepted",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 5,
+        "max": 5
+      },
+      "result_at": null
+    }
+  ],
+  "capability_refusals": []
+}

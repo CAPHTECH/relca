@@ -1,0 +1,43 @@
+model ResponsibilityDiff version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  people [c1,a1,cfo]
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { executors [c1]; capability recheck() -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Approver {
+    executors [a1]
+    capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } }
+    capability second(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } }
+  }
+  actor Vendor {
+    control party
+    standing over [end.returned] basis "invoice claim"
+  }
+  authority ApprovalGrant {
+    basis "approval table"
+    grants a1 to Approver.approve
+    grants a1 to Approver.second
+    issued_by cfo
+  }
+  responsible a1 for Approver.approve
+  responsible a1 for Approver.second
+  process FlowA {
+    entry = Reader.enter()
+    approval = Approver.approve(entry)
+    if approval == fail { end returned } else { end posted }
+  }
+  process FlowB {
+    entry = Reader.enter()
+    b = Approver.second(entry)
+    if b == fail { end returned } else { end posted }
+  }
+  cut Scope { include [Invoice,Reader,Clerk,Approver,Vendor] }
+  configuration A { cut Scope; process FlowA }
+  configuration B { cut Scope; process FlowB }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    contest Vendor on end.returned route Clerk.recheck reversible_by [a1] respond_by 5min
+  }
+}

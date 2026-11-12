@@ -1,0 +1,33 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "accepted",
+      "elapsed": {
+        "min": 4,
+        "max": 4
+      },
+      "work": {
+        "min": 4,
+        "max": 4
+      },
+      "result_at": null
+    },
+    {
+      "end": "bad",
+      "elapsed": {
+        "min": 4,
+        "max": 4
+      },
+      "work": {
+        "min": 4,
+        "max": 4
+      },
+      "result_at": null
+    }
+  ],
+  "capability_refusals": []
+}

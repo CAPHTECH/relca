@@ -1,0 +1,20 @@
+model Completion version "0.2" {
+  type T = enum { ok, good, bad }
+  people [j,p]
+  actor Judge { executors [j]; capability run() -> T { duration fixed 1min; result nondet {bad} } }
+  actor Route { executors [p]; capability respond() -> T { duration fixed 10min; result nondet {ok} } }
+  actor Party { control party; standing over [end.done] basis "claim" }
+  permit j to Judge.run
+  permit p to Route.respond
+  authority G { basis "decision"; grants j to Judge.run }
+  process Flow { x = Judge.run(); if x == bad { end done } else { end other } }
+  cut C { include [Judge,Route,Party] }
+  bounds { cases 1; live_tasks 2; clock 2min }
+  verify safety no_resource_overcommit
+  verify recoverable end
+  verify terminating end
+  verify almost_sure end
+  verify reachable end.done
+  verify probability reached end.done within 1min >= 1
+  contract Controls { contest Party on end.done route Route.respond reversible_by [j] respond_by 10min }
+}

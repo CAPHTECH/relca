@@ -1,0 +1,4 @@
+model Minus version "0.2" {
+ type T=enum{ok};actor Ledger{capacity 2;state n:0..2=2;capability sub()->T{writes n;finish{n=0};duration fixed 1min;result nondet{ok}}}
+ process P{r=Ledger.sub();end done};cut C{include[Ledger]};bounds{cases 2;live_tasks 1;clock 5min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify reachable end.done
+}

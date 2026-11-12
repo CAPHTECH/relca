@@ -1,0 +1,17 @@
+model Limits version "0.2" {
+  people [p]
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { executors [p]; capability run() -> T { duration fixed 2min; result nondet { ok }; writes hit; finish { hit = true } } }
+  actor Party { control party; standing over [end.done] basis "claim" }
+  actor Route { capacity 1; capability reply() -> T { duration fixed 1min; result nondet { ok } } }
+  authority G { basis "decision"; grants p to A.run }
+  process Flow { r = A.run(); if r == ok { end done } else { end done } }
+  arrivals fixed [0min, 0min, 0min]
+  policy fifo tie_by case_id
+  queue capacity 1 on_overflow end overflowed
+  bounds { cases 3; live_tasks 1; clock 20min }
+  contract C { contest Party on end.overflowed route Route.reply reversible_by [p] respond_by 1min }
+  verify safety no_resource_overcommit
+
+}

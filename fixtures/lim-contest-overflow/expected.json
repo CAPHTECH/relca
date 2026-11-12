@@ -1,0 +1,17 @@
+{
+  "verdict": "vacuous",
+  "properties": [
+    {
+      "id": "contract C #1 contest",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "contract C #1 contest_response",
+      "verdict": "vacuous"
+    },
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ]
+}

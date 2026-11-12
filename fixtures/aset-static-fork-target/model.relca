@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered: bool = false }
+
+  actor Ledger{capacity 1;state keys:set<CaseId>;state other:set<CaseId>;capability a(k:CaseId)->Ack{writes keys;atomic{if k in keys{result rejected_duplicate}else{keys+=k;result committed}};duration fixed 1min;cancel forbidden_after_start};capability b(k:CaseId)->Ack{writes other;atomic{if k in other{result rejected_duplicate}else{other+=k;result committed}};duration fixed 1min;cancel forbidden_after_start}}
+  process Flow { fork f{a=Ledger.a(case.id);b=Ledger.b(case.id)};join all f;end done }
+  cut K { include [Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.done
+}

@@ -1,0 +1,11 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { a: bool = false; b: bool = false }
+  actor A { capacity 1; capability run() -> T { duration fixed 2min; result nondet { ok }; start { a = true } } }
+  actor B { capacity 1; capability run() -> T { duration fixed 3min; result nondet { ok }; start { a = true } } }
+  process Flow { fork f { x = A.run(); y = B.run() }; join all f; if a == true && b == true { end done } else { end wrong } }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+  verify reachable end.done
+}

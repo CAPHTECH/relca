@@ -1,0 +1,14 @@
+model Completion version "0.2" {
+  type T = enum { ok, good, bad }
+  people [p,q,r]
+  actor A { executors [p]; capability run() -> T { duration fixed 1min; result nondet {ok} } }
+  actor B { executors [q] }
+  process Flow { x = A.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  verify recoverable end
+  verify terminating end
+  verify almost_sure end
+  verify reachable end.done
+  verify probability reached end.done within 10min >= 1
+}

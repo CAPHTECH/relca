@@ -1,0 +1,10 @@
+model ProbabilitySum version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  kernel K { * -> { 0.25: ok with hit = true; 0.75: ok with hit = false } }
+  actor A { capacity 1; capability sample() -> T { duration fixed 1min; outcomes kernel K; writes hit } }
+  process Flow { s = A.sample(); if hit == true { end bad } else { end good } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true <= 0.25
+}

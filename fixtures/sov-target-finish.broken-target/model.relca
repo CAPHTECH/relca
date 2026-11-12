@@ -1,0 +1,16 @@
+model StandingEffects version "0.2" {
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  people [c1, a1, cfo]
+  actor Approver { executors [a1]; capability approve() -> Verdict { duration fixed 2min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  actor Clerk { executors [c1]; capability recheck() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Vendor { control party; standing over [Ledger.post.finish] basis "posting claim" }
+  permit a1 to Approver.approve
+  authority ApprovalGrant { basis "approval table"; grants a1 to Approver.approve; issued_by cfo }
+  process Flow { approval = Approver.approve(); if approval == fail { end returned } else { }; ack = Ledger.post(); end posted }
+  cut Scope { include [Approver, Ledger, Clerk, Vendor] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { contest Vendor on Ledger.post.finish route Clerk.recheck reversible_by [a1] respond_by 5min }
+}

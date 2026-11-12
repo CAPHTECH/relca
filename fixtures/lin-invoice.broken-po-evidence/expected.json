@@ -1,0 +1,99 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "agency": {
+    "common_causes": {
+      "rules": "common-cause-p1-1",
+      "scope": "selected_process_lexical_calls",
+      "notice": "条件付き独立は given の下でだけ仮定され、無条件には独立でない",
+      "causes": [
+        {
+          "actor": "Invoice",
+          "latent": "Invoice.difficulty",
+          "targets": [
+            {
+              "call": "entry",
+              "capability": "Clerk.enter",
+              "kernel": "human_entry"
+            },
+            {
+              "call": "poV",
+              "capability": "Clerk.match_po",
+              "kernel": "po_match"
+            },
+            {
+              "call": "receiptV",
+              "capability": "Clerk.match_receipt",
+              "kernel": "receipt_match"
+            },
+            {
+              "call": "approvalV",
+              "capability": "Approver.approve",
+              "kernel": "approval_check"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "W-LIN-2",
+      "severity": "warning"
+    },
+    {
+      "code": "W-LIN-2",
+      "severity": "warning"
+    }
+  ,{"code":"W-UNREACH-0","severity":"warning","span":{"end":2500,"start":2335}}],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "probability": {
+        "min": "93/125000",
+        "max": "93/125000"
+      }
+    }
+  ],
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 14,
+        "max": 16
+      },
+      "work": {
+        "min": 14,
+        "max": 16
+      },
+      "result_at": null,
+      "probability": {
+        "min": "2407/125000",
+        "max": "2407/125000"
+      }
+    },
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 17,
+        "max": 17
+      },
+      "work": {
+        "min": 17,
+        "max": 17
+      },
+      "result_at": null,
+      "probability": {
+        "min": "122593/125000",
+        "max": "122593/125000"
+      }
+    }
+  ]
+}

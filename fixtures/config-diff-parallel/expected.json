@@ -1,0 +1,10 @@
+{
+  "verdict":"satisfied", "mismatch":null, "differences":[{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Office.long","to":["fork"]},{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Office.short","to":["fork"]}], "diagnostics":[{"code":"W-DIFF-1","message":"computed change for time Office.long has no intent","severity":"warning","span":null},{"code":"W-DIFF-1","message":"computed change for time Office.short has no intent","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for time Office.long has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for time Office.short has no preserve, override, maintain or loses annotation","severity":"warning","span":null}],
+  "from":{"configuration":"AsIs","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"C"},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"]}},
+  "to":{"configuration":"ToBeP","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"C"},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"]}},
+  "terminals":[{"end":"done","from":{"elapsed":{"min":8,"max":8},"work":{"min":8,"max":8},"result_at":null},"to":{"elapsed":{"min":5,"max":5},"work":{"min":8,"max":8},"result_at":null}}],
+  "properties":[{"id":"reachable end.done","from":"satisfied","to":"satisfied"},{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"}],
+  "absent_diagnostics":["E-DIFF-0","E-CMP-0","W-DIFF-2"],
+  "checked":["comparison_mismatch","actor","relation","intent_claims","retire_loses","meaning","authority","resource","time","visibility","contest","preserve","override","maintain","annotations"],
+  "unchecked":[]
+}

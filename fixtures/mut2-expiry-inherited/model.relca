@@ -1,0 +1,12 @@
+model Expiry version "0.2" {
+  type Verdict = enum { pass, fail }
+  people [a1,cfo]
+  actor Approver { executors [a1]; capability approve() -> Verdict { duration fixed 1min; result nondet { pass } } }
+  authority Parent { basis "parent"; grants a1 to Approver.approve; issued_by cfo; expires 0min }
+  authority ApprovalGrant { basis "child"; grants a1 to Approver.approve; issued_by a1; delegated_from Parent }
+  process Flow { v = Approver.approve(); end done; end missing }
+  cut Scope { include [Approver] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.missing
+  contract Controls { authority_basis Approver.approve ApprovalGrant }
+}

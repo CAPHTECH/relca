@@ -1,0 +1,7 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  observed case { n: 0..2 = 1 }
+  process P { if n == ok { end done } else { end wrong } }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

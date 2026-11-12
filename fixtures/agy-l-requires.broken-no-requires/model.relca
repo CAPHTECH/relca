@@ -1,0 +1,11 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { pass,fail,posted,denied }
+  observed case { approval: optional<T> }
+  actor Judge { capacity 1; capability check() -> T { writes approval; duration fixed 1min; result nondet { pass,fail } } }
+  actor Post { capacity 1; capability post() -> T {  duration fixed 1min; result nondet { posted } } }
+  process Flow { j = Judge.check(); p = Post.post(); end done }
+  cut K { include [Judge,Post] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

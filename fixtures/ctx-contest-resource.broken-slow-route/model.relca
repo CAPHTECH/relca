@@ -1,0 +1,18 @@
+model ContestRuntime version "0.2" {
+  type T = enum { pass, fail }
+  people [j1,j2,p]
+  actor Judge { executors [j1,j2]; capability judge() -> T { duration fixed 4min; result nondet { fail } } }
+  actor Route { executors [p]; capability respond() -> T { duration fixed 3min; result nondet { pass } } }
+  actor Party { control party; standing over [end.returned] basis "claim" }
+  permit j1 to Judge.judge
+  permit j2 to Judge.judge
+  permit p to Route.respond
+  authority G { basis "decision"; grants j1 to Judge.judge; grants j2 to Judge.judge }
+  process Flow { d = Judge.judge(); if d == fail { end returned } else { end posted } }
+  cut C { include [Judge,Route,Party] }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { contest Party on end.returned route Route.respond reversible_by [j1] respond_by 4min }
+}

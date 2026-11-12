@@ -1,0 +1,34 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-2"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": {
+        "min": 1,
+        "max": 1
+      }
+    }
+  ]
+}

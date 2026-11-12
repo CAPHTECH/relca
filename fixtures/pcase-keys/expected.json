@@ -1,0 +1,12 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "probability": { "min": "1", "max": "1" }
+    }
+  ]
+}

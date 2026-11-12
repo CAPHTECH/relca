@@ -1,0 +1,188 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "differences": {
+      "rules": "agency-diff-p2-1",
+      "status": "derived",
+      "rows": [
+        {
+          "viewpoint": "observation",
+          "item": "normal.actors",
+          "actor": "Doc",
+          "status": "changed",
+          "from": [
+            "Clerk"
+          ],
+          "to": [
+            "Extractor"
+          ]
+        },
+        {
+          "viewpoint": "observation",
+          "item": "normal.people",
+          "actor": "Doc",
+          "status": "changed",
+          "from": [
+            "c1"
+          ],
+          "to": []
+        },
+        {
+          "viewpoint": "observation",
+          "item": "normal.unattributed_actors",
+          "actor": "Doc",
+          "status": "changed",
+          "from": [],
+          "to": [
+            "Extractor"
+          ]
+        },
+        {
+          "viewpoint": "observation",
+          "item": "normal.direct",
+          "person": "c1",
+          "status": "changed",
+          "from": [
+            "Doc"
+          ],
+          "to": []
+        },
+        {
+          "viewpoint": "origin",
+          "item": "direct",
+          "actor": "Clerk",
+          "status": "changed",
+          "from": [
+            "Doc"
+          ],
+          "to": []
+        },
+        {
+          "viewpoint": "origin",
+          "item": "direct",
+          "actor": "Extractor",
+          "status": "changed",
+          "from": [],
+          "to": [
+            "Doc"
+          ]
+        },
+        {
+          "viewpoint": "framing",
+          "item": "reachable",
+          "end": "posted",
+          "status": "not_comparable",
+          "from": {
+            "status": "derived",
+            "reason": null
+          },
+          "to": {
+            "status": "not_derived",
+            "reason": "state_guards"
+          }
+        },
+        {
+          "viewpoint": "framing",
+          "item": "selectors",
+          "end": "posted",
+          "status": "not_comparable",
+          "from": {
+            "status": "derived",
+            "reason": null
+          },
+          "to": {
+            "status": "not_derived",
+            "reason": "state_guards"
+          }
+        },
+        {
+          "viewpoint": "framing",
+          "item": "read_only",
+          "end": "posted",
+          "status": "not_comparable",
+          "from": {
+            "status": "derived",
+            "reason": null
+          },
+          "to": {
+            "status": "not_derived",
+            "reason": "state_guards"
+          }
+        },
+        {
+          "viewpoint": "framing",
+          "item": "actors",
+          "status": "not_comparable",
+          "from": {
+            "status": "derived",
+            "reason": null
+          },
+          "to": {
+            "status": "not_derived",
+            "reason": "state_guards"
+          }
+        },
+        {
+          "viewpoint": "retention",
+          "item": "normal",
+          "capability": "Clerk.enter",
+          "status": "changed",
+          "from": {
+            "min": 1,
+            "max": 1
+          },
+          "to": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "viewpoint": "retention",
+          "item": "normal",
+          "capability": "Extractor.extract",
+          "status": "changed",
+          "from": {
+            "min": 0,
+            "max": 0
+          },
+          "to": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "viewpoint": "retention",
+          "item": "fallback",
+          "capability": "Clerk.enter",
+          "status": "changed",
+          "from": "unchecked",
+          "to": "kept_by_intent"
+        },
+        {
+          "viewpoint": "effects",
+          "item": "concentration.generation_roots",
+          "effect": "Ledger.post",
+          "call": "k",
+          "status": "changed",
+          "from": [
+            {
+              "call": "e",
+              "capability": "Clerk.enter"
+            }
+          ],
+          "to": [
+            {
+              "call": "e",
+              "capability": "Extractor.extract"
+            }
+          ]
+        }
+      ],
+      "unchecked": [
+        "fallback_path",
+        "workload_transfer",
+        "via_model_paths"
+      ]
+    }
+  }
+}

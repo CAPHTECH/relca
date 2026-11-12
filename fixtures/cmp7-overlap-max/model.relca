@@ -1,0 +1,14 @@
+model Overlap version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability run() -> T { duration {6min:0.5,9min:0.5}; result nondet { pass } } }
+  actor B { capacity 1; capability run() -> T { duration fixed 8min; result nondet { pass } } }
+  process P { a = A.run(); end done }
+  process R { b = B.run(); end done }
+  cut C { include [A, B] }
+  configuration One { cut C; process P }
+  configuration Two { cut C; process R }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  metrics { window 10min; currency "JPY"; rate A per_minute 1; rate B per_minute 1; rate A.run per_start 0; rate B.run per_start 0 }
+  compare [One, Two] cut C objectives { maximize metrics.overall.work }
+}

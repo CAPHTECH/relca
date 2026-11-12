@@ -1,0 +1,8 @@
+{
+  "verdict":"violated", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 excludes","verdict":"violated"}],
+  "terminals":[{"end":"done","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+  "obligations":[],
+  "diagnostics":[{"code":"W-CUT-0"}], "absent_diagnostics":["W-DEADLOCK-0","W-BUDGET-0","E-CON-0"]
+}

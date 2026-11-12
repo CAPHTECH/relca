@@ -1,0 +1,15 @@
+model ContractVacuous version "0.2" {
+  type Verdict = enum { pass, fail }
+  type Ack = enum { ok }
+  actor Gate { capacity 1; capability check() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Effect { capacity 1; capability run() -> Ack { commits; duration fixed 1min; result nondet { ok } } }
+  process Flow { gate = Gate.check(); if gate == fail { x = Effect.run() } else { }; end done }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    invariant Effect.run.commit -> gate == pass
+    at_most_once Effect.run.commit per case.id
+    response Effect.run.start -> one_of(Effect.run.finish) by 1min after Effect.run.start otherwise unresolved
+    requires_event Effect.run.start after Gate.check.finish(pass)
+  }
+}

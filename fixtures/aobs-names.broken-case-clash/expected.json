@@ -1,0 +1,16 @@
+{
+  "verdict": "unsupported",
+  "properties": [],
+  "terminals": [],
+  "diagnostics": [
+    {
+      "code": "U-SEM-0",
+      "severity": "error",
+      "message": "Actor state name conflicts with a case variable",
+      "span": {
+        "start": 107,
+        "end": 111
+      }
+    }
+  ]
+}

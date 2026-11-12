@@ -1,0 +1,14 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [],
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "inconclusive"
+    }
+  ],
+  "simulation": {
+    "completed_replications": 4,
+    "truncated_replications": 0
+  }
+}

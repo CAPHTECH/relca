@@ -1,0 +1,12 @@
+model Records version "0.2" {
+type Color = enum { red, green, blue }
+type Pair = record { color: Color; flag: bool }
+observed case { pair: optional<Pair> }
+actor Work { capacity 1; capability run() -> Pair { duration fixed 1min; outcomes kernel K; writes pair } }
+kernel K { * -> { 0.25: Pair { flag = true, color = red }; 0.75: Pair { flag = false, color = green } } }
+process Flow { p = Work.run(); end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify probability reached pair.flag == false >= 0.76
+}

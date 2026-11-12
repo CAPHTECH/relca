@@ -1,0 +1,46 @@
+{
+  "verdict": "inconclusive",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "P90",
+        "p": "9/10",
+        "property": "Posted",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "truncated"
+        },
+        "lower_bound": "4"
+      },
+      {
+        "name": "P95",
+        "p": "19/20",
+        "property": "Posted",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "truncated"
+        },
+        "lower_bound": "4"
+      },
+      {
+        "name": "P95Done",
+        "p": "19/20",
+        "property": "Posted",
+        "form": "reached_only",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "truncated"
+        },
+        "lower_bound": "4"
+      }
+    ]
+  }
+}

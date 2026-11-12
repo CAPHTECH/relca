@@ -1,0 +1,9 @@
+model Mixed version "0.2" {
+ type Pick=enum{left,right};type R=enum{committed,conflict};resource RA capacity 1
+ actor Picker{capacity 2;capability choose()->Pick{duration fixed 1min;result nondet{left,right}}}
+ actor Ledger{capacity 2;state n:0..2=0;
+ capability a()->R{uses RA:1;version_check [n] else conflict;commits;writes n;finish{n=1};duration fixed 1min;result nondet{committed}}
+ capability b()->R{commits;writes n;finish{n+=1};duration fixed 1min;result nondet{committed}}}
+ process P{p=Picker.choose();if p==left {a=Ledger.a()} else {b=Ledger.b()};end done}
+ cut C{include[Picker,Ledger]};bounds{cases 2;live_tasks 1;clock 10min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify safety no_resource_overcommit
+}

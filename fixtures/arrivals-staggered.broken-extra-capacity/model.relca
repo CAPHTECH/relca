@@ -1,0 +1,10 @@
+model ArrivalsStaggered version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 2; capability run() -> T { duration fixed 3min; result nondet { ok } } }
+  process Flow { r = A.run(); end done }
+  arrivals fixed [0min, 1min, 2min]
+  policy fifo tie_by case_id
+  bounds { cases 3; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+  verify reachable end.done
+}

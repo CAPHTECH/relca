@@ -1,0 +1,14 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": true
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "inconclusive"
+    }
+  ],
+  "terminals": []
+}

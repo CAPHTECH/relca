@@ -1,0 +1,63 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "absent_diagnostics": [
+    "U-SYN-0",
+    "U-SEM-0",
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-TYPE-0",
+    "E-POL-LATENT",
+    "E-CUT-1"
+  ],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 5,
+            "max": 5
+          },
+          "elapsed": {
+            "min": 5,
+            "max": 5
+          },
+          "work": {
+            "min": 5,
+            "max": 5
+          },
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 2,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 10,
+            "max": 10
+          },
+          "elapsed": {
+            "min": 8,
+            "max": 8
+          },
+          "work": {
+            "min": 5,
+            "max": 5
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ]
+}

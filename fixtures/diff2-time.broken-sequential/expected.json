@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[{"kind":"relation","target":"A.c","change":"added"},{"kind":"relation","target":"A.b","change":"removed"}],"terminals":[{"end":"done","to":{"elapsed":{"min":2,"max":2},"work":{"min":2,"max":2}}}]}

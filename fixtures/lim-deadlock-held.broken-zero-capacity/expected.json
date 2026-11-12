@@ -1,0 +1,281 @@
+{
+  "verdict": "violated",
+  "mode": "exhaustive",
+  "unit": "min",
+  "cut": "undeclared",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 20,
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-DEADLOCK-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "absent_diagnostics": [
+    "W-BUDGET-0"
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [],
+  "admission": {
+    "rejected_count": {
+      "min": 0,
+      "max": 0
+    },
+    "external_wait_max": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [],
+      "admitted_at": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "case_id": 2,
+      "arrival": 0,
+      "terminals": [],
+      "admitted_at": null
+    },
+    {
+      "case_id": 3,
+      "arrival": 0,
+      "terminals": [],
+      "admitted_at": null
+    }
+  ],
+  "metrics": {
+    "cases": [
+      {
+        "case_id": 1,
+        "external_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "1",
+              "max": "1",
+              "reason": null
+            },
+            "observed_total": null
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "0",
+                  "max": "0",
+                  "reason": null
+                },
+                "observed_total": null
+              }
+            }
+          ]
+        }
+      },
+      {
+        "case_id": 2,
+        "external_wait": {
+          "min": null,
+          "max": null,
+          "reason": "deadlock"
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "observed_total": null
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "0",
+                  "max": "0",
+                  "reason": null
+                },
+                "observed_total": null
+              }
+            }
+          ]
+        }
+      },
+      {
+        "case_id": 3,
+        "external_wait": {
+          "min": null,
+          "max": null,
+          "reason": "deadlock"
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "observed_total": null
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "0",
+                  "max": "0",
+                  "reason": null
+                },
+                "observed_total": null
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "overall": {
+      "counts": {
+        "offered": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "received": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "completed": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "rejected": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "unfinished": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "deadlocked": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "not_arrived": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "admitted": {
+          "stats": {
+            "min": "1",
+            "max": "1",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "end_counts": [
+          {
+            "end": "done",
+            "count": {
+              "stats": {
+                "min": "0",
+                "max": "0",
+                "reason": null
+              },
+              "observed_total": null
+            }
+          }
+        ]
+      },
+      "work": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      }
+    },
+    "capabilities": [
+      {
+        "capability": "A.run",
+        "starts": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        }
+      }
+    ],
+    "actors": [
+      {
+        "actor": "A",
+        "work": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "peak_tasks": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        }
+      }
+    ]
+  }
+}

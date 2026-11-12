@@ -1,0 +1,33 @@
+{
+  "verdict":"satisfied", "bounds":{"truncated":false}, "cut":"undeclared",
+  "diagnostics":[{"code":"W-CUT-0"}], "absent_diagnostics":["W-DEADLOCK-0","W-AGY-0","W-AGY-1"],
+  "properties":[{"id":"reachable end.done","verdict":"satisfied"},{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[
+    {"end":"rejected","elapsed":{"min":4,"max":4},"work":{"min":4,"max":4},"result_at":null},
+    {"end":"done","elapsed":{"min":5,"max":5},"work":{"min":5,"max":5},"result_at":null}
+  ],
+  "agency":{
+    "rules":"agency-p0-1",
+    "origin":[
+      {"actor":"Invoice","direct":[],"indirect":[]},
+      {"actor":"PurchaseOrder","direct":[],"indirect":[]},
+      {"actor":"ReceiptRecord","direct":[],"indirect":[]},
+      {"actor":"Reader","direct":["Invoice"],"indirect":[]},
+      {"actor":"Clerk","direct":["PurchaseOrder"],"indirect":["Invoice"]},
+      {"actor":"Approver","direct":[],"indirect":["Invoice"]},
+      {"actor":"Ledger","direct":[],"indirect":["Invoice","PurchaseOrder"]}
+    ],
+    "lineage":[
+      {"call":"po","capability":"Clerk.match_po","subject_sources":["Invoice"],"independent_sources":["PurchaseOrder"]},
+      {"call":"receipt","capability":"Clerk.match_receipt","subject_sources":["Invoice"],"independent_sources":["PurchaseOrder"]},
+      {"call":"approval","capability":"Approver.approve","subject_sources":["Invoice"],"independent_sources":[]}
+    ],
+    "lineage_groups":[{"subject_sources":["Invoice"],"judgements":3,"actors":2,"independent_sources":["PurchaseOrder"]}],
+    "refusal":[{"effect":"Ledger.post","call":"posted","reachable":true,"judgements":[
+      {"call":"po","capability":"Clerk.match_po","stops":"all_paths","bypasses":0},
+      {"call":"receipt","capability":"Clerk.match_receipt","stops":"all_paths","bypasses":0},
+      {"call":"approval","capability":"Approver.approve","stops":"all_paths","bypasses":0}
+    ]}],
+    "unchecked":["W-RESP-1","contest_path","fallback_path","executors","via_model"]
+  }
+}

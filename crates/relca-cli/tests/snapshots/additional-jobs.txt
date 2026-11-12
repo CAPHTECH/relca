@@ -1,0 +1,59 @@
+coverage-verify: existing fixture/invoice invocations lack verify.
+cli-refusal-00: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-01: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-02: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-03: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-04: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-05: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-06: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-07: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-08: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-09: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-10: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-11: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-12: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-13: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-14: Restore one of the sixteen hand-classified fail-closed CLI forms.
+cli-refusal-15: Restore one of the sixteen hand-classified fail-closed CLI forms.
+wait-refusal-revocation-q0-rule0-rev0: An explicit simulation clause is missing.
+wait-refusal-revocation-q0-rule0-rev1: An explicit simulation clause is missing.
+wait-refusal-revocation-q1-rule0-rev0: An explicit simulation clause is missing.
+wait-refusal-revocation-q1-rule0-rev1: An explicit simulation clause is missing.
+wait-refusal-revocation-q1-rule1-rev0: An explicit simulation clause is missing.
+wait-refusal-revocation-q1-rule1-rev1: An explicit simulation clause is missing.
+wait-refusal-completion-terminating-rule0: Structural completion is not sampled.
+wait-refusal-completion-recoverable-rule0: Structural completion is not sampled.
+wait-refusal-completion-almost_sure-rule0: Structural completion is not sampled.
+wait-refusal-completion-terminating-rule1: Structural completion is not sampled.
+excluded-requires-start-same-time: Restore an inline IR-derived excluded-pair control; expected case_local count is one.
+excluded-requires-after-queue: Restore an inline IR-derived excluded-pair control; expected case_local count is one.
+excluded-initial-product: Restore an inline IR-derived excluded-pair control; expected case_local count is one.
+excluded-range-stop-with-queue: Restore an inline IR-derived excluded-pair control; expected case_local count is one.
+response-g-unknown: ADR 0056 positive g-unknown: two real attempts, one effect, unresolved receipt is not success. Hand oracle: response_loss_retry.
+response-g-probability: ADR 0056 positive g-probability: declared 0.1 independent channel loss; posted 0.9, duplicate 0.09, unknown 0.01. Hand oracle: response_loss_retry.
+response-max-thirty-two: ADR 0056 positive max-thirty-two: finite retry expansion boundary, shared bad=0.1 persists across 32 attempts, not independent repeated failure. Hand oracle: response_loss_retry.
+q3-conform-ok: ADR 0058 U6: first conform snapshot kind, complete six-event observation and its ledger.
+q3-conform-unknown: ADR 0058 U6: one missing start remains unknown, not success or a violation.
+q3-conform-arguments: ADR 0058 U6: conform argument refusal also owns a ledger.
+q8-approval-baseline: ADR 0061 A01: explicit decisions N2/D3 and observed person-minutes total7/mean7/3, synthetic acceptance input.
+q8-approval-ineligible: ADR 0061 A02: ineligible proposal excluded from rate D3 but included in independent time denominator4, mean7/4.
+q8-approval-person-union: ADR 0061 A08: same-person overlapping intervals have union4 person-minutes, not task sum5.
+q4-calendar-open: ADR 0059 C01: explicit opening at 5, start 5, end 7, calendar wait 5; independent q4 hand oracle.
+q4-condition-true: ADR 0059 C08: initially observed true, zero condition wait, task work 2; independent q4 hand oracle.
+q4-finite-arrivals: ADR 0059 C11/C12: four independent schedule keys, two burst and two spaced draws; independent q4 hand oracle.
+q5-start: ADR 0062 P01: priority starts give End6/2/4 and work2 each, independently checked by the fixed Q5 hand oracle.
+q5-external: ADR 0062 P05: Held-only readmission0/8/4 and End4/12/8; receipt remains0/1/2.
+q5-conflict: ADR 0062 P07: same-time checked intersection selects case2 without changing service work or clearing stale.
+q7-sensitivity-values: ADR 0060 A1: exactly three declared points; hand probabilities 1/250, 1/125, 1/200, no implicit product.
+q7-sensitivity-endpoints: ADR 0060 A8: only p=0 and p=1 are declared; finite maximum zero is not a worst-case or robust guarantee.
+q9-rates-check: ADR 0063 C: p1/4 and positive long support violate the contest response deadline; hand oracle in contest_rates_calculations.md.
+q9-rates-simulate: ADR 0063 C: seed1/16 replications file four short routes; no violation witness is not exhaustive safety.
+q6a-qualified-check: ADR 0064 A1: qualify q before first_idle; q works0..2, p works0. Independent skills_load hand oracle, not a skill score.
+q6a-burst-simulate: ADR 0064 A4: frozen backlogs2/1/0, independent seed1/16 bad masks2d31/d38e/0200 yield17/16 cases and17/48 per offered arrival.
+q6b-a7-check: ADR 0064 A7: fixed independent q6b hand table; normal Fast1, degraded Clerk3, common Probe1, total time/work2..4.
+q6c-work-compare: Q6c I17 hand W: qualification q and complete P selector are explicit changes; both plans keep bad1/10 and fixed time/work2. Fixed q6c_oracle::compare checks the live output.
+q6c-degrade-diff: Q6c I17 hand D: explicit Manual condition/producer; old If lacks side dependency, so both sides are not_comparable rather than equal. Fixed q6c_oracle::diff checks scope and old whole-process L.
+q6c-work-sensitivity: Q6c I18 hand S: explicit base/probability points bad1/10 and1/4, both fixed time2; all effective selector kernels and aleatory/model evidence checked by fixed q6c_oracle::suite.
+p2c-q9-range-stop: Cleanup hand Q9: target/refusal at1, later range stop at3; two replications preserve failed2 versus unresolved2 and no_samples versus unfinished. Fixed p2_cleanup_calculations.md, connected by p2c_snapshot_oracle.
+p2c-prefix-diff: Cleanup hand C1: only common_prefix changes Probe.check1..1 to2..2, both side dependencies unchanged; exact Count arrays in p2_cleanup_calculations.md.
+p2c-withdrawn-diff: Cleanup hand C4: both whole tables are not_derived multiple_case_interference; normal/degraded/common_prefix are three keyless not_comparable rows with exact owner reasons, never empty equality.

@@ -1,0 +1,92 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [
+          {
+            "effect": "A.post",
+            "call": "k",
+            "status": "derived",
+            "e": {
+              "actors": [
+                "A"
+              ],
+              "people": [
+                "p1",
+                "p2"
+              ],
+              "unattributed_actors": [],
+              "permitted": [
+                "p1",
+                "p2"
+              ]
+            },
+            "j": [
+              {
+                "call": "v",
+                "capability": "A.approve",
+                "actors": [
+                  "A"
+                ],
+                "people": [
+                  "p1",
+                  "p2"
+                ],
+                "unattributed_actors": [],
+                "permitted": [
+                  "p1",
+                  "p2"
+                ],
+                "stops": "all_paths",
+                "bypasses": 0
+              }
+            ],
+            "u": [
+              {
+                "call": "v",
+                "capability": "A.approve",
+                "actors": [
+                  "A"
+                ],
+                "people": [
+                  "p1",
+                  "p2"
+                ],
+                "unattributed_actors": [],
+                "permitted": [
+                  "p1",
+                  "p2"
+                ],
+                "stops": "all_paths",
+                "bypasses": 0
+              }
+            ],
+            "state_refusers": [],
+            "process_judgements": "derived",
+            "concentration": {
+              "single_actor": true,
+              "single_person": false,
+              "single_generation_root": true,
+              "generation_roots": [
+                {
+                  "call": "e",
+                  "capability": "A.enter"
+                }
+              ],
+              "signal": "判定・拒否・実行の担い手と生成根の集中の兆候",
+              "mechanism": "同じ担い手又は生成根への依存が構成上重なる",
+              "check": "モデル外の統制・原本参照・ログで確認する"
+            }
+          }
+        ],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      }
+    }
+  }
+}

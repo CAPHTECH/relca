@@ -1,0 +1,52 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "W-DEADLOCK-0"
+    },
+    {
+      "code": "W-UNREACH-0"
+    },
+    {
+      "code": "W-UNREACH-2"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "reachable end.done",
+      "verdict": "violated"
+    }
+  ],
+  "metrics": {
+    "rules": "business-metrics-p1-resource-1",
+    "resources": [
+      {
+        "resource": "R",
+        "capacity": 1,
+        "occupancy_time": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "peak_units": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "utilization": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false,"range_violation_stops":true},"properties":[{"id":"reachable end.done","verdict":"inconclusive"},{"id":"state_in_range","verdict":"violated"}],"terminals":[],"absent_diagnostics":["U-SEM-0","E-TYPE-0","W-DEADLOCK-0","W-BUDGET-0"]}

@@ -1,0 +1,16 @@
+model QtlDirect version "0.2" {
+  type C = enum { low, high }
+  type V = enum { pass, fail }
+  kernel half { * -> { 0.5: pass; 0.5: fail } }
+  actor A { capacity 1;
+    capability choose() -> C { duration fixed 1min; result nondet { low, high } }
+    capability low() -> V { duration {1min:0.8, 3min:0.2}; outcomes kernel half }
+    capability high() -> V { duration {1min:0.6, 3min:0.4}; result nondet { pass } }
+  }
+  process P { c = A.choose(); if c == low { lval = A.low(); if lval == pass { end done } else { end returned } } else { rval = A.high(); if rval == pass { end done } else { end returned } } }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric quantile.Conditional = quantile(0.8, case.Done given reached)
+}

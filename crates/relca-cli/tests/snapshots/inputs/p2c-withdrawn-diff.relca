@@ -1,0 +1,20 @@
+model Prefix version "0.2" {
+  type R = enum { ok, fail }
+  actor Probe { capacity 1; capability check() -> R { duration fixed 1min; result nondet { ok, fail } } }
+  actor Clerk { capacity 1; capability run() -> R { duration fixed 3min; result nondet { ok } } }
+  actor Fast { capacity 1; capability run() -> R { duration fixed 1min; result nondet { ok } } }
+  process Before { status = Probe.check();
+    degrade Manual when status == fail { c = Clerk.run(); end done }
+    else { f = Fast.run(); end done }
+  }
+  cut C { include [Probe,Clerk,Fast] }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id then call_order assign first_idle
+  bounds { cases 2; live_tasks 4; clock 20min }
+  verify reachable end.done
+  process After { pre = Probe.check(); status = Probe.check();
+    degrade Manual when status == fail { c = Clerk.run(); end done } else { f = Fast.run(); end done }
+  }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+}

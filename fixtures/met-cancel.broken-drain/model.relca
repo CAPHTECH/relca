@@ -1,0 +1,16 @@
+model MetricsCancel version "0.2" {
+  type T = enum { pass, ok }
+  actor F { capacity 1; capability win() -> T { duration fixed 3min; result nondet { pass }; cancel forbidden_after_start } }
+  actor S { capacity 1; capability work() -> T { duration fixed 7min; result nondet { ok }; cancel cooperative ack_within 2min } }
+  process P {
+    fork f { fast = F.win(); slow = S.work() }
+    join any f where result == pass tie by [fast, slow] remaining drain if none -> none_end
+    end done
+    end none_end
+  }
+  cut C { include [F, S] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  metrics { window 10min; currency "JPY"; rate F per_minute 2; rate S per_minute 3; rate F.win per_start 5; rate S.work per_start 7 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

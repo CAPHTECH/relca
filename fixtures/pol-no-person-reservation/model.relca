@@ -1,0 +1,15 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [p]
+  resource S capacity 1
+  actor H { capacity 1;  capability hold() -> T { uses S:1; duration fixed 3min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor A { executors [p];  capability work() -> T { uses S:1; duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor B { executors [p];  capability work() -> T {  duration fixed 1min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { fork f { h = H.hold(); a = A.work(); b = B.work() }; join all f; end done }
+  cut C { include [H,A,B] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id then call_order assign first_idle
+  verify safety no_resource_overcommit
+verify reachable end.done
+}

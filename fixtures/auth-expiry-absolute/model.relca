@@ -1,0 +1,13 @@
+model Authority version "0.2" {
+  type T = enum { pass }
+  people [r,q]
+  actor A { executors [q]; capability run() -> T { duration fixed 2min; result nondet { pass } } }
+  permit q to A.run
+  authority G { basis "model absolute time"; grants q to A.run; issued_by r; expires 7min }
+  process Flow { a = A.run(); end done }
+  arrivals fixed [0min, 5min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run G }
+}

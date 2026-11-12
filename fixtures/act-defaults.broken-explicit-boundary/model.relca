@@ -1,0 +1,8 @@
+model Defaults version "0.2" {
+  type T = enum { ok }
+  actor A { boundary "one registered actor"; capability c() -> T { duration fixed 0min; result nondet { ok } } }
+  process Flow { end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

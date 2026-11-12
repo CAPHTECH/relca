@@ -1,0 +1,11 @@
+model QtlMaybe version "0.2" {
+  type V = enum { pass, fail }
+  actor A { capacity 1; capability check() -> V { duration fixed 2min; result nondet { pass } } }
+  process P { v = A.check(); if v == pass { end done } else { end returned } }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric quantile.Median = quantile(1, case.Done)
+  metric quantile.MedianDone = quantile(0, case.Done given reached)
+}

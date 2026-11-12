@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false},"properties":[{"id":"probability reached #1","verdict":"violated","probability":{"min":"3/4","max":"3/4"}},{"id":"state_in_range","verdict":"satisfied"}]}

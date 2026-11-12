@@ -1,0 +1,21 @@
+model ExplainExecutors version "0.2" {
+  type T = enum { ok }
+  people [p,q]
+  actor Clerk { executors [p]; capability enter() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Worker { executors [p,q]; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  permit q to Worker.run
+  authority Grant { basis "table"; grants q to Worker.run }
+  process Flow {
+    entry = Clerk.enter()
+    x = Worker.run()
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  cut Scope { question "example"; include [Clerk, Worker] }
+  verify safety no_resource_overcommit
+  contract Controls {
+    separation Clerk.enter.finish, Worker.run.finish
+    permitted Worker.run
+    authority_basis Worker.run Grant
+  }
+}

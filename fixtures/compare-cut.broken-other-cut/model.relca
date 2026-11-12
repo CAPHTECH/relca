@@ -1,0 +1,12 @@
+model CompareCut version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { a = A.run(); end done }
+  process Q { a = A.run(); end done }
+  cut C { include [A] }
+  cut D { include [A] }
+  configuration Aplan { cut C; process P }
+  configuration Bplan { cut D; process Q }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify reachable end.done
+}

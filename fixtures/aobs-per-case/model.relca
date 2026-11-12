@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor Doc { instance per_case; state flag: bool = true; state answer: optional<R> }; actor Probe { capacity 1; capability check() -> R { duration fixed 1min; result nondet { ok } } }
+  process P { a = Probe.check(); end done }
+  cut C { include [Doc,Probe] }
+  bounds { cases 2; live_tasks 1; clock 20min }
+  arrivals fixed [0min,3min]; contract K { invariant Probe.check.finish -> Doc.flag == true && Doc.answer == none }
+  verify safety no_resource_overcommit
+}

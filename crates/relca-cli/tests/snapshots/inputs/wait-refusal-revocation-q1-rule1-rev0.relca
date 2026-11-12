@@ -1,0 +1,18 @@
+model Authority version "0.2" {
+  type T = enum { pass }
+  people [r,p,q]
+  actor A { executors [q]; capability run() -> T { duration fixed 2min; result nondet { pass } } }
+  permit q to A.run
+  authority G { basis "record only"; grants q to A.run; issued_by r; expires 3min;                }
+  process Flow { a = A.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run G }
+
+metrics { window 20min; currency "JPY";                 }
+
+property case.Done = reached(end.done)
+metric cohort.DoneRate = expected(count(case.Done)) / arrivals
+
+actor Rule { version "r1"; decides pause: bool = true }
+}

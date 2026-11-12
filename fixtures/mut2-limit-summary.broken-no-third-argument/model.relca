@@ -1,0 +1,84 @@
+model Summary version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { posted }
+  people [a1,cfo]
+  actor BudgetSource00 { source record }
+  actor BudgetSource01 { source record }
+  actor BudgetSource02 { source record }
+  actor BudgetSource03 { source record }
+  actor BudgetSource04 { source record }
+  actor BudgetSource05 { source record }
+  actor BudgetSource06 { source record }
+  actor BudgetSource07 { source record }
+  actor BudgetSource08 { source record }
+  actor BudgetSource09 { source record }
+  actor BudgetSource10 { source record }
+  actor BudgetSource11 { source record }
+  actor BudgetSource12 { source record }
+  actor BudgetSource13 { source record }
+  actor BudgetSource14 { source record }
+  actor BudgetSource15 { source record }
+  actor BudgetSource16 { source record }
+  actor BudgetSource17 { source record }
+  actor BudgetSource18 { source record }
+  actor BudgetSource19 { source record }
+  actor BudgetSource20 { source record }
+  actor BudgetSource21 { source record }
+  actor BudgetSource22 { source record }
+  actor BudgetSource23 { source record }
+  actor BudgetSource24 { source record }
+  actor BudgetSource25 { source record }
+  actor BudgetSource26 { source record }
+  actor BudgetSource27 { source record }
+  actor BudgetSource28 { source record }
+  actor BudgetSource29 { source record }
+  actor BudgetSource30 { source record }
+  actor BudgetSource31 { source record }
+  actor BudgetSource32 { source record }
+  actor BudgetSource33 { source record }
+  actor BudgetSource34 { source record }
+  actor BudgetSource35 { source record }
+  actor BudgetSource36 { source record }
+  actor BudgetSource37 { source record }
+  actor BudgetSource38 { source record }
+  actor BudgetSource39 { source record }
+  actor BudgetSource40 { source record }
+  actor BudgetSource41 { source record }
+  actor BudgetSource42 { source record }
+  actor BudgetSource43 { source record }
+  actor BudgetSource44 { source record }
+  actor BudgetSource45 { source record }
+  actor BudgetSource46 { source record }
+  actor BudgetSource47 { source record }
+  actor BudgetSource48 { source record }
+  actor BudgetSource49 { source record }
+  actor BudgetSource50 { source record }
+  actor BudgetSource51 { source record }
+  actor BudgetSource52 { source record }
+  actor BudgetSource53 { source record }
+  actor BudgetSource54 { source record }
+  actor BudgetSource55 { source record }
+  actor BudgetSource56 { source record }
+  actor BudgetSource57 { source record }
+  actor BudgetSource58 { source record }
+  actor BudgetSource59 { source record }
+  actor Probe { capacity 1; capability read() -> Entry { reads [BudgetSource00,BudgetSource01,BudgetSource02,BudgetSource03,BudgetSource04,BudgetSource05,BudgetSource06,BudgetSource07,BudgetSource08,BudgetSource09,BudgetSource10,BudgetSource11,BudgetSource12,BudgetSource13,BudgetSource14,BudgetSource15,BudgetSource16,BudgetSource17,BudgetSource18,BudgetSource19,BudgetSource20,BudgetSource21,BudgetSource22,BudgetSource23,BudgetSource24,BudgetSource25,BudgetSource26,BudgetSource27,BudgetSource28,BudgetSource29,BudgetSource30,BudgetSource31,BudgetSource32,BudgetSource33,BudgetSource34,BudgetSource35,BudgetSource36,BudgetSource37,BudgetSource38,BudgetSource39,BudgetSource40,BudgetSource41,BudgetSource42,BudgetSource43,BudgetSource44,BudgetSource45,BudgetSource46,BudgetSource47,BudgetSource48,BudgetSource49,BudgetSource50,BudgetSource51,BudgetSource52,BudgetSource53,BudgetSource54,BudgetSource55,BudgetSource56,BudgetSource57,BudgetSource58,BudgetSource59]; duration fixed 1min; result nondet { entry } } }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Extract { via model "doc@v3"; capacity 1; capability make() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { capacity 1; capability note() -> Verdict { duration fixed 1min; result nondet { pass, fail } } capability match_po(e:Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 1min; result nondet { pass, fail } } }
+  actor Approver { capacity 1; executors [a1]; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post(p:Verdict,a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { posted } } }
+  authority G { basis "budget"; grants a1 to Approver.approve; issued_by cfo }
+  contract C { authority_basis Approver.approve G }
+  process Flow {
+    e = Extract.make(); p = Clerk.match_po(e); a = Approver.approve(e); n = Clerk.note()
+    if p == pass && a == pass && n == pass {} else { end rejected }
+    z = Ledger.post(p,a); end done
+  }
+  cut Scope { include [Invoice,PurchaseOrder,Extract,Clerk,Approver,Ledger,Probe,BudgetSource00,BudgetSource01,BudgetSource02,BudgetSource03,BudgetSource04,BudgetSource05,BudgetSource06,BudgetSource07,BudgetSource08,BudgetSource09,BudgetSource10,BudgetSource11,BudgetSource12,BudgetSource13,BudgetSource14,BudgetSource15,BudgetSource16,BudgetSource17,BudgetSource18,BudgetSource19,BudgetSource20,BudgetSource21,BudgetSource22,BudgetSource23,BudgetSource24,BudgetSource25,BudgetSource26,BudgetSource27,BudgetSource28,BudgetSource29,BudgetSource30,BudgetSource31,BudgetSource32,BudgetSource33,BudgetSource34,BudgetSource35,BudgetSource36,BudgetSource37,BudgetSource38,BudgetSource39,BudgetSource40,BudgetSource41,BudgetSource42,BudgetSource43,BudgetSource44,BudgetSource45,BudgetSource46,BudgetSource47,BudgetSource48,BudgetSource49,BudgetSource50,BudgetSource51,BudgetSource52,BudgetSource53,BudgetSource54,BudgetSource55,BudgetSource56,BudgetSource57,BudgetSource58,BudgetSource59] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

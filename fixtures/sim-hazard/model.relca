@@ -1,0 +1,9 @@
+model Hazard version "0.2" {
+  type T = enum { ok }
+  observed case { hit:bool = false }
+  actor A { capacity 1; capability c() -> T { duration {1min:0.5,3min:0.5}; result nondet { ok }; writes hit; finish { hit = true } } }
+  process P { a = A.c(); end done }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify probability reached hit == true >= 0
+  simulation replications 4 seed 0 confidence 0.5
+}

@@ -1,0 +1,14 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [c1,c2,a1]
+  actor Clerk { executors [c2,c1];  capability enter() -> T {  duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor Approver { executors [c2,a1];  capability approve() -> T {  duration fixed 1min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { a = Clerk.enter(); b = Approver.approve(); end done }
+  cut C { include [Clerk,Approver] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id assign first_idle
+  contract Ctl { separation Clerk.enter.finish, Approver.approve.finish }
+  verify safety no_resource_overcommit
+verify reachable end.done
+}

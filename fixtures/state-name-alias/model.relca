@@ -1,0 +1,13 @@
+model StateNameAlias version "0.2" {
+  type Verdict = enum { pass, fail }
+  observed case { approval: optional<Verdict> }
+  actor A { capacity 1; capability approve() -> Verdict { duration fixed 1min; result nondet { pass }; writes approval } }
+  process Flow {
+    approval = A.approve()
+    if approval == pass {} else { end rejected }
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { invariant A.approve.finish -> approval == pass }
+}

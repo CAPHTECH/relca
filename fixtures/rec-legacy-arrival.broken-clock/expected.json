@@ -1,0 +1,34 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": true
+  },
+  "terminals": [],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "probability reached #1",
+      "verdict": "inconclusive",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "inconclusive",
+          "probability": {
+            "min": "0",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

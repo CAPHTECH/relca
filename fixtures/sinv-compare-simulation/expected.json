@@ -1,0 +1,18 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [],
+  "plans": [
+    {
+      "configuration": "A",
+      "report": {
+        "diagnostics": []
+      }
+    },
+    {
+      "configuration": "B",
+      "report": {
+        "diagnostics": []
+      }
+    }
+  ]
+}

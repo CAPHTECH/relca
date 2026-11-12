@@ -1,0 +1,99 @@
+model EcOrderPlain version "0.2" {
+  type Order = enum { placed }
+  type Res = enum { reserved, short }
+  type Pay = enum { charged, rejected_duplicate }
+  type Alloc = enum { allocated, lost }
+  type Ack = enum { committed }
+  type Cancel = enum { keep, withdraw }
+  type Draft = enum { drafted }
+  type Verdict = enum { approve, reject }
+  people [cs1, cs2, csl, fin1, cfo]
+  observed case { confirmed: bool = false; shipped: bool = false; charged_flag: bool = false; charges: 0..2 = 0; refunded: bool = false; approval: optional<Verdict> }
+  actor Cart { source record }
+  actor StockLedger { source record }
+  actor Customer { control party; capacity 1; standing over [end.refund_rejected] basis "purchase contract"
+    capability request_cancel(k:Ack) -> Cancel { duration fixed 1min; result nondet { keep, withdraw } }
+  }
+  actor Shop { capacity 1
+    capability accept() -> Order { reads [Cart]; duration fixed 1min; result nondet { placed } }
+    capability confirm(a:Alloc) -> Ack { commits; duration fixed 1min; result nondet { committed }; writes confirmed; finish { confirmed = true } }
+    capability instruct_ship(k:Ack) -> Ack { commits; duration fixed 1min; result nondet { committed }; writes shipped; finish { shipped = true } }
+  }
+  actor Stock { capacity 1
+    capability reserve(o:Order) -> Res { reads [StockLedger]; duration fixed 1min; result nondet { reserved, short } }
+    capability allocate(r:Res) -> Alloc { reads [StockLedger]; duration fixed 1min; result nondet { allocated, lost } }
+  }
+  actor Psp { capacity 1; state keys: set<CaseId>
+    capability charge_keyed(key: CaseId) -> Pay {
+      idempotency key key
+      commits; writes [keys, charged_flag, charges]; duration fixed 1min
+      atomic { if key in keys { result rejected_duplicate } else { keys += key; charged_flag = true; charges += 1; result charged } }
+      cancel forbidden_after_start
+    }
+    capability charge_plain(key: CaseId) -> Pay {
+      effect_scope modeled
+      commits; writes [charged_flag, charges]; duration fixed 1min
+      result nondet { charged }; finish { charged_flag = true; charges += 1 }
+      cancel forbidden_after_start
+    }
+    capability refund_auto(a:Alloc) -> Ack { commits; duration fixed 1min; result nondet { committed }; writes refunded; finish { refunded = true } }
+    capability refund(v:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed }; writes refunded; finish { refunded = true } }
+  }
+  actor CS { executors [cs1, cs2, csl]
+    capability draft_refund(c:Cancel) -> Draft { duration fixed 10min; result nondet { drafted } }
+  }
+  actor Finance { executors [fin1]
+    capability approve_refund(d:Draft) -> Verdict { duration fixed 30min; result nondet { approve, reject }; writes approval }
+  }
+  authority RefundGrant { basis "refund approval table"; grants fin1 to Finance.approve_refund; issued_by cfo }
+  responsible fin1 for Finance.approve_refund
+  cut OrderCut {
+    question "One order from placement to shipment instruction, with payment resend, allocation loss, cancel refund"
+    include [Cart, StockLedger, Customer, Shop, Stock, Psp, CS, Finance]
+    exclude Warehouse reason "shipping after instruction is another domain" loses "shipping errors and returns"
+    exclude CardDecline reason "PSP decline path not in the asked scope" loses "declined orders and customer retry"
+    defer UnknownResolution reason "relca stops a case at receipt unknown; no step can follow it" loses "who decides unknown payment, CS effort and deadline"
+    defer RefundResponseLoss reason "loss and resend modeled only on charge" loses "double refund or missing refund on refund resend"
+    defer CancelAfterShipment reason "cancel asked only before shipment instruction" loses "returns and refunds after shipment"
+    defer CancelShipRace reason "cancel is modeled as one sequential decision after confirm" loses "cancel arriving while shipment instruction runs"
+    defer RejectedRefundFollowup reason "no rule yet after finance rejects a refund" loses "customer claim and money kept"
+    defer Rates reason "no time or cost rates given" loses "CS and finance cost and load"
+    externality [Customer.waiting]
+  }
+  bounds { cases 1; live_tasks 2; clock 120min }
+  simulation replications 1000 seed 0 confidence 0.95
+  verify safety no_resource_overcommit
+  verify reachable end.shipped
+  verify reachable end.cancel_refunded
+  verify probability reached charges == 2 <= 0
+  contract PayControls {
+    at_most_once Psp.charge_keyed.commit per case.id
+    at_most_once Psp.charge_plain.commit per case.id
+    invariant Psp.refund.commit -> approval == approve
+    separation CS.draft_refund.finish, Finance.approve_refund.finish
+    authority_basis Finance.approve_refund RefundGrant
+    response case.received -> one_of(end.shipped,end.stock_refunded,end.cancel_refunded,end.out_of_stock) by 120min after case.received otherwise unresolved
+  }
+  process PlainFlow {
+    order = Shop.accept()
+    res = Stock.reserve(order)
+    if res == reserved {} else { end out_of_stock }
+    pay = Psp.charge_plain(case.id) response_loss nondet retry max_attempts 2 when receipt unknown backoff fixed 0min exhausted end payment_failed
+    alloc = Stock.allocate(res)
+    if alloc == allocated {} else {
+      rf = Psp.refund_auto(alloc)
+      end stock_refunded
+    }
+    ok = Shop.confirm(alloc)
+    c = Customer.request_cancel(ok)
+    if c == keep {} else {
+      d = CS.draft_refund(c)
+      v = Finance.approve_refund(d)
+      if v == approve {} else { end refund_rejected }
+      r = Psp.refund(v)
+      end cancel_refunded
+    }
+    sh = Shop.instruct_ship(ok)
+    end shipped
+  }
+}

@@ -1,0 +1,15 @@
+model Records version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed, refused }
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; approval: optional<Verdict>; registered: bool = false }
+actor Extractor { capacity 1; capability extract() -> Entry { duration fixed 1min; result nondet { Entry { confidence = high }, Entry { confidence = low } }; writes entry } }
+actor Approver { capacity 1; capability approve(e: Entry) -> Verdict { duration fixed 2min; result nondet { pass, fail }; writes approval } }
+actor Clerk { capacity 1; capability review(e: Entry) -> Verdict { duration fixed 3min; result nondet { pass, fail } } }
+actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+process Flow { e = Extractor.extract(); a = Approver.approve(e); if a == fail { end returned } else { }; if e.confidence == low { r = Clerk.review(e); if r == fail { end returned } else { } } else { }; p = Ledger.post(); end posted }
+contract C { invariant Ledger.post.commit -> approval == pass }
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+
+}

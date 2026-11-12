@@ -1,0 +1,15 @@
+model StateAlias version "0.2" {
+  type V = enum { pass, fail }
+  observed case { approval: optional<V> }
+  actor A { capacity 1
+    capability good() -> V { duration fixed 1min; result nondet { pass }; writes approval }
+    capability other() -> V { duration fixed 1min; result nondet { pass }; writes approval }
+  }
+  process Good { approval = A.good(); end done }
+  process Other { approval = A.other(); end done }
+  cut C { include [A] }
+  configuration X { cut C; process Good }
+  configuration Y { cut C; process Other }
+  bounds { cases 1; live_tasks 1; clock 4min }
+  contract Controls { invariant approval == pass -> approval == pass }
+}

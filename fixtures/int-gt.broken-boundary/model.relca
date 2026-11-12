@@ -1,0 +1,6 @@
+model Count version "0.2" {
+  observed case { n: 0..3 = 1 }
+  process P { if n>1 { end done } else { end wrong } }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

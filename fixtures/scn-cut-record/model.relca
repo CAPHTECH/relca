@@ -1,0 +1,29 @@
+model M version "0.2" {
+type T = enum { ok }
+observed case { hit: bool = false }
+actor A {
+  capacity 1
+  capability run() -> T {
+    duration fixed 5min
+    result nondet { ok }
+    writes hit
+    finish { hit = true }
+  }
+}
+process Flow { r = A.run(); end done }
+cut C { include [A]; horizon received..done within 1min }
+policy fifo tie_by case_id
+scenario Day {
+  arrivals fixed_every 2min during [0min, 6min)
+  horizon 12min
+  bounds { cases 3; live_tasks 1; clock 30min }
+
+}
+metrics {
+  window 30min
+  currency "JPY"
+  rate A per_minute 1
+  rate A.run per_start 0
+}
+verify reachable end.done
+}

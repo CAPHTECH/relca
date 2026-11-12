@@ -1,0 +1,13 @@
+model DiffMismatch version "0.2" {
+  type V = enum { pass }
+  actor A { capacity 2; capability a() -> V { duration fixed 3min; result nondet { pass } }; capability b() -> V { duration fixed 5min; result nondet { pass } } }
+  process Before { x = A.a(); y = A.b(); end done }
+  process After { fork f { x = A.a(); y = A.b() }; join all f; end done }
+  cut C { include [A] }
+  cut D { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  configuration Hold { cut D; process Before }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

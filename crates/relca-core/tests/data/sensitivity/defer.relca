@@ -1,0 +1,14 @@
+model DeferredValues version "0.2" {
+  type T = enum { ok }
+  actor Work { capacity 1
+    capability run() -> T { duration fixed 2min; result nondet { ok } }
+  }
+  process Flow { x = Work.run(); end done }
+  cut C { include [Work]; defer Work reason "quality and load not measured" loses "numeric indicators" }
+  metrics { window 4min; currency "JPY"; rate Work per_minute 10 }
+  property case.Done = reached(end.done)
+  metric cohort.Rate = expected(count(case.Done)) / arrivals
+  bounds { cases 1; live_tasks 1; clock 4min }
+  verify reachable end.done
+  simulation replications 4 seed 0 confidence 0.875
+}

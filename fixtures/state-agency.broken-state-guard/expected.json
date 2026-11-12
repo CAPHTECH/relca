@@ -1,0 +1,14 @@
+{
+  "verdict":"satisfied", "mode":"exhaustive", "unit":"min", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null},{"end":"rejected","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+  "agency":{
+    "rules":"agency-p1-state-1",
+    "origin":[{"actor":"Invoice","direct":[],"indirect":[]},{"actor":"PurchaseOrder","direct":[],"indirect":[]},{"actor":"Source","direct":["Invoice"],"indirect":[]},{"actor":"Judge","direct":["PurchaseOrder"],"indirect":["Invoice"]},{"actor":"Ledger","direct":[],"indirect":[]}],
+    "lineage":[],"lineage_groups":[],"refusal":[],
+    "unchecked":["W-RESP-1","contest_path","fallback_path","executors","via_model","state_guards"]
+  },
+  "diagnostics":[{"code":"W-CUT-0"}],
+  "absent_diagnostics":["E-POL-LATENT","U-SEM-0","W-AGY-0","W-AGY-1","W-DEADLOCK-0","W-BUDGET-0"]
+}

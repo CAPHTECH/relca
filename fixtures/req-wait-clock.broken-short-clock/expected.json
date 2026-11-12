@@ -1,0 +1,7 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": true
+  },
+  "terminals": []
+}

@@ -1,0 +1,12 @@
+model AtomicDuty version "0.2" {
+  type Ack = enum { committed }
+  people [p]
+  observed case { r: bool = false; ok: bool = false }
+  actor Record { source record }
+  actor SetBoth { capacity 1; capability put() -> Ack { commits; reads [Record]; writes [r,ok]; finish { r = true; ok = true }; duration fixed 3min; result nondet { committed } } }
+  responsible p for (r -> ok)
+  process Flow { out = SetBoth.put(); end done }
+  cut Scope { include [Record,SetBoth] }
+  bounds { cases 1; live_tasks 2; clock 120min }
+  verify safety no_resource_overcommit
+}

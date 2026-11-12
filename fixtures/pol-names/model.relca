@@ -1,0 +1,14 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [z1,y2,x1]
+  actor Zebra { grain table; executors [z1,y2];  capability enter() -> T {  duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor Minister { executors [y2,x1];  capability approve() -> T {  duration fixed 1min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { a = Zebra.enter(); b = Minister.approve(); end done }
+  cut C { include [Zebra,Minister] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id assign first_idle
+  contract Ctl { separation Zebra.enter.finish, Minister.approve.finish }
+  verify safety no_resource_overcommit
+verify reachable end.done
+}

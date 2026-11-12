@@ -1,0 +1,1 @@
+{"verdict":"invalid","differences":[],"terminals":[],"properties":[],"checked":["comparison_mismatch"],"mismatch":{"from_cut":"C","to_cut":"D","differences":[]},"diagnostics":[{"code":"E-CMP-0","severity":"error","span":null}],"from":{"report":{"verdict":"satisfied"}},"to":{"report":{"verdict":"satisfied"}}}

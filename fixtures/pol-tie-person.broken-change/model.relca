@@ -1,0 +1,14 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [p]
+  actor A { executors [p];  capability x() -> T {  duration fixed 3min; result nondet { pass }; cancel cooperative ack_within 1min } }
+  actor B { executors [p];  capability y() -> T {  duration fixed 5min; result nondet { pass }; cancel cooperative ack_within 1min } }
+
+  process P { fork f { b = B.y(); a = A.x() }; join any f where result == pass tie by [a,b] remaining cancel_then_drain if none -> done; end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id then call_order assign first_idle
+  contract Due { response case.received -> one_of(end.done) by 4min after case.received otherwise unresolved }
+  verify safety no_resource_overcommit
+verify reachable end.done
+}

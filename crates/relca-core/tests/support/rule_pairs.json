@@ -1,0 +1,632 @@
+[
+  {
+    "id": "T01",
+    "good": "rule-basic",
+    "broken": "rule-basic.broken-t01",
+    "before": "",
+    "after": "",
+    "calculation": "AsIs: pass gives approve[0,2]+post[2,3]=3min elapsed/work; fail refuses before Start at2, held2/work2. K sees a pass commit and is satisfied. ToBeB false makes requires true for both approval values: posted3/work3 only; fail commits and K is violated. Nondeterminism has no 1/2 probability.",
+    "invocation_only": true
+  },
+  {
+    "id": "T02",
+    "good": "rule-diff",
+    "broken": "rule-diff.broken-t02",
+    "before": "  intent { change rule ApprovalRule reason \"exempt approval\" }",
+    "after": "",
+    "calculation": "Same process gives zero old structural rows. Effective r1/true -> r2/false is exactly one rule modified row. K S->V folds V. No preservation/override/maintain/loses gives W-DIFF-3=1. Removing reason adds W-DIFF-1=1, not a new business verdict.",
+    "invocation_only": false
+  },
+  {
+    "id": "T03",
+    "good": "rule-preserve",
+    "broken": "rule-preserve.broken-t03",
+    "before": "approval_required = false",
+    "after": "approval_required = true",
+    "calculation": "Version difference remains r1->r2 in both. False allows failing approval commit (K V), true refuses it (K S). Preservation summary V1/Q0/S0 versus V0/Q0/S1; all other bins0, never count V as Q.",
+    "invocation_only": false
+  },
+  {
+    "id": "T04",
+    "good": "rule-not-by",
+    "broken": "rule-not-by.broken-t04",
+    "before": "by cfo under RuleChange",
+    "after": "by a1 under RuleChange",
+    "calculation": "T04: one edit; E-CON-0: rule change by a person excluded by not_by. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T05",
+    "good": "rule-self-authorize",
+    "broken": "rule-self-authorize.broken-t05",
+    "before": "under ApprovalRule \"r1\"",
+    "after": "under ApprovalRule \"r2\"",
+    "calculation": "T05: one edit; E-CON-0: rule change is authorized only under the amended rule. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T06",
+    "good": "rule-prior-version",
+    "broken": "rule-prior-version.broken-t06",
+    "before": "under ApprovalRule \"r1\"",
+    "after": "under ApprovalRule \"r\"",
+    "calculation": "T06: one edit; E-NAME-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T06C",
+    "good": "rule-version-case",
+    "broken": "rule-version-case.broken-t06c",
+    "before": "under ApprovalRule \"r1\"",
+    "after": "under ApprovalRule \"R1\"",
+    "calculation": "T06C: one edit; E-NAME-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T06B",
+    "good": "rule-other-prior",
+    "broken": "rule-other-prior.broken-t06b",
+    "before": "under Manual \"m1\"",
+    "after": "under Manual \"m0\"",
+    "calculation": "T06B: one edit; E-CON-0: rule change Authority is not in force under the prior rule. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T07",
+    "good": "rule-no-grant",
+    "broken": "rule-no-grant.broken-t07",
+    "before": "by cfo under RuleChange",
+    "after": "by cfo under ApprovalGrant",
+    "calculation": "T07: one edit; E-CON-0: Authority does not grant change of the rule to the amender. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T08",
+    "good": "rule-label",
+    "broken": "rule-label.broken-t08",
+    "before": "model RuleExample version \"0.2\" {\ntype V = enum { pass, fail }\ntype Ack = enum { committed, held }\npeople [a1, cfo]\nobserved case { approval: optional<V> }\nactor ApprovalRule { control policy; version \"r1\"; decides approval_required: bool = true }\nactor Approver { executors [a1]; capability approve() -> V { duration fixed 2min; result nondet { pass, fail }; writes approval } }\nactor Ledger { capacity 1; capability post() -> Ack { requires ApprovalRule.approval_required == false || approval == pass else held; commits; duration fixed 1min; result nondet { committed } } }\nauthority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo }\nauthority RuleChange { basis \"amendment procedure\"; grants cfo to change ApprovalRule; not_by [a1] }\nprocess Flow { a = Approver.approve(); ack = Ledger.post(); if ack == committed { end posted } else { end held } }\ncut C { include [ApprovalRule, Approver, Ledger] }\nconfiguration AsIs { cut C; process Flow }\nconfiguration ToBeB { cut C; process Flow\n  amend ApprovalRule from \"r1\" to \"r2\" by cfo under RuleChange { approval_required = false }\n  intent { change rule ApprovalRule reason \"exempt approval\" }\n}\nbounds { cases 1; live_tasks 2; clock 20min }\nverify safety no_resource_overcommit\ncontract K { invariant Ledger.post.commit -> approval == pass }\n}\n",
+    "after": "model RuleExample version \"0.2\" {\ntype V = enum { pass, fail }\ntype Ack = enum { committed, held }\npeople [a1, cfo]\nobserved case { approval: optional<V> }\nactor Charter { grain document; control policy; version \"r1\"; decides approval_required: bool = true }\nactor Approver { executors [a1]; capability approve() -> V { duration fixed 2min; result nondet { pass, fail }; writes approval } }\nactor Ledger { capacity 1; capability post() -> Ack { requires Charter.approval_required == false || approval == pass else held; commits; duration fixed 1min; result nondet { committed } } }\nauthority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo }\nauthority RuleChange { basis \"amendment procedure\"; grants cfo to change Charter; not_by [a1] }\nprocess Flow { a = Approver.approve(); ack = Ledger.post(); if ack == committed { end posted } else { end held } }\ncut C { include [Charter, Approver, Ledger] }\nconfiguration AsIs { cut C; process Flow }\nconfiguration ToBeB { cut C; process Flow\n  amend Charter from \"r1\" to \"r2\" by cfo under RuleChange { approval_required = false }\n  intent { change rule Charter reason \"exempt approval\" }\n}\nbounds { cases 1; live_tasks 2; clock 20min }\nverify safety no_resource_overcommit\ncontract K { invariant Ledger.post.commit -> approval == pass }\n}\n",
+    "calculation": "Renaming ApprovalRule to Charter and grain document does not change any event/guard/value. Compare semantic rows under explicit name mapping; hash, spans and embedded names legitimately differ. This is equivalence, not an additional fault pair.",
+    "invocation_only": false
+  },
+  {
+    "id": "T08G",
+    "good": "rule-label-grain",
+    "broken": "rule-label-grain.broken-t08g",
+    "before": "actor Approver {",
+    "after": "actor Approver { grain rule;",
+    "calculation": "Approver has no decides; grain rule alone must not create rule metadata. Events and times unchanged3/2min.",
+    "invocation_only": false
+  },
+  {
+    "id": "T09",
+    "good": "rule-cut",
+    "broken": "rule-cut.broken-t09",
+    "before": "include [ApprovalRule, Approver, Ledger]",
+    "after": "include [Approver, Ledger]; exclude ApprovalRule reason \"r\" loses \"l\"",
+    "calculation": "T09: one edit; E-CUT-1: condition reads an Actor excluded by the cut. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T09B",
+    "good": "rule-cut-missing",
+    "broken": "rule-cut-missing.broken-t09b",
+    "before": "[ApprovalRule, Approver, Ledger]",
+    "after": "[Approver, Ledger]",
+    "calculation": "T09B: one edit; E-CUT-1: declared Actor ApprovalRule is neither included nor excluded by the cut. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T09C",
+    "good": "rule-cut-amend",
+    "broken": "rule-cut-amend.broken-t09c",
+    "before": "include [ApprovalRule, Approver, Ledger]",
+    "after": "include [Approver, Ledger]; exclude ApprovalRule reason \"r\" loses \"l\"",
+    "calculation": "T09C: one edit; E-CUT-1: amendment targets an Actor excluded by the cut. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T09D",
+    "good": "rule-cut-both",
+    "broken": "rule-cut-both.broken-t09d",
+    "before": "include [ApprovalRule, Approver, Ledger]",
+    "after": "include [Approver, Ledger]; exclude ApprovalRule reason \"r\" loses \"l\"",
+    "calculation": "One Cut condition read (qualified Rule span) then one ToBeB amend target span. Two errors, not per-configuration duplication. AsIs selection must still check ToBeB.",
+    "invocation_only": false
+  },
+  {
+    "id": "T10",
+    "good": "rule-agency",
+    "broken": "rule-agency.broken-t10",
+    "before": "version \"r1\"; decides",
+    "after": "state",
+    "calculation": "R0 omits both configurations and RuleChange. Fixed Rule true derives normative refusal; ActorObserved is mutable even if initially fixed, so Unknown/state_guards/refusal[]; same business times3/2. Do not leave change/amend referring to a non-Rule.",
+    "invocation_only": false
+  },
+  {
+    "id": "T11",
+    "good": "rule-reverse",
+    "broken": "rule-reverse.broken-t11",
+    "before": "",
+    "after": "",
+    "calculation": "Forward has exact r1->r2 amendment. Reverse r2->r1 has none: root E-CON-0, no rule row; do not borrow from-side amendment.",
+    "invocation_only": true
+  },
+  {
+    "id": "T11B",
+    "good": "rule-reverse-declared",
+    "broken": "rule-reverse-declared.broken-t11b",
+    "before": "",
+    "after": "",
+    "calculation": "Base r1->AsIs r0 declared, both require approval K S. ToBeB r2->AsIs r0 not declared despite to-side amendment r1->r0. No inferred chains.",
+    "invocation_only": true
+  },
+  {
+    "id": "T12",
+    "good": "rule-partial",
+    "broken": "rule-partial.broken-t12",
+    "before": "mode: Mode = open",
+    "after": "mode: Mode = strict",
+    "calculation": "Only approval_required amended, mode remains declared open (not first member strict). Open: posted3/work3, K V. Strict: requires false, only held2/work2, zero commits -> K vacuous. All bounds have one declaration.",
+    "invocation_only": false
+  },
+  {
+    "id": "T13",
+    "good": "rule-cases",
+    "broken": "rule-cases.broken-t13",
+    "before": "policy fifo tie_by case_id\n",
+    "after": "",
+    "calculation": "Four approval combinations. a1 serializes cases: c1 approve0..2, c2 approve2..4. FIFO c1 posted3/held2, c2 posted5/held4; work posted3/held2 for each, waiting2 is not work. Without FIFO either case can be first: posted elapsed3..5, held2..4 for both. No probability invented.",
+    "invocation_only": false
+  },
+  {
+    "id": "T15",
+    "good": "rule-self-issued",
+    "broken": "rule-self-issued.broken-t15",
+    "before": "; issued_by cfo }\nprocess",
+    "after": " }\nprocess",
+    "calculation": "RuleChange grants cfo to self and issued_by cfo: W-AUTH-0 once in AsIs, although grant unused there; warning does not change satisfied. Removing issuer removes warning, not Authority validity.",
+    "invocation_only": false
+  },
+  {
+    "id": "T16",
+    "good": "rule-enables",
+    "broken": "rule-enables.broken-t16",
+    "before": "basis \"f\"; grants cfo",
+    "after": "basis \"f\"; grants a1",
+    "calculation": "Valid prior RuleChange authorizes amendment. Separate unused Future becomes active r2, grants to amender cfo -> enables warning1, not E-CON. Grant a1 instead: warning0. Unused grant assumption remains both.",
+    "invocation_only": false
+  },
+  {
+    "id": "T17",
+    "good": "rule-repeat",
+    "broken": "rule-repeat.broken-t17",
+    "before": "amend ApprovalRule from \"r1\" to \"r2\" by cfo under RuleChange { approval_required = false }",
+    "after": "amend ApprovalRule from \"r1\" to \"r2\" by cfo under RuleChange { approval_required = false }\namend ApprovalRule from \"r1\" to \"r2\" by cfo under RuleChange { approval_required = false }",
+    "calculation": "T17: one edit; U-SEM-0: repeated amendment of one rule is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T18",
+    "good": "rule-maintain",
+    "broken": "rule-maintain.broken-t18",
+    "before": "maintain rule ApprovalRule",
+    "after": "override rule ApprovalRule",
+    "calculation": "T18: one edit; U-SEM-0: override of a rule difference is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T19",
+    "good": "rule-cross-rule",
+    "broken": "rule-cross-rule.broken-t19",
+    "before": "under B \"r1\"",
+    "after": "under B \"r2\"",
+    "calculation": "A and B differ. Both amendments start at declared r1. GA bound to B r2 cannot authorize A merely because it is a different Actor. Proper prior B r1 -> safety S, end0/work0.",
+    "invocation_only": false
+  },
+  {
+    "id": "T20",
+    "good": "rule-qualified-version",
+    "broken": "rule-qualified-version.broken-t20",
+    "before": "under B \"r1\"",
+    "after": "under B \"r2\"",
+    "calculation": "Unrelated.r2 does not declare B.r2. Qualified (Actor,version) lookup fails E-NAME, not E-CON/fallback. Good counterpart end0/work0.",
+    "invocation_only": false
+  },
+  {
+    "id": "T22",
+    "good": "rule-version-after",
+    "broken": "rule-version-after.broken-t22",
+    "before": "decides approval_required: bool = true; ",
+    "after": "",
+    "calculation": "T22: one edit; U-SYN-0: unsupported syntax: version. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "T23",
+    "good": "rule-explain",
+    "broken": "rule-explain.broken-t23",
+    "before": "approval_required: bool = false",
+    "after": "approval_required: bool = true",
+    "calculation": "No configuration present and no selector: fail approve at2, post commit at3 violates K; independent replay verified. True refuses fail, K S with no counterexample. Qualified state display ApprovalRule.approval_required.",
+    "invocation_only": false
+  },
+  {
+    "id": "S02",
+    "good": "rule-default",
+    "broken": "rule-default.broken-s02",
+    "before": "bool = true",
+    "after": "bool",
+    "calculation": "S02: one edit; U-SEM-0: rule value requires a default. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S03",
+    "good": "rule-version-missing",
+    "broken": "rule-version-missing.broken-s03",
+    "before": "version \"r1\"; ",
+    "after": "",
+    "calculation": "S03: one edit; E-CON-0: rule Actor requires version. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S04FINISH",
+    "good": "rule-write-finish",
+    "broken": "rule-write-finish.broken-s04finish",
+    "before": "writes scratch; finish { scratch = on }",
+    "after": "writes bit; finish { bit = on }",
+    "calculation": "Uninvoked one-minute self-owned Flag probe; Rule bit and observed scratch have the same enum type. Only the write target changes (matching writes list follows assignment). Reject in lower before engine guard; no runtime value or time is produced for the bad input.",
+    "invocation_only": false
+  },
+  {
+    "id": "S04START",
+    "good": "rule-write-start",
+    "broken": "rule-write-start.broken-s04start",
+    "before": "start { scratch = on }",
+    "after": "start { bit = on }",
+    "calculation": "Uninvoked one-minute self-owned Flag probe; Rule bit and observed scratch have the same enum type. Only the write target changes (matching writes list follows assignment). Reject in lower before engine guard; no runtime value or time is produced for the bad input.",
+    "invocation_only": false
+  },
+  {
+    "id": "S04RESULT",
+    "good": "rule-write-result",
+    "broken": "rule-write-result.broken-s04result",
+    "before": "writes scratch",
+    "after": "writes bit",
+    "calculation": "Uninvoked one-minute self-owned Flag probe; Rule bit and observed scratch have the same enum type. Only the write target changes (matching writes list follows assignment). Reject in lower before engine guard; no runtime value or time is produced for the bad input.",
+    "invocation_only": false
+  },
+  {
+    "id": "S04ATOMIC",
+    "good": "rule-write-atomic",
+    "broken": "rule-write-atomic.broken-s04atomic",
+    "before": "writes scratch; duration fixed 1min; atomic { if scratch == on { result off } else { scratch = on;",
+    "after": "writes bit; duration fixed 1min; atomic { if scratch == on { result off } else { bit = on;",
+    "calculation": "Uninvoked one-minute self-owned Flag probe; Rule bit and observed scratch have the same enum type. Only the write target changes (matching writes list follows assignment). Reject in lower before engine guard; no runtime value or time is produced for the bad input.",
+    "invocation_only": false
+  },
+  {
+    "id": "S05",
+    "good": "rule-conditional-amend",
+    "broken": "rule-conditional-amend.broken-s05",
+    "before": "approval_required = false",
+    "after": "approval_required = approval == pass",
+    "calculation": "S05: one edit; U-SYN-0: unsupported syntax: conditional rule value. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S05D",
+    "good": "rule-conditional-default",
+    "broken": "rule-conditional-default.broken-s05d",
+    "before": "bool = true",
+    "after": "bool = true || false",
+    "calculation": "S05D: one edit; U-SYN-0: unsupported syntax: conditional rule value. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S07",
+    "good": "rule-from",
+    "broken": "rule-from.broken-s07",
+    "before": "from \"r1\"",
+    "after": "from \"r0\"",
+    "calculation": "S07: one edit; E-CON-0: amendment must start from the declared rule version. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S08",
+    "good": "rule-same-version",
+    "broken": "rule-same-version.broken-s08",
+    "before": "to \"r2\"",
+    "after": "to \"r1\"",
+    "calculation": "S08: one edit; E-CON-0: amendment must change the rule version. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S09",
+    "good": "rule-non-rule-amend",
+    "broken": "rule-non-rule-amend.broken-s09",
+    "before": "amend ApprovalRule",
+    "after": "amend Approver",
+    "calculation": "S09: one edit; E-CON-0: amend requires a rule Actor. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S10",
+    "good": "rule-non-rule-grant",
+    "broken": "rule-non-rule-grant.broken-s10",
+    "before": "to change ApprovalRule",
+    "after": "to change Approver",
+    "calculation": "S10: one edit; E-CON-0: change grant requires a rule Actor. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S11",
+    "good": "rule-unknown-rule",
+    "broken": "rule-unknown-rule.broken-s11",
+    "before": "to change ApprovalRule",
+    "after": "to change Nobody",
+    "calculation": "S11: one edit; E-NAME-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S12",
+    "good": "rule-unknown-value",
+    "broken": "rule-unknown-value.broken-s12",
+    "before": "{ approval_required = false }",
+    "after": "{ missing = false }",
+    "calculation": "S12: one edit; E-NAME-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S13",
+    "good": "rule-outside-type",
+    "broken": "rule-outside-type.broken-s13",
+    "before": "{ approval_required = false }",
+    "after": "{ approval_required = maybe }",
+    "calculation": "S13: one edit; E-TYPE-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S24",
+    "good": "rule-duplicate-assignment",
+    "broken": "rule-duplicate-assignment.broken-s24",
+    "before": "{ approval_required = false }",
+    "after": "{ approval_required = false; approval_required = false }",
+    "calculation": "S24: one edit; U-SEM-0: duplicate rule assignment. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14EXPIRES0",
+    "good": "rule-restricted-expires",
+    "broken": "rule-restricted-expires.broken-s14expires0",
+    "before": "basis \"amendment procedure\";",
+    "after": "basis \"amendment procedure\"; expires 10min;",
+    "calculation": "S14EXPIRES0: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14EXPIRES1",
+    "good": "rule-restricted-expires-unused",
+    "broken": "rule-restricted-expires-unused.broken-s14expires1",
+    "before": "basis \"u\";",
+    "after": "basis \"u\"; expires 10min;",
+    "calculation": "S14EXPIRES1: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14SCOPE0",
+    "good": "rule-restricted-scope",
+    "broken": "rule-restricted-scope.broken-s14scope0",
+    "before": "basis \"amendment procedure\";",
+    "after": "basis \"amendment procedure\"; scope approval == pass;",
+    "calculation": "S14SCOPE0: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14SCOPE1",
+    "good": "rule-restricted-scope-unused",
+    "broken": "rule-restricted-scope-unused.broken-s14scope1",
+    "before": "basis \"u\";",
+    "after": "basis \"u\"; scope approval == pass;",
+    "calculation": "S14SCOPE1: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14DELEGATED_FROM0",
+    "good": "rule-restricted-delegated_from",
+    "broken": "rule-restricted-delegated_from.broken-s14delegated_from0",
+    "before": "basis \"amendment procedure\";",
+    "after": "basis \"amendment procedure\"; delegated_from ApprovalGrant;",
+    "calculation": "S14DELEGATED_FROM0: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S14DELEGATED_FROM1",
+    "good": "rule-restricted-delegated_from-unused",
+    "broken": "rule-restricted-delegated_from-unused.broken-s14delegated_from1",
+    "before": "basis \"u\";",
+    "after": "basis \"u\"; delegated_from ApprovalGrant;",
+    "calculation": "S14DELEGATED_FROM1: one edit; U-SEM-0: restricted rule-change Authority is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S15",
+    "good": "rule-bound-capability",
+    "broken": "rule-bound-capability.broken-s15",
+    "before": "basis \"approval table\";",
+    "after": "basis \"approval table\"; under ApprovalRule \"r1\";",
+    "calculation": "S15: one edit; U-SEM-0: version-bound Authority with Capability grants is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S17",
+    "good": "rule-per-case",
+    "broken": "rule-per-case.broken-s17",
+    "before": "control policy;",
+    "after": "control policy; instance per_case;",
+    "calculation": "S17: one edit; U-SEM-0: per-case rule Actor is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S18",
+    "good": "rule-integer",
+    "broken": "rule-integer.broken-s18",
+    "before": "approval_required: bool = true",
+    "after": "approval_required: 0..2 = 1",
+    "calculation": "S18: one edit; U-SYN-0: unsupported syntax: integer rule value type. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S19OPTIONAL",
+    "good": "rule-type-optional",
+    "broken": "rule-type-optional.broken-s19optional",
+    "before": "approval_required: bool",
+    "after": "approval_required: optional<bool>",
+    "calculation": "S19OPTIONAL: one edit; U-SEM-0: rule value type is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S19SET",
+    "good": "rule-type-set",
+    "broken": "rule-type-set.broken-s19set",
+    "before": "approval_required: bool",
+    "after": "approval_required: set<CaseId>",
+    "calculation": "S19SET: one edit; U-SEM-0: rule value type is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S19PERSONID",
+    "good": "rule-type-personid",
+    "broken": "rule-type-personid.broken-s19personid",
+    "before": "approval_required: bool",
+    "after": "approval_required: PersonId",
+    "calculation": "S19PERSONID: one edit; U-SEM-0: rule value type is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S19CASEID",
+    "good": "rule-type-caseid",
+    "broken": "rule-type-caseid.broken-s19caseid",
+    "before": "approval_required: bool",
+    "after": "approval_required: CaseId",
+    "calculation": "S19CASEID: one edit; U-SEM-0: rule value type is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S20",
+    "good": "rule-non-rule-under",
+    "broken": "rule-non-rule-under.broken-s20",
+    "before": "under ApprovalRule \"r1\"",
+    "after": "under Approver \"r1\"",
+    "calculation": "S20: one edit; E-CON-0: version binding requires a rule Actor. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S21G",
+    "good": "rule-kernel-given",
+    "broken": "rule-kernel-given.broken-s21g",
+    "before": "KProbe { * -> { 1: pass } }",
+    "after": "KProbe given [ApprovalRule.approval_required] { true -> { 1: pass }; false -> { 1: fail } }",
+    "calculation": "S21G: one edit; U-SEM-0: kernel reads of rule values are unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S21R",
+    "good": "rule-kernel-reads",
+    "broken": "rule-kernel-reads.broken-s21r",
+    "before": "outcomes kernel KProbe",
+    "after": "kernel_reads latent [ApprovalRule.approval_required]; outcomes kernel KProbe",
+    "calculation": "S21R: one edit; U-SEM-0: kernel reads of rule values are unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S21W",
+    "good": "rule-kernel-with",
+    "broken": "rule-kernel-with.broken-s21w",
+    "before": "1: pass }",
+    "after": "1: pass with approval_required = true }",
+    "calculation": "S21W: one edit; U-SEM-0: rule values cannot be written during a run. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S23",
+    "good": "rule-grant-seen",
+    "broken": "rule-grant-seen.broken-s23",
+    "before": "grants cfo to change ApprovalRule; ",
+    "after": "",
+    "calculation": "S23: one edit; E-SYN-0: Authority requires basis and grants. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S25",
+    "good": "rule-duplicate-state",
+    "broken": "rule-duplicate-state.broken-s25",
+    "before": "control policy;",
+    "after": "control policy; state approval_required: bool = true;",
+    "calculation": "S25: one edit; U-SEM-0: duplicate state variable. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S25L",
+    "good": "rule-duplicate-latent",
+    "broken": "rule-duplicate-latent.broken-s25l",
+    "before": "control policy;",
+    "after": "control policy; latent approval_required: bool = true;",
+    "calculation": "S25L: one edit; U-SEM-0: duplicate state variable. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S25V",
+    "good": "rule-duplicate-version",
+    "broken": "rule-duplicate-version.broken-s25v",
+    "before": "version \"r1\";",
+    "after": "version \"r1\"; version \"r1\";",
+    "calculation": "S25V: one edit; U-SEM-0: name/type resolution. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S25D",
+    "good": "rule-duplicate-decides",
+    "broken": "rule-duplicate-decides.broken-s25d",
+    "before": "decides approval_required: bool = true",
+    "after": "decides approval_required: bool = true; decides approval_required: bool = true",
+    "calculation": "S25D: one edit; U-SEM-0: duplicate state variable. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "S26L",
+    "good": "rule-last-write-wins",
+    "broken": "rule-last-write-wins.broken-s26l",
+    "before": "decides approval_required: bool = true",
+    "after": "decides approval_required: bool = true last_write_wins",
+    "calculation": "S26L: one edit; U-SEM-0: last_write_wins outside shared Actor state is unsupported. No execution, no time/work or success conversion.",
+    "invocation_only": false
+  },
+  {
+    "id": "EDGE-VERSION",
+    "good": "rule-version-only-diff",
+    "broken": "rule-version-only-diff.broken-edge-version",
+    "before": "",
+    "after": "",
+    "calculation": "Values identical true but versions r1/r2 differ: one rule row. Forward S; reverse requires nonexistent r2->r1 amendment, invalid.",
+    "invocation_only": true
+  },
+  {
+    "id": "EDGE-CLOCK",
+    "good": "rule-clock",
+    "broken": "rule-clock.broken-edge-clock",
+    "before": "clock 20min",
+    "after": "clock 2min",
+    "calculation": "All actual post commits occur at3. Clock2 observes no commit and cuts: inconclusive, no terminal; clock3 (separate core control) includes commit, violated. Never turn unfinished case into success/failure.",
+    "invocation_only": false
+  },
+  {
+    "id": "EDGE-VACUOUS",
+    "good": "rule-preserve-vacuous",
+    "broken": "rule-preserve-vacuous.broken-edge-vacuous",
+    "before": "result nondet { pass }",
+    "after": "result nondet { fail }",
+    "calculation": "All-pass commits on both sides K S/S. All-fail AsIs refuses all commits K Q, ToBeB commits fail K V. Preservation must keep source Q distinct from S; to V remains V, diff V.",
+    "invocation_only": false
+  }
+]

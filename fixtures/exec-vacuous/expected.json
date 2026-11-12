@@ -1,0 +1,23 @@
+{
+  "verdict":"vacuous", "mismatch":null, "diagnostics":[{"code":"W-DIFF-1","message":"computed change for authority Clerk.enter has no intent","severity":"warning","span":null},{"code":"W-DIFF-1","message":"computed change for resource Clerk has no intent","severity":"warning","span":null},{"code":"W-DIFF-1","message":"computed change for resource Extractor has no intent","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for actor Extractor has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for relation Extractor.extract has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for authority Clerk.enter has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for resource Clerk has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for resource Extractor has no preserve, override, maintain or loses annotation","severity":"warning","span":null}],
+  "from":{"configuration":"AsIs","report":{
+    "verdict":"satisfied","mode":"exhaustive","unit":"min","cut":{"name":"C"},
+    "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+    "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 separation","verdict":"satisfied"}],
+    "terminals":[{"end":"done","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}],
+    "absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-BUDGET-0","E-CON-0","U-SEM-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":390,"start":319}}]}},
+  "to":{"configuration":"ToBeA","report":{
+    "verdict":"vacuous","mode":"exhaustive","unit":"min","cut":{"name":"C"},
+    "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+    "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 separation","verdict":"vacuous"}],
+    "terminals":[{"end":"done","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+    "absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-BUDGET-0","E-CON-0","U-SEM-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":175,"start":106}},{"code":"W-UNREACH-3","severity":"warning","span":{"end":69,"start":67}}]}},
+  "differences":[
+    {"kind":"actor","target":"Clerk","change":"removed","reason":"remove clerk","loses":"human entry"},
+    {"kind":"actor","target":"Extractor","change":"added","reason":"add extractor","loses":null},
+    {"kind":"relation","target":"Clerk.enter","change":"removed","reason":"remove entry","loses":"entry result"},
+    {"kind":"relation","target":"Extractor.extract","change":"added","reason":"add extraction","loses":null},{"change":"removed","from":{"authority_basis":[],"grants":[],"permission":["c1"],"responsibilities":[]},"kind":"authority","loses":null,"reason":null,"target":"Clerk.enter","to":null},{"change":"removed","from":{"capacity":1,"executors":["c1"]},"kind":"resource","loses":null,"reason":null,"target":"Clerk","to":null},{"change":"added","from":null,"kind":"resource","loses":null,"reason":null,"target":"Extractor","to":{"capacity":1,"executors":null}}],
+  "properties":[{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"},{"id":"contract Controls #1 separation","from":"satisfied","to":"vacuous"}],
+  "terminals":[{"end":"done","from":{"elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null},"to":{"elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}}],
+  "absent_diagnostics":["W-CUT-0","W-DIFF-2","E-DIFF-0","E-CMP-0"]
+}

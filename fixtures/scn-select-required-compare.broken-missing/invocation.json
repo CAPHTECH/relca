@@ -1,0 +1,8 @@
+{
+  "command": "compare",
+  "plans": [
+    "Slow",
+    "Fast"
+  ],
+  "mode": "exhaustive"
+}

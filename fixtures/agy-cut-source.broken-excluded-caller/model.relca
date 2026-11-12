@@ -1,0 +1,11 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor Invoice { source document }
+  actor ScopeAnchor { source record }
+  actor Reader { capacity 1; capability enter() -> T { reads [Invoice]; duration fixed 1min; result nondet { ok } } }
+  process Flow { e = Reader.enter(); end done }
+  cut K { include [ScopeAnchor]; exclude Reader reason "caller outside" loses "call"; exclude Invoice reason "source outside" loses "source internals" }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

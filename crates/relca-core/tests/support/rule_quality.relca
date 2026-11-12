@@ -1,0 +1,21 @@
+model RuleQuality version "0.2" {
+ type T = enum { ok }
+ people [p]
+ observed case { hit: bool = false }
+ actor ApprovalRule { version "r1"; decides enabled: bool = true }
+ actor A { executors [p]; capability run() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } } }
+ authority G { basis "prior"; grants p to change ApprovalRule }
+ process P { x = A.run(); end done }
+ cut C { include [ApprovalRule,A] }
+ configuration AsIs { cut C; process P }
+ configuration ToBeB { cut C; process Q; amend ApprovalRule from "r1" to "r2" by p under G { enabled = false } }
+ property case.Hit = reached(ApprovalRule.enabled == true)
+ metric cohort.Rate = expected(count(case.Hit)) / arrivals
+ bounds { cases 1; live_tasks 1; clock 5min }
+ simulation replications 3 seed 7 confidence 0.5
+ verify safety no_resource_overcommit
+ process Q { x = A.run(); end done }
+ metric quantile.All = quantile(0.5, case.Hit)
+ metric quantile.Given = quantile(0.5, case.Hit given reached)
+ compare [AsIs,ToBeB] hard { cohort.Rate <= 0.6 } objectives { minimize cohort.Rate; minimize quantile.All }
+}

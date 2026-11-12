@@ -1,0 +1,10 @@
+model Debtor version "0.2" {
+  type T = enum { ok }
+  people [p,q]
+  actor Worker { executors [p]; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { w = Worker.run(); end done }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  contract Controls { response case.received -> one_of(Worker.run.finish) by 2min after case.received otherwise unresolved debtor missing }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

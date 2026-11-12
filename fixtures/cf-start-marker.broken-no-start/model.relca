@@ -1,0 +1,28 @@
+model Conflict version "0.2" {
+  type R = enum { committed, conflict }
+  type H = enum { free, taken }
+  actor Ledger {
+    capacity 2
+    state started:0..2=0
+    state holder: H = free
+    state claims: 0..1 = 0
+    capability claim() -> R {
+      version_check [holder] else conflict
+      commits
+      duration fixed 1min
+      result nondet { committed }
+      writes [holder, claims]
+      finish { holder = taken; claims += 1 }
+    }
+  }
+  process P {
+    r = Ledger.claim()
+    if r == committed { end claimed } else { end retry_needed }
+  }
+  cut C { include [Ledger] }
+  bounds { cases 2; live_tasks 1; clock 10min }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  verify reachable end.claimed
+  verify reachable end.retry_needed
+}

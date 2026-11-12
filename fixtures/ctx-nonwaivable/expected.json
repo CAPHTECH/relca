@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 response","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}],
+  "obligations":[{"response_id":"contract Controls #1 response","response_label":"audit","case_id":1,"trigger_site":"received","trigger":"case.received","targets":["end.done"],"debtor":null,"debtor_status":"not_configured","non_waivable":true,"coverage":"complete","outcomes":[{"status":"fulfilled","triggered_at":0,"deadline":3,"resolved_at":1,"reason":null,"by_clause":null,"executor":null,"authority":null}]}],
+  "diagnostics":[{"code":"W-CUT-0"}], "absent_diagnostics":["W-DEADLOCK-0","W-BUDGET-0","E-CON-0"]
+}

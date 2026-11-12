@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  people [p]; actor Doc { latent allow: bool = true }; actor A { executors [p]; capability go() -> R { commits; duration fixed 1min; result nondet { ok } } }
+  process P { a = A.go(); end done }
+  cut C { include [Doc,A] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  authority G { basis "scope"; grants p to A.go; scope Doc.allow == true }; contract K { authority_basis A.go G }
+  verify reachable end.done
+}

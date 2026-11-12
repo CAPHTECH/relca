@@ -1,0 +1,9 @@
+model Composite version "0.2" {
+  type T = enum { ok }
+  actor Team { contains [Member]; capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Member { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { m = Member.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 3min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

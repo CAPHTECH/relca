@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered: bool = false }
+
+  actor Poster{capacity 1;capability post()->Ack{commits;duration fixed 1min;result nondet{committed}}}
+  process Flow { a=Poster.post();end done }
+  cut K { include [Poster] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  contract C{at_most_once Poster.post.commit per case.id};simulation replications 5 seed 17 confidence 0.95;configuration Left{cut K;process Flow};configuration Right{cut K;process Other};process Other{b=Poster.post();end done}
+  verify reachable end.done
+}

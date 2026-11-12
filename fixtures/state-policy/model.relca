@@ -1,0 +1,14 @@
+model StatePolicy version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok }
+  observed case { difficult_seen: bool = false }
+  actor Invoice { latent difficulty: Difficulty = routine }
+  actor AI { capacity 1; capability extract() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Human { capacity 1; capability enter() -> T { duration fixed 5min; result nondet { ok } } }
+  process Flow {
+    if difficult_seen == true { h = Human.enter() } else { a = AI.extract() }
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

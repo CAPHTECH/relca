@@ -1,0 +1,14 @@
+model MetricsFIFO version "0.2" {
+  type T = enum { pass }
+  resource Q9 capacity 1;
+ actor Zeta { capacity 2; capability z1() -> T { uses Q9:1; duration fixed 3min; result nondet { pass } } }
+  actor Alpha { capacity 1; capability a0() -> T { duration fixed 5min; result nondet { pass } } }
+  process P { a = Zeta.z1(); b = Alpha.a0(); end done }
+  cut C { include [Zeta, Alpha] }
+  arrivals fixed [0min, 1min, 2min]
+  policy fifo tie_by case_id
+  bounds { cases 3; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; rate Zeta per_minute 2; rate Alpha per_minute 3; rate Zeta.z1 per_start 1; rate Alpha.a0 per_start 4 ; breakdown waits }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,60 @@
+[
+  {
+    "pointer": "/mutations/2/mutants/0/other_changes",
+    "rows": [
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/affects",
+        "field": "value",
+        "before": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "after": null,
+        "direction": "changed"
+      },
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/field",
+        "field": "value",
+        "before": "concurrency.read_write",
+        "after": null,
+        "direction": "changed"
+      },
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/value",
+        "field": "value",
+        "before": "Ledger.keys: process.Flow@if:538 -> Ledger.post",
+        "after": null,
+        "direction": "changed"
+      }
+    ]
+  },
+  {
+    "pointer": "/mutations/8/mutants/0/other_changes",
+    "rows": [
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/affects",
+        "field": "value",
+        "before": "共有の観測stateの静的な読取り/書込み候補。到達や同時実行を確定しない。到達不能な枝や資源による直列化も含みうる。全順序を展開し、古い値を読む経路を残す。複数案件の共有Actor stateだけを対象とし、単一案件・案件局所・per_case・潜在は一覧の対象外。候補の不在は競合なしの証明ではない。",
+        "after": null,
+        "direction": "changed"
+      },
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/field",
+        "field": "value",
+        "before": "concurrency.read_write",
+        "after": null,
+        "direction": "changed"
+      },
+      {
+        "check": "assumptions",
+        "key": "/field=\"concurrency.read_write\";value=\"Ledger.keys: process.Flow@if:538 -> Ledger.post\"/value",
+        "field": "value",
+        "before": "Ledger.keys: process.Flow@if:538 -> Ledger.post",
+        "after": null,
+        "direction": "changed"
+      }
+    ]
+  }
+]

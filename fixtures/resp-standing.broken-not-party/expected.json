@@ -1,0 +1,6 @@
+{
+  "verdict":"invalid","bounds":{"cases":null,"live_tasks":null,"clock":null,"truncated":null},
+  "agency":null,"properties":[],"terminals":[],
+  "diagnostics":[{"code":"E-CON-0","severity":"error"}],
+  "absent_diagnostics":["E-NAME-0","U-SYN-0","U-SEM-0"]
+}

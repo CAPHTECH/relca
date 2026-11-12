@@ -1,0 +1,175 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [
+          {
+            "effect": "Ledger.post",
+            "call": "k",
+            "status": "derived",
+            "e": {
+              "actors": [
+                "Ledger"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Ledger"
+              ],
+              "permitted": []
+            },
+            "j": [
+              {
+                "call": "v",
+                "capability": "Approver.approve",
+                "actors": [
+                  "Approver"
+                ],
+                "people": [
+                  "a1"
+                ],
+                "unattributed_actors": [],
+                "permitted": [
+                  "a1"
+                ],
+                "stops": "all_paths",
+                "bypasses": 0
+              }
+            ],
+            "u": [
+              {
+                "call": "v",
+                "capability": "Approver.approve",
+                "actors": [
+                  "Approver"
+                ],
+                "people": [
+                  "a1"
+                ],
+                "unattributed_actors": [],
+                "permitted": [
+                  "a1"
+                ],
+                "stops": "all_paths",
+                "bypasses": 0
+              }
+            ],
+            "state_refusers": [
+              {
+                "actor": "Ledger",
+                "capability": "Ledger.post",
+                "reads": [
+                  "Ledger.keys"
+                ],
+                "on_normal_path": false
+              }
+            ],
+            "process_judgements": "derived",
+            "concentration": {
+              "single_actor": false,
+              "single_person": "unknown",
+              "single_generation_root": true,
+              "generation_roots": [
+                {
+                  "call": "e",
+                  "capability": "Clerk.enter"
+                }
+              ],
+              "signal": "判定・拒否・実行の担い手と生成根の集中の兆候",
+              "mechanism": "同じ担い手又は生成根への依存が構成上重なる",
+              "check": "モデル外の統制・原本参照・ログで確認する"
+            }
+          },
+          {
+            "effect": "Ledger.post",
+            "call": "k2",
+            "status": "derived",
+            "e": {
+              "actors": [
+                "Ledger"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Ledger"
+              ],
+              "permitted": []
+            },
+            "state_refusers": [
+              {
+                "actor": "Ledger",
+                "capability": "Ledger.post",
+                "reads": [
+                  "Ledger.keys"
+                ],
+                "on_normal_path": "unknown"
+              }
+            ],
+            "process_judgements": {
+              "status": "not_derived",
+              "reason": "state_guards"
+            },
+            "concentration": {
+              "single_actor": "unknown",
+              "single_person": "unknown",
+              "single_generation_root": "unknown",
+              "generation_roots": {
+                "status": "not_derived",
+                "reason": "state_guards"
+              },
+              "signal": "判定・拒否・実行の担い手と生成根の集中の兆候",
+              "mechanism": "同じ担い手又は生成根への依存が構成上重なる",
+              "check": "モデル外の統制・原本参照・ログで確認する"
+            }
+          }
+        ],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Clerk.enter",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Approver.approve",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Ledger.post",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 2
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ]
+      }
+    }
+  }
+}

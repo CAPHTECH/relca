@@ -1,0 +1,13 @@
+model StateLatentProduct version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok }
+  latent case { truth: bool }
+  actor Invoice { latent difficulty: Difficulty }
+  actor Worker { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { x = Worker.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    invariant Worker.run.finish -> (truth == true || truth == false) && (Invoice.difficulty == routine || Invoice.difficulty == difficult)
+  }
+}

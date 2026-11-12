@@ -1,0 +1,11 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor A { capacity 1; state answer: optional<R>; state flag: bool = false;
+    capability run() -> R { duration fixed 1min; result nondet { ok }; writes [answer,flag]; finish { flag = true } }
+  }
+  process P { a = A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  contract K { invariant A.run.start -> A.answer == none && A.flag == false; invariant A.run.finish -> A.answer == ok && A.flag == true }
+  verify reachable end.done
+}

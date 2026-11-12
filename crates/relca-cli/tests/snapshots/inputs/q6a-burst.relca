@@ -1,0 +1,27 @@
+model Performance version "0.2" {
+  type R = enum { ok, bad, denied }
+  latent case { bad: bool = false }
+  kernel Low { * -> { 0.9: ok with bad = false; 0.1: bad with bad = true } }
+  kernel Q40 { * -> { 0.6: ok with bad = false; 0.4: bad with bad = true } }
+  kernel Half { * -> { 0.5: ok with bad = false; 0.5: bad with bad = true } }
+  kernel Quarter { * -> { 0.75: ok with bad = false; 0.25: bad with bad = true } }
+  performance P basis "fixture assumption; not measured" {
+    load queued_same_actor_at_start
+    executor anonymous { [0,1): kernel Low; [1,infinity): kernel Half }
+  }
+  actor Desk { control policy; capacity 1
+    capability run() -> R {
+      duration fixed 2min; outcomes performance P; writes bad
+    }
+  }
+  process Flow { r = Desk.run(); end done }
+  cut C { include [Desk] }
+  bounds { cases 3; live_tasks 4; clock 20min }
+  arrivals fixed [0min,0min,0min]
+  policy observable fifo tie_by case_id then call_order
+  metrics { window 20min; currency "JPY"; breakdown waits }
+  property case.Bad = reached(bad == true)
+  metric cohort.BadPerArrival = expected(count(case.Bad)) / arrivals
+  simulation replications 16 seed 1 confidence 0.5
+  verify probability reached bad == true <= 1
+}

@@ -1,0 +1,8 @@
+model OnlyAtomic version "0.2" {
+  type Ack = enum { committed,rejected_duplicate }
+  actor Ledger { capacity 1; state keys: set<CaseId>; capability post(key: CaseId) -> Ack { commits; writes keys; duration fixed 1min; atomic { if key in keys { result rejected_duplicate } else { keys += key; result committed } }; cancel forbidden_after_start } }
+  process P { k = Ledger.post(case.id); end done }
+  cut K { include [Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

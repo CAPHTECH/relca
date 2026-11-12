@@ -1,0 +1,18 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "absent_diagnostics": [
+    "E-SYN-0",
+    "E-TYPE-0",
+    "E-NAME-0",
+    "E-POL-LATENT",
+    "U-SYN-0",
+    "U-SEM-0"
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {"end":"done","elapsed":{"min":2,"max":3},"work":{"min":2,"max":3},"result_at":null}
+  ]
+}

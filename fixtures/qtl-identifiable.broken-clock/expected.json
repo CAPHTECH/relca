@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Median",
+        "p": "1/2",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "2",
+          "upper": "2",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P95",
+        "p": "19/20",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "truncated"
+        },
+        "lower_bound": "4"
+      }
+    ]
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "verdict": "violated",
+  "mode": "simulation",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 30,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "violated",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "basis": "statistical",
+          "hits": 4,
+          "unknown": 0,
+          "trials": 4
+        },
+        {
+          "case_id": 2,
+          "arrival": 1,
+          "verdict": "violated",
+          "basis": "statistical",
+          "hits": 0,
+          "unknown": 0,
+          "trials": 4
+        },
+        {
+          "case_id": 3,
+          "arrival": 2,
+          "verdict": "violated",
+          "basis": "statistical",
+          "hits": 0,
+          "unknown": 0,
+          "trials": 4
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "count": 4
+        }
+      ],
+      "unfinished_count": 0,
+      "deadlocked_count": 0
+    },
+    {
+      "case_id": 2,
+      "arrival": 1,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "count": 4
+        }
+      ],
+      "unfinished_count": 0,
+      "deadlocked_count": 0
+    },
+    {
+      "case_id": 3,
+      "arrival": 2,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "count": 4
+        }
+      ],
+      "unfinished_count": 0,
+      "deadlocked_count": 0
+    }
+  ],
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "scenario": {
+    "name": "Busy",
+    "arrivals": {
+      "form": "fixed_every",
+      "every": 1,
+      "from": 0,
+      "until": 3,
+      "count": 3
+    },
+    "horizon": null,
+    "drain": {
+      "from": 2,
+      "until": "all_terminal_or_clock"
+    },
+    "aggregation": {
+      "from": 0,
+      "until": "all_terminal_or_clock",
+      "observed_until": {
+        "min": "9",
+        "max": "9",
+        "reason": null,
+        "mean": "9",
+        "samples": 4
+      }
+    },
+    "warmup": 0
+  },
+  "simulation": {
+    "status": "completed",
+    "replications": 4,
+    "seed": 1,
+    "confidence": "1/2",
+    "attempted_replications": 4,
+    "completed_replications": 4,
+    "truncated_replications": 0,
+    "multiplicity": {
+      "rows": 3,
+      "alpha_before": "1/4",
+      "alpha_after": "1/12"
+    }
+  }
+}

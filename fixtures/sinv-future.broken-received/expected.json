@@ -1,0 +1,14 @@
+{
+  "verdict": "violated",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    }
+  ],
+  "terminals": []
+}

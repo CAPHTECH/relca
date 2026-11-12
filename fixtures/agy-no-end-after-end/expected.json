@@ -1,0 +1,108 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-1",
+      "scope": "selected_process_lexical_calls_and_declared_contest_routes",
+      "observation": {
+        "status": "derived",
+        "sources": [
+          {
+            "actor": "Invoice",
+            "normal": {
+              "actors": [
+                "Worker"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Worker"
+              ]
+            },
+            "contest": {
+              "actors": [],
+              "people": [],
+              "unattributed_actors": [],
+              "routes": []
+            }
+          }
+        ],
+        "people": [],
+        "fallback": "unchecked"
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "done",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [],
+            "read_only": []
+          },
+          {
+            "end": "late",
+            "status": "derived",
+            "reachable": false,
+            "selectors": [],
+            "read_only": []
+          }
+        ],
+        "actors": [],
+        "complete": true,
+        "unchecked": [
+          "type_domain_authority",
+          "practical_framing"
+        ]
+      },
+      "proposal": {
+        "status": "not_derived",
+        "reason": "no_proposal_contract"
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Gate.draw",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Worker.do",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 0
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ],
+        "notice": "行使回数から不要とは判定しない",
+        "unchecked": [
+          "fallback_dependency",
+          "retention_basis",
+          "actual_skill"
+        ]
+      }
+    }
+  }
+}

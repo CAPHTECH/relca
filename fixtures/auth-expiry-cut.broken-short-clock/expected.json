@@ -1,0 +1,17 @@
+{
+  "verdict": "inconclusive",
+  "bounds": {
+    "truncated": true
+  },
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "contract Controls #1 authority_basis",
+      "verdict": "inconclusive"
+    }
+  ],
+  "terminals": []
+}

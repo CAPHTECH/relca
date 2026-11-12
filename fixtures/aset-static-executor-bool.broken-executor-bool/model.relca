@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { input_by:optional<PersonId>;flag:bool=false }
+
+  actor Clerk {executors [c1,c2]; capability enter()->Ack {writes [input_by,flag];finish{input_by=executor.id;flag=executor.id};duration fixed 3min;result nondet{committed}}}
+  process Flow { a=Clerk.enter();if input_by==c1 {end by_c1}else{end by_c2} }
+  cut K { include [Clerk] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.by_c1;verify reachable end.by_c2
+}

@@ -1,0 +1,16 @@
+model StateInvariantCompare version "0.2" {
+  type R = enum { ok }
+  observed case { ok: bool = true }
+  actor Desk { capacity 1
+    capability good() -> R { duration fixed 1min; result nondet { ok }; writes ok; finish { ok = true } }
+    capability bad() -> R { duration fixed 1min; result nondet { ok }; writes ok; finish { ok = false } }
+  }
+  process AFlow { r = Desk.good(); end done }
+  process BFlow { r = Desk.bad(); end done }
+  cut C { include [Desk] }
+  configuration A { cut C; process AFlow }
+  configuration B { cut C; process BFlow }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 4 seed 17 confidence 0.95
+  contract Controls { invariant ok }
+}

@@ -1,0 +1,39 @@
+{
+  "verdict": "violated",
+  "terminals": [
+    {
+      "end": "twice",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "absent_diagnostics": [
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-TYPE-0",
+    "E-CUT-1",
+    "E-POL-LATENT",
+    "U-SYN-0",
+    "U-SEM-0"
+  ],
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ]
+}

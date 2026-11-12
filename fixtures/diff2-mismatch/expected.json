@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[{"kind":"time","target":"A.a","change":"modified","from":["sequential"],"to":["fork"]},{"kind":"time","target":"A.b","change":"modified","from":["sequential"],"to":["fork"]}],"mismatch":null}

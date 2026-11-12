@@ -1,0 +1,15 @@
+model MaxOnly version "0.2" {
+  type Choice = enum { short, long }
+  type Ack = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1
+    capability choose() -> Choice { duration fixed 1min; result nondet { short, long } }
+    capability mark() -> Ack { duration fixed 5min; result nondet { ok }; writes hit; finish { hit = true } }
+  }
+  process P { c = A.choose(); if c == short { end miss } else { a = A.mark(); end done } }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify safety no_resource_overcommit
+  property case.Hit = reached(hit == true)
+  metric cohort.Rate = expected(count(case.Hit)) / arrivals
+}

@@ -1,0 +1,788 @@
+{
+ "verdict": "violated",
+ "mode": "exhaustive",
+ "unit": "min",
+ "model": {
+  "name": "EcOrderPlain",
+  "sha256": "ee84bd699bf8e246e9da8a0523f0f50ce0d884c322cfcaf342244c707168e004"
+ },
+ "ledger": {
+  "producer": {
+   "version": "0.0.0"
+  },
+  "execution": {
+   "selection": {
+    "effective": {
+     "process": {
+      "reason": null,
+      "status": "known",
+      "value": "PlainFlow"
+     }
+    }
+   }
+  }
+ },
+ "cut": {
+  "name": "OrderCut",
+  "question": "One order from placement to shipment instruction, with payment resend, allocation loss, cancel refund",
+  "include": [
+   "Cart",
+   "StockLedger",
+   "Customer",
+   "Shop",
+   "Stock",
+   "Psp",
+   "CS",
+   "Finance"
+  ],
+  "exclude": [
+   {
+    "target": "Warehouse",
+    "actor": false,
+    "reason": "shipping after instruction is another domain",
+    "loses": "shipping errors and returns"
+   },
+   {
+    "target": "CardDecline",
+    "actor": false,
+    "reason": "PSP decline path not in the asked scope",
+    "loses": "declined orders and customer retry"
+   }
+  ],
+  "defer": [
+   {
+    "target": "UnknownResolution",
+    "actor": false,
+    "reason": "relca stops a case at receipt unknown; no step can follow it",
+    "loses": "who decides unknown payment, CS effort and deadline"
+   },
+   {
+    "target": "RefundResponseLoss",
+    "actor": false,
+    "reason": "loss and resend modeled only on charge",
+    "loses": "double refund or missing refund on refund resend"
+   },
+   {
+    "target": "CancelAfterShipment",
+    "actor": false,
+    "reason": "cancel asked only before shipment instruction",
+    "loses": "returns and refunds after shipment"
+   },
+   {
+    "target": "CancelShipRace",
+    "actor": false,
+    "reason": "cancel is modeled as one sequential decision after confirm",
+    "loses": "cancel arriving while shipment instruction runs"
+   },
+   {
+    "target": "RejectedRefundFollowup",
+    "actor": false,
+    "reason": "no rule yet after finance rejects a refund",
+    "loses": "customer claim and money kept"
+   },
+   {
+    "target": "Rates",
+    "actor": false,
+    "reason": "no time or cost rates given",
+    "loses": "CS and finance cost and load"
+   }
+  ]
+ },
+ "bounds": {
+  "cases": 1,
+  "live_tasks": 2,
+  "clock": 120,
+  "truncated": false
+ },
+ "properties": [
+  {
+   "notes": [
+    "mechanism_unmodeled"
+   ],
+   "cases": [
+    {
+     "case_id": 1,
+     "arrival": 0,
+     "verdict": "violated"
+    }
+   ],
+   "id": "contract PayControls #2 at_most_once",
+   "verdict": "violated"
+  },
+  {
+   "cases": [
+    {
+     "case_id": 1,
+     "arrival": 0,
+     "verdict": "inconclusive"
+    }
+   ],
+   "id": "receipt_resolution",
+   "verdict": "inconclusive"
+  }
+ ],
+ "diagnostics": [],
+ "assumptions": [
+  {
+   "field": "response.pay",
+   "value": "max_attempts=2; backoff=0; loss=Nondet",
+   "affects": "retry_bounded; receipt_channel; receipt_not_success; atomic server-finish channel only; no asynchronous task, status query or correlated channel inference"
+  },
+  {
+   "field": "agency.response_alias_exclusions",
+   "value": "count=1; bindings={\"pay\"}",
+   "affects": "non_executable_result_alias: 元bindingは既知の採用値へのlinkであり、追加のTask・J・独立根拠ではない。実際の全試行サイトは残す。"
+  },
+  {
+   "field": "agency.response_control",
+   "value": "both_interpreters_complete_per_case_start_envelope",
+   "affects": "新入力のF/Uはresponse_controlでnot_derived。O・実試行のJ系譜・Eは保持。Lは両探索器の切断なし完全探索のStart範囲が一致した場合だけ導く。共通根拠は試行数で増やさない。"
+  },
+  {
+   "field": "agency.diagnostics.W-AGY-0",
+   "value": "unchecked(response_control)",
+   "affects": "応答の受信と採用に依存する制御を旧警告の導出は扱わない。警告の不在を問題なしと解釈しない。"
+  },
+  {
+   "field": "agency.diagnostics.W-AGY-2",
+   "value": "unchecked(response_control)",
+   "affects": "応答の受信と採用に依存する制御を旧警告の導出は扱わない。警告の不在を問題なしと解釈しない。"
+  },
+  {
+   "field": "agency.diagnostics.W-LIN-2",
+   "value": "unchecked(response_control)",
+   "affects": "応答の受信と採用に依存する制御を旧警告の導出は扱わない。警告の不在を問題なしと解釈しない。"
+  },
+  {
+   "field": "agency.diagnostics.W-RESP-2",
+   "value": "unchecked(response_control)",
+   "affects": "応答の受信と採用に依存する制御を旧警告の導出は扱わない。警告の不在を問題なしと解釈しない。"
+  }
+ ],
+ "agency": {
+  "unchecked": [
+   "contest_path",
+   "fallback_path",
+   "via_model",
+   "responsibility_time_frame",
+   "responsibility_assignment_scope",
+   "response_control"
+  ]
+ },
+ "response_receipts": [
+  {
+   "case_id": 1,
+   "command": "pay",
+   "attempt": 1,
+   "capability": "Psp.charge_plain",
+   "receipt": "unknown",
+   "at": {
+    "min": 3,
+    "max": 3
+   },
+   "observed_result": null,
+   "resolved_effect": false
+  },
+  {
+   "case_id": 1,
+   "command": "pay",
+   "attempt": 2,
+   "capability": "Psp.charge_plain",
+   "receipt": "unknown",
+   "at": {
+    "min": 4,
+    "max": 4
+   },
+   "observed_result": null,
+   "resolved_effect": false
+  },
+  {
+   "case_id": 1,
+   "command": "pay",
+   "attempt": 2,
+   "capability": "Psp.charge_plain",
+   "receipt": "delivered",
+   "at": {
+    "min": 4,
+    "max": 4
+   },
+   "observed_result": "charged",
+   "resolved_effect": false
+  },
+  {
+   "case_id": 1,
+   "command": "pay",
+   "attempt": 1,
+   "capability": "Psp.charge_plain",
+   "receipt": "delivered",
+   "at": {
+    "min": 3,
+    "max": 3
+   },
+   "observed_result": "charged",
+   "resolved_effect": true
+  }
+ ],
+ "response_analysis": {
+  "rules": "response-p2-1",
+  "coverage": "complete",
+  "business_horizon": false,
+  "scope": "declared sequential channels and observed transitions under selected bounds; exploration coverage is not business completion",
+  "checked": [
+   "retry_bounded",
+   "receipt_channel",
+   "receipt_not_success"
+  ],
+  "unchecked": [
+   "asynchronous_external_task",
+   "general_status_query",
+   "correlated_response_loss",
+   "unbounded_retry",
+   "fairness"
+  ]
+ },
+ "case_outcomes": [
+  {
+   "case_id": 1,
+   "arrival": 0,
+   "terminals": [
+    {
+     "observed_until": {
+      "min": 4,
+      "max": 4
+     },
+     "observed_elapsed": {
+      "min": 4,
+      "max": 4
+     },
+     "observed_work": {
+      "min": 4,
+      "max": 4
+     },
+     "kind": "receipt_unknown",
+     "end": null,
+     "completed_at": null,
+     "elapsed": null,
+     "work": null,
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    },
+    {
+     "kind": "end",
+     "end": "out_of_stock",
+     "completed_at": {
+      "min": 2,
+      "max": 2
+     },
+     "elapsed": {
+      "min": 2,
+      "max": 2
+     },
+     "work": {
+      "min": 2,
+      "max": 2
+     },
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    },
+    {
+     "kind": "end",
+     "end": "stock_refunded",
+     "completed_at": {
+      "min": 5,
+      "max": 5
+     },
+     "elapsed": {
+      "min": 5,
+      "max": 5
+     },
+     "work": {
+      "min": 5,
+      "max": 5
+     },
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    },
+    {
+     "kind": "end",
+     "end": "refund_rejected",
+     "completed_at": {
+      "min": 46,
+      "max": 46
+     },
+     "elapsed": {
+      "min": 46,
+      "max": 46
+     },
+     "work": {
+      "min": 46,
+      "max": 46
+     },
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    },
+    {
+     "kind": "end",
+     "end": "cancel_refunded",
+     "completed_at": {
+      "min": 47,
+      "max": 47
+     },
+     "elapsed": {
+      "min": 47,
+      "max": 47
+     },
+     "work": {
+      "min": 47,
+      "max": 47
+     },
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    },
+    {
+     "kind": "end",
+     "end": "shipped",
+     "completed_at": {
+      "min": 7,
+      "max": 7
+     },
+     "elapsed": {
+      "min": 7,
+      "max": 7
+     },
+     "work": {
+      "min": 7,
+      "max": 7
+     },
+     "result_at": null,
+     "probability": {
+      "min": "0",
+      "max": "1"
+     }
+    }
+   ]
+  }
+ ],
+ "terminals": [
+  {
+   "probability": {
+    "min": "0",
+    "max": "1"
+   },
+   "end": "out_of_stock",
+   "elapsed": {
+    "min": 2,
+    "max": 2
+   },
+   "work": {
+    "min": 2,
+    "max": 2
+   },
+   "result_at": null
+  },
+  {
+   "probability": {
+    "min": "0",
+    "max": "1"
+   },
+   "end": "stock_refunded",
+   "elapsed": {
+    "min": 5,
+    "max": 5
+   },
+   "work": {
+    "min": 5,
+    "max": 5
+   },
+   "result_at": null
+  },
+  {
+   "probability": {
+    "min": "0",
+    "max": "1"
+   },
+   "end": "refund_rejected",
+   "elapsed": {
+    "min": 46,
+    "max": 46
+   },
+   "work": {
+    "min": 46,
+    "max": 46
+   },
+   "result_at": null
+  },
+  {
+   "probability": {
+    "min": "0",
+    "max": "1"
+   },
+   "end": "cancel_refunded",
+   "elapsed": {
+    "min": 47,
+    "max": 47
+   },
+   "work": {
+    "min": 47,
+    "max": 47
+   },
+   "result_at": null
+  },
+  {
+   "probability": {
+    "min": "0",
+    "max": "1"
+   },
+   "end": "shipped",
+   "elapsed": {
+    "min": 7,
+    "max": 7
+   },
+   "work": {
+    "min": 7,
+    "max": 7
+   },
+   "result_at": null
+  }
+ ],
+ "explanation": {
+  "version": "invoice-counterexample-v1",
+  "status": "complete",
+  "counterexamples": [
+   {
+    "id": "contract PayControls #2 at_most_once",
+    "case_id": 1,
+    "status": "verified",
+    "transition_count": 48,
+    "property_location": {
+     "span": {
+      "start": 4523,
+      "end": 4571
+     },
+     "line": 71,
+     "column": 5,
+     "end_line": 71,
+     "end_column": 53
+    },
+    "context_location": {
+     "span": {
+      "start": 4914,
+      "end": 5641
+     },
+     "line": 77,
+     "column": 3,
+     "end_line": 98,
+     "end_column": 4
+    },
+    "steps": [
+     {
+      "command": "pay",
+      "attempt": 1,
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 27,
+      "time": 2,
+      "case_id": 1,
+      "binding": "@response:2:1",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": null,
+      "kind": "queue",
+      "events": [
+       {
+        "kind": "queue",
+        "case_id": 1,
+        "binding": "@response:2:1",
+        "result": null
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": null
+     },
+     {
+      "command": "pay",
+      "attempt": 1,
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 28,
+      "time": 2,
+      "case_id": 1,
+      "binding": "@response:2:1",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": null,
+      "kind": "start",
+      "events": [
+       {
+        "kind": "start",
+        "case_id": 1,
+        "binding": "@response:2:1",
+        "result": null
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": null
+     },
+     {
+      "command": "pay",
+      "attempt": 1,
+      "observed_receipt": "unknown",
+      "actual_result": "charged",
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 35,
+      "time": 3,
+      "case_id": 1,
+      "binding": "@response:2:1",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": null,
+      "kind": "finish",
+      "events": [
+       {
+        "kind": "finish",
+        "case_id": 1,
+        "binding": "@response:2:1",
+        "result": "charged"
+       },
+       {
+        "kind": "commit",
+        "case_id": 1,
+        "binding": "@response:2:1",
+        "result": "charged"
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": null
+     },
+     {
+      "command": "pay",
+      "attempt": 2,
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 40,
+      "time": 3,
+      "case_id": 1,
+      "binding": "@response:2:2",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": null,
+      "kind": "queue",
+      "events": [
+       {
+        "kind": "queue",
+        "case_id": 1,
+        "binding": "@response:2:2",
+        "result": null
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": null
+     },
+     {
+      "command": "pay",
+      "attempt": 2,
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 41,
+      "time": 3,
+      "case_id": 1,
+      "binding": "@response:2:2",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": null,
+      "kind": "start",
+      "events": [
+       {
+        "kind": "start",
+        "case_id": 1,
+        "binding": "@response:2:2",
+        "result": null
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": null
+     },
+     {
+      "command": "pay",
+      "attempt": 2,
+      "observed_receipt": "delivered",
+      "actual_result": "charged",
+      "retry_location": {
+       "span": {
+        "start": 5100,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 58,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "index": 48,
+      "time": 4,
+      "case_id": 1,
+      "binding": "@response:2:2",
+      "actor": "Psp",
+      "capability": "charge_plain",
+      "executor": null,
+      "result": "charged",
+      "kind": "finish",
+      "events": [
+       {
+        "kind": "finish",
+        "case_id": 1,
+        "binding": "@response:2:2",
+        "result": "charged"
+       },
+       {
+        "kind": "commit",
+        "case_id": 1,
+        "binding": "@response:2:2",
+        "result": "charged"
+       }
+      ],
+      "location": {
+       "span": {
+        "start": 5047,
+        "end": 5189
+       },
+       "line": 81,
+       "column": 5,
+       "end_line": 81,
+       "end_column": 147
+      },
+      "violation": {
+       "id": "contract PayControls #2 at_most_once",
+       "property_location": {
+        "span": {
+         "start": 4523,
+         "end": 4571
+        },
+        "line": 71,
+        "column": 5,
+        "end_line": 71,
+        "end_column": 53
+       },
+       "at_step": 48,
+       "trigger_step": null,
+       "deadline": null,
+       "related_steps": [
+        35,
+        48
+       ]
+      }
+     }
+    ]
+   }
+  ],
+  "omitted": [],
+  "assumptions": [],
+  "checked": [],
+  "unchecked": []
+ }
+}

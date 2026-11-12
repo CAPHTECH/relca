@@ -1,0 +1,22 @@
+model CommonCause version "0.2" {
+  type Verdict = enum { pass, fail }
+  observed case { a, b: optional<Verdict> }
+  actor Power { latent failed: bool ~ { true: 0.1, false: 0.9 } }
+  kernel KA given [Power.failed] {
+    true -> { 1: fail }
+    false -> { 1: pass }
+  }
+  kernel KB given [Power.failed] {
+    true -> { 1: fail }
+    false -> { 1: pass }
+  }
+  actor A { capacity 1; capability check() -> Verdict { duration fixed 1min; outcomes kernel KA; kernel_reads latent [Power.failed]; writes a } }
+  actor B { capacity 1; capability check() -> Verdict { duration fixed 1min; outcomes kernel KB; kernel_reads latent [Power.failed]; writes b } }
+  process Flow { a = A.check(); b = B.check(); end done }
+  cut C { include [Power, A, B] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached a == fail && b == fail <= 0.1
+  verify probability reached a == fail <= 0.1
+  verify probability reached b == fail <= 0.1
+}

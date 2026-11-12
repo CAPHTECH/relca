@@ -1,0 +1,15 @@
+model PerCase version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok, bad }
+  people [p]
+  actor Invoice { instance per_case; grain document; source document; latent difficulty: Difficulty }
+
+  process Flow { end done }
+  cut Scope { question "案件ごとの文書"; include [Invoice] }
+  arrivals fixed [0min, 0min]
+  policy fifo tie_by case_id
+
+
+  bounds { cases 2; live_tasks 2; clock 30min }
+  verify probability reached Invoice.difficulty == difficult <= 1
+}

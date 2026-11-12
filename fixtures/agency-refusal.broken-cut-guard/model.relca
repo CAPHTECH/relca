@@ -1,0 +1,46 @@
+model AgencyRefusal version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor Reader {
+    capacity 1
+    capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } }
+  }
+  actor Judge {
+    capacity 1
+    capability check(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Flag {
+    capacity 1
+    capability check(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Ledger {
+    capacity 1
+    capability post(v:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } }
+  }
+  process Before {
+    entry = Reader.enter()
+    j = Judge.check(entry)
+    x = Flag.check(entry)
+    if j == pass { } else { end rejected }
+    posted = Ledger.post(j)
+    end done
+  }
+  process After {
+    entry = Reader.enter()
+    j = Judge.check(entry)
+    x = Flag.check(entry)
+    if x == pass {
+      if j == pass || j == fail { } else { end rejected }
+    } else { }
+    posted = Ledger.post(j)
+    end done
+  }
+  cut C { include [Invoice, Reader, Judge, Flag, Ledger] }
+  configuration AsIs { cut C; process Before }
+  configuration ToBe { cut C; process After }
+  bounds { cases 1; live_tasks 4; clock 32min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

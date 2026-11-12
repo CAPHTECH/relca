@@ -1,0 +1,14 @@
+model Qtl version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration fixed 3min; result nondet { ok } } }
+  process P { job = A.run(); end done }
+  cut C { include [A] }
+  arrivals fixed [0min, 1min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric quantile.Median = quantile(1, case.Done)
+  metric quantile.MedianDone = quantile(1, case.Done given reached)
+  concurrent cases 1 on_overflow wait_external fifo
+}

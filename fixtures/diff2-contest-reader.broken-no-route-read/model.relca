@@ -1,0 +1,18 @@
+model DiffContestReader version "0.2" {
+  type V = enum { pass,fail }
+  people [p]
+  actor S { source document }
+  actor Clerk { capacity 1; capability enter() -> V { reads [S]; duration fixed 1min; result nondet { pass } }; capability recheck() -> V { duration fixed 1min; result nondet { pass } } }
+  actor Extractor { capacity 2; capability extract() -> V { reads [S]; duration fixed 1min; result nondet { pass } } }
+  actor Gate { executors [p]; capability g() -> V { duration fixed 1min; result nondet { pass,fail } } }
+  actor V { control party; standing over [end.rejected] basis "claim" }
+  authority G { basis "review"; grants p to Gate.g; issued_by p }
+  process Before { e = Clerk.enter(); x = Gate.g(); if x == pass { end done } else { end rejected } }
+  process After { e = Extractor.extract(); x = Gate.g(); if x == pass { end done } else { end rejected } }
+  contract Ctl { contest V on end.rejected route Clerk.recheck reversible_by [p] respond_by 5min }
+  cut C { include [S,Clerk,Extractor,Gate,V] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

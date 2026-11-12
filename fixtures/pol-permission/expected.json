@@ -1,0 +1,39 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-3",
+      "severity": "warning",
+      "message": "process P: executor q is never assigned"
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 1,
+            "max": 1
+          },
+          "elapsed": {
+            "min": 1,
+            "max": 1
+          },
+          "work": {
+            "min": 1,
+            "max": 1
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ]
+}

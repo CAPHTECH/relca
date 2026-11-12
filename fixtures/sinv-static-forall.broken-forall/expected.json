@@ -1,0 +1,16 @@
+{
+  "verdict": "unsupported",
+  "diagnostics": [
+    {
+      "code": "U-SYN-0"
+    },
+    {
+      "code": "W-CUT-0"
+    }
+  ],
+  "bounds": {
+    "truncated": null
+  },
+  "properties": [],
+  "terminals": []
+}

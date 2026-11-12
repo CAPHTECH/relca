@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Median",
+        "p": "1/2",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "2",
+          "upper": "7",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P90",
+        "p": "9/10",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "6",
+          "upper": "7",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+model Count version "0.2" {
+  latent case { h: 0..1 }
+  process P { end done }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify probability reached h == 1 >= 1
+}

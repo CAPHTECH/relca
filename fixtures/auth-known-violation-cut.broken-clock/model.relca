@@ -1,0 +1,15 @@
+model Authority version "0.2" {
+  type T = enum { fast, slow }
+  people [r,p,q,z]
+  actor Judge { executors [p]; capability judge() -> T { duration fixed 1min; result nondet { fast, slow } } }
+  actor A { executors [q]; capability run() -> T { duration fixed 1min; result nondet { fast } } }
+  actor Slow { executors [z]; capability run() -> T { duration fixed 5min; result nondet { slow } } }
+  permit p to Judge.judge
+  permit q to A.run
+  permit z to Slow.run
+  authority G { basis "known violation survives cut"; grants q to A.run; issued_by r; expires 1min }
+  process Flow { j = Judge.judge(); if j == fast { a = A.run() } else { s = Slow.run() }; end done }
+  bounds { cases 1; live_tasks 2; clock 3min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run G }
+}

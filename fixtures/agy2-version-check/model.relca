@@ -1,0 +1,13 @@
+model VersionAgency version "0.2" {
+  type Ack = enum { ok,denied }
+  people [p]
+  actor Ledger { capacity 2; state n: 0..2 = 0;
+    capability post() -> Ack { commits; duration fixed 3min; result nondet { ok };
+      writes n; finish { n += 1 }; version_check [n] else denied }
+  }
+  process P { k = Ledger.post(); end done }
+  cut K { include [Ledger] }
+  arrivals fixed [0min,0min]
+  bounds { cases 2; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

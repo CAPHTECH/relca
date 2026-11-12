@@ -1,0 +1,13 @@
+model Limits version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1; capability run() -> T { duration fixed 2min; result nondet { ok }; writes hit; finish { hit = true } } }
+  process Flow { r = A.run(); end done }
+  arrivals fixed [0min, 0min, 0min]
+  policy fifo tie_by case_id
+  queue capacity 1 on_overflow reject
+  concurrent cases 2 on_overflow reject
+  bounds { cases 3; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+
+}

@@ -1,0 +1,1 @@
+{"verdict":"satisfied","absent_diagnostics":["W-AUTH-0"],"properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 authority_basis","verdict":"satisfied"}],"terminals":[{"end":"done","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}]}

@@ -1,0 +1,39 @@
+{
+  "verdict": "invalid",
+  "plans": [
+    {
+      "configuration": "Slow",
+      "report": {
+        "verdict": "invalid",
+        "bounds": {
+          "truncated": null
+        },
+        "properties": [],
+        "terminals": [],
+        "diagnostics": [
+          {
+            "code": "E-CONF-0",
+            "severity": "error"
+          }
+        ]
+      }
+    },
+    {
+      "configuration": "Fast",
+      "report": {
+        "verdict": "invalid",
+        "bounds": {
+          "truncated": null
+        },
+        "properties": [],
+        "terminals": [],
+        "diagnostics": [
+          {
+            "code": "E-CONF-0",
+            "severity": "error"
+          }
+        ]
+      }
+    }
+  ]
+}

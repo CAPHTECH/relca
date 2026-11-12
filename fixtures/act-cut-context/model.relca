@@ -1,0 +1,9 @@
+model Context version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { a = A.run(); end done }
+  cut C { include [A]; reentry [review cut quarterly]; horizon job within 1d }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

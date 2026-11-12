@@ -1,0 +1,308 @@
+[
+  {
+    "name": "aobs-capacity.broken-two-writers",
+    "source_sha256": "0c7682f86720aabf4dcdd22e6ecb8286ca3a0a62aeb02dbf7ae9db3108ed7d02",
+    "reason": "static unsupported -> runtime range violated; commutative Add, stale requires remains observable",
+    "original_expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error",
+          "message": "concurrent writers of shared Actor state are unsupported (G5)",
+          "span": {
+            "start": 127,
+            "end": 307
+          }
+        }
+      ]
+    },
+    "replacement_expected": {
+      "verdict": "violated",
+      "diagnostics": [],
+      "absent_diagnostics": [
+        "E-SYN-0",
+        "E-TYPE-0",
+        "E-NAME-0",
+        "E-POL-LATENT",
+        "U-SYN-0",
+        "U-SEM-0"
+      ],
+      "bounds": {
+        "truncated": false,
+        "range_violation_stops": true
+      },
+      "case_outcomes": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "posted",
+              "completed_at": {
+                "min": 1,
+                "max": 1
+              },
+              "elapsed": {
+                "min": 1,
+                "max": 1
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "posted",
+              "completed_at": {
+                "min": 1,
+                "max": 1
+              },
+              "elapsed": {
+                "min": 1,
+                "max": 1
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        }
+      ],
+      "terminals": [],
+      "properties": [
+        {
+          "id": "safety no_resource_overcommit",
+          "verdict": "inconclusive"
+        },
+        {
+          "id": "state_in_range",
+          "verdict": "violated"
+        }
+      ],
+      "state_range_violations": [
+        {
+          "case_id": 1,
+          "time": 1,
+          "variable": "Ledger.posted",
+          "before": "1",
+          "operand": "1",
+          "attempted": "2",
+          "lower": "0",
+          "upper": "1",
+          "phase": "finish"
+        },
+        {
+          "case_id": 2,
+          "time": 1,
+          "variable": "Ledger.posted",
+          "before": "1",
+          "operand": "1",
+          "attempted": "2",
+          "lower": "0",
+          "upper": "1",
+          "phase": "finish"
+        }
+      ]
+    }
+  },
+  {
+    "name": "aset-cases.broken-capacity",
+    "source_sha256": "cc9920ffb9e68b1d69d60ce10574982ec19a298522d4e95946777f0004b959ef",
+    "reason": "static unsupported -> runtime satisfied; commutative InsertCase",
+    "original_expected": {
+      "verdict": "unsupported",
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ],
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      }
+    },
+    "replacement_expected": {
+      "verdict": "satisfied",
+      "diagnostics": [],
+      "absent_diagnostics": [
+        "E-SYN-0",
+        "E-TYPE-0",
+        "E-NAME-0",
+        "E-POL-LATENT",
+        "U-SYN-0",
+        "U-SEM-0"
+      ],
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [],
+      "case_outcomes": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "done",
+              "completed_at": {
+                "min": 1,
+                "max": 1
+              },
+              "elapsed": {
+                "min": 1,
+                "max": 1
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "done",
+              "completed_at": {
+                "min": 1,
+                "max": 1
+              },
+              "elapsed": {
+                "min": 1,
+                "max": 1
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "id": "contract C #1 at_most_once",
+          "verdict": "satisfied"
+        },
+        {
+          "id": "reachable end.done",
+          "verdict": "satisfied"
+        }
+      ]
+    }
+  },
+  {
+    "name": "aset-static-capacity-with-resource.broken-capacity-with-resource",
+    "source_sha256": "c0b3a4ecb3215a3e17411a2552838d9298874a38b8e3a5916ef705f904140114",
+    "reason": "static unsupported -> runtime satisfied; lock R",
+    "original_expected": {
+      "verdict": "unsupported",
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ],
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      }
+    },
+    "replacement_expected": {
+      "verdict": "satisfied",
+      "diagnostics": [],
+      "absent_diagnostics": [
+        "E-SYN-0",
+        "E-TYPE-0",
+        "E-NAME-0",
+        "E-POL-LATENT",
+        "U-SYN-0",
+        "U-SEM-0"
+      ],
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [],
+      "case_outcomes": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "done",
+              "completed_at": {
+                "min": 1,
+                "max": 1
+              },
+              "elapsed": {
+                "min": 1,
+                "max": 1
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "terminals": [
+            {
+              "kind": "end",
+              "end": "done",
+              "completed_at": {
+                "min": 2,
+                "max": 2
+              },
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 1,
+                "max": 1
+              },
+              "result_at": null
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "id": "contract C #1 at_most_once",
+          "verdict": "satisfied"
+        },
+        {
+          "id": "reachable end.done",
+          "verdict": "satisfied"
+        }
+      ]
+    }
+  }
+]

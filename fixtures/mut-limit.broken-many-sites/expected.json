@@ -1,0 +1,1 @@
+{"verdict":"unsupported","mode":"mutation","analysis":"exhaustive","set":"bpr-default","original_verdict":"satisfied","run":{"completion":"inconclusive","reason":"mutant_limit","mutant_limit":128,"limit_reached":true},"original":{"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":2523,"start":2172}}]}}

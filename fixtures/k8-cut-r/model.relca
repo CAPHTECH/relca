@@ -1,0 +1,27 @@
+model CutResource version "0.2" {
+  type Entry = enum { entry }
+  type Ack = enum { committed, rejected_duplicate }
+  observed case { registered: bool = false }
+  latent case { correct: bool = false }
+  kernel ExtractQuality { * -> { 0.98: entry with correct = true; 0.02: entry with correct = false } }
+  actor Extract { capacity 1; capability make() -> Entry { duration fixed 1min; outcomes kernel ExtractQuality; writes correct } }
+  resource erp_slots capacity 1
+  actor Poster { capacity 1
+    capability post(key: CaseId) -> Ack {
+      commits
+      uses erp_slots: 1
+      duration fixed 1min
+      result nondet { committed }
+      writes registered
+      finish { registered = true }
+      cancel forbidden_after_start
+    }
+  }
+  process Flow { e = Extract.make(); p = Poster.post(case.id); end done }
+  cut R { include [Extract, Poster] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  contract C { at_most_once Poster.post.commit per case.id }
+  verify safety no_resource_overcommit
+  verify probability reached registered == true && correct == false <= 0.02
+  verify probability reached registered == true within 2min >= 1
+}

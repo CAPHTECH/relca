@@ -1,0 +1,146 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "rules": "quality-cohort-p1-1",
+    "analysis": "exhaustive",
+    "properties": [
+      {
+        "name": "P",
+        "condition": "end.a",
+        "within": null,
+        "cases": [
+          {
+            "case_id": 1,
+            "arrival": 0,
+            "min": "0",
+            "max": "1",
+            "reason": null
+          }
+        ],
+        "expected_count": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        }
+      }
+    ],
+    "cohort": [
+      {
+        "name": "Rate",
+        "form": "ratio_of_expected_counts",
+        "numerator": "P",
+        "denominator": {
+          "kind": "arrivals",
+          "count": 1
+        },
+        "value": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "bounds_with_undetermined": null
+      }
+    ],
+    "outcomes_per_arrival": [
+      {
+        "kind": "end",
+        "end": "a",
+        "expected_count": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        }
+      },
+      {
+        "kind": "end",
+        "end": "b",
+        "expected_count": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "1",
+          "basis": "per_case_relaxation",
+          "reason": null
+        }
+      },
+      {
+        "kind": "rejected",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "unfinished",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "deadlock",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      }
+    ],
+    "checked": [
+      "case_reachability",
+      "expected_counts",
+      "ratio_of_expected_counts",
+      "denominator_disclosure",
+      "outcomes_per_arrival"
+    ],
+    "unchecked": [
+      "expectation_of_ratio",
+      "cohort_any_probability",
+      "metric_intervals",
+      "metric_constraints",
+      "numerator_subset_of_denominator",
+      "business_value",
+      "rework_loss",
+      "deadline_attainment"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "verdict": "unsupported",
+  "properties": [],
+  "terminals": [],
+  "diagnostics": [
+    {
+      "code": "U-SYN-0",
+      "severity": "error",
+      "message": "noninteger qualified comparison is unsupported",
+      "span": {
+        "start": 104,
+        "end": 105
+      }
+    }
+  ]
+}

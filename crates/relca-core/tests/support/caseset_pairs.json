@@ -1,0 +1,730 @@
+[
+  {
+    "id": "P01",
+    "good": "aset-dup",
+    "bad": "aset-dup.broken-no-check",
+    "from_": "atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }",
+    "to": "finish { keys += key; registered = true }; result nondet { committed }",
+    "calc": "First finish t1 inserts {1}, registered=true, commit1. Second finish t2 sees1 and rejects: finish2/commit1, keys={1}, E=W=2, dup only. Without check both finish committed: commit2, twice only, contract and reachable dup violated. Notes absent/present respectively. Both sides have W-UNREACH-1 and W-UNREACH-2."
+  },
+  {
+    "id": "P02",
+    "good": "aset-cases",
+    "bad": "aset-cases.broken-capacity",
+    "from_": "capacity 1",
+    "to": "capacity 2",
+    "calc": "FIFO capacity1: case1 [0,1), case2 [1,2). Each W1 and one commit; final shared keys={1,2}. Capacity2 is a static shared-writer refusal; no exploration."
+  },
+  {
+    "id": "P03",
+    "good": "aset-cut-rg",
+    "bad": "aset-cut-rg.broken-wrong-set",
+    "from_": "if key in keys",
+    "to": "if key in seen",
+    "calc": "Both one-call cases commit once, E1/E2, total W2. Guarding the wrong empty set leaves seen={} and keys={1,2}, but cannot certify a mechanism: notes required only on faulty side."
+  },
+  {
+    "id": "P03R",
+    "good": "aset-cut-resource",
+    "bad": "aset-cut-resource.broken-two-slots",
+    "from_": "erp_slots capacity 1",
+    "to": "erp_slots capacity 2",
+    "calc": "R resource1 serializes two one-minute posts (1/2); resource2 overlaps (1/1). Work1 each. All contracts satisfied but notes mechanism_unmodeled on both: anonymous capacity is not duplicate prevention."
+  },
+  {
+    "id": "P04",
+    "good": "aset-policy",
+    "bad": "aset-policy.broken-latent",
+    "from_": "if key in keys",
+    "to": "if Ledger.risk == high",
+    "calc": "Membership remains true after first finish and through duplicate rejection: posted only at2, W2. Replacing only atomic guard with latent high must fail E-POL-LATENT, including unused capabilities."
+  },
+  {
+    "id": "P05",
+    "good": "aset-executor",
+    "bad": "aset-executor.broken-anonymous",
+    "from_": "executors [c1,c2]",
+    "to": "capacity 1",
+    "calc": "Either declared person can start at0, occupies [0,3), writes their own ID at3. Both by_c1 and by_c2 exist, E=W3. Optional starts none. Anonymous executor cannot invent a PersonId."
+  },
+  {
+    "id": "P06",
+    "good": "aset-cut",
+    "bad": "aset-cut.broken-exclude",
+    "from_": "include [Ledger]",
+    "to": "exclude Ledger reason \"outside\" loses \"keys\"",
+    "calc": "After both normal finishes keys contains1, including rejected duplicate. Excluding called Ledger is E-CUT-1; the separate read-only boundary isolates Contains support."
+  },
+  {
+    "id": "P06b",
+    "good": "aset-cut-read",
+    "bad": "aset-cut-read.broken-exclude-reader",
+    "from_": "include [Ledger,Probe]",
+    "to": "include [Probe];exclude Ledger reason \"outside\" loses \"keys\"",
+    "calc": "No call or evidence read touches Ledger. At1 keys empty so false OR true is true. Exclusion must still reject the membership leaf; no short-circuit Cut exemption."
+  },
+  {
+    "id": "P07",
+    "good": "aset-label",
+    "bad": "aset-label.broken-renamed",
+    "from_": "Ledger",
+    "to": "Book",
+    "calc": "Actor alpha-renaming cannot alter E2/W2, dup, commit1 or mechanism recognition. Core separately varies grain document/ledger/person and normalizes source-derived spans, SHA and explicit identifier paths."
+  },
+  {
+    "id": "P08",
+    "good": "aset-cancel",
+    "bad": "aset-cancel.broken-forbidden",
+    "from_": "cancel cooperative ack_within 1min",
+    "to": "cancel forbidden_after_start",
+    "calc": "Fast [0,1); first post [0,2) cancelled at ack2 has no atomic effect. Next post [2,5) commits, E5/W(1+2+3)=6/result1. Forbidden first finishes3 and inserts, second [3,6) rejects: E6/W7/result1, commit1 still."
+  },
+  {
+    "id": "P09",
+    "good": "aset-agency",
+    "bad": "aset-agency.broken-scalar-requires",
+    "from_": "requires key in Ledger.keys",
+    "to": "requires decision==ok",
+    "calc": "Seed1 + Writer1 + prime1 + post1 =4, always membership true at runtime. Contains is Unknown statically, so no refusal proof. Control decision==ok is rewritten to unique Writer result, producing pass4/fail3 and a Writer all_paths judgement; do not claim equal timing."
+  },
+  {
+    "id": "P10",
+    "good": "aset-clock",
+    "bad": "aset-clock.broken-short",
+    "from_": "clock 20min",
+    "to": "clock 1min",
+    "calc": "At clock1 first finish is processed; case1 done1/W1, case2 cannot finish at2. Contract and reachability case1 S/case2 I, aggregate I. No fabricated rejected terminal; no W-BUDGET-0 for clock alone."
+  },
+  {
+    "id": "P12",
+    "good": "aset-limit",
+    "bad": "aset-limit.broken-sixty-five",
+    "from_": "model CaseSet version \"0.2\" {\n  type Ack = enum { committed, rejected_duplicate }\n  type T = enum { ok, no }\n  people [c1,c2]\n  observed case { registered: bool = false }\n\n  actor Ledger{state keys:set<CaseId>}\n  process Flow { end done }\n  cut K { include [Ledger] }\n  arrivals fixed [0min,1min,2min,3min,4min,5min,6min,7min,8min,9min,10min,11min,12min,13min,14min,15min,16min,17min,18min,19min,20min,21min,22min,23min,24min,25min,26min,27min,28min,29min,30min,31min,32min,33min,34min,35min,36min,37min,38min,39min,40min,41min,42min,43min,44min,45min,46min,47min,48min,49min,50min,51min,52min,53min,54min,55min,56min,57min,58min,59min,60min,61min,62min,63min]\n  policy fifo tie_by case_id\n  bounds { cases 64; live_tasks 3; clock 64min }\n\n  verify reachable end.done\n}\n",
+    "to": "model CaseSet version \"0.2\" {\n  type Ack = enum { committed, rejected_duplicate }\n  type T = enum { ok, no }\n  people [c1,c2]\n  observed case { registered: bool = false }\n\n  actor Ledger{state keys:set<CaseId>}\n  process Flow { end done }\n  cut K { include [Ledger] }\n  arrivals fixed [0min,1min,2min,3min,4min,5min,6min,7min,8min,9min,10min,11min,12min,13min,14min,15min,16min,17min,18min,19min,20min,21min,22min,23min,24min,25min,26min,27min,28min,29min,30min,31min,32min,33min,34min,35min,36min,37min,38min,39min,40min,41min,42min,43min,44min,45min,46min,47min,48min,49min,50min,51min,52min,53min,54min,55min,56min,57min,58min,59min,60min,61min,62min,63min,64min]\n  policy fifo tie_by case_id\n  bounds { cases 65; live_tasks 3; clock 64min }\n\n  verify reachable end.done\n}\n",
+    "calc": "64 end-only cases each E=W0, keys empty. Set cardinality2^64=18446744073709551616, no power-set allocation. Coherently adding case65+arrival65 exceeds representation; U-SEM-0. Direct bit63 display oracle is [64]."
+  },
+  {
+    "id": "P13",
+    "good": "aset-finish-snapshot",
+    "bad": "aset-finish-snapshot.broken-false-toggle",
+    "from_": "finish{gate=true}",
+    "to": "finish{gate=false}",
+    "calc": "At start0 gate=false selects the reject branch. Toggle ends1 and writes true; post ends3, evaluates true and commits in the then branch. W3+1=4, keys{1}. Fault leaves false: reject only, keys{}, commit0 and at_most_once vacuous. This distinguishes finish evaluation from start snapshot with capacity1 and tests commit_when=true."
+  },
+  {
+    "id": "P14",
+    "good": "aset-start-insert",
+    "bad": "aset-start-insert.broken-no-start",
+    "from_": "start{keys+=key}",
+    "to": "",
+    "calc": "Start0 inserts1, Fast completes1, ack2 cancels post without undoing start. E2/W(2+1)=3/result1. Removing start leaves empty and absent. No at_most_once is declared, so vacuity cannot mask reachability."
+  },
+  {
+    "id": "P15",
+    "good": "aset-person-start",
+    "bad": "aset-person-start.broken-finish-only",
+    "from_": "start{input_by=executor.id}",
+    "to": "writes input_by;finish{input_by=executor.id}",
+    "calc": "Slow starts with c1 at0 and records c1; cancellation ack2 does not roll back. Finish-only write never occurs and remains none. E2/W3/result1 in both. ID source and effect time are distinct obligations."
+  },
+  {
+    "id": "P16",
+    "good": "aset-atomic-rollback",
+    "bad": "aset-atomic-rollback.broken-initial-one",
+    "from_": "n:0..1=0",
+    "to": "n:0..1=1",
+    "calc": "Control: first bundle inserts key, sets registered and n1; second rejects without evaluating n+1. Fault attempts n2 at t1: no insertion, no result/commit, registered false, n remains1. state_in_range V, reachable/contract I, not computational truncation."
+  },
+  {
+    "id": "P17",
+    "good": "aset-simulation",
+    "bad": "aset-simulation.broken-two-people",
+    "from_": "executors [c1]",
+    "to": "executors [c1,c2]",
+    "calc": "One executor gives four by_c1 replications, E=W3, no draws. Two executor starts differ in Task.executor already; first encounter aborts attempted1/completed0. No uniform random executor. A separate no-branch control preserves the same refusal."
+  },
+  {
+    "id": "P18",
+    "good": "aset-compare-notes",
+    "bad": "aset-compare-notes.broken-replications",
+    "from_": "replications 4",
+    "to": "replications 5",
+    "calc": "Both old-syntax configurations execute one post in1, work1 and at_most_once S with mechanism_unmodeled. Exhaustive table excludes notes. Core/CLI separately compare simulation4 (I sample contract) and inject unknown, duplicate or wrong-property notes into projection. Replication count edit does not change exhaustive semantics."
+  },
+  {
+    "id": "P19",
+    "good": "aset-replay-display",
+    "bad": "aset-replay-display.broken-shorter-wait",
+    "from_": "wait 3min",
+    "to": "wait 2min",
+    "calc": "Ledger finishes1/2 and shares keys[1,2]; waits3 then Probe1 finishes5/6. Earliest invariant counterexample case1/t5, one shortest trace, verified replay, value array[1,2]. Fault wait2 yields4/5. Replay tampering [2,1],[1,1],[0,2],[1,3] is separately API-negative, never normalized."
+  },
+  {
+    "id": "P20",
+    "good": "aset-requires-in",
+    "bad": "aset-requires-in.broken-no-prime",
+    "from_": "writes keys;finish{keys+=key};",
+    "to": "",
+    "calc": "Prime [0,1) inserts1; work starts1 and ends2. Removing prime insertion (and its writes contract) makes work refuse before start at1, refusal1/work0, total E=W1. Both reach done. Atomic refusal in P01 instead consumes a full task minute."
+  },
+  {
+    "id": "P21",
+    "good": "aset-branch-sharing",
+    "bad": "aset-branch-sharing.broken-scalar-guard",
+    "from_": "if case.id in Ledger.keys",
+    "to": "if registered==true",
+    "calc": "Each case begins false/empty own key and posts once; keys{1,2}, case completion1/2, W1 each. Replacing guard with per-case false registered control leaves runtime equal. Private transition seam, not this monotone fixture, must distinguish due shared finish vs Branch ordering."
+  },
+  {
+    "id": "P22",
+    "good": "aset-conditional-agency",
+    "bad": "aset-conditional-agency.broken-nondet",
+    "from_": "writes [keys, registered]\n      duration fixed 3min\n      atomic {\n        if gate==true { keys += key; registered = true; result committed }\n        else { result rejected_duplicate }\n      }",
+    "to": "duration fixed 3min;result nondet{committed,rejected_duplicate}",
+    "calc": "Atomic sees gate true at3, calls Next [3,5): E5/W(3+1+2)=6. Static F guards Unknown; L(post)=1..1, L(Next) not_derived/state_guards. Independent nondet results admit rejected3/W4 and committed5/W6; F derived and L(Next)=0..1. Do not degrade O/P with Unknown."
+  },
+  {
+    "id": "P23",
+    "good": "aset-atomic-sampling",
+    "bad": "aset-atomic-sampling.broken-no-check",
+    "from_": "atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }",
+    "to": "finish { keys += key; registered = true }; result nondet { committed }",
+    "calc": "Atomic makes deterministic dup, four replications, each E=W2, draws empty. Finish-only always twice; no dup witness means inconclusive sample reachability, not violated. Corresponding exhaustive probability1 vs0 is separately asserted."
+  },
+  {
+    "id": "P23P",
+    "good": "aset-atomic-probability",
+    "bad": "aset-atomic-probability.broken-no-check",
+    "from_": "atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }",
+    "to": "finish { keys += key; registered = true }; result nondet { committed }",
+    "calc": "No random source: deterministic dup probability[1,1] vs[0,0] when check removed. E=W2 on both. Atomic results must not become nondeterministic outcomes."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-person",
+    "bad": "aset-static-element-person.broken-element-person",
+    "from_": "set<CaseId>",
+    "to": "set<PersonId>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-person must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-enum",
+    "bad": "aset-static-element-enum.broken-element-enum",
+    "from_": "set<CaseId>",
+    "to": "set<T>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-enum must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-bool",
+    "bad": "aset-static-element-bool.broken-element-bool",
+    "from_": "set<CaseId>",
+    "to": "set<bool>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-bool must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-integer",
+    "bad": "aset-static-element-integer.broken-element-integer",
+    "from_": "set<CaseId>",
+    "to": "set<0..3>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-integer must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-optional",
+    "bad": "aset-static-element-optional.broken-element-optional",
+    "from_": "set<CaseId>",
+    "to": "set<optional<CaseId>>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-optional must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-element-nested",
+    "bad": "aset-static-element-nested.broken-element-nested",
+    "from_": "set<CaseId>",
+    "to": "set<set<CaseId>>",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse element-nested must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-case-set",
+    "bad": "aset-static-case-set.broken-case-set",
+    "from_": "actor Ledger{state keys:set<CaseId>}",
+    "to": "observed case{keys:set<CaseId>};actor Ledger{}",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse case-set must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-latent-case",
+    "bad": "aset-static-latent-case.broken-latent-case",
+    "from_": "actor Ledger{state keys:set<CaseId>}",
+    "to": "latent case{keys:set<CaseId>};actor Ledger{}",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse latent-case must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-latent-actor",
+    "bad": "aset-static-latent-actor.broken-latent-actor",
+    "from_": "state keys:set<CaseId>",
+    "to": "latent keys:set<CaseId>",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse latent-actor must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-per-case",
+    "bad": "aset-static-per-case.broken-per-case",
+    "from_": "state keys:set<CaseId>",
+    "to": "instance per_case;state keys:set<CaseId>",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse per-case must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-caseid-state",
+    "bad": "aset-static-caseid-state.broken-caseid-state",
+    "from_": "state keys:set<CaseId>",
+    "to": "state k:CaseId",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse caseid-state must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-caseid-optional",
+    "bad": "aset-static-caseid-optional.broken-caseid-optional",
+    "from_": "state keys:set<CaseId>",
+    "to": "state k:optional<CaseId>",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse caseid-optional must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-person-latent",
+    "bad": "aset-static-person-latent.broken-person-latent",
+    "from_": "state keys:set<CaseId>",
+    "to": "latent who:optional<PersonId>",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse person-latent must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-person-parameter",
+    "bad": "aset-static-person-parameter.broken-person-parameter",
+    "from_": "key:CaseId",
+    "to": "key:PersonId",
+    "calc": "Positive control: No task is invoked: end at0, elapsed0 and work0. Single misuse person-parameter must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-remove",
+    "bad": "aset-static-remove.broken-remove",
+    "from_": "keys += key",
+    "to": "keys -= key",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse remove must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-assign",
+    "bad": "aset-static-assign.broken-assign",
+    "from_": "keys += key",
+    "to": "keys = key",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse assign must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-assign-empty",
+    "bad": "aset-static-assign-empty.broken-assign-empty",
+    "from_": "keys += key",
+    "to": "keys = {}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse assign-empty must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-default-empty",
+    "bad": "aset-static-default-empty.broken-default-empty",
+    "from_": "state keys: set<CaseId>",
+    "to": "state keys: set<CaseId> = {}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse default-empty must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-default-none",
+    "bad": "aset-static-default-none.broken-default-none",
+    "from_": "state keys: set<CaseId>",
+    "to": "state keys: set<CaseId> = none",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse default-none must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-distribution",
+    "bad": "aset-static-distribution.broken-distribution",
+    "from_": "state keys: set<CaseId>",
+    "to": "state keys: set<CaseId> ~ { }",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse distribution must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-builtin-case",
+    "bad": "aset-static-builtin-case.broken-builtin-case",
+    "from_": "type T = enum",
+    "to": "type CaseId=enum{k1};type T = enum",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse builtin-case must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-builtin-person",
+    "bad": "aset-static-builtin-person.broken-builtin-person",
+    "from_": "type T = enum",
+    "to": "type PersonId=enum{c1};type T = enum",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse builtin-person must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-nondet",
+    "bad": "aset-static-nondet.broken-nondet",
+    "from_": "commits",
+    "to": "commits;result nondet{committed}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse nondet must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-finish",
+    "bad": "aset-static-finish.broken-finish",
+    "from_": "commits",
+    "to": "commits;finish{}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse finish must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-kernel",
+    "bad": "aset-static-kernel.broken-kernel",
+    "from_": "commits",
+    "to": "commits;outcomes kernel K",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse kernel must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-both-writes",
+    "bad": "aset-static-both-writes.broken-both-writes",
+    "from_": "if key in keys { result rejected_duplicate }",
+    "to": "if key in keys { registered=false;result rejected_duplicate }",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse both-writes must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-no-writes",
+    "bad": "aset-static-no-writes.broken-no-writes",
+    "from_": "keys += key; registered = true;",
+    "to": "",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse no-writes must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-same-result",
+    "bad": "aset-static-same-result.broken-same-result",
+    "from_": "result rejected_duplicate",
+    "to": "result committed",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse same-result must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-duplicate-atomic",
+    "bad": "aset-static-duplicate-atomic.broken-duplicate-atomic",
+    "from_": "atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }",
+    "to": "atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      };atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse duplicate-atomic must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-nested-atomic",
+    "bad": "aset-static-nested-atomic.broken-nested-atomic",
+    "from_": "result rejected_duplicate",
+    "to": "atomic{if key in keys{result rejected_duplicate}else{keys+=key;result committed}};result rejected_duplicate",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse nested-atomic must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-nested-if",
+    "bad": "aset-static-nested-if.broken-nested-if",
+    "from_": "result rejected_duplicate",
+    "to": "if key in keys{result rejected_duplicate}else{result committed}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse nested-if must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-else-if",
+    "bad": "aset-static-else-if.broken-else-if",
+    "from_": "else { keys",
+    "to": "else if key in keys { keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse else-if must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-branch-nondet",
+    "bad": "aset-static-branch-nondet.broken-branch-nondet",
+    "from_": "result rejected_duplicate",
+    "to": "result nondet{rejected_duplicate}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse branch-nondet must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-after-result",
+    "bad": "aset-static-after-result.broken-after-result",
+    "from_": "result rejected_duplicate }",
+    "to": "result rejected_duplicate;registered=false }",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse after-result must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-missing-else",
+    "bad": "aset-static-missing-else.broken-missing-else",
+    "from_": "else { keys",
+    "to": "{ keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse missing-else must be statically refused with E-SYN-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-missing-result-value",
+    "bad": "aset-static-missing-result-value.broken-missing-result-value",
+    "from_": "result rejected_duplicate",
+    "to": "result",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse missing-result-value must be statically refused with E-SYN-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-missing-brace",
+    "bad": "aset-static-missing-brace.broken-missing-brace",
+    "from_": "result committed }",
+    "to": "result committed",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse missing-brace must be statically refused with E-SYN-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-writes-missing",
+    "bad": "aset-static-writes-missing.broken-writes-missing",
+    "from_": "writes [keys, registered]",
+    "to": "writes [registered]",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse writes-missing must be statically refused with E-NAME-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-writes-extra",
+    "bad": "aset-static-writes-extra.broken-writes-extra",
+    "from_": "writes [keys, registered]",
+    "to": "writes [keys, registered,spare]",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse writes-extra must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-duplicate-target",
+    "bad": "aset-static-duplicate-target.broken-duplicate-target",
+    "from_": "keys += key",
+    "to": "keys += key;Ledger.keys+=key",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse duplicate-target must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-result-type",
+    "bad": "aset-static-result-type.broken-result-type",
+    "from_": "result committed",
+    "to": "result ok",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse result-type must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-enum-argument",
+    "bad": "aset-static-enum-argument.broken-enum-argument",
+    "from_": "key: CaseId",
+    "to": "key: T",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse enum-argument must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-undefined-insert",
+    "bad": "aset-static-undefined-insert.broken-undefined-insert",
+    "from_": "keys += key",
+    "to": "keys += missing",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse undefined-insert must be statically refused with E-NAME-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-enum-insert",
+    "bad": "aset-static-enum-insert.broken-enum-insert",
+    "from_": "keys += key",
+    "to": "keys += other",
+    "calc": "Positive control: Seed.make1 followed by post1 and post1: elapsed=work=1+1+1=3. Single misuse enum-insert must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-direct-case-insert",
+    "bad": "aset-static-direct-case-insert.broken-direct-case-insert",
+    "from_": "keys += key",
+    "to": "keys += case.id",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse direct-case-insert must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-case-equality",
+    "bad": "aset-static-case-equality.broken-case-equality",
+    "from_": "if b == rejected_duplicate",
+    "to": "if case.id == b",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse case-equality must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-executor-condition",
+    "bad": "aset-static-executor-condition.broken-executor-condition",
+    "from_": "if b == rejected_duplicate",
+    "to": "if executor.id == c1",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse executor-condition must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-binding-membership",
+    "bad": "aset-static-binding-membership.broken-binding-membership",
+    "from_": "if b == rejected_duplicate",
+    "to": "if b in Ledger.keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse binding-membership must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-captured-parameter",
+    "bad": "aset-static-captured-parameter.broken-captured-parameter",
+    "from_": "if b == rejected_duplicate",
+    "to": "if key in Ledger.keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse captured-parameter must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-missing-actor",
+    "bad": "aset-static-missing-actor.broken-missing-actor",
+    "from_": "if b == rejected_duplicate",
+    "to": "if case.id in Missing.keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse missing-actor must be statically refused with E-NAME-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-missing-set",
+    "bad": "aset-static-missing-set.broken-missing-set",
+    "from_": "if b == rejected_duplicate",
+    "to": "if case.id in Ledger.missing",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse missing-set must be statically refused with E-NAME-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-nonset",
+    "bad": "aset-static-nonset.broken-nonset",
+    "from_": "if b == rejected_duplicate",
+    "to": "if case.id in Ledger.nonset",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse nonset must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-negation",
+    "bad": "aset-static-negation.broken-negation",
+    "from_": "if b == rejected_duplicate",
+    "to": "if !registered == false",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse negation must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-not-in",
+    "bad": "aset-static-not-in.broken-not-in",
+    "from_": "if b == rejected_duplicate",
+    "to": "if case.id not in Ledger.keys",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse not-in must be statically refused with E-SYN-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-foreign-write",
+    "bad": "aset-static-foreign-write.broken-foreign-write",
+    "from_": "keys += key",
+    "to": "Other.keys += key",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse foreign-write must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-idempotency",
+    "bad": "aset-static-idempotency.broken-idempotency",
+    "from_": "commits",
+    "to": "commits;idempotency key",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse idempotency must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-retry",
+    "bad": "aset-static-retry.broken-retry",
+    "from_": "commits",
+    "to": "commits;retry 1",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse retry must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-probability-membership",
+    "bad": "aset-static-probability-membership.broken-probability-membership",
+    "from_": "verify reachable end.dup",
+    "to": "verify probability reached case.id in Ledger.keys >= 1",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse probability-membership must be statically refused with U-SYN-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-binding-to-case",
+    "bad": "aset-static-binding-to-case.broken-binding-to-case",
+    "from_": "Ledger.take(case.id)",
+    "to": "Ledger.take(a)",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse binding-to-case must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-anonymous",
+    "bad": "aset-static-anonymous.broken-anonymous",
+    "from_": "executors [c1,c2]",
+    "to": "capacity 1",
+    "calc": "Positive control: Clerk chooses c1 or c2, one task [0,3): both endpoints have elapsed=work=3. Single misuse anonymous must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-executor-bool",
+    "bad": "aset-static-executor-bool.broken-executor-bool",
+    "from_": "flag=true",
+    "to": "flag=executor.id",
+    "calc": "Positive control: Clerk chooses c1 or c2, one task [0,3): both endpoints have elapsed=work=3. Single misuse executor-bool must be statically refused with E-TYPE-0, exit3. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-kernel-given",
+    "bad": "aset-static-kernel-given.broken-kernel-given",
+    "from_": "kernel K{* -> {1:committed}}",
+    "to": "kernel K given [who]{none -> {1:committed};c1 -> {1:committed};c2 -> {1:committed}}",
+    "calc": "Positive control: One one-minute task [0,1): elapsed=work=1. Single misuse kernel-given must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-kernel-with",
+    "bad": "aset-static-kernel-with.broken-kernel-with",
+    "from_": "1:committed",
+    "to": "1:committed with who=c1",
+    "calc": "Positive control: One one-minute task [0,1): elapsed=work=1. Single misuse kernel-with must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-kernel-reads",
+    "bad": "aset-static-kernel-reads.broken-kernel-reads",
+    "from_": "duration fixed 1min",
+    "to": "kernel_reads latent[who];duration fixed 1min",
+    "calc": "Positive control: One one-minute task [0,1): elapsed=work=1. Single misuse kernel-reads must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-capacity-with-resource",
+    "bad": "aset-static-capacity-with-resource.broken-capacity-with-resource",
+    "from_": "capacity 1; state keys",
+    "to": "capacity 2; state keys",
+    "calc": "Positive control: One one-minute post per case, FIFO intervals [0,1) and [1,2): completion1/2 and work1 each. Single misuse capacity-with-resource must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  },
+  {
+    "id": "P11",
+    "good": "aset-static-fork-target",
+    "bad": "aset-static-fork-target.broken-fork-target",
+    "from_": "writes other;atomic{if k in other{result rejected_duplicate}else{other+=k;result committed}}",
+    "to": "writes keys;atomic{if k in other{result rejected_duplicate}else{keys+=k;result committed}}",
+    "calc": "Positive control: Two one-minute tasks run serially (or serialize at capacity1): elapsed=1+1=2 and work=1+1=2. Single misuse fork-target must be statically refused with U-SEM-0, exit4. No numeric exploration after static failure."
+  }
+]

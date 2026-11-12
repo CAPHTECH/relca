@@ -1,0 +1,9 @@
+{
+  "command": "compare",
+  "plans": [
+    "Check",
+    "Fast"
+  ],
+  "mode": "exhaustive",
+  "scenario": "Day"
+}

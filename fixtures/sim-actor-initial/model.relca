@@ -1,0 +1,8 @@
+model ActorInitial version "0.2" {
+  type T = enum { first, second }
+  actor A { latent z:T ~ {first:0.5,second:0.5} }
+  process P { end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify probability reached A.z == first <= 1
+  simulation replications 4 seed 0 confidence 0.5
+}

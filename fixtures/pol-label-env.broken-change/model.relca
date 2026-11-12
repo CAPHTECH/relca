@@ -1,0 +1,13 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  observed case { v: T = ok; flag: T = ok }
+  kernel K { * -> { 0.9: ok; 0.1: bad } }
+  actor A { capacity 1; capability draw() -> T { duration fixed 2min; outcomes kernel K; writes v } }
+  actor B { capacity 1;  capability choose() -> T {  duration fixed 1min; result nondet { ok, late }; writes flag; cancel cooperative ack_within 1min } }
+
+  process P { fork f { a = A.draw(); b = B.choose() }; join all f; end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id assign first_idle
+  verify probability reached v == bad && flag == late <= 0.1
+}

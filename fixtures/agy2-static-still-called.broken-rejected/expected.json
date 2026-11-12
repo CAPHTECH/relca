@@ -1,0 +1,9 @@
+{
+  "verdict": "invalid",
+  "agency": null,
+  "diagnostics": [
+    {
+      "code": "E-DIFF-0"
+    }
+  ]
+}

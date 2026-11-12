@@ -1,0 +1,11 @@
+{
+  "verdict":"violated","bounds":{"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 contest","verdict":"violated"},{"id":"contract Controls #1 contest_response","verdict":"violated"}],
+  "obligations":[],
+  "contest_summary":{"business_ended_open":{"min":"0","max":"0","reason":null}},
+  "contest_runtime":[{"case_id":1,"coverage":"complete","alternatives":[{"filed":false,"target_at":2,"status":"not_filed","closed_at":2},{"filed":true,"target_at":2,"filed_at":2,"deadline":2,"status":"violated","response_at":3,"closed_at":3,"executor":"c1","result":"pass","violation_reason":"late_response"},{"filed":true,"target_at":2,"filed_at":2,"deadline":2,"status":"violated","response_at":3,"closed_at":3,"executor":"c1","result":"fail","violation_reason":"late_response"}]}],
+  "terminals":[{"end":"returned","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null},{"end":"posted","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+  "responsibilities":[],
+  "contest_paths":[{"id":"contract Controls #1 contest","rules":"contest-p1-1","party":"Vendor","end":"returned","route":"Clerk.recheck","reversible_by":["a1"],"respond_by":0,"checks":{"route_exists":{"satisfied":true},"reversal_authority":{"satisfied":true,"quantifier":"exists_decision_per_person","people":[{"person":"a1","satisfied":true,"decisions":[{"capability":"Approver.approve","executor":true,"included":true,"permission":true,"authorities":["ApprovalGrant"]}],"reason":null}]},"deadline_defined":{"satisfied":false}},"verdict":"violated","basis":"構造の不足","missing":["deadline_defined"]}],
+  "absent_diagnostics":["W-CONTEST-0","E-SYN-0","E-CON-0"]
+}

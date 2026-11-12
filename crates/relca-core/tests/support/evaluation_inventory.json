@@ -1,0 +1,1619 @@
+{
+  "eval-hard": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T01"
+  },
+  "eval-hard.broken-no-hard": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T01"
+  },
+  "eval-hard.broken-latent-fast": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-POL-LATENT",
+    "id": "T01"
+  },
+  "eval-contention": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T02"
+  },
+  "eval-contention.broken-no-policy": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T02"
+  },
+  "cmp7-clock": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03C"
+  },
+  "cmp7-clock.broken-short-clock": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03C"
+  },
+  "cmp7-clock-loose": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03L/S-clock"
+  },
+  "cmp7-clock-loose.broken-crossing": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03L/S-clock"
+  },
+  "cmp7-clock-strict": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03L/S-clock"
+  },
+  "cmp7-clock-strict.broken-crossing": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T03L/S-clock"
+  },
+  "eval-zero": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T04"
+  },
+  "eval-zero.broken-all-fail": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T04"
+  },
+  "eval-sim": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T05"
+  },
+  "eval-sim.broken-tight": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T05"
+  },
+  "eval-sim-ratio": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T06"
+  },
+  "eval-sim-ratio.broken-tight": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T06"
+  },
+  "eval-pareto": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T07"
+  },
+  "eval-pareto.broken-work-only": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T07"
+  },
+  "cmp7-cost": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T07-cost"
+  },
+  "cmp7-cost.broken-missing-rate": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T07-cost"
+  },
+  "eval-shared-source": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T08"
+  },
+  "eval-shared-source.broken-one-objective": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T08"
+  },
+  "eval-vacuous": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T09"
+  },
+  "eval-vacuous.broken-reached": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T09"
+  },
+  "eval-agency": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10"
+  },
+  "eval-agency.broken-swapped": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "ToBeP",
+        "AsIs"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10"
+  },
+  "eval-agency.broken-implicit-cut": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10"
+  },
+  "eval-mut7": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T11",
+    "mutation": true
+  },
+  "eval-mut7.broken-no-cohort": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T11",
+    "mutation": true
+  },
+  "eval-label": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Zulu",
+        "Alpha"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T12"
+  },
+  "eval-label.broken-no-policy": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Zulu",
+        "Alpha"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T12"
+  },
+  "cmp7-equality-le": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T14"
+  },
+  "cmp7-equality-le.broken-strict": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T14"
+  },
+  "cmp7-equality-ge": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T14"
+  },
+  "cmp7-equality-ge.broken-strict": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T14"
+  },
+  "cmp7-row-multiplicity": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T16"
+  },
+  "cmp7-row-multiplicity.broken-another-row": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T16"
+  },
+  "cmp7-case-multiplicity": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T15"
+  },
+  "cmp7-case-multiplicity.broken-one-case": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T15"
+  },
+  "cmp7-sim-zero": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T18"
+  },
+  "cmp7-sim-zero.broken-registered": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T18"
+  },
+  "cmp7-overlap": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T19"
+  },
+  "cmp7-overlap.broken-narrow": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T19"
+  },
+  "cmp7-maximize": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T20"
+  },
+  "cmp7-maximize.broken-minimize": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T20"
+  },
+  "cmp7-no-admissible": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T21"
+  },
+  "cmp7-no-admissible.broken-one-admissible": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T21"
+  },
+  "cmp7-abort": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T22"
+  },
+  "cmp7-abort.broken-deterministic": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "T22"
+  },
+  "eval-hard.broken-report": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "compare report lists are unsupported"
+  },
+  "eval-hard.broken-weight": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "weighted scores are unsupported"
+  },
+  "eval-hard.broken-score": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "weighted scores are unsupported"
+  },
+  "eval-hard.broken-hard-metric": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "hard constraints apply to cohort ratios only"
+  },
+  "eval-hard.broken-hard-quantile": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "hard constraints apply to cohort ratios only"
+  },
+  "eval-hard.broken-hard-case": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "hard constraints apply to cohort ratios only"
+  },
+  "eval-hard.broken-no-direction": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "objectives need minimize or maximize"
+  },
+  "eval-hard.broken-utilization": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported compare objective"
+  },
+  "eval-hard.broken-waiting": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported compare objective"
+  },
+  "eval-hard.broken-agency": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported compare objective"
+  },
+  "eval-hard.broken-case-objective": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported compare objective"
+  },
+  "eval-hard.broken-quantile": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-NAME-0",
+    "id": "T01",
+    "message_contains": "unknown quantile metric: Median"
+  },
+  "eval-hard.broken-duplicate-declaration": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SEM-0",
+    "id": "T01",
+    "message_contains": "duplicate compare declaration"
+  },
+  "eval-hard.broken-duplicate-hard": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SEM-0",
+    "id": "T01",
+    "message_contains": "duplicate hard constraint"
+  },
+  "eval-hard.broken-duplicate-objective": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SEM-0",
+    "id": "T01",
+    "message_contains": "duplicate objective"
+  },
+  "eval-hard.broken-unknown-plan": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-NAME-0",
+    "id": "T01",
+    "message_contains": "unknown configuration"
+  },
+  "eval-hard.broken-unknown-cohort": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-NAME-0",
+    "id": "T01",
+    "message_contains": "unknown cohort metric"
+  },
+  "eval-hard.broken-unknown-objective": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-NAME-0",
+    "id": "T01",
+    "message_contains": "unknown cohort metric"
+  },
+  "eval-hard.broken-unknown-cut": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-NAME-0",
+    "id": "T01",
+    "message_contains": "unknown cut"
+  },
+  "eval-hard.broken-out-of-range": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-PROB-0",
+    "id": "T01",
+    "message_contains": "probability outside 0..1"
+  },
+  "eval-hard.broken-fraction": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "exponent or fraction probability"
+  },
+  "eval-hard.broken-exponent": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "exponent or fraction probability"
+  },
+  "eval-hard.broken-one-plan": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01",
+    "message_contains": "plans require at least two distinct ASCII identifiers"
+  },
+  "eval-hard.broken-same-plan": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01",
+    "message_contains": "plans require at least two distinct ASCII identifiers"
+  },
+  "eval-hard.broken-empty-plans": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01",
+    "message_contains": "plans require at least two distinct ASCII identifiers"
+  },
+  "eval-hard.broken-empty-hard": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01"
+  },
+  "eval-hard.broken-empty-objectives": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01"
+  },
+  "eval-hard.broken-missing-bracket": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-SYN-0",
+    "id": "T01"
+  },
+  "eval-hard.broken-process": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported syntax: compare"
+  },
+  "eval-hard.broken-configuration": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "U-SYN-0",
+    "id": "T01",
+    "message_contains": "unsupported syntax: compare"
+  },
+  "eval-hard.broken-plan-order": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Fast",
+        "Check"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-CONF-0",
+    "id": "T13",
+    "message_contains": "plans differ from the compare declaration"
+  },
+  "cmp7-under": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": null,
+    "id": "T13-under"
+  },
+  "cmp7-under.broken-duplicate": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": "U-SEM-0",
+    "id": "T13-under",
+    "message_contains": "duplicate compare scenario"
+  },
+  "cmp7-under.broken-unknown": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": "E-NAME-0",
+    "id": "T13-under",
+    "message_contains": "unknown scenario"
+  },
+  "cmp7-under.broken-empty": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": "E-SYN-0",
+    "id": "T13-under"
+  },
+  "cmp7-under.broken-cut": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": "E-CMP-0",
+    "id": "T13-under",
+    "message_contains": "compare cut differs from plan cut"
+  },
+  "cmp7-under.broken-scenario-body": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": "U-SYN-0",
+    "id": "T13-under",
+    "message_contains": "unsupported syntax: compare"
+  },
+  "cmp7-under.broken-outside": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Outside"
+    },
+    "code": "E-CONF-0",
+    "id": "T13-under",
+    "message_contains": "scenario is not under the compare declaration"
+  },
+  "cmp7-under.broken-omitted": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-CONF-0",
+    "id": "T13-under",
+    "message_contains": "a scenario selector is required"
+  },
+  "cmp7-under.broken-several": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day,Spare"
+    },
+    "code": "U-SEM-0",
+    "id": "T13-under",
+    "message_contains": "compare under several scenarios is unsupported"
+  },
+  "cmp7-under-one": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Day"
+    },
+    "code": null,
+    "id": "T13-under"
+  },
+  "cmp7-under-one.broken-omitted": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": "E-CONF-0",
+    "id": "T13-under",
+    "message_contains": "a scenario selector is required"
+  },
+  "cmp7-overall": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9"
+  },
+  "cmp7-overall.broken-opposite-direction": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9"
+  },
+  "cmp7-mut-state": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T25",
+    "mutation": true,
+    "kind7_oracle": {
+      "status": "not_applicable",
+      "reason": "state_condition",
+      "mutants": [],
+      "skipped_sites": [
+        {
+          "cohort": "WrongPerRegistered",
+          "status": "not_applicable",
+          "reason": "state_condition"
+        }
+      ]
+    }
+  },
+  "cmp7-mut-state.broken-ends": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T25",
+    "mutation": true,
+    "kind7_oracle": {
+      "status": "generated",
+      "reason": null,
+      "mutants": [
+        {
+          "id": "old_promise_denominator_removed:cohort.WrongPerRegistered:remove:posted",
+          "operator": "remove_denominator_end",
+          "result": "detected",
+          "reason": null,
+          "report": null,
+          "site": {
+            "cohort": "WrongPerRegistered",
+            "removed_end": "posted",
+            "process": null
+          },
+          "other_changes": [],
+          "assigned_changes": [
+            {
+              "check": "quality_denominator",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "returned"
+              ],
+              "direction": "changed"
+            },
+            {
+              "check": "comparison_mismatch",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "returned"
+              ],
+              "direction": "changed"
+            }
+          ]
+        },
+        {
+          "id": "old_promise_denominator_removed:cohort.WrongPerRegistered:remove:returned",
+          "operator": "remove_denominator_end",
+          "result": "detected",
+          "reason": null,
+          "report": null,
+          "site": {
+            "cohort": "WrongPerRegistered",
+            "removed_end": "returned",
+            "process": null
+          },
+          "other_changes": [],
+          "assigned_changes": [
+            {
+              "check": "quality_denominator",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "posted"
+              ],
+              "direction": "changed"
+            },
+            {
+              "check": "comparison_mismatch",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "posted"
+              ],
+              "direction": "changed"
+            }
+          ]
+        }
+      ],
+      "skipped_sites": []
+    }
+  },
+  "cmp7-mut-singleton": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T25",
+    "mutation": true,
+    "kind7_oracle": {
+      "status": "not_applicable",
+      "reason": "no_matching_site",
+      "mutants": [],
+      "skipped_sites": [
+        {
+          "cohort": "WrongPerRegistered",
+          "status": "not_applicable",
+          "reason": "no_matching_site"
+        }
+      ]
+    }
+  },
+  "cmp7-mut-singleton.broken-union": {
+    "invocation": {
+      "command": "mutate"
+    },
+    "code": null,
+    "id": "T25",
+    "mutation": true,
+    "kind7_oracle": {
+      "status": "generated",
+      "reason": null,
+      "mutants": [
+        {
+          "id": "old_promise_denominator_removed:cohort.WrongPerRegistered:remove:posted",
+          "operator": "remove_denominator_end",
+          "result": "detected",
+          "reason": null,
+          "report": null,
+          "site": {
+            "cohort": "WrongPerRegistered",
+            "removed_end": "posted",
+            "process": null
+          },
+          "other_changes": [],
+          "assigned_changes": [
+            {
+              "check": "quality_denominator",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "returned"
+              ],
+              "direction": "changed"
+            },
+            {
+              "check": "comparison_mismatch",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "returned"
+              ],
+              "direction": "changed"
+            }
+          ]
+        },
+        {
+          "id": "old_promise_denominator_removed:cohort.WrongPerRegistered:remove:returned",
+          "operator": "remove_denominator_end",
+          "result": "detected",
+          "reason": null,
+          "report": null,
+          "site": {
+            "cohort": "WrongPerRegistered",
+            "removed_end": "returned",
+            "process": null
+          },
+          "other_changes": [],
+          "assigned_changes": [
+            {
+              "check": "quality_denominator",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "posted"
+              ],
+              "direction": "changed"
+            },
+            {
+              "check": "comparison_mismatch",
+              "key": "cohort.WrongPerRegistered",
+              "field": "denominator.terminals",
+              "before": [
+                "posted",
+                "returned"
+              ],
+              "after": [
+                "posted"
+              ],
+              "direction": "changed"
+            }
+          ]
+        }
+      ],
+      "skipped_sites": []
+    }
+  },
+  "cmp7-sim-no-hard": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "m0"
+  },
+  "cmp7-sim-no-hard.broken-no-objectives": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "m0"
+  },
+  "cmp7-overlap-max": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T19-max"
+  },
+  "cmp7-overlap-max.broken-narrow": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "One",
+        "Two"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T19-max"
+  },
+  "cmp7-responsibility": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "From",
+        "To"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10-F32"
+  },
+  "cmp7-responsibility.broken-no-inspect": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "From",
+        "To"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10-F32"
+  },
+  "cmp7-three-plans": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Fast",
+        "Check",
+        "Middle"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10-all-pairs"
+  },
+  "cmp7-three-plans.broken-another-excluded": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Fast",
+        "Check",
+        "Middle"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "T10-all-pairs"
+  },
+  "cmp7-shared-cohort": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U10-cohort"
+  },
+  "cmp7-shared-cohort.broken-one-objective": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U10-cohort"
+  },
+  "cmp7-no-metrics": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9-not-configured"
+  },
+  "cmp7-no-metrics.broken-configured": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9-not-configured"
+  },
+  "cmp7-named-work": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9-named"
+  },
+  "cmp7-named-work.broken-anonymous": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "AsIs",
+        "ToBeP"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U9-named"
+  },
+  "cmp7-verify-excluded": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U3-verify"
+  },
+  "cmp7-verify-excluded.broken-verify-satisfied": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Check",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    },
+    "code": null,
+    "id": "U3-verify"
+  },
+  "cmp7-nondyadic": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "F14-public"
+  },
+  "cmp7-nondyadic.broken-tight": {
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "mode": "simulation"
+    },
+    "code": null,
+    "id": "F14-public"
+  }
+}

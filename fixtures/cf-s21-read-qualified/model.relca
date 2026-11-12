@@ -1,0 +1,4 @@
+model Read version "0.2" {
+ type R=enum{ok};actor Ledger{source record;capacity 1;state holder:bool=false;capability read()->R{reads [Ledger];duration fixed 1min;result nondet{ok}}}
+ process P{r=Ledger.read();end done};cut C{include[Ledger]};bounds{cases 1;live_tasks 1;clock 5min};verify reachable end.done
+}

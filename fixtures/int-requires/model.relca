@@ -1,0 +1,8 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  observed case { n: 0..2 = 1 }
+  actor A { capacity 1; capability inc() -> T { duration fixed 1min; result nondet { ok }; requires n>=1 else no; start { n -= 1 } } }
+  process P { a = A.inc(); if a == ok { if n == 0 { end done } else { end wrong } } else { if n == 0 { end refused } else { end wrong } } }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify safety no_resource_overcommit
+}

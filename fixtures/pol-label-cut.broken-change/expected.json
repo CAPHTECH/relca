@@ -1,0 +1,14 @@
+{
+  "verdict": "inconclusive",
+  "bounds": {
+    "truncated": true
+  },
+  "diagnostics": [],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "terminals": []
+    }
+  ]
+}

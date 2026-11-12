@@ -1,0 +1,8 @@
+{
+  "verdict": "invalid",
+  "bounds": { "truncated": null },
+  "cut": "undeclared",
+  "diagnostics": [{ "code": "E-CAP-0" }, { "code": "W-CUT-0" }],
+  "properties": [],
+  "terminals": []
+}

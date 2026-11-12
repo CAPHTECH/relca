@@ -1,0 +1,18 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "U-SYN-0"
+    },
+    {
+      "code": "E-TYPE-0",
+      "message": "result writer has different base type"
+    }
+  ],
+  "absent_diagnostics": [
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-POL-LATENT",
+    "U-SEM-0"
+  ]
+}

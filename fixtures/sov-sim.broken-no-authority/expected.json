@@ -1,0 +1,37 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "U-SEM-0"
+    }
+  ],
+  "contest_paths": [
+    {
+      "id": "contract Controls #1 contest",
+      "rules": "contest-p1-2",
+      "party": "Vendor",
+      "end": null,
+      "effect": "Ledger.post.commit",
+      "route": "Clerk.recheck",
+      "respond_by": 5,
+      "verdict": "violated",
+      "basis": "構造の不足",
+      "checks": {
+        "route_exists": {
+          "satisfied": true,
+          "reason": null
+        },
+        "reversal_authority": {
+          "satisfied": false
+        },
+        "deadline_defined": {
+          "satisfied": true,
+          "reason": null
+        }
+      },
+      "missing": [
+        "reversal_authority"
+      ]
+    }
+  ]
+}

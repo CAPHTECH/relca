@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { who:optional<PersonId>;flag:bool=false }
+  kernel K{* -> {1:committed}}
+  actor Ledger{capacity 1;capability post()->Ack{duration fixed 1min;outcomes kernel K}}
+  process Flow { a=Ledger.post();end done }
+  cut K { include [Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.done
+}

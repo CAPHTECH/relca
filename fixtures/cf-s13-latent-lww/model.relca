@@ -1,0 +1,4 @@
+model Placement version "0.2" {
+ actor A{latent flag:bool=false}
+ process P{end done};bounds{cases 1;live_tasks 1;clock 5min};verify reachable end.done
+}

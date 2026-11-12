@@ -1,0 +1,27 @@
+{
+  "verdict": "violated",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 0,
+        "max": 0
+      },
+      "work": {
+        "min": 0,
+        "max": 0
+      },
+      "result_at": null
+    }
+  ]
+}

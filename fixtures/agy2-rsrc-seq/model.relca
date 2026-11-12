@@ -1,0 +1,13 @@
+model Seq version "0.2" {
+  type V = enum { pass,fail }
+  resource R capacity 1
+  actor A { capacity 1;
+    capability z() -> V { duration fixed 1min; result nondet { pass,fail } }
+    capability x() -> V { uses R: 2; duration fixed 1min; result nondet { pass } }
+    capability y() -> V { duration fixed 1min; result nondet { pass } }
+  }
+  process P { w = A.z(); if w == pass { y = A.y() } else { x = A.x(); y2 = A.y() }; end done }
+  cut K { include [A] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor D { state flag: bool = true }; actor Probe { capacity 1; capability check() -> R { duration fixed 1min; result nondet { ok } } }
+  process P { a = Probe.check(); end done }
+  cut C { include [D,Probe] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  contract K { invariant Probe.check.finish -> D.flag == true }
+  verify reachable end.done
+}

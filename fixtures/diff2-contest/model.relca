@@ -1,0 +1,18 @@
+model DiffContest version "0.2" {
+  type V = enum { pass,fail }
+  people [p]
+  actor Gate { executors [p]; capability g() -> V { duration fixed 1min; result nondet { pass,fail } } }
+  actor Reader { capacity 1; capability r() -> V { duration fixed 1min; result nondet { pass } } }
+  actor V { control party; standing over [end.rejected] basis "請求" }
+  authority G { basis "review"; grants p to Gate.g; issued_by p }
+  process Before { r = Reader.r(); x = Gate.g(); if x == pass { end done } else { end done } }
+  process After { r = Reader.r(); x = Gate.g(); if x == pass { end done } else { end rejected } }
+  process Names { end rejected }
+  contract Ctl { contest V on end.rejected route Reader.r reversible_by [p] respond_by 5min }
+  cut C { include [Gate,Reader,V] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  configuration NamesOnly { cut C; process Names }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

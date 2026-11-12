@@ -1,0 +1,9 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-CON-0",
+      "severity": "error"
+    }
+  ]
+}

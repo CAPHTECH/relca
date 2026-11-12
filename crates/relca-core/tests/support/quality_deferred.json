@@ -1,0 +1,1026 @@
+{
+  "qual-horizon": {
+    "source": "model QualityBase version \"0.2\" {\n  type V = enum { pass, fail }\n  type Ack = enum { committed }\n  observed case { registered: bool = false }\n  latent case { correct: bool = false }\n  kernel judge { * -> { 0.9: pass with correct = true; 0.02: pass with correct = false; 0.08: fail with correct = false } }\n  actor Checker { capacity 1; capability check() -> V { duration fixed 4min; outcomes kernel judge; writes correct } }\n  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }\n  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }\n  cut C { include [Checker, Ledger] }\n  verify reachable end.posted\n  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n  policy fifo tie_by case_id\n  scenario Day { arrivals fixed_every 6min during [0min, 18min); horizon 14min; bounds { cases 3; live_tasks 2; clock 30min } }\n}\n",
+    "expected": {
+      "verdict": "inconclusive",
+      "quality": {
+        "rules": "quality-cohort-p1-1",
+        "analysis": "exhaustive",
+        "properties": [
+          {
+            "name": "Wrong",
+            "condition": "registered == true && correct == false",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "min": "1/50",
+                "max": "1/50",
+                "reason": null
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "min": "1/50",
+                "max": "1/50",
+                "reason": null
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "min": "0",
+                "max": "1",
+                "reason": "undetermined"
+              }
+            ],
+            "expected_count": {
+              "lower": "1/25",
+              "upper": "26/25",
+              "basis": "per_case_relaxation",
+              "reason": "undetermined"
+            }
+          },
+          {
+            "name": "Registered",
+            "condition": "registered == true",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "min": "23/25",
+                "max": "23/25",
+                "reason": null
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "min": "23/25",
+                "max": "23/25",
+                "reason": null
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "min": "0",
+                "max": "1",
+                "reason": "undetermined"
+              }
+            ],
+            "expected_count": {
+              "lower": "46/25",
+              "upper": "71/25",
+              "basis": "per_case_relaxation",
+              "reason": "undetermined"
+            }
+          }
+        ],
+        "cohort": [
+          {
+            "name": "WrongPerArrival",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "arrivals",
+              "count": 3
+            },
+            "value": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "undetermined"
+            },
+            "bounds_with_undetermined": {
+              "lower": "1/75",
+              "upper": "26/75"
+            }
+          },
+          {
+            "name": "WrongPerRegistered",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "property",
+              "property": "Registered",
+              "covers": null,
+              "reason": "state_condition"
+            },
+            "value": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "undetermined"
+            },
+            "bounds_with_undetermined": {
+              "lower": "1/71",
+              "upper": "13/23"
+            }
+          }
+        ],
+        "outcomes_per_arrival": [
+          {
+            "kind": "end",
+            "end": "returned",
+            "expected_count": {
+              "lower": "4/25",
+              "upper": "4/25",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "4/75",
+              "upper": "4/75",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "end",
+            "end": "posted",
+            "expected_count": {
+              "lower": "46/25",
+              "upper": "46/25",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "46/75",
+              "upper": "46/75",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "unfinished",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "deadlock",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "cut_off",
+            "end": null,
+            "expected_count": {
+              "lower": "1",
+              "upper": "1",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "1/3",
+              "upper": "1/3",
+              "basis": "exact",
+              "reason": null
+            }
+          }
+        ],
+        "checked": [
+          "case_reachability",
+          "expected_counts",
+          "ratio_of_expected_counts",
+          "denominator_disclosure",
+          "outcomes_per_arrival"
+        ],
+        "unchecked": [
+          "expectation_of_ratio",
+          "cohort_any_probability",
+          "metric_intervals",
+          "metric_constraints",
+          "numerator_subset_of_denominator",
+          "business_value",
+          "rework_loss",
+          "deadline_attainment"
+        ]
+      }
+    },
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    },
+    "code": null,
+    "calc": "T06: horizon14 cuts case3,not a computational cut. A null undetermined[1/75,26/75],B[1/71,13/23]. Observed outcomes posted46/75,returned4/75,cut_off1/3,unfinished0. Clock counterpart identical property bounds but truncated and no cut_off row.",
+    "deferred": "ADR0042 scenario/horizon"
+  },
+  "qual-horizon.broken-clock": {
+    "source": "model QualityBase version \"0.2\" {\n  type V = enum { pass, fail }\n  type Ack = enum { committed }\n  observed case { registered: bool = false }\n  latent case { correct: bool = false }\n  kernel judge { * -> { 0.9: pass with correct = true; 0.02: pass with correct = false; 0.08: fail with correct = false } }\n  actor Checker { capacity 1; capability check() -> V { duration fixed 4min; outcomes kernel judge; writes correct } }\n  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }\n  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }\n  cut C { include [Checker, Ledger] }\n  arrivals fixed [0min, 6min, 12min]\n  bounds { cases 3; live_tasks 2; clock 14min }\n  verify reachable end.posted\n  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n  policy fifo tie_by case_id\n}\n",
+    "expected": {
+      "verdict": "inconclusive",
+      "quality": {
+        "rules": "quality-cohort-p1-1",
+        "analysis": "exhaustive",
+        "properties": [
+          {
+            "name": "Wrong",
+            "condition": "registered == true && correct == false",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "min": "1/50",
+                "max": "1/50",
+                "reason": null
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "min": "1/50",
+                "max": "1/50",
+                "reason": null
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "min": "0",
+                "max": "1",
+                "reason": "truncated"
+              }
+            ],
+            "expected_count": {
+              "lower": "1/25",
+              "upper": "26/25",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            }
+          },
+          {
+            "name": "Registered",
+            "condition": "registered == true",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "min": "23/25",
+                "max": "23/25",
+                "reason": null
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "min": "23/25",
+                "max": "23/25",
+                "reason": null
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "min": "0",
+                "max": "1",
+                "reason": "truncated"
+              }
+            ],
+            "expected_count": {
+              "lower": "46/25",
+              "upper": "71/25",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            }
+          }
+        ],
+        "cohort": [
+          {
+            "name": "WrongPerArrival",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "arrivals",
+              "count": 3
+            },
+            "value": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            },
+            "bounds_with_undetermined": {
+              "lower": "1/75",
+              "upper": "26/75"
+            }
+          },
+          {
+            "name": "WrongPerRegistered",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "property",
+              "property": "Registered",
+              "covers": null,
+              "reason": "state_condition"
+            },
+            "value": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            },
+            "bounds_with_undetermined": {
+              "lower": "1/71",
+              "upper": "13/23"
+            }
+          }
+        ],
+        "outcomes_per_arrival": [
+          {
+            "kind": "end",
+            "end": "returned",
+            "expected_count": {
+              "lower": "4/25",
+              "upper": "29/25",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            },
+            "rate": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            }
+          },
+          {
+            "kind": "end",
+            "end": "posted",
+            "expected_count": {
+              "lower": "46/25",
+              "upper": "71/25",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            },
+            "rate": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            },
+            "rate": {
+              "lower": "0",
+              "upper": "0",
+              "basis": "exact",
+              "reason": null
+            }
+          },
+          {
+            "kind": "unfinished",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "1",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            },
+            "rate": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            }
+          },
+          {
+            "kind": "deadlock",
+            "end": null,
+            "expected_count": {
+              "lower": "0",
+              "upper": "1",
+              "basis": "per_case_relaxation",
+              "reason": "truncated"
+            },
+            "rate": {
+              "lower": null,
+              "upper": null,
+              "basis": null,
+              "reason": "truncated"
+            }
+          }
+        ],
+        "checked": [
+          "case_reachability",
+          "expected_counts",
+          "ratio_of_expected_counts",
+          "denominator_disclosure",
+          "outcomes_per_arrival"
+        ],
+        "unchecked": [
+          "expectation_of_ratio",
+          "cohort_any_probability",
+          "metric_intervals",
+          "metric_constraints",
+          "numerator_subset_of_denominator",
+          "business_value",
+          "rework_loss",
+          "deadline_attainment"
+        ]
+      }
+    },
+    "invocation": null,
+    "code": null,
+    "calc": "T06: horizon14 cuts case3,not a computational cut. A null undetermined[1/75,26/75],B[1/71,13/23]. Observed outcomes posted46/75,returned4/75,cut_off1/3,unfinished0. Clock counterpart identical property bounds but truncated and no cut_off row.",
+    "deferred": "ADR0042 scenario/horizon"
+  },
+  "qual-sim-horizon": {
+    "source": "model QualityBase version \"0.2\" {\n  type V = enum { pass, fail }\n  type Ack = enum { committed }\n  observed case { registered: bool = false }\n  latent case { correct: bool = false }\n  kernel judge { * -> { 1: pass with correct = true } }\n  actor Checker { capacity 1; capability check() -> V { duration fixed 4min; outcomes kernel judge; writes correct } }\n  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }\n  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }\n  cut C { include [Checker, Ledger] }\n  verify reachable end.posted\n  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n  policy fifo tie_by case_id\n  scenario Day { simulation replications 4 seed 1 confidence 0.5; arrivals fixed_every 6min during [0min, 18min); horizon 14min; bounds { cases 3; live_tasks 2; clock 30min } }\n}\n",
+    "expected": {
+      "verdict": "inconclusive",
+      "quality": {
+        "rules": "quality-cohort-p1-1",
+        "analysis": "simulation",
+        "properties": [
+          {
+            "name": "Wrong",
+            "condition": "registered == true && correct == false",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "hits": 0,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "hits": 0,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "hits": 0,
+                "unknown": 4,
+                "trials": 4
+              }
+            ],
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "unknown_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "name": "Registered",
+            "condition": "registered == true",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "hits": 4,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "hits": 4,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "hits": 0,
+                "unknown": 4,
+                "trials": 4
+              }
+            ],
+            "expected_count": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            },
+            "unknown_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ],
+        "cohort": [
+          {
+            "name": "WrongPerArrival",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "arrivals",
+              "count": 3
+            },
+            "value": {
+              "point": null,
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "3",
+                "min": "3",
+                "max": "3",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": "undetermined"
+            },
+            "bounds_with_undetermined": {
+              "lower": "0",
+              "upper": "1/3"
+            }
+          },
+          {
+            "name": "WrongPerRegistered",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "property",
+              "property": "Registered",
+              "covers": null,
+              "reason": "state_condition"
+            },
+            "value": {
+              "point": null,
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": "undetermined"
+            },
+            "bounds_with_undetermined": {
+              "lower": "0",
+              "upper": "1/2"
+            }
+          }
+        ],
+        "outcomes_per_arrival": [
+          {
+            "kind": "end",
+            "end": "returned",
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "end",
+            "end": "posted",
+            "expected_count": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "2/3",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "unfinished",
+            "end": null,
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "deadlock",
+            "end": null,
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "cut_off",
+            "end": null,
+            "expected_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "1/3",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ],
+        "checked": [
+          "case_reachability",
+          "expected_counts",
+          "ratio_of_expected_counts",
+          "denominator_disclosure",
+          "outcomes_per_arrival"
+        ],
+        "unchecked": [
+          "expectation_of_ratio",
+          "cohort_any_probability",
+          "metric_intervals",
+          "metric_constraints",
+          "numerator_subset_of_denominator",
+          "business_value",
+          "rework_loss",
+          "deadline_attainment"
+        ]
+      }
+    },
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Day"
+    },
+    "code": null,
+    "calc": "T10: hits/unknown from deterministic correct kernel: N_W0,U_W4,N_R8,U_R4,arrivals12. Undetermined A[0,1/3],B[0,1/2]. Clock counterpart truncated. Replications4,not12.",
+    "deferred": "ADR0042 scenario/horizon"
+  },
+  "qual-sim-horizon.broken-clock": {
+    "source": "model QualityBase version \"0.2\" {\n  type V = enum { pass, fail }\n  type Ack = enum { committed }\n  observed case { registered: bool = false }\n  latent case { correct: bool = false }\n  kernel judge { * -> { 1: pass with correct = true } }\n  actor Checker { capacity 1; capability check() -> V { duration fixed 4min; outcomes kernel judge; writes correct } }\n  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }\n  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }\n  cut C { include [Checker, Ledger] }\n  arrivals fixed [0min, 6min, 12min]\n  bounds { cases 3; live_tasks 2; clock 14min }\n  verify reachable end.posted\n  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n  policy fifo tie_by case_id\n  simulation replications 4 seed 1 confidence 0.5\n}\n",
+    "expected": {
+      "verdict": "inconclusive",
+      "quality": {
+        "rules": "quality-cohort-p1-1",
+        "analysis": "simulation",
+        "properties": [
+          {
+            "name": "Wrong",
+            "condition": "registered == true && correct == false",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "hits": 0,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "hits": 0,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "hits": 0,
+                "unknown": 4,
+                "trials": 4
+              }
+            ],
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "unknown_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "name": "Registered",
+            "condition": "registered == true",
+            "within": null,
+            "cases": [
+              {
+                "case_id": 1,
+                "arrival": 0,
+                "hits": 4,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 2,
+                "arrival": 6,
+                "hits": 4,
+                "unknown": 0,
+                "trials": 4
+              },
+              {
+                "case_id": 3,
+                "arrival": 12,
+                "hits": 0,
+                "unknown": 4,
+                "trials": 4
+              }
+            ],
+            "expected_count": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            },
+            "unknown_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ],
+        "cohort": [
+          {
+            "name": "WrongPerArrival",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "arrivals",
+              "count": 3
+            },
+            "value": {
+              "point": null,
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "3",
+                "min": "3",
+                "max": "3",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": "truncated"
+            },
+            "bounds_with_undetermined": {
+              "lower": "0",
+              "upper": "1/3"
+            }
+          },
+          {
+            "name": "WrongPerRegistered",
+            "form": "ratio_of_expected_counts",
+            "numerator": "Wrong",
+            "denominator": {
+              "kind": "property",
+              "property": "Registered",
+              "covers": null,
+              "reason": "state_condition"
+            },
+            "value": {
+              "point": null,
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": "truncated"
+            },
+            "bounds_with_undetermined": {
+              "lower": "0",
+              "upper": "1/2"
+            }
+          }
+        ],
+        "outcomes_per_arrival": [
+          {
+            "kind": "end",
+            "end": "returned",
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "end",
+            "end": "posted",
+            "expected_count": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "2/3",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "unfinished",
+            "end": null,
+            "expected_count": {
+              "mean": "1",
+              "min": "1",
+              "max": "1",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "1/3",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "kind": "deadlock",
+            "end": null,
+            "expected_count": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            },
+            "rate": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ],
+        "checked": [
+          "case_reachability",
+          "expected_counts",
+          "ratio_of_expected_counts",
+          "denominator_disclosure",
+          "outcomes_per_arrival"
+        ],
+        "unchecked": [
+          "expectation_of_ratio",
+          "cohort_any_probability",
+          "metric_intervals",
+          "metric_constraints",
+          "numerator_subset_of_denominator",
+          "business_value",
+          "rework_loss",
+          "deadline_attainment"
+        ]
+      }
+    },
+    "invocation": {
+      "command": "simulate"
+    },
+    "code": null,
+    "calc": "T10: hits/unknown from deterministic correct kernel: N_W0,U_W4,N_R8,U_R4,arrivals12. Undetermined A[0,1/3],B[0,1/2]. Clock counterpart truncated. Replications4,not12.",
+    "deferred": "ADR0042 scenario/horizon"
+  }
+}

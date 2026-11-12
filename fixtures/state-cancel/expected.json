@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied", "mode":"exhaustive", "unit":"min", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 invariant","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":3,"max":3},"work":{"min":4,"max":4},"result_at":{"min":1,"max":1}}],
+  "diagnostics":[{"code":"W-CUT-0"},{"code":"W-UNREACH-2","severity":"warning","span":{"end":683,"start":532}}],
+  "absent_diagnostics":["E-POL-LATENT","U-SEM-0","W-DEADLOCK-0","W-BUDGET-0"]
+}

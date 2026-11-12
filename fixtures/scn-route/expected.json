@@ -1,0 +1,86 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "bounds": {
+    "cases": 1,
+    "live_tasks": 1,
+    "clock": 10,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 3,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "scenario": {
+    "name": "One",
+    "arrivals": {
+      "form": "fixed",
+      "every": null,
+      "from": 0,
+      "until": 0,
+      "count": 1
+    },
+    "horizon": null,
+    "drain": {
+      "from": 0,
+      "until": "all_terminal_or_clock"
+    },
+    "aggregation": {
+      "from": 0,
+      "until": "all_terminal_or_clock",
+      "observed_until": {
+        "min": "3",
+        "max": "3",
+        "reason": null
+      }
+    },
+    "warmup": 0
+  }
+}

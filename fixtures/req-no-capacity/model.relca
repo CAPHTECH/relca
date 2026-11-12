@@ -1,0 +1,10 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { flag: bool = false }
+  actor A { capacity 1; capability run() -> T { duration fixed 3min; result nondet { ok }; requires flag == true else denied } }
+  process Flow { r = A.run(); end refused }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+  verify reachable end.refused
+}

@@ -1,0 +1,15 @@
+{
+  "verdict": "invalid",
+  "properties": [],
+  "terminals": [],
+  "diagnostics": [
+    {
+      "code": "E-CUT-1",
+      "severity": "error",
+      "span": {
+        "start": 393,
+        "end": 399
+      }
+    }
+  ]
+}

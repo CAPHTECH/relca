@@ -1,0 +1,1 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"responsibilities":[{"id":1,"rules":"responsibility-p1-2","person":"a1","target":{"kind":"state_condition"},"time_frame":{"status":"unchecked"}},{"id":2,"rules":"responsibility-p1-2","person":"s1","target":{"kind":"maintenance","value":"Extractor.maintenance"},"time_frame":{"status":"unchecked"}}],"contest_paths":[]}

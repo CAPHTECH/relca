@@ -1,0 +1,26 @@
+model Degradation version "0.2" {
+  type Status = enum { ok, fail }
+  type Choice = enum { pass, fail }
+  people [p,c,f,o,r,z]
+  actor Doc { source document }
+  actor Summary { source record }
+  actor Probe { executors [p]; capability check() -> Status { duration fixed 1min; result nondet { ok, fail } } }
+  actor Clerk { executors [c]; capability enter() -> Status { reads [Doc]; duration fixed 3min; result nondet { ok } } }
+  actor Fast { executors [f]; capability run() -> Status { reads [Summary]; duration fixed 1min; result nondet { ok } } }
+  actor Other { executors [o]; capability enter() -> Status { duration fixed 2min; result nondet { ok } } }
+  actor Review { executors [r]; capability choice() -> Choice { duration fixed 1min; result nondet { pass, fail } } }
+  actor Finish { executors [z]; capability close() -> Status { duration fixed 2min; result nondet { ok } } }
+  process After {
+    status = Probe.check();
+    degrade Manual when status == fail { c = Clerk.enter(); end done }
+    else { f = Fast.run(); end done }
+  }
+  cut Scope { include [Doc,Summary,Probe,Clerk,Fast,Other,Review,Finish] }
+  bounds { cases 1; live_tasks 4; clock 10min }
+  metrics { window 10min; currency "JPY" }
+  verify reachable end.done
+  simulation replications 4 seed 1 confidence 0.95
+  process Before { status = Probe.check(); if status == fail { c = Clerk.enter(); end done } else { f = Fast.run(); end done } }
+  configuration From { cut Scope; process Before }
+  configuration To { cut Scope; process After }
+}

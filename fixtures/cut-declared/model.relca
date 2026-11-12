@@ -1,0 +1,37 @@
+model CutDeclared version "0.2" {
+  type Verdict = enum { pass }
+  actor Office {
+    capacity 1
+    capability short() -> Verdict {
+      duration fixed 3min
+      result nondet { pass }
+    }
+    capability long() -> Verdict {
+      duration fixed 5min
+      result nondet { pass }
+    }
+  }
+  actor Archive {
+    capacity 1
+    capability store() -> Verdict {
+      duration fixed 2min
+      result nondet { pass }
+    }
+  }
+  process Check {
+    a = Office.short()
+    b = Office.long()
+    end done
+  }
+  cut CheckCut {
+    question "直列の 2 検査の経過と作業量"
+    include [Office]
+    exclude Archive reason "保管は別業務" loses "保管の遅れが検査に与える影響"
+    exclude Payment reason "送金は別 Domain" loses "支払誤りの検出"
+    defer Office.short.rates reason "検査の失敗率の根拠なし" loses "再検査の負荷"
+    externality [Vendor.dispute_effort]
+    reentry [review cut quarterly by cfo]
+  }
+  bounds { cases 1; live_tasks 2; clock 8min }
+  verify reachable end.done
+}

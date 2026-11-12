@@ -1,0 +1,143 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "unit": "min",
+  "cut": "undeclared",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 20,
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "absent_diagnostics": [
+    "W-BUDGET-0",
+    "W-DEADLOCK-0"
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "contract C #1 response",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied"
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "verdict": "satisfied"
+        },
+        {
+          "case_id": 3,
+          "arrival": 0,
+          "verdict": "satisfied"
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "admission": {
+    "rejected_count": {
+      "min": 0,
+      "max": 0
+    },
+    "external_wait_max": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 2,
+            "max": 2
+          },
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ],
+      "admitted_at": {
+        "min": 0,
+        "max": 0
+      }
+    },
+    {
+      "case_id": 2,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 4,
+            "max": 4
+          },
+          "elapsed": {
+            "min": 4,
+            "max": 4
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ],
+      "admitted_at": {
+        "min": 2,
+        "max": 2
+      }
+    },
+    {
+      "case_id": 3,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 6,
+            "max": 6
+          },
+          "elapsed": {
+            "min": 6,
+            "max": 6
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ],
+      "admitted_at": {
+        "min": 4,
+        "max": 4
+      }
+    }
+  ]
+}

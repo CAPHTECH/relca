@@ -1,0 +1,44 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    },
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "empty",
+      "elapsed": {
+        "min": 0,
+        "max": 0
+      },
+      "work": {
+        "min": 0,
+        "max": 0
+      },
+      "result_at": null
+    }
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "reachable end.empty",
+      "verdict": "satisfied"
+    }
+  ]
+}

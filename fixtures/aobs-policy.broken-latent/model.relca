@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type Mode = enum { fast,slow }
+  actor Desk { latent mode: Mode = fast }
+  process P { if Desk.mode == fast { wait 1min } else { wait 3min }; end done }
+  cut C { include [Desk] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+
+  verify reachable end.done
+}

@@ -1,0 +1,37 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null
+    }
+  ],
+  "agency": {
+    "refusal": [
+      {
+        "effect": "Post.post",
+        "call": "p",
+        "reachable": true,
+        "judgements": [
+          {
+            "call": "j",
+            "capability": "Judge.check",
+            "stops": "none",
+            "bypasses": 1
+          }
+        ]
+      }
+    ]
+  }
+}

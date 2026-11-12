@@ -1,0 +1,11 @@
+model DiffSurplus version "0.2" {
+  type V = enum { pass }
+  actor A { capacity 1; capability a() -> V { duration fixed 1min; result nondet { pass } } }
+  process Before { x = A.a(); end done }
+  process After { x = A.a(); end done }
+  cut C { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After; intent { change time A.a reason "同じ呼出し" } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

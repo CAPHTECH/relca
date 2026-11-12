@@ -1,0 +1,14 @@
+model ProbabilityFinishRead version "0.2" {
+  type T = enum { ok }
+  observed case { flag: bool = false; hit: bool = false }
+  kernel K given [flag] {
+    false -> { 0: ok with hit = true; 1: ok with hit = false }
+    true -> { 0.5: ok with hit = true; 0.5: ok with hit = false }
+  }
+  actor Writer { capacity 1; capability set() -> T { duration fixed 1min; result nondet { ok }; writes flag; finish { flag = true } } }
+  actor Sampler { capacity 1; capability sample() -> T { duration fixed 2min; outcomes kernel K; writes hit } }
+  process Flow { fork f { w = Writer.set(); s = Sampler.sample() }; join all f; if hit == true { end bad } else { end good } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true >= 0.5
+}

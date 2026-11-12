@@ -1,0 +1,39 @@
+{
+  "verdict": "unsupported",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Median",
+        "p": "1/2",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "point": null,
+          "observations": 0,
+          "censored": 0,
+          "reason": "aborted"
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "MedianDone",
+        "p": "1/2",
+        "property": "Done",
+        "form": "reached_only",
+        "value": {
+          "point": null,
+          "observations": 0,
+          "censored": 0,
+          "reason": "aborted"
+        },
+        "lower_bound": null
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "code": "U-SEM-0",
+      "severity": "error"
+    }
+  ]
+}

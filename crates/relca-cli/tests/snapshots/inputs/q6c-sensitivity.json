@@ -1,0 +1,13 @@
+{
+  "schema": "relca-sensitivity/v1",
+  "scope": {
+    "kind": "enumerated_models",
+    "rationale": "Explicit Q6c hand points, no implicit Cartesian product"
+  },
+  "points": [
+    {"id": "base", "model": "q6c-base.relca", "configuration": null, "scenario": null},
+    {"id": "probability", "model": "q6c-probability.relca", "configuration": null, "scenario": null}
+  ],
+  "targets": [{"kind": "probability_query", "id": "probability reached #1"}],
+  "confidence": null
+}

@@ -1,0 +1,42 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": true
+  },
+  "terminals": [],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "reachable end.done",
+      "verdict": "inconclusive"
+    }
+  ],
+  "metrics": {
+    "rules": "business-metrics-p1-resource-1",
+    "resources": [
+      {
+        "resource": "R",
+        "capacity": 2,
+        "occupancy_time": {
+          "min": null,
+          "max": null,
+          "reason": "truncated"
+        },
+        "peak_units": {
+          "min": null,
+          "max": null,
+          "reason": "truncated"
+        },
+        "utilization": {
+          "min": null,
+          "max": null,
+          "reason": "truncated"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 waive","verdict":"satisfied"},{"id":"contract Controls #2 response","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":5,"max":5},"work":{"min":5,"max":5},"result_at":null}],
+  "obligations":[{"response_id":"contract Controls #2 response","response_label":"delivery","case_id":1,"trigger_site":"received","trigger":"case.received","targets":["B.run.finish"],"debtor":null,"debtor_status":"not_configured","non_waivable":false,"coverage":"complete","outcomes":[{"status":"waived","triggered_at":0,"deadline":2,"resolved_at":1,"reason":"registered exception","by_clause":"contract Controls #1 waive","executor":"p","authority":"G"}]}],
+  "diagnostics":[{"code":"W-CUT-0"},{"code":"W-UNREACH-0","severity":"warning","span":{"end":290,"start":223}}], "absent_diagnostics":["W-DEADLOCK-0","W-BUDGET-0","E-CON-0"]
+}

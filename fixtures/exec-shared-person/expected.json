@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied", "mode":"exhaustive", "unit":"min",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":5,"max":5},"work":{"min":8,"max":8},"result_at":null}],
+  "diagnostics":[{"code":"W-CUT-0"}],
+  "absent_diagnostics":["E-CON-0","U-SEM-0","W-DEADLOCK-0","W-BUDGET-0"]
+}

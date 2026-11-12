@@ -1,0 +1,12 @@
+model DiffPreserveUnion version "0.2" {
+  type V = enum { pass }
+  actor A { capacity 1; capability a() -> V { commits; duration fixed 1min; result nondet { pass } }; capability b() -> V { duration fixed 1min; result nondet { pass } }; capability post() -> V { commits; duration fixed 1min; result nondet { pass } } }
+  process Before { x = A.a(); y = A.post(); end done }
+  process After { x = A.a(); y = A.b(); end done }
+  contract Ctl { at_most_once A.a.commit per case.id; at_most_once A.post.commit per case.id }
+  cut C { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After; intent { preserve Ctl; preserve "contract Ctl #2 at_most_once" on relation A.b } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

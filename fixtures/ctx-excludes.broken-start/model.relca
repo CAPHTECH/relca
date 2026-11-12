@@ -1,0 +1,11 @@
+model Excludes version "0.2" {
+  type T = enum { ok, bad }
+  actor A { capacity 1; capability stop() -> T { duration fixed 1min; result nondet { ok } } }
+  actor B { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { a = A.stop(); b = B.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    excludes A.stop.finish, B.run.start
+  }
+}

@@ -1,0 +1,14 @@
+model Duty version "0.2" {
+  type Entry = enum { entry }; type Verdict = enum { pass, fail }; type Ack = enum { committed }
+  people [p,q]
+  observed case { r: bool = false; ok: bool = false }
+  actor Record { source record }
+  actor Reader { capacity 1; capability read() -> Entry { reads [Record]; duration fixed 1min; result nondet { entry } } }
+  actor Guard { executors [p]; capability check(e:Entry) -> Verdict { reads [Record]; duration fixed 2min; result nondet { pass,fail } } }
+  actor SetR { capacity 1; capability put(v:Verdict) -> Ack { commits; reads [Record]; writes r; finish { r = true }; duration fixed 3min; result nondet { committed } } }
+  responsible p for (ok -> r)
+  process Flow { e = Reader.read(); j = Guard.check(e); if j == pass {} else { end returned }; out = SetR.put(j); end done }
+  cut Scope { include [Record,Reader,Guard,SetR] }
+  bounds { cases 1; live_tasks 2; clock 120min }
+  verify safety no_resource_overcommit
+}

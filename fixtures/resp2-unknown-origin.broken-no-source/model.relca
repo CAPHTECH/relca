@@ -1,0 +1,13 @@
+model UnknownOrigin version "0.2" {
+  type Entry = enum { entry,other }; type Ack = enum { committed }
+  people [p]
+  observed case { r: bool = false }
+  actor Record { source record }
+  actor Inspector { executors [p]; capability inspect() -> Entry { duration fixed 2min; result nondet { entry,other } } }
+  actor Bad { capacity 1; capability set(v:Entry) -> Ack { commits; writes r; finish { r = true }; duration fixed 3min; result nondet { committed } } }
+  responsible p for Bad.maintenance
+  process Flow { j = Inspector.inspect(); out = Bad.set(j); end done }
+  cut Scope { include [Record,Inspector,Bad] }
+  bounds { cases 1; live_tasks 2; clock 120min }
+  verify safety no_resource_overcommit
+}

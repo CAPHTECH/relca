@@ -1,0 +1,10 @@
+{
+  "verdict": "unsupported",
+  "original_verdict": "satisfied",
+  "run": {
+    "completion": "inconclusive",
+    "reason": "mutant_incomplete",
+    "mutant_limit": 128,
+    "limit_reached": false
+  }
+}

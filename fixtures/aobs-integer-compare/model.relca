@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type Mode = enum { ok }
+  actor A { state n: 0..2 = 1 }
+  process P { if A.n < 2 { wait 1min } else { wait 3min }; end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+
+  verify reachable end.done
+}

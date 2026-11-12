@@ -1,0 +1,11 @@
+model StateInvariant version "0.2" {
+  type R = enum { committed, rejected }
+  actor Ledger { capacity 1; state posted: 0..2 = 0
+    capability post() -> R { requires posted == 0 else rejected; duration fixed 1min; result nondet { committed }; writes posted; finish { posted += 1 } }
+  }
+  process Flow { r = Ledger.post(); end done }
+  cut C { include [Ledger] }
+  bounds { cases 2; live_tasks 1; clock 10min }
+  arrivals fixed [0min,0min]
+  contract Controls { invariant Ledger.posted <= 1 }
+}

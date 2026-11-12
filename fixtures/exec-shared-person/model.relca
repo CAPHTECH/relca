@@ -1,0 +1,9 @@
+model ExecShared version "0.2" {
+  type T = enum { ok }
+  people [p,q]
+  actor A { executors [p]; capability a() -> T { duration fixed 3min; result nondet { ok } } }
+  actor B { executors [q]; capability b() -> T { duration fixed 5min; result nondet { ok } } }
+  process Flow { fork f { a = A.a(); b = B.b() }; join all f; end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,46 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "P90",
+        "p": "9/10",
+        "property": "Posted",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "4",
+          "upper": "4",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P95",
+        "p": "19/20",
+        "property": "Posted",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "beyond_reached_mass"
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P95Done",
+        "p": "19/20",
+        "property": "Posted",
+        "form": "reached_only",
+        "value": {
+          "lower": "4",
+          "upper": "4",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

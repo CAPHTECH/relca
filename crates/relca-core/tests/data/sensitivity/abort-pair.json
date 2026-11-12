@@ -1,0 +1,13 @@
+{
+  "schema": "relca-sensitivity/v1",
+  "scope": {"kind": "enumerated_models", "rationale": "Runtime rejection does not remove planned probability rows"},
+  "points": [
+    {"id": "a0", "model": "abort.relca", "configuration": null, "scenario": null},
+    {"id": "a1", "model": "abort.relca", "configuration": null, "scenario": null}
+  ],
+  "targets": [
+    {"kind": "probability_query", "id": "probability reached #1"},
+    {"kind": "probability_query", "id": "probability reached #2"}
+  ],
+  "confidence": "7/8"
+}

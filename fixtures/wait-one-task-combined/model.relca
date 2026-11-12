@@ -1,0 +1,12 @@
+model HQ version "0.2" {
+type T = enum { ok }
+observed case { hit: bool = false }
+resource Desk capacity 1;
+actor A { capacity 1; capability run() -> T { uses Desk:1; duration fixed 5min; result nondet { ok }; writes hit; finish { hit = true } } }
+process P { r = A.run(); end done }
+cut C { include [A] }
+policy fifo tie_by case_id
+arrivals fixed [0min, 0min]; bounds { cases 2; live_tasks 1; clock 20min }
+metrics { window 20min; currency "JPY"; breakdown waits }
+verify reachable end.done
+}

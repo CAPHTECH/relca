@@ -1,0 +1,29 @@
+model ResponsibilityContest version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  people [c1,a1,cfo]
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { executors [c1]; capability recheck() -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Approver { executors [a1]; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Vendor {
+    control party
+    standing over [end.returned] basis "invoice claim"
+  }
+  permit a1 to Approver.approve
+  authority ApprovalGrant { basis "approval table"; grants a1 to Approver.approve; issued_by cfo }
+  process Flow {
+    entry = Reader.enter()
+    approval = Approver.approve(entry)
+    if approval == fail { end returned } else { end posted }
+  }
+  cut Scope {
+    include [Invoice,Reader,Approver,Vendor]
+    exclude Clerk reason "route outside scope" loses "recheck"
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    contest Vendor on end.returned route Clerk.recheck reversible_by [a1] respond_by 5min
+  }
+}

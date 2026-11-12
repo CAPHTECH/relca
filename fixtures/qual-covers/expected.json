@@ -1,0 +1,278 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "rules": "quality-cohort-p1-1",
+    "analysis": "exhaustive",
+    "properties": [
+      {
+        "name": "Wrong",
+        "condition": "registered == true && correct == false",
+        "within": null,
+        "cases": [
+          {
+            "case_id": 1,
+            "arrival": 0,
+            "min": "1/50",
+            "max": "1/50",
+            "reason": null
+          },
+          {
+            "case_id": 2,
+            "arrival": 10,
+            "min": "1/50",
+            "max": "1/50",
+            "reason": null
+          }
+        ],
+        "expected_count": {
+          "lower": "1/25",
+          "upper": "1/25",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "name": "Registered",
+        "condition": "registered == true",
+        "within": null,
+        "cases": [
+          {
+            "case_id": 1,
+            "arrival": 0,
+            "min": "23/25",
+            "max": "23/25",
+            "reason": null
+          },
+          {
+            "case_id": 2,
+            "arrival": 10,
+            "min": "23/25",
+            "max": "23/25",
+            "reason": null
+          }
+        ],
+        "expected_count": {
+          "lower": "46/25",
+          "upper": "46/25",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "name": "Resolved",
+        "condition": "end.posted || end.returned",
+        "within": null,
+        "cases": [
+          {
+            "case_id": 1,
+            "arrival": 0,
+            "min": "477/500",
+            "max": "477/500",
+            "reason": null
+          },
+          {
+            "case_id": 2,
+            "arrival": 10,
+            "min": "477/500",
+            "max": "477/500",
+            "reason": null
+          }
+        ],
+        "expected_count": {
+          "lower": "477/250",
+          "upper": "477/250",
+          "basis": "exact",
+          "reason": null
+        }
+      }
+    ],
+    "cohort": [
+      {
+        "name": "WrongPerArrival",
+        "form": "ratio_of_expected_counts",
+        "numerator": "Wrong",
+        "denominator": {
+          "kind": "arrivals",
+          "count": 2
+        },
+        "value": {
+          "lower": "1/50",
+          "upper": "1/50",
+          "basis": "exact",
+          "reason": null
+        },
+        "bounds_with_undetermined": null
+      },
+      {
+        "name": "WrongPerRegistered",
+        "form": "ratio_of_expected_counts",
+        "numerator": "Wrong",
+        "denominator": {
+          "kind": "property",
+          "property": "Registered",
+          "covers": null,
+          "reason": "state_condition"
+        },
+        "value": {
+          "lower": "1/46",
+          "upper": "1/46",
+          "basis": "exact",
+          "reason": null
+        },
+        "bounds_with_undetermined": null
+      },
+      {
+        "name": "ResolvedPerArrival",
+        "form": "ratio_of_expected_counts",
+        "numerator": "Resolved",
+        "denominator": {
+          "kind": "arrivals",
+          "count": 2
+        },
+        "value": {
+          "lower": "477/500",
+          "upper": "477/500",
+          "basis": "exact",
+          "reason": null
+        },
+        "bounds_with_undetermined": null
+      },
+      {
+        "name": "WrongPerResolved",
+        "form": "ratio_of_expected_counts",
+        "numerator": "Wrong",
+        "denominator": {
+          "kind": "property",
+          "property": "Resolved",
+          "covers": [
+            "posted",
+            "returned"
+          ],
+          "reason": null
+        },
+        "value": {
+          "lower": "10/477",
+          "upper": "10/477",
+          "basis": "exact",
+          "reason": null
+        },
+        "bounds_with_undetermined": null
+      }
+    ],
+    "outcomes_per_arrival": [
+      {
+        "kind": "end",
+        "end": "returned",
+        "expected_count": {
+          "lower": "4/25",
+          "upper": "4/25",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "2/25",
+          "upper": "2/25",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "end",
+        "end": "posted",
+        "expected_count": {
+          "lower": "437/250",
+          "upper": "437/250",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "437/500",
+          "upper": "437/500",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "end",
+        "end": "exception",
+        "expected_count": {
+          "lower": "23/250",
+          "upper": "23/250",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "23/500",
+          "upper": "23/500",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "rejected",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "unfinished",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      },
+      {
+        "kind": "deadlock",
+        "end": null,
+        "expected_count": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        },
+        "rate": {
+          "lower": "0",
+          "upper": "0",
+          "basis": "exact",
+          "reason": null
+        }
+      }
+    ],
+    "checked": [
+      "case_reachability",
+      "expected_counts",
+      "ratio_of_expected_counts",
+      "denominator_disclosure",
+      "outcomes_per_arrival"
+    ],
+    "unchecked": [
+      "expectation_of_ratio",
+      "cohort_any_probability",
+      "metric_intervals",
+      "metric_constraints",
+      "numerator_subset_of_denominator",
+      "business_value",
+      "rework_loss",
+      "deadline_attainment"
+    ]
+  }
+}

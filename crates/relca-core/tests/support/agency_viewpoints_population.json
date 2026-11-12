@@ -1,0 +1,167 @@
+{
+  "names": [
+    "agy-o-people",
+    "agy-o-people.broken-no-read",
+    "agy-o-permit",
+    "agy-o-permit.broken-one-executor",
+    "agy-o-unattributed",
+    "agy-o-unattributed.broken-declared-executor",
+    "agy-o-contest",
+    "agy-o-contest.broken-route-no-read",
+    "agy-f-select",
+    "agy-f-select.broken-merged-ends",
+    "agy-f-or",
+    "agy-f-or.broken-and",
+    "agy-f-state",
+    "agy-f-state.broken-binding-guard",
+    "agy-f-singleton",
+    "agy-f-singleton.broken-two-results",
+    "agy-l-counts",
+    "agy-l-counts.broken-unconditional",
+    "agy-l-requires",
+    "agy-l-requires.broken-no-requires",
+    "agy-l-fork",
+    "agy-l-fork.broken-missing-second-call",
+    "agy-l-any",
+    "agy-l-any.broken-sequential",
+    "agy-p-name",
+    "agy-p-name.broken-proposal-name",
+    "agy-label",
+    "agy-label.broken-actor-rename",
+    "agy-l-state-local",
+    "agy-l-state-local.broken-binding-guard",
+    "agy-soft-budget",
+    "agy-soft-budget.broken-one-unit-short",
+    "agy-old-budget",
+    "agy-old-budget.broken-legacy-limit",
+    "agy-invoice",
+    "agy-invoice.broken-ai-transfer",
+    "agy-report-compat",
+    "agy-report-compat.broken-old-key",
+    "agy-f-new-binding",
+    "agy-f-new-binding.broken-only-fail",
+    "agy-mutate",
+    "agy-mutate.broken-off-path-viewpoints",
+    "agy-cut-source",
+    "agy-cut-source.broken-excluded-caller",
+    "agy-no-end-after-end",
+    "agy-no-end-after-end.broken-enable-suffix"
+  ],
+  "pairs": [
+    {
+      "id": "A01",
+      "name": "agy-o-people",
+      "fault": "no-read"
+    },
+    {
+      "id": "A02",
+      "name": "agy-o-permit",
+      "fault": "one-executor"
+    },
+    {
+      "id": "A03",
+      "name": "agy-o-unattributed",
+      "fault": "declared-executor"
+    },
+    {
+      "id": "A04",
+      "name": "agy-o-contest",
+      "fault": "route-no-read"
+    },
+    {
+      "id": "A05",
+      "name": "agy-f-select",
+      "fault": "merged-ends"
+    },
+    {
+      "id": "A06",
+      "name": "agy-f-or",
+      "fault": "and"
+    },
+    {
+      "id": "A07",
+      "name": "agy-f-state",
+      "fault": "binding-guard"
+    },
+    {
+      "id": "A08",
+      "name": "agy-f-singleton",
+      "fault": "two-results"
+    },
+    {
+      "id": "A09",
+      "name": "agy-l-counts",
+      "fault": "unconditional"
+    },
+    {
+      "id": "A10",
+      "name": "agy-l-requires",
+      "fault": "no-requires"
+    },
+    {
+      "id": "A11",
+      "name": "agy-l-fork",
+      "fault": "missing-second-call"
+    },
+    {
+      "id": "A12",
+      "name": "agy-l-any",
+      "fault": "sequential"
+    },
+    {
+      "id": "A13",
+      "name": "agy-p-name",
+      "fault": "proposal-name"
+    },
+    {
+      "id": "A14",
+      "name": "agy-label",
+      "fault": "actor-rename"
+    },
+    {
+      "id": "A15",
+      "name": "agy-l-state-local",
+      "fault": "binding-guard"
+    },
+    {
+      "id": "A16",
+      "name": "agy-soft-budget",
+      "fault": "one-unit-short"
+    },
+    {
+      "id": "A17",
+      "name": "agy-old-budget",
+      "fault": "legacy-limit"
+    },
+    {
+      "id": "A18",
+      "name": "agy-invoice",
+      "fault": "ai-transfer"
+    },
+    {
+      "id": "A19",
+      "name": "agy-report-compat",
+      "fault": "old-key"
+    },
+    {
+      "id": "A20",
+      "name": "agy-f-new-binding",
+      "fault": "only-fail"
+    },
+    {
+      "id": "A21",
+      "name": "agy-mutate",
+      "fault": "off-path-viewpoints"
+    },
+    {
+      "id": "A22",
+      "name": "agy-cut-source",
+      "fault": "excluded-caller"
+    },
+    {
+      "id": "A23",
+      "name": "agy-no-end-after-end",
+      "fault": "enable-suffix"
+    }
+  ]
+}

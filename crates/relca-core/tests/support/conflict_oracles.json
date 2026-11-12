@@ -1,0 +1,813 @@
+[
+  {
+    "name": "cf-version",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "version_check",
+      "Ledger.claims.concurrency": "commutative"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-version.broken-no-check",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-three",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-three.broken-no-check",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-serial",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "version_check"
+    },
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-serial.broken-no-check",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-same-tick",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-same-tick.broken-simulate",
+    "mode": "simulate",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-lww",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "last_write_wins"
+    },
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-lww.broken-overlap",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-lww-clock",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-lww-clock.broken-clock",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-lock",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "lock ledger_lock",
+      "Ledger.claims.concurrency": "lock ledger_lock"
+    },
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-lock.broken-wide-lock",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-race",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-race.broken-two-writers",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-atomic-cap2",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-atomic-cap2.broken-overwrite",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-latent",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-latent.broken-latent",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-silent",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "version_check"
+    },
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-silent.broken-one-case",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-label",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-label.broken-renamed",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-label-lock",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-label-lock.broken-renamed",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-agency",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-agency.broken-ordinary-result",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-agency-requires",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-agency-requires.broken-no-guard",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-no-ghost-commit",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-no-ghost-commit.broken-inverted-invariant",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-version-atomic",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-version-atomic.broken-no-check",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-wide-state",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.holder.concurrency": "version_check",
+      "Ledger.claims.concurrency": "commutative"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-wide-state.broken-no-check",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-lww-commutative",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-lww-commutative.broken-assign",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s01-close",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s01-close.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s02-result-missing",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s02-result-missing.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s03-type",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s03-type.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s04-name",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s04-name.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s05-unwritten",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s05-unwritten.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s06-duplicate-target",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s06-duplicate-target.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s07-duplicate-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s07-duplicate-item.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s08-overlap",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s08-overlap.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s09-start",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s09-start.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s15-retry",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s15-retry.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s16-priority",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s16-priority.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s17-commutative",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s17-commutative.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s18-conflict-keyword",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s18-conflict-keyword.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s22-empty",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s22-empty.broken-invalid-item",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s10-kernel",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s10-kernel.broken-version",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s11-case-lww",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s11-case-lww.broken-suffix",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s12-percase-lww",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s12-percase-lww.broken-suffix",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s13-latent-lww",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s13-latent-lww.broken-suffix",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s14-mixed",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s14-mixed.broken-subtract",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-writes",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-writes.broken-owner",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-finish",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-finish.broken-owner",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-start",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s19-other-start.broken-owner",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-version",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-version.broken-siblings",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-lock",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-lock.broken-siblings",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-lww",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s20-fork-lww.broken-siblings",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s23-duplicate-lww",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s23-duplicate-lww.broken-duplicate",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-start-marker",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-start-marker.broken-no-start",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s21-read-qualified",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-s21-read-qualified.broken-qualified",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-subtract",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-subtract.broken-assign",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-grain",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-grain.broken-team",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-one-sided",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-one-sided.broken-one-sided",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cross-pair",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cross-pair.broken-one-sided",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-mixed-resolution",
+    "mode": "check",
+    "assumptions": {
+      "Ledger.n.concurrency": "Ledger.a/Ledger.a: lock RA; Ledger.a/Ledger.b: version_check; Ledger.b/Ledger.b: commutative"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-mixed-resolution.broken-one-sided",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-check-vector",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-check-vector.broken-first-only",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-aba",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-aba.broken-no-restore",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cancel",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cancel.broken-drain",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cancel-start",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-cancel-start.broken-no-start",
+    "mode": "check",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-simulation",
+    "mode": "simulate",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-simulation.broken-overlap",
+    "mode": "simulate",
+    "assumptions": null,
+    "warnings": null
+  },
+  {
+    "name": "cf-explain",
+    "mode": "explain",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-explain.broken-overlap",
+    "mode": "explain",
+    "assumptions": null,
+    "warnings": [
+      "W-UNREACH-1",
+      "W-UNREACH-2"
+    ]
+  },
+  {
+    "name": "cf-compare-exhaustive",
+    "mode": "compare",
+    "assumptions": null,
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Left",
+        "Right"
+      ],
+      "mode": "exhaustive"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-compare-exhaustive.broken-overlap",
+    "mode": "compare",
+    "assumptions": null,
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Left",
+        "Right"
+      ],
+      "mode": "exhaustive"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-compare-simulation",
+    "mode": "compare",
+    "assumptions": null,
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Left",
+        "Right"
+      ],
+      "mode": "simulation"
+    },
+    "warnings": null
+  },
+  {
+    "name": "cf-compare-simulation.broken-overlap",
+    "mode": "compare",
+    "assumptions": null,
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Left",
+        "Right"
+      ],
+      "mode": "simulation"
+    },
+    "warnings": null
+  }
+]

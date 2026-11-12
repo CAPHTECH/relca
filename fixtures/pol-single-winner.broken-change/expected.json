@@ -1,0 +1,36 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "diagnostics": [],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 2,
+            "max": 2
+          },
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 4,
+            "max": 4
+          },
+          "result_at": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ]
+    }
+  ]
+}

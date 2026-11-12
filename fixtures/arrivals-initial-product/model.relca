@@ -1,0 +1,19 @@
+model ArrivalsInitialProduct version "0.2" {
+  type Route = enum { short, long }
+  type T = enum { ok }
+  latent case { x: Route ~ { short:0.5, long:0.5 } }
+  observed case { route: Route = short; hit: bool = false }
+  kernel Choose given [x] { short -> { 1: short }; long -> { 1: long } }
+  actor Chooser { capacity 1; capability choose() -> Route { duration fixed 1min; outcomes kernel Choose; kernel_reads latent [x]; writes route } }
+  actor R {
+    capacity 1
+    capability short() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }
+    capability long() -> T { duration fixed 3min; result nondet { ok }; writes hit; finish { hit = true } }
+  }
+  process Flow { c = Chooser.choose(); if route == short { s = R.short(); end done } else { l = R.long(); end done } }
+  arrivals fixed [0min, 0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true within 3min <= 0.5
+}

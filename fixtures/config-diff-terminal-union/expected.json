@@ -1,0 +1,10 @@
+{
+  "verdict":"violated", "mismatch":null, "differences":[{"change":"added","from":false,"kind":"meaning","loses":null,"reason":null,"target":"end.new","to":true},{"change":"removed","from":true,"kind":"meaning","loses":null,"reason":null,"target":"end.old","to":false}], "diagnostics":[{"code":"W-DIFF-1","message":"computed change for meaning end.new has no intent","severity":"warning","span":null},{"code":"W-DIFF-1","message":"computed change for meaning end.old has no intent","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for meaning end.new has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for meaning end.old has no preserve, override, maintain or loses annotation","severity":"warning","span":null}],
+  "from":{"configuration":"AsIs","report":{"verdict":"violated","bounds":{"truncated":false},"cut":{"name":"C"},"terminals":[{"end":"old","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}],"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"]}},
+  "to":{"configuration":"ToBe","report":{"verdict":"violated","bounds":{"truncated":false},"cut":{"name":"C"},"terminals":[{"end":"new","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}],"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"]}},
+  "terminals":[{"end":"old","from":{"elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null},"to":null},{"end":"new","from":null,"to":{"elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}}],
+  "properties":[{"id":"reachable end.old","from":"satisfied","to":"violated"},{"id":"reachable end.new","from":"violated","to":"satisfied"},{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"}],
+  "absent_diagnostics":["E-DIFF-0","E-CMP-0","W-DIFF-2"],
+  "checked":["comparison_mismatch","actor","relation","intent_claims","retire_loses","meaning","authority","resource","time","visibility","contest","preserve","override","maintain","annotations"],
+  "unchecked":[]
+}

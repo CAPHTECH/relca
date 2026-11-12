@@ -1,0 +1,9 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor Ledger { capacity 1; capability post() -> V {  duration fixed 1min; result nondet { pass } } }
+  process Flow { p = Ledger.post(); if p == pass { end done } else { end returned } }
+  cut K { include [Ledger] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

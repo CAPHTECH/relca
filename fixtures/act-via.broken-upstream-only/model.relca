@@ -1,0 +1,18 @@
+model Via version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { posted }
+  actor Invoice { source document }
+  actor Extract { via model "doc@v3"; capacity 1; capability make() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Reader { capacity 1; capability make() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Judge { capacity 1; capability check(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post(v:Verdict) -> Ack { commits; duration fixed 1min; result nondet { posted } } }
+  process Flow {
+    e = Extract.make(); r = Reader.make(); j = Judge.check(r); k = Judge.check(r)
+    if j == pass { } else { end rejected }
+    z = Ledger.post(j); end done
+  }
+  bounds { cases 1; live_tasks 2; clock 6min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

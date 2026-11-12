@@ -1,0 +1,5 @@
+# rec-s06-caseid-field.broken-unsupported
+
+T14 s06-caseid-field: the negative changes only the named syntax/type shape. Positive extraction is1min/work1 and has both high/low ends. Static negative has no evaluated time, probability or terminals. Expected U-SYN-0 at parse; Cut undeclared contributes exactly one W-CUT-0.
+
+Expected values are hand derivations, not captured implementation output. Units: minutes. New acceptance stops RED before implementation.

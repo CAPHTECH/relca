@@ -1,0 +1,19 @@
+[
+  ["joint", "half", "routine:0.8, difficult:0.2", "routine:0.5, difficult:0.5"],
+  ["marginal", "error-row", "0.15: ok with bad = true; 0.85: ok with bad = false", "0.05: ok with bad = true; 0.95: ok with bad = false"],
+  ["case-product", "fixed-case", "x: bool ~ { true:0.25, false:0.75 }", "x: bool = true"],
+  ["reject", "zero-queue", "queue capacity 1", "queue capacity 0"],
+  ["late", "clock", "clock 4min", "clock 2min"],
+  ["capacity", "capacity", "grain document", "capacity 0; grain document"],
+  ["executors", "executors", "grain document", "executors [p]; grain document"],
+  ["capability", "capability", "grain document", "capability unused() -> T { duration fixed 0min; result nondet { ok } }; grain document"],
+  ["optin", "unmarked", "instance per_case; ", ""],
+  ["shared-fixed", "marker", "actor Shared {", "actor Shared { instance per_case;"],
+  ["write-ir", "override", "scratch = false", "scratch = true"],
+  ["keys", "unmarked-single", "instance per_case; ", ""],
+  ["explain", "invariant", "obs == difficult", "obs == routine"],
+  ["common", "one-reader", "b = Reader.second()", "b = Reader.plain()"],
+  ["nondet", "fixed", "latent difficulty: Difficulty", "latent difficulty: Difficulty = routine"],
+  ["latent-policy", "policy", "if obs == difficult", "if Invoice.difficulty == difficult"],
+  ["same-document", "second-kernel", "kernel L given [Invoice.difficulty] { routine -> { 1: routine with right = routine }; difficult -> { 1: difficult with right = difficult } }", "kernel L { * -> { 0.8: routine with right = routine; 0.2: difficult with right = difficult } }"]
+]

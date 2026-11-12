@@ -1,0 +1,9 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor Worker { capacity 2; capability do() -> V {  duration fixed 1min; result nondet { pass,fail } } }
+  process Flow { fork f { a = Worker.do() } join all f; end done }
+  cut K { include [Worker] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

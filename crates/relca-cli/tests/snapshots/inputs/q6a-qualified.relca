@@ -1,0 +1,21 @@
+model Qualification version "0.2" {
+  type R = enum { ok }
+  people [p,q]
+  actor Desk { control policy; executors [p,q]
+    capability run() -> R {
+      qualified_executors [q]
+      duration fixed 2min; result nondet { ok }
+    }
+  }
+  permit [q] to Desk.run
+  contract Controls { permitted Desk.run }
+  process Flow { r = Desk.run(); end done }
+  cut C { include [Desk] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  arrivals fixed [0min]
+  policy observable fifo tie_by case_id then call_order assign first_idle
+  metrics { window 20min; currency "JPY"; breakdown waits }
+  simulation replications 16 seed 1 confidence 0.5
+  verify safety no_resource_overcommit
+  verify reachable end.done
+}

@@ -1,0 +1,19 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered: bool = false }
+
+  actor Ledger{capacity 1;state keys:set<CaseId>;capability post(key: CaseId) -> Ack {
+      commits
+
+      duration fixed 3min
+      start{keys+=key};result nondet{committed}
+      cancel cooperative ack_within 1min
+    }};actor Fast {capacity 1;capability go()->Ack{duration fixed 1min;result nondet{committed};cancel forbidden_after_start}}
+  process Flow { fork f{a=Ledger.post(case.id);q=Fast.go()};join any f where result==committed tie by [q,a] remaining cancel_then_drain if none -> absent;if case.id in Ledger.keys{end present}else{end absent} }
+  cut K { include [Ledger,Fast] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.present
+}

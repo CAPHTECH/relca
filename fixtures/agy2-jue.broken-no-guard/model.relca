@@ -1,0 +1,14 @@
+model AgencySecondHalf version "0.2" {
+  type Entry = enum { entry }
+  type V = enum { pass, fail }
+  type Ack = enum { committed }
+  people [c1, a1]
+  actor Doc { source document }
+  actor Clerk { executors [c1]; capability enter() -> Entry { reads [Doc]; duration fixed 1min; result nondet { entry } } }
+  actor Approver { executors [a1]; capability approve(e: Entry) -> V { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post(v: V) -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  process Flow { e = Clerk.enter(); v = Approver.approve(e); k = Ledger.post(v); end posted }
+  cut Scope { include [Doc, Clerk, Approver, Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

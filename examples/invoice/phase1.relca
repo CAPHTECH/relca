@@ -1,0 +1,136 @@
+model InvoiceBPRPhase1 version "0.2" {
+  type Entry = record { confidence: enum { high, low } }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed, rejected_duplicate, held }
+  type Difficulty = enum { routine, difficult }
+  people [c1,c2,a1,s1,cfo]
+  observed case { entry: optional<Entry>; po, receipt, approval: optional<Verdict>; registered: bool = false; input_by: optional<PersonId> }
+  latent case { extraction_correct: bool = false }
+  actor Invoice { source document; latent difficulty: Difficulty ~ { routine: 0.8, difficult: 0.2 } }
+  actor PurchaseOrder { source record }
+  actor ReceiptRecord { source record }
+  kernel human_entry given [Invoice.difficulty] {
+    routine -> { 0.99: Entry { confidence = high } with extraction_correct = true; 0.01: Entry { confidence = high } with extraction_correct = false }
+    difficult -> { 0.94: Entry { confidence = high } with extraction_correct = true; 0.06: Entry { confidence = high } with extraction_correct = false }
+  }
+  kernel ai_entry given [Invoice.difficulty] {
+    routine -> { 0.98: Entry { confidence = high } with extraction_correct = true; 0.02: Entry { confidence = high } with extraction_correct = false }
+    difficult -> { 0.85: Entry { confidence = high } with extraction_correct = true; 0.15: Entry { confidence = high } with extraction_correct = false }
+  }
+  kernel po_match given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.2: pass; 0.8: fail }
+    false, difficult -> { 0.5: pass; 0.5: fail }
+  }
+  kernel receipt_match given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.15: pass; 0.85: fail }
+    false, difficult -> { 0.4: pass; 0.6: fail }
+  }
+  kernel approval_check given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.1: pass; 0.9: fail }
+    false, difficult -> { 0.3: pass; 0.7: fail }
+  }
+  actor Clerk { executors [c1,c2]
+    capability enter() -> Entry { reads [Invoice]; duration fixed 6min; outcomes kernel human_entry; kernel_reads latent [Invoice.difficulty]; writes [entry,extraction_correct,input_by]; finish { input_by = executor.id }; cancel cooperative ack_within 1min }
+    capability match_po(e:Entry) -> Verdict { reads [e,PurchaseOrder]; duration fixed 3min; outcomes kernel po_match; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes po; cancel cooperative ack_within 1min }
+    capability match_receipt(e:Entry) -> Verdict { reads [e,ReceiptRecord]; duration fixed 5min; outcomes kernel receipt_match; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes receipt; cancel cooperative ack_within 1min }
+    capability recheck() -> Verdict { reads [Invoice]; duration fixed 1min; result nondet { pass,fail } }
+  }
+  actor Extractor { capacity 2; via model "doc-extract@v3";
+    capability extract() -> Entry { reads [Invoice]; duration fixed 1min; outcomes kernel ai_entry; kernel_reads latent [Invoice.difficulty]; writes [entry,extraction_correct]; cancel cooperative ack_within 1min }
+  }
+  actor Approver { executors [a1]
+    capability approve(e:Entry,p:Verdict,r:Verdict) -> Verdict { requires po == pass && receipt == pass else fail; reads [entry,po,receipt]; duration fixed 2min; outcomes kernel approval_check; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes approval; cancel cooperative ack_within 1min }
+  }
+  actor Ledger { capacity 1; state keys: set<CaseId>
+    capability post(key:CaseId,p:Verdict,r:Verdict,a:Verdict) -> Ack {
+      requires approval == pass && po == pass && receipt == pass else held
+      reads [entry,approval]
+      commits; duration fixed 1min; writes [keys,registered]
+      atomic { if key in keys { result rejected_duplicate } else { keys += key; registered = true; result committed } }
+      cancel forbidden_after_start
+    }
+  }
+  actor Vendor { control party; standing over [end.returned] basis "invoice claim" }
+  authority ApprovalGrant { basis "approval table"; grants a1 to Approver.approve; issued_by cfo }
+  responsible a1 for (registered -> approval == pass)
+  responsible s1 for Extractor.maintenance
+  cut InvoiceCut {
+    question "One receipt of one invoice"
+    include [Invoice,PurchaseOrder,ReceiptRecord,Clerk,Extractor,Approver,Ledger,Vendor]
+    exclude Payment reason "separate payment domain" loses "payment errors"
+    exclude VendorMaster reason "master data out of scope" loses "master data correlation"
+    defer Resubmission reason "one receipt only" loses "ultimate settlement"
+    defer Vendor.contest_rate reason "fixed recheck duration is not measured" loses "frequency and effort"
+    externality [Vendor.dispute_effort]
+    reentry [contest Vendor -> Clerk.recheck, review cut quarterly by cfo]
+    horizon receipt..resolution within 60min
+    horizon contest within 5d structural_only
+  }
+  bounds { cases 1; live_tasks 2; clock 60min }
+  metrics { window 60min; currency "JPY"; breakdown waits }
+  simulation replications 1000 seed 0 confidence 0.95
+  verify safety no_resource_overcommit
+  verify probability reached registered == true && extraction_correct == false <= 0.001
+  property case.WrongPosting = reached(registered == true && extraction_correct == false)
+  property case.Resolved = reached(end.posted || end.returned)
+  property case.Posted = reached(end.posted)
+  metric cohort.WrongPerArrival = expected(count(case.WrongPosting)) / arrivals
+  metric quantile.PostedP95 = quantile(0.95, case.Posted)
+  metric quantile.PostedReachedP95 = quantile(0.95, case.Posted given reached)
+  contract InvoiceControls {
+    invariant registered -> approval == pass
+    invariant registered -> po == pass && receipt == pass
+    at_most_once Ledger.post.commit per case.id
+    authority_basis Approver.approve ApprovalGrant
+    separation Clerk.enter.finish, Approver.approve.finish
+    response case.received -> one_of(end.posted,end.returned) by 60min after case.received otherwise unresolved
+    contest Vendor on end.returned route Clerk.recheck reversible_by [a1] respond_by 5d
+  }
+  process AsIsFlow {
+    entry = Clerk.enter()
+    poV = Clerk.match_po(entry)
+    receiptV = Clerk.match_receipt(entry)
+    if poV == pass && receiptV == pass {} else { end returned }
+    approvalV = Approver.approve(entry,poV,receiptV)
+    if approvalV == pass {} else { end returned }
+    posted = Ledger.post(case.id,poV,receiptV,approvalV)
+    if posted == committed { end posted } else { end exception }
+  }
+  process ToBePFlow {
+    entry = Clerk.enter()
+    fork checks { poV = Clerk.match_po(entry); receiptV = Clerk.match_receipt(entry) }
+    join all checks
+    if poV == pass && receiptV == pass {} else { end returned }
+    approvalV = Approver.approve(entry,poV,receiptV)
+    if approvalV == pass {} else { end returned }
+    posted = Ledger.post(case.id,poV,receiptV,approvalV)
+    if posted == committed { end posted } else { end exception }
+  }
+  process ToBeAFlow {
+    entry = Extractor.extract()
+    fork checks { poV = Clerk.match_po(entry); receiptV = Clerk.match_receipt(entry) }
+    join all checks
+    if poV == pass && receiptV == pass {} else { end returned }
+    approvalV = Approver.approve(entry,poV,receiptV)
+    if approvalV == pass {} else { end returned }
+    posted = Ledger.post(case.id,poV,receiptV,approvalV)
+    if posted == committed { end posted } else { end exception }
+  }
+  configuration AsIs { cut InvoiceCut; process AsIsFlow }
+  configuration ToBeP { cut InvoiceCut; process ToBePFlow }
+  configuration ToBeA { cut InvoiceCut; process ToBeAFlow; intent {
+    add Extractor reason "transfer extraction"
+    add Extractor.extract reason "transfer input"
+    retire Clerk.enter from normal_path keep fallback reason "retain manual input capability"
+    maintain actor Extractor by s1 reason "model maintenance and error investigation"
+  } }
+  compare [AsIs,ToBeP,ToBeA] cut InvoiceCut
+    hard { cohort.WrongPerArrival <= 0.001 }
+    objectives { minimize metrics.overall.named_people_work }
+}

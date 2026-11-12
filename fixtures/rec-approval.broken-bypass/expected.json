@@ -1,0 +1,56 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "W-AGY-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-AGY-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 2,
+        "max": 7
+      },
+      "work": {
+        "min": 2,
+        "max": 7
+      },
+      "result_at": null
+    },
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 3,
+        "max": 6
+      },
+      "work": {
+        "min": 3,
+        "max": 6
+      },
+      "result_at": null
+    }
+  ],
+  "properties": [
+    {
+      "id": "contract C #1 invariant",
+      "verdict": "violated"
+    },
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ]
+}

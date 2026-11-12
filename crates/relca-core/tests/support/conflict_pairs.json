@@ -1,0 +1,362 @@
+[
+  {
+    "good": "cf-version",
+    "bad": "cf-version.broken-no-check",
+    "old": "      version_check [holder] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-three",
+    "bad": "cf-three.broken-no-check",
+    "old": "      version_check [holder] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-serial",
+    "bad": "cf-serial.broken-no-check",
+    "old": "      version_check [holder] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-same-tick",
+    "bad": "cf-same-tick.broken-simulate",
+    "old": "  policy fifo",
+    "new": "  simulation replications 10 seed 1 confidence 0.95\n  policy fifo"
+  },
+  {
+    "good": "cf-lww",
+    "bad": "cf-lww.broken-overlap",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  },
+  {
+    "good": "cf-lww-clock",
+    "bad": "cf-lww-clock.broken-clock",
+    "old": "clock 10min",
+    "new": "clock 1min"
+  },
+  {
+    "good": "cf-lock",
+    "bad": "cf-lock.broken-wide-lock",
+    "old": "ledger_lock capacity 1",
+    "new": "ledger_lock capacity 2"
+  },
+  {
+    "good": "cf-race",
+    "bad": "cf-race.broken-two-writers",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  },
+  {
+    "good": "cf-atomic-cap2",
+    "bad": "cf-atomic-cap2.broken-overwrite",
+    "old": "model CaseSet version \"0.2\" {\n  type Ack = enum { committed, rejected_duplicate }\n  type S=enum{idle,busy}\n  type T = enum { ok, no }\n  people [c1,c2]\n  observed case { registered: bool = false }\n\n  actor Ledger { capacity 2; state status:S=idle; state keys: set<CaseId>; capability post(key: CaseId) -> Ack {\n      commits\n      writes [keys, registered]\n      duration fixed 1min\n      atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; result committed }\n      }\n      cancel forbidden_after_start\n    } }\n  process Flow { a = Ledger.post(case.id); end done }\n  cut K { include [Ledger] }\n  arrivals fixed [0min,0min]\n  policy fifo tie_by case_id\n  bounds { cases 2; live_tasks 3; clock 20min }\n  contract C { at_most_once Ledger.post.commit per case.id }\n  verify reachable end.done\n}\n",
+    "new": "model CaseSet version \"0.2\" {\n  type Ack = enum { committed, rejected_duplicate }\n  type S=enum{idle,busy}\n  type T = enum { ok, no }\n  people [c1,c2]\n  observed case { registered: bool = false }\n\n  actor Ledger { capacity 2; state status:S=idle; state keys: set<CaseId>; capability post(key: CaseId) -> Ack {\n      commits\n      writes [keys, registered, status]\n      duration fixed 1min\n      atomic {\n        if key in keys { result rejected_duplicate }\n        else { keys += key; registered = true; status = busy; result committed }\n      }\n      cancel forbidden_after_start\n    } }\n  process Flow { a = Ledger.post(case.id); end done }\n  cut K { include [Ledger] }\n  arrivals fixed [0min,0min]\n  policy fifo tie_by case_id\n  bounds { cases 2; live_tasks 3; clock 20min }\n  contract C { at_most_once Ledger.post.commit per case.id }\n  verify reachable end.done\n}\n"
+  },
+  {
+    "good": "cf-latent",
+    "bad": "cf-latent.broken-latent",
+    "old": "[holder]",
+    "new": "[holder, risk]"
+  },
+  {
+    "good": "cf-silent",
+    "bad": "cf-silent.broken-one-case",
+    "old": "model Conflict version \"0.2\" {\n  type R = enum { committed, conflict }\n  type H = enum { free, taken }\n  actor Ledger {\n    capacity 1\n    state holder: H = free\n    state claims: 0..2 = 0\n    capability claim() -> R {\n      version_check [holder] else conflict\n      commits\n      duration fixed 1min\n      result nondet { committed }\n      writes [holder, claims]\n      finish { holder = taken; claims += 1 }\n    }\n  }\n  process P {\n    r = Ledger.claim()\n    if r == committed { end claimed } else { end retry_needed }\n  }\n  cut C { include [Ledger] }\n  bounds { cases 2; live_tasks 1; clock 10min }\n  arrivals fixed [0min,0min]\n  policy fifo tie_by case_id\n  verify reachable end.claimed\n}\n",
+    "new": "model Conflict version \"0.2\" {\n  type R = enum { committed, conflict }\n  type H = enum { free, taken }\n  actor Ledger {\n    capacity 1\n    state holder: H = free\n    state claims: 0..2 = 0\n    capability claim() -> R {\n      version_check [holder] else conflict\n      commits\n      duration fixed 1min\n      result nondet { committed }\n      writes [holder, claims]\n      finish { holder = taken; claims += 1 }\n    }\n  }\n  process P {\n    r = Ledger.claim()\n    if r == committed { end claimed } else { end retry_needed }\n  }\n  cut C { include [Ledger] }\n  bounds { cases 1; live_tasks 1; clock 10min }\n  policy fifo tie_by case_id\n  verify reachable end.claimed\n}\n"
+  },
+  {
+    "good": "cf-label",
+    "bad": "cf-label.broken-renamed",
+    "old": "Ledger",
+    "new": "Book"
+  },
+  {
+    "good": "cf-label-lock",
+    "bad": "cf-label-lock.broken-renamed",
+    "old": "ledger_lock",
+    "new": "slots"
+  },
+  {
+    "good": "cf-agency",
+    "bad": "cf-agency.broken-ordinary-result",
+    "old": "      version_check [holder] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-agency-requires",
+    "bad": "cf-agency-requires.broken-no-guard",
+    "old": "requires gate==pass else conflict;",
+    "new": ""
+  },
+  {
+    "good": "cf-no-ghost-commit",
+    "bad": "cf-no-ghost-commit.broken-inverted-invariant",
+    "old": "r == committed }\n  verify",
+    "new": "r == conflict }\n  verify"
+  },
+  {
+    "good": "cf-version-atomic",
+    "bad": "cf-version-atomic.broken-no-check",
+    "old": "      version_check [keys] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-wide-state",
+    "bad": "cf-wide-state.broken-no-check",
+    "old": "      version_check [holder] else conflict\n",
+    "new": ""
+  },
+  {
+    "good": "cf-lww-commutative",
+    "bad": "cf-lww-commutative.broken-assign",
+    "old": "n+=1",
+    "new": "n=1"
+  },
+  {
+    "good": "cf-s01-close",
+    "bad": "cf-s01-close.broken-invalid-item",
+    "old": "[holder]",
+    "new": "[holder"
+  },
+  {
+    "good": "cf-s02-result-missing",
+    "bad": "cf-s02-result-missing.broken-invalid-item",
+    "old": "else conflict\n",
+    "new": "else\n"
+  },
+  {
+    "good": "cf-s03-type",
+    "bad": "cf-s03-type.broken-invalid-item",
+    "old": "else conflict",
+    "new": "else absent"
+  },
+  {
+    "good": "cf-s04-name",
+    "bad": "cf-s04-name.broken-invalid-item",
+    "old": "[holder]",
+    "new": "[unknown]"
+  },
+  {
+    "good": "cf-s05-unwritten",
+    "bad": "cf-s05-unwritten.broken-invalid-item",
+    "old": "[holder]",
+    "new": "[holder, spare]"
+  },
+  {
+    "good": "cf-s06-duplicate-target",
+    "bad": "cf-s06-duplicate-target.broken-invalid-item",
+    "old": "[holder]",
+    "new": "[holder, holder]"
+  },
+  {
+    "good": "cf-s07-duplicate-item",
+    "bad": "cf-s07-duplicate-item.broken-invalid-item",
+    "old": "      version_check [holder] else conflict\n",
+    "new": "      version_check [holder] else conflict\n      version_check [holder] else conflict\n"
+  },
+  {
+    "good": "cf-s08-overlap",
+    "bad": "cf-s08-overlap.broken-invalid-item",
+    "old": "else conflict",
+    "new": "else committed"
+  },
+  {
+    "good": "cf-s09-start",
+    "bad": "cf-s09-start.broken-invalid-item",
+    "old": "      commits",
+    "new": "      start {holder=taken}\n      commits"
+  },
+  {
+    "good": "cf-s15-retry",
+    "bad": "cf-s15-retry.broken-invalid-item",
+    "old": "      commits",
+    "new": "      retry 1\n      commits"
+  },
+  {
+    "good": "cf-s16-priority",
+    "bad": "cf-s16-priority.broken-invalid-item",
+    "old": "      commits",
+    "new": "      priority 1\n      commits"
+  },
+  {
+    "good": "cf-s17-commutative",
+    "bad": "cf-s17-commutative.broken-invalid-item",
+    "old": "      commits",
+    "new": "      commutative holder\n      commits"
+  },
+  {
+    "good": "cf-s18-conflict-keyword",
+    "bad": "cf-s18-conflict-keyword.broken-invalid-item",
+    "old": "      commits",
+    "new": "      conflict last_write_wins\n      commits"
+  },
+  {
+    "good": "cf-s22-empty",
+    "bad": "cf-s22-empty.broken-invalid-item",
+    "old": "[holder]",
+    "new": "[]"
+  },
+  {
+    "good": "cf-s10-kernel",
+    "bad": "cf-s10-kernel.broken-version",
+    "old": "outcomes kernel K",
+    "new": "version_check [holder] else conflict;outcomes kernel K"
+  },
+  {
+    "good": "cf-s11-case-lww",
+    "bad": "cf-s11-case-lww.broken-suffix",
+    "old": "flag:bool=false",
+    "new": "flag:bool=false last_write_wins"
+  },
+  {
+    "good": "cf-s12-percase-lww",
+    "bad": "cf-s12-percase-lww.broken-suffix",
+    "old": "flag:bool=false",
+    "new": "flag:bool=false last_write_wins"
+  },
+  {
+    "good": "cf-s13-latent-lww",
+    "bad": "cf-s13-latent-lww.broken-suffix",
+    "old": "flag:bool=false",
+    "new": "flag:bool=false last_write_wins"
+  },
+  {
+    "good": "cf-s14-mixed",
+    "bad": "cf-s14-mixed.broken-subtract",
+    "old": "finish{x+=1}}}\n process",
+    "new": "finish{x-=1}}}\n process"
+  },
+  {
+    "good": "cf-s19-other-writes",
+    "bad": "cf-s19-other-writes.broken-owner",
+    "old": "writes [holder, claims]",
+    "new": "writes [Other.x, claims]"
+  },
+  {
+    "good": "cf-s19-other-finish",
+    "bad": "cf-s19-other-finish.broken-owner",
+    "old": "holder = taken",
+    "new": "Other.x = taken"
+  },
+  {
+    "good": "cf-s19-other-start",
+    "bad": "cf-s19-other-start.broken-owner",
+    "old": "      commits",
+    "new": "      start {Other.x=taken}\n      commits"
+  },
+  {
+    "good": "cf-s20-fork-version",
+    "bad": "cf-s20-fork-version.broken-siblings",
+    "old": "r = Ledger.claim()",
+    "new": "fork f {a = Ledger.claim(); b = Ledger.claim()}; join all f"
+  },
+  {
+    "good": "cf-s20-fork-lock",
+    "bad": "cf-s20-fork-lock.broken-siblings",
+    "old": "r = Ledger.claim()",
+    "new": "fork f {a = Ledger.claim(); b = Ledger.claim()}; join all f"
+  },
+  {
+    "good": "cf-s20-fork-lww",
+    "bad": "cf-s20-fork-lww.broken-siblings",
+    "old": "r = Ledger.claim()",
+    "new": "fork f {a = Ledger.claim(); b = Ledger.claim()}; join all f"
+  },
+  {
+    "good": "cf-s23-duplicate-lww",
+    "bad": "cf-s23-duplicate-lww.broken-duplicate",
+    "old": "last_write_wins",
+    "new": "last_write_wins last_write_wins"
+  },
+  {
+    "good": "cf-start-marker",
+    "bad": "cf-start-marker.broken-no-start",
+    "old": "      start {started+=1}\n",
+    "new": ""
+  },
+  {
+    "good": "cf-s21-read-qualified",
+    "bad": "cf-s21-read-qualified.broken-qualified",
+    "old": "reads [Ledger]",
+    "new": "reads [Ledger.holder]"
+  },
+  {
+    "good": "cf-subtract",
+    "bad": "cf-subtract.broken-assign",
+    "old": "n-=1",
+    "new": "n=0"
+  },
+  {
+    "good": "cf-grain",
+    "bad": "cf-grain.broken-team",
+    "old": "  actor Ledger {",
+    "new": "  actor Ledger { grain team"
+  },
+  {
+    "good": "cf-one-sided",
+    "bad": "cf-one-sided.broken-one-sided",
+    "old": "capability b()->R{version_check [holder] else conflict;",
+    "new": "capability b()->R{"
+  },
+  {
+    "good": "cf-cross-pair",
+    "bad": "cf-cross-pair.broken-one-sided",
+    "old": "capability b()->R{uses RB:1;version_check [holder] else conflict;",
+    "new": "capability b()->R{uses RB:1;"
+  },
+  {
+    "good": "cf-mixed-resolution",
+    "bad": "cf-mixed-resolution.broken-one-sided",
+    "old": "capability b()->R{version_check [n] else conflict;",
+    "new": "capability b()->R{"
+  },
+  {
+    "good": "cf-check-vector",
+    "bad": "cf-check-vector.broken-first-only",
+    "old": "[x,y] else conflict",
+    "new": "[x] else conflict"
+  },
+  {
+    "good": "cf-aba",
+    "bad": "cf-aba.broken-no-restore",
+    "old": "holder=free};duration",
+    "new": "holder=taken};duration"
+  },
+  {
+    "good": "cf-cancel",
+    "bad": "cf-cancel.broken-drain",
+    "old": "cancel immediate",
+    "new": "cancel forbidden_after_start"
+  },
+  {
+    "good": "cf-cancel-start",
+    "bad": "cf-cancel-start.broken-no-start",
+    "old": "start{marker=taken};",
+    "new": ""
+  },
+  {
+    "good": "cf-simulation",
+    "bad": "cf-simulation.broken-overlap",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  },
+  {
+    "good": "cf-explain",
+    "bad": "cf-explain.broken-overlap",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  },
+  {
+    "good": "cf-compare-exhaustive",
+    "bad": "cf-compare-exhaustive.broken-overlap",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  },
+  {
+    "good": "cf-compare-simulation",
+    "bad": "cf-compare-simulation.broken-overlap",
+    "old": "capacity 1",
+    "new": "capacity 2"
+  }
+]

@@ -1,0 +1,81 @@
+model ProbabilityInvoice version "0.2" {
+  type Entry = enum { high }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  type Difficulty = enum { routine, difficult }
+  observed case { entry: optional<Entry>; po, receipt, approval: optional<Verdict>; registered: bool = false }
+  latent case { extraction_correct: bool = false }
+  actor Invoice { source document; latent difficulty: Difficulty ~ { routine: 0.8, difficult: 0.2 } }
+  actor PurchaseOrder { source record }
+  actor ReceiptRecord { source record }
+  kernel human_entry given [Invoice.difficulty] {
+    routine -> { 0.99: high with extraction_correct = true; 0.01: high with extraction_correct = false }
+    difficult -> { 0.94: high with extraction_correct = true; 0.06: high with extraction_correct = false }
+  }
+  kernel ai_entry given [Invoice.difficulty] {
+    routine -> { 0.98: high with extraction_correct = true; 0.02: high with extraction_correct = false }
+    difficult -> { 0.85: high with extraction_correct = true; 0.15: high with extraction_correct = false }
+  }
+  kernel po_match given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.2: pass; 0.8: fail }
+    false, difficult -> { 0.5: pass; 0.5: fail }
+  }
+  kernel receipt_match given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.15: pass; 0.85: fail }
+    false, difficult -> { 0.4: pass; 0.6: fail }
+  }
+  kernel approval_check given [extraction_correct, Invoice.difficulty] {
+    true, routine -> { 1: pass }
+    true, difficult -> { 1: pass }
+    false, routine -> { 0.1: pass; 0.9: fail }
+    false, difficult -> { 0.3: pass; 0.7: fail }
+  }
+  actor Clerk { capacity 2
+    capability enter() -> Entry { reads [Invoice]; duration fixed 6min; outcomes kernel human_entry; kernel_reads latent [Invoice.difficulty]; writes [entry,extraction_correct] }
+    capability match_po(e:Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 3min; outcomes kernel po_match; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes po }
+    capability match_receipt(e:Entry) -> Verdict { reads [ReceiptRecord]; duration fixed 5min; outcomes kernel receipt_match; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes receipt }
+  }
+  actor Extractor { capacity 1
+    capability extract() -> Entry { reads [Invoice]; duration fixed 1min; outcomes kernel ai_entry; kernel_reads latent [Invoice.difficulty]; writes [entry,extraction_correct] }
+  }
+  actor Approver { capacity 1
+    capability approve(e:Entry) -> Verdict { duration fixed 2min; outcomes kernel approval_check; kernel_reads latent [extraction_correct,Invoice.difficulty]; writes approval }
+  }
+  actor Ledger { capacity 1
+    capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } }
+  }
+  process AsIsFlow {
+    entry = Extractor.extract()
+    po = Clerk.match_po(entry)
+    receipt = Clerk.match_receipt(entry)
+    if po == pass && receipt == pass {} else { end returned }
+    approval = Approver.approve(entry)
+    if approval == pass {} else { end returned }
+    posted = Ledger.post()
+    end posted
+  }
+  process ToBePFlow {
+    entry = Clerk.enter()
+    fork checks { po = Clerk.match_po(entry); receipt = Clerk.match_receipt(entry) }
+    join all checks
+    if po == pass && receipt == pass {} else { end returned }
+    approval = Approver.approve(entry)
+    if approval == pass {} else { end returned }
+    posted = Ledger.post()
+    end posted
+  }
+  cut InvoiceCut { include [Invoice,PurchaseOrder,ReceiptRecord,Clerk,Extractor,Approver,Ledger] }
+  configuration AsIs { cut InvoiceCut; process AsIsFlow }
+  configuration ToBeP { cut InvoiceCut; process ToBePFlow }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached registered == true && extraction_correct == false <= 0.001
+  property case.Wrong = reached(registered == true && extraction_correct == false)
+  property case.Registered = reached(registered == true)
+  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals
+  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))
+}

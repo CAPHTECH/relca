@@ -1,0 +1,8 @@
+{
+  "command": "compare",
+  "plans": [
+    "A",
+    "B"
+  ],
+  "mode": "simulation"
+}

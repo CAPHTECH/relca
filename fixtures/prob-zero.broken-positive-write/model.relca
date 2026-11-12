@@ -1,0 +1,14 @@
+model ProbabilityZero version "0.2" {
+  type T = enum { pass, fail }
+  observed case { danger: bool = false }
+  kernel K { * -> { 1: pass with danger = true; 0: fail with danger = true } }
+  actor A { capacity 1
+    capability sample() -> T { duration fixed 1min; outcomes kernel K; writes danger }
+    capability slow() -> T { duration fixed 100min; result nondet { pass } }
+  }
+  process Flow { s = A.sample(); if s == fail { w = A.slow() } else {}; end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached danger == true <= 0
+  contract Controls { invariant A.sample.finish -> danger == false }
+}

@@ -1,0 +1,8 @@
+{
+  "verdict": "violated",
+  "terminals": [],
+  "bounds": {
+    "truncated": false,
+    "range_violation_stops": true
+  }
+}

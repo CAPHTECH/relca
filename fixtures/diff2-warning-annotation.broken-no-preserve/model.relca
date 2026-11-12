@@ -1,0 +1,12 @@
+model DiffWarningAnnotation version "0.2" {
+  type V = enum { pass,fail }
+  actor Gate { capacity 1; capability pick() -> V { commits; duration fixed 1min; result nondet { pass,fail } } }
+  process Before { x = Gate.pick(); if x == pass { end done } else { end done } }
+  process After { x = Gate.pick(); if x == pass { end done } else { end rejected } }
+  contract Ctl { at_most_once Gate.pick.commit per case.id }
+  cut C { include [Gate] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After; intent { change meaning end.rejected reason "終端追加" } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

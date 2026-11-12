@@ -1,0 +1,64 @@
+{
+  "verdict": "violated",
+  "mode": "exhaustive",
+  "unit": "min",
+  "bounds": {
+    "cases": 1,
+    "live_tasks": 2,
+    "clock": 2,
+    "truncated": true
+  },
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "recoverable end",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "terminating end",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "almost_sure end",
+      "verdict": "inconclusive",
+      "probability": {
+        "min": "0",
+        "max": "1"
+      }
+    },
+    {
+      "id": "reachable end.done",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "probability reached #1",
+      "verdict": "violated",
+      "probability": {
+        "min": "0",
+        "max": "0"
+      }
+    },
+    {
+      "id": "contract Controls #1 contest",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "contract Controls #1 contest_response",
+      "verdict": "inconclusive"
+    }
+  ],
+  "terminals": [],
+  "diagnostics": [],
+  "absent_diagnostics": [
+    "W-UNREACH-0",
+    "W-UNREACH-1",
+    "W-UNREACH-2",
+    "W-UNREACH-3"
+  ],
+  "unchecked": [
+    "unreachable"
+  ]
+}

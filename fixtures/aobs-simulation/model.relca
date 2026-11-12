@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor A { capacity 1; state flag: bool = false; capability run() -> R { duration fixed 1min; result nondet { ok }; writes flag; finish { flag = true } } }
+  process P { a = A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 2; live_tasks 1; clock 20min }
+  arrivals fixed [0min,2min]; simulation replications 1 seed 0 confidence 0.95
+  verify safety no_resource_overcommit
+}

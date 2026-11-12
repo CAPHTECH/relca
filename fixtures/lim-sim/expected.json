@@ -1,0 +1,441 @@
+{
+  "verdict": "inconclusive",
+  "mode": "simulation",
+  "unit": "min",
+  "cut": "undeclared",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 20,
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "absent_diagnostics": [
+    "W-BUDGET-0",
+    "W-DEADLOCK-0"
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive",
+      "basis": "sample",
+      "witness": null
+    }
+  ],
+  "terminals": [],
+  "simulation": {
+    "attempted_replications": 10,
+    "completed_replications": 10,
+    "truncated_replications": 0
+  },
+  "metrics": {
+    "cases": [
+      {
+        "case_id": 1,
+        "external_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null,
+          "mean": "0",
+          "samples": 10
+        },
+        "first_start_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null,
+          "mean": "0",
+          "samples": 10
+        },
+        "work": {
+          "min": "2",
+          "max": "2",
+          "reason": null,
+          "mean": "2",
+          "samples": 10
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "1",
+              "max": "1",
+              "reason": null,
+              "mean": "1",
+              "samples": 10
+            },
+            "observed_total": 10
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "1",
+                  "max": "1",
+                  "reason": null,
+                  "mean": "1",
+                  "samples": 10
+                },
+                "observed_total": 10
+              }
+            }
+          ]
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "2",
+              "max": "2",
+              "reason": null,
+              "mean": "2",
+              "samples": 10
+            },
+            "count": {
+              "stats": {
+                "min": "1",
+                "max": "1",
+                "reason": null,
+                "mean": "1",
+                "samples": 10
+              },
+              "observed_total": 10
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "count": {
+              "stats": {
+                "min": "0",
+                "max": "0",
+                "reason": null,
+                "mean": "0",
+                "samples": 10
+              },
+              "observed_total": 0
+            }
+          }
+        ]
+      },
+      {
+        "case_id": 2,
+        "external_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null,
+          "mean": "0",
+          "samples": 10
+        },
+        "first_start_wait": {
+          "min": "2",
+          "max": "2",
+          "reason": null,
+          "mean": "2",
+          "samples": 10
+        },
+        "work": {
+          "min": "2",
+          "max": "2",
+          "reason": null,
+          "mean": "2",
+          "samples": 10
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "1",
+              "max": "1",
+              "reason": null,
+              "mean": "1",
+              "samples": 10
+            },
+            "observed_total": 10
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "1",
+                  "max": "1",
+                  "reason": null,
+                  "mean": "1",
+                  "samples": 10
+                },
+                "observed_total": 10
+              }
+            }
+          ]
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "4",
+              "max": "4",
+              "reason": null,
+              "mean": "4",
+              "samples": 10
+            },
+            "count": {
+              "stats": {
+                "min": "1",
+                "max": "1",
+                "reason": null,
+                "mean": "1",
+                "samples": 10
+              },
+              "observed_total": 10
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "count": {
+              "stats": {
+                "min": "0",
+                "max": "0",
+                "reason": null,
+                "mean": "0",
+                "samples": 10
+              },
+              "observed_total": 0
+            }
+          }
+        ]
+      },
+      {
+        "case_id": 3,
+        "external_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null,
+          "mean": "0",
+          "samples": 10
+        },
+        "first_start_wait": {
+          "min": "4",
+          "max": "4",
+          "reason": null,
+          "mean": "4",
+          "samples": 10
+        },
+        "work": {
+          "min": "2",
+          "max": "2",
+          "reason": null,
+          "mean": "2",
+          "samples": 10
+        },
+        "counts": {
+          "admitted": {
+            "stats": {
+              "min": "1",
+              "max": "1",
+              "reason": null,
+              "mean": "1",
+              "samples": 10
+            },
+            "observed_total": 10
+          },
+          "end_counts": [
+            {
+              "end": "done",
+              "count": {
+                "stats": {
+                  "min": "1",
+                  "max": "1",
+                  "reason": null,
+                  "mean": "1",
+                  "samples": 10
+                },
+                "observed_total": 10
+              }
+            }
+          ]
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "6",
+              "max": "6",
+              "reason": null,
+              "mean": "6",
+              "samples": 10
+            },
+            "count": {
+              "stats": {
+                "min": "1",
+                "max": "1",
+                "reason": null,
+                "mean": "1",
+                "samples": 10
+              },
+              "observed_total": 10
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null,
+            "count": {
+              "stats": {
+                "min": "0",
+                "max": "0",
+                "reason": null,
+                "mean": "0",
+                "samples": 10
+              },
+              "observed_total": 0
+            }
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "counts": {
+        "offered": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null,
+            "mean": "3",
+            "samples": 10
+          },
+          "observed_total": 30
+        },
+        "received": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null,
+            "mean": "3",
+            "samples": 10
+          },
+          "observed_total": 30
+        },
+        "completed": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null,
+            "mean": "3",
+            "samples": 10
+          },
+          "observed_total": 30
+        },
+        "rejected": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null,
+            "mean": "0",
+            "samples": 10
+          },
+          "observed_total": 0
+        },
+        "unfinished": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null,
+            "mean": "0",
+            "samples": 10
+          },
+          "observed_total": 0
+        },
+        "deadlocked": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null,
+            "mean": "0",
+            "samples": 10
+          },
+          "observed_total": 0
+        },
+        "not_arrived": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null,
+            "mean": "0",
+            "samples": 10
+          },
+          "observed_total": 0
+        },
+        "admitted": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null,
+            "mean": "3",
+            "samples": 10
+          },
+          "observed_total": 30
+        },
+        "end_counts": [
+          {
+            "end": "done",
+            "count": {
+              "stats": {
+                "min": "3",
+                "max": "3",
+                "reason": null,
+                "mean": "3",
+                "samples": 10
+              },
+              "observed_total": 30
+            }
+          }
+        ]
+      },
+      "work": {
+        "min": "6",
+        "max": "6",
+        "reason": null,
+        "mean": "6",
+        "samples": 10
+      }
+    },
+    "capabilities": [
+      {
+        "capability": "A.run",
+        "starts": {
+          "min": "3",
+          "max": "3",
+          "reason": null,
+          "mean": "3",
+          "samples": 10
+        }
+      }
+    ],
+    "actors": [
+      {
+        "actor": "A",
+        "work": {
+          "min": "6",
+          "max": "6",
+          "reason": null,
+          "mean": "6",
+          "samples": 10
+        },
+        "peak_tasks": {
+          "min": "1",
+          "max": "1",
+          "reason": null,
+          "mean": "1",
+          "samples": 10
+        }
+      }
+    ]
+  }
+}

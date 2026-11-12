@@ -1,0 +1,18 @@
+model MetricsCompare version "0.2" {
+  type T = enum { pass }
+  actor Office {
+    capacity 2
+    capability short() -> T { duration fixed 3min; result nondet { pass } }
+    capability long() -> T { duration fixed 5min; result nondet { pass } }
+  }
+  process Serial { a = Office.short(); b = Office.long(); end done }
+  process Parallel { fork f { a = Office.short(); b = Office.long() }; join all f; end done }
+  cut C { include [Office] }
+  configuration AsIs { cut C; process Serial }
+  configuration ToBeP { cut C; process Parallel }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  metrics { window 10min; currency "JPY"; rate Office per_minute 100; rate Office.short per_start 2; rate Office.long per_start 3 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+  compare [AsIs, ToBeP] cut C objectives { minimize metrics.overall.work; maximize metrics.overall.named_people_work; minimize metrics.overall.peak_tasks; minimize metrics.overall.observed_cost_total; minimize metrics.overall.observed_cost_per_arrival }
+}

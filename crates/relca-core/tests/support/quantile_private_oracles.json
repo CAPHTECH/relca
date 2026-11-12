@@ -1,0 +1,47 @@
+{
+  "calculation": "ADR0049 plan T17/T19/T20/T24. These are independently hand-authored graph/observation worlds. A leaf elapsed is FIRST hit after receipt; null means known never. Unknown has four endpoints, never an invented uniform probability. Production adapters must solve these inputs, not return the expected member.",
+  "graphs": [
+    {"id":"T19-direct-B","tree":{"choice":[{"chance":[["1/5",2],["3/10",4],["1/2",null]]},{"chance":[["3/5",2],["2/5",4]]}]},"queries":[{"p":"4/5","given_reached":true}],"at":[2,4],"expected":{"A":[["1/5","1/5","3/5","3/5"],["1/2","1/2","1","1"]],"B":[["3/10","3/10","2/5","2/5"],["0","0","0","0"]],"D":["1/2","1/2","1","1"],"quantiles":[{"lower":"4","upper":"4","basis":"per_case_relaxation","reason":null,"lower_bound":null}]}},
+    {"id":"T19-redistributed","tree":{"choice":[{"chance":[["2/5",2],["1/10",4],["1/2",null]]},{"chance":[["3/5",2],["2/5",4]]}]},"queries":[{"p":"4/5","given_reached":true}],"at":[2,4],"expected":{"A":[["2/5","2/5","3/5","3/5"],["1/2","1/2","1","1"]],"B":[["1/10","1/10","2/5","2/5"],["0","0","0","0"]],"D":["1/2","1/2","1","1"],"quantiles":[{"lower":"2","upper":"4","basis":"per_case_relaxation","reason":null,"lower_bound":null}]}},
+    {"id":"T20-crossing","tree":{"choice":[{"chance":[["3/5",2],["2/5",6]]},4]},"queries":[{"p":"1/2","given_reached":false},{"p":"9/10","given_reached":false}],"expected":{"quantiles":[{"lower":"2","upper":"4","basis":"per_case_relaxation","reason":null,"lower_bound":null},{"lower":"4","upper":"6","basis":"per_case_relaxation","reason":null,"lower_bound":null}]}},
+    {"id":"T20-crossing-late","tree":{"choice":[{"chance":[["3/5",2],["2/5",6]]},7]},"queries":[{"p":"1/2","given_reached":false},{"p":"9/10","given_reached":false}],"expected":{"quantiles":[{"lower":"2","upper":"7","basis":"per_case_relaxation","reason":null,"lower_bound":null},{"lower":"6","upper":"7","basis":"per_case_relaxation","reason":null,"lower_bound":null}]}},
+    {"id":"F21-early-hit-absorbs-B","tree":{"path":[{"elapsed":2,"hit":true},{"elapsed":3,"hit":false},{"elapsed":4,"hit":true}]},"queries":[{"p":"1","given_reached":true}],"at":[2],"expected":{"A":[["1","1","1","1"]],"B":[["0","0","0","0"]],"D":["1","1","1","1"],"quantiles":[{"lower":"2","upper":"2","basis":"exact","reason":null,"lower_bound":null}]}},
+    {"id":"T17-live-tasks-now","tree":{"censored":{"earliest":0,"cause":"live_tasks"}},"queries":[{"p":"1/2","given_reached":false},{"p":"1/2","given_reached":true}],"expected":{"quantiles":[{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":"0"},{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":null}]}},
+    {"id":"T17-numeric-now","tree":{"censored":{"earliest":0,"cause":"numeric"}},"queries":[{"p":"1/2","given_reached":false},{"p":"1/2","given_reached":true}],"expected":{"quantiles":[{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":"0"},{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":null}]}},
+    {"id":"F30-max-only-unknown","tree":{"choice":[null,{"censored":{"earliest":2,"cause":"clock"}}]},"queries":[{"p":"1/2","given_reached":true}],"expected":{"D":["0","0","0","1"],"quantiles":[{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":null}]}},
+    {"id":"F30-min-only-unknown","tree":{"choice":[2,{"censored":{"earliest":2,"cause":"clock"}}]},"queries":[{"p":"1/2","given_reached":true}],"expected":{"D":["0","1","1","1"],"quantiles":[{"lower":null,"upper":null,"basis":null,"reason":"truncated","lower_bound":null}]}},
+    {"id":"F39-within-closes-late-B","tree":{"censored":{"earliest":4,"latest":3,"cause":"clock"}},"within":3,"queries":[{"p":"1","given_reached":true}],"at":[3],"expected":{"A":[["0","0","0","0"]],"B":[["0","0","0","0"]],"D":["0","0","0","0"],"quantiles":[{"lower":null,"upper":null,"basis":null,"reason":"zero_denominator","lower_bound":null}]}}
+  ],
+  "samples": [
+    {"id":"pooled-not-mean","replications":[[2],[2],[4],[4]],"p":"1/2","given_reached":false,"expected":{"point":"2","observations":4,"censored":0,"reason":null,"lower_bound":null}},
+    {"id":"T07-identifiable","replications":[[2],[2],[{"earliest":4,"cause":"clock"}],[{"earliest":4,"cause":"clock"}]],"p":"1/2","given_reached":false,"expected":{"point":"2","observations":4,"censored":2,"reason":null,"lower_bound":null}},
+    {"id":"T07-high-tail","replications":[[2],[2],[{"earliest":4,"cause":"clock"}],[{"earliest":4,"cause":"clock"}]],"p":"19/20","given_reached":false,"expected":{"point":null,"observations":4,"censored":2,"reason":"truncated","lower_bound":"4"}},
+    {"id":"T14-conditional-censor","replications":[[3,{"earliest":5,"cause":"horizon"}],[3,{"earliest":5,"cause":"horizon"}]],"p":"3/4","given_reached":true,"expected":{"point":null,"observations":4,"censored":2,"reason":"undetermined","lower_bound":"3"}},
+    {"id":"T14-all-censor","replications":[[3,{"earliest":5,"cause":"horizon"}],[3,{"earliest":5,"cause":"horizon"}]],"p":"3/4","given_reached":false,"expected":{"point":null,"observations":4,"censored":2,"reason":"undetermined","lower_bound":"5"}},
+    {"id":"T25-conditional-latest","replications":[[3,{"earliest":2,"latest":3,"cause":"horizon"}]],"p":"1","given_reached":true,"expected":{"point":"3","observations":2,"censored":1,"reason":null,"lower_bound":null}},
+    {"id":"T25-no-latest","replications":[[3,{"earliest":2,"cause":"horizon"}]],"p":"1","given_reached":true,"expected":{"point":null,"observations":2,"censored":1,"reason":"undetermined","lower_bound":"3"}},
+    {"id":"zero-denominator","replications":[[null,null]],"p":"1/2","given_reached":true,"expected":{"point":null,"observations":2,"censored":0,"reason":"zero_denominator","lower_bound":null}},
+    {"id":"unknown-denominator","replications":[[{"earliest":0,"cause":"pending"}]],"p":"1/2","given_reached":true,"expected":{"point":null,"observations":1,"censored":1,"reason":"truncated","lower_bound":null}},
+    {"id":"no-samples","replications":[],"p":"1/2","given_reached":false,"expected":{"point":null,"observations":0,"censored":0,"reason":"no_samples","lower_bound":null}},
+    {"id":"late-abort-retract","replications":[[2],[2]],"aborted":true,"p":"1/2","given_reached":false,"expected":{"point":null,"observations":0,"censored":0,"reason":"aborted","lower_bound":null}},
+    {"id":"known-miss-remains-in-all","replications":[[3,null]],"p":"19/20","given_reached":false,"expected":{"point":null,"observations":2,"censored":0,"reason":"beyond_reached_mass","lower_bound":null}}
+  ],
+  "worlds": [
+    {"id":"T24-transient-other-case","arrivals":[0,10],"views":[{"time":0,"received":[1],"flag":false},{"time":10,"received":[1,2],"flag":false},{"time":11,"received":[1,2],"flag":true,"actor_case":1},{"time":12,"received":[1,2],"flag":false,"actor_case":1}],"case2_trace":[],"expected":{"first_hits":[11,1],"all_q1":"11","given_q1":"11"}},
+    {"id":"T24-no-hit","arrivals":[0,10],"views":[{"time":0,"received":[1],"flag":false},{"time":10,"received":[1,2],"flag":false},{"time":11,"received":[1,2],"flag":false,"actor_case":1},{"time":12,"received":[1,2],"flag":false,"actor_case":1}],"case2_trace":[],"expected":{"first_hits":[null,null],"all_reason":"beyond_reached_mass","given_reason":"zero_denominator"}},
+    {"id":"F24-before-receipt-is-not-hit","arrivals":[10],"views":[{"time":9,"received":[],"flag":true},{"time":10,"received":[1],"flag":false}],"expected":{"first_hits":[null]}},
+    {"id":"F29-selected-candidate-only","arrivals":[0],"views":[{"time":0,"received":[1],"flag":false}],"candidates":[{"selected":true,"time":2,"flag":false},{"selected":false,"time":2,"flag":true}],"expected":{"first_hits":[null]}}
+  ],
+  "ir_mutants": [
+    {"id":"valid","mutation":null,"expected":{"engine_unsupported":false,"reference_stop":"Complete"}},
+    {"id":"p-zero","mutation":{"p":"0"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"p-negative","mutation":{"p":"-1/2"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"p-too-large","mutation":{"p":"3/2"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"p-invalid-denominator","mutation":{"p_raw":[1,0]},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"property-index-len","mutation":{"property":"len"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"empty-name","mutation":{"name":""},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"duplicate-quantile","mutation":{"duplicate":"quantile"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"duplicate-cohort","mutation":{"duplicate":"cohort"},"expected":{"engine_unsupported":true,"reference_stop":"SemanticAbort"}},
+    {"id":"huge-valid-rational","mutation":{"p":"1/10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"expected":{"engine_unsupported":false,"reference_stop":"Complete"}}
+  ]
+}

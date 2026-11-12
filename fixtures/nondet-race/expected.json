@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "bounds": { "truncated": false },
+  "absent_diagnostics": ["W-DEADLOCK-0"],
+  "cut": "undeclared",
+  "diagnostics": [{ "code": "W-CUT-0" },{"code":"W-UNREACH-1","severity":"warning","span":{"end":704,"start":609}}],
+  "properties": [
+    { "id": "safety no_resource_overcommit", "verdict": "satisfied" },
+    { "id": "reachable end.fast", "verdict": "satisfied" },
+    { "id": "reachable end.slow_ok", "verdict": "satisfied" },
+    { "id": "reachable end.rejected", "verdict": "satisfied" }
+  ],
+  "terminals": [
+    {
+      "end": "fast",
+      "elapsed": { "min": 4, "max": 5 },
+      "work": { "min": 7, "max": 8 },
+      "result_at": { "min": 3, "max": 3 }
+    },
+    {
+      "end": "slow_ok",
+      "elapsed": { "min": 5, "max": 5 },
+      "work": { "min": 8, "max": 8 },
+      "result_at": { "min": 5, "max": 5 }
+    },
+    {
+      "end": "rejected",
+      "elapsed": { "min": 5, "max": 5 },
+      "work": { "min": 8, "max": 8 },
+      "result_at": null
+    }
+  ]
+}

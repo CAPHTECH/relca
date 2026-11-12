@@ -1,0 +1,43 @@
+{
+  "verdict": "violated",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    },
+    {
+      "id": "contract Controls #2 invariant",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    },
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 5,
+        "max": 5
+      },
+      "work": {
+        "min": 5,
+        "max": 5
+      },
+      "result_at": null
+    }
+  ]
+}

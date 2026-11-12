@@ -1,0 +1,6 @@
+{
+  "verdict":"unsupported","mode":"exhaustive","unit":"min","cut":"undeclared",
+  "bounds":{"cases":null,"live_tasks":null,"clock":null,"truncated":null},
+  "agency":null,"properties":[],"terminals":[],
+  "diagnostics":[{"code":"U-SEM-0","severity":"error"}],"absent_diagnostics":["W-BUDGET-0","W-DEADLOCK-0"]
+}

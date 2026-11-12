@@ -1,0 +1,8 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "capability_refusals": []
+}

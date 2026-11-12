@@ -1,0 +1,9 @@
+model Records version "0.2" {
+type R = record { f0: bool; f1: bool; f2: bool; f3: bool; f4: bool; f5: bool; f6: bool; f7: bool; f8: bool; f9: bool; f10: bool }
+actor Work { capacity 1; capability run() -> R { duration fixed 1min; result nondet { R { f0 = true, f1 = true, f2 = true, f3 = true, f4 = true, f5 = true, f6 = true, f7 = true, f8 = true, f9 = true, f10 = true } } } }
+process Flow { r = Work.run(); end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.done
+}

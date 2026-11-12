@@ -1,0 +1,11 @@
+{
+  "verdict":"violated", "cut":{"name":"C"},
+  "contest_summary":{"business_ended_open":{"min":"0","max":"0","reason":null}},
+  "bounds":{"cases":2,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 contest","verdict":"satisfied"},{"id":"contract Controls #1 contest_response","verdict":"violated"}],
+  "terminals":[], "obligations":[], "diagnostics":[{"code":"W-UNREACH-1","severity":"warning","span":{"end":633,"start":584}},{"code":"W-UNREACH-2","severity":"warning","span":{"end":631,"start":621}}],
+  "contest_runtime":[
+    {"case_id":1,"static_id":"contract Controls #1 contest","coverage":"complete","alternatives":[{"filed":false,"target_at":4,"status":"not_filed","closed_at":4},{"filed":true,"target_at":4,"filed_at":4,"deadline":8,"status":"responded","response_at":7,"closed_at":7,"executor":"p","result":"pass"},{"filed":true,"target_at":4,"filed_at":4,"deadline":8,"status":"violated","response_at":10,"closed_at":10,"executor":"p","result":"pass"}]},
+    {"case_id":2,"static_id":"contract Controls #1 contest","coverage":"complete","alternatives":[{"filed":false,"target_at":4,"status":"not_filed","closed_at":4},{"filed":true,"target_at":4,"filed_at":4,"deadline":8,"status":"responded","response_at":7,"closed_at":7,"executor":"p","result":"pass"},{"filed":true,"target_at":4,"filed_at":4,"deadline":8,"status":"violated","response_at":10,"closed_at":10,"executor":"p","result":"pass"}]}
+  ]
+}

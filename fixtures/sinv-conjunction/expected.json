@@ -1,0 +1,27 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 6,
+        "max": 6
+      },
+      "work": {
+        "min": 9,
+        "max": 9
+      },
+      "result_at": null
+    }
+  ]
+}

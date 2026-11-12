@@ -1,0 +1,1 @@
+{"verdict":"vacuous","properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 authority_basis","verdict":"vacuous"}],"terminals":[{"end":"returned","elapsed":{"min":0,"max":0},"work":{"min":0,"max":0},"result_at":null}]}

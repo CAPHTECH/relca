@@ -1,0 +1,15 @@
+model Keys version "0.2" {
+  type T = enum { first, second }
+  latent case { z:T ~ { second:0.5, first:0.5 } }
+  observed case { y:T = second }
+  kernel K { * -> { 0.5:first; 0.5:second } }
+  actor A { capacity 1; capability c() -> T { duration fixed 1min; outcomes kernel K; writes y } }
+  process P { a = A.c(); if a == first { b = B.c(); end yes } else { end no } }
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify probability reached z == first >= 0.5
+  verify probability reached y == first <= 1
+  simulation replications 4 seed 0 confidence 0.75
+  actor B { capacity 1; capability c() -> T { duration fixed 1min; result nondet { first } } }
+  property case.Finished = reached(end.yes || end.no)
+  metric cohort.Rate = expected(count(case.Finished)) / arrivals
+}

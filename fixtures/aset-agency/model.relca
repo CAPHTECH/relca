@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { decision:T=no }
+
+  actor Source{source record}; actor Seed{capacity 1;capability make()->T{reads[Source];duration fixed 1min;result nondet{ok}}};actor Writer{capacity 1;capability check(e:T)->T{writes decision;duration fixed 1min;result nondet{ok,no}}};actor Ledger{capacity 1;state keys:set<CaseId>;capability prime(key:CaseId)->Ack{writes keys;finish{keys+=key};duration fixed 1min;result nondet{committed}}};actor Poster{capacity 1;capability post(key:CaseId)->Ack{commits;requires key in Ledger.keys else rejected_duplicate;duration fixed 1min;result nondet{committed}}}
+  process Flow { e=Seed.make();d=Writer.check(e);p=Ledger.prime(case.id);a=Poster.post(case.id);end done }
+  cut K { include [Source,Seed,Writer,Ledger,Poster] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify safety no_resource_overcommit
+}

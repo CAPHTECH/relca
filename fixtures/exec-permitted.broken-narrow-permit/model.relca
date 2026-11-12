@@ -1,0 +1,10 @@
+model ExecPermitted version "0.2" {
+  type T = enum { ok }
+  people [p,q]
+  actor Runner { executors [p,q]; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  permit p to Runner.run
+  process Flow { x = Runner.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { permitted Runner.run }
+}

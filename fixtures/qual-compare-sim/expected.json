@@ -1,0 +1,1093 @@
+{
+  "verdict": "satisfied",
+  "plans": [
+    {
+      "configuration": "Check",
+      "report": {
+        "quality": {
+          "rules": "quality-cohort-p1-1",
+          "analysis": "simulation",
+          "properties": [
+            {
+              "name": "Wrong",
+              "condition": "registered == true && correct == false",
+              "within": null,
+              "cases": [
+                {
+                  "case_id": 1,
+                  "arrival": 0,
+                  "hits": 0,
+                  "unknown": 0,
+                  "trials": 4
+                },
+                {
+                  "case_id": 2,
+                  "arrival": 10,
+                  "hits": 0,
+                  "unknown": 0,
+                  "trials": 4
+                }
+              ],
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "unknown_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "name": "Registered",
+              "condition": "registered == true",
+              "within": null,
+              "cases": [
+                {
+                  "case_id": 1,
+                  "arrival": 0,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                },
+                {
+                  "case_id": 2,
+                  "arrival": 10,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                }
+              ],
+              "expected_count": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "unknown_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              }
+            }
+          ],
+          "cohort": [
+            {
+              "name": "WrongPerArrival",
+              "form": "ratio_of_expected_counts",
+              "numerator": "Wrong",
+              "denominator": {
+                "kind": "arrivals",
+                "count": 2
+              },
+              "value": {
+                "point": "0",
+                "numerator": {
+                  "mean": "0",
+                  "min": "0",
+                  "max": "0",
+                  "samples": 4,
+                  "reason": null
+                },
+                "denominator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "samples": 4,
+                "reason": null
+              },
+              "bounds_with_undetermined": null
+            },
+            {
+              "name": "WrongPerRegistered",
+              "form": "ratio_of_expected_counts",
+              "numerator": "Wrong",
+              "denominator": {
+                "kind": "property",
+                "property": "Registered",
+                "covers": null,
+                "reason": "state_condition"
+              },
+              "value": {
+                "point": "0",
+                "numerator": {
+                  "mean": "0",
+                  "min": "0",
+                  "max": "0",
+                  "samples": 4,
+                  "reason": null
+                },
+                "denominator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "samples": 4,
+                "reason": null
+              },
+              "bounds_with_undetermined": null
+            }
+          ],
+          "outcomes_per_arrival": [
+            {
+              "kind": "end",
+              "end": "returned",
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "end",
+              "end": "posted",
+              "expected_count": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "1",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "rejected",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "unfinished",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "deadlock",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            }
+          ],
+          "checked": [
+            "case_reachability",
+            "expected_counts",
+            "ratio_of_expected_counts",
+            "denominator_disclosure",
+            "outcomes_per_arrival"
+          ],
+          "unchecked": [
+            "expectation_of_ratio",
+            "cohort_any_probability",
+            "metric_intervals",
+            "metric_constraints",
+            "numerator_subset_of_denominator",
+            "business_value",
+            "rework_loss",
+            "deadline_attainment"
+          ]
+        }
+      }
+    },
+    {
+      "configuration": "Fast",
+      "report": {
+        "quality": {
+          "rules": "quality-cohort-p1-1",
+          "analysis": "simulation",
+          "properties": [
+            {
+              "name": "Wrong",
+              "condition": "registered == true && correct == false",
+              "within": null,
+              "cases": [
+                {
+                  "case_id": 1,
+                  "arrival": 0,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                },
+                {
+                  "case_id": 2,
+                  "arrival": 10,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                }
+              ],
+              "expected_count": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "unknown_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "name": "Registered",
+              "condition": "registered == true",
+              "within": null,
+              "cases": [
+                {
+                  "case_id": 1,
+                  "arrival": 0,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                },
+                {
+                  "case_id": 2,
+                  "arrival": 10,
+                  "hits": 4,
+                  "unknown": 0,
+                  "trials": 4
+                }
+              ],
+              "expected_count": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "unknown_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              }
+            }
+          ],
+          "cohort": [
+            {
+              "name": "WrongPerArrival",
+              "form": "ratio_of_expected_counts",
+              "numerator": "Wrong",
+              "denominator": {
+                "kind": "arrivals",
+                "count": 2
+              },
+              "value": {
+                "point": "1",
+                "numerator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "denominator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "samples": 4,
+                "reason": null
+              },
+              "bounds_with_undetermined": null
+            },
+            {
+              "name": "WrongPerRegistered",
+              "form": "ratio_of_expected_counts",
+              "numerator": "Wrong",
+              "denominator": {
+                "kind": "property",
+                "property": "Registered",
+                "covers": null,
+                "reason": "state_condition"
+              },
+              "value": {
+                "point": "1",
+                "numerator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "denominator": {
+                  "mean": "2",
+                  "min": "2",
+                  "max": "2",
+                  "samples": 4,
+                  "reason": null
+                },
+                "samples": 4,
+                "reason": null
+              },
+              "bounds_with_undetermined": null
+            }
+          ],
+          "outcomes_per_arrival": [
+            {
+              "kind": "end",
+              "end": "returned",
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "end",
+              "end": "posted",
+              "expected_count": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "1",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "rejected",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "unfinished",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            },
+            {
+              "kind": "deadlock",
+              "end": null,
+              "expected_count": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "rate": {
+                "point": "0",
+                "samples": 4,
+                "reason": null
+              }
+            }
+          ],
+          "checked": [
+            "case_reachability",
+            "expected_counts",
+            "ratio_of_expected_counts",
+            "denominator_disclosure",
+            "outcomes_per_arrival"
+          ],
+          "unchecked": [
+            "expectation_of_ratio",
+            "cohort_any_probability",
+            "metric_intervals",
+            "metric_constraints",
+            "numerator_subset_of_denominator",
+            "business_value",
+            "rework_loss",
+            "deadline_attainment"
+          ]
+        }
+      }
+    }
+  ],
+  "tables": {
+    "quality": [
+      {
+        "key": {
+          "scope": "property",
+          "subject": "Wrong",
+          "end": null,
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "property",
+          "subject": "Wrong",
+          "end": null,
+          "field": "unknown_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "property",
+          "subject": "Registered",
+          "end": null,
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "property",
+          "subject": "Registered",
+          "end": null,
+          "field": "unknown_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "cohort",
+          "subject": "WrongPerArrival",
+          "end": null,
+          "field": "value"
+        },
+        "denominator": {
+          "kind": "arrivals",
+          "count": 2
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "1",
+              "numerator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "cohort",
+          "subject": "WrongPerArrival",
+          "end": null,
+          "field": "bounds_with_undetermined"
+        },
+        "denominator": {
+          "kind": "arrivals",
+          "count": 2
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": null
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": null
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "cohort",
+          "subject": "WrongPerRegistered",
+          "end": null,
+          "field": "value"
+        },
+        "denominator": {
+          "kind": "property",
+          "property": "Registered",
+          "covers": null,
+          "reason": "state_condition"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "numerator": {
+                "mean": "0",
+                "min": "0",
+                "max": "0",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "1",
+              "numerator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "denominator": {
+                "mean": "2",
+                "min": "2",
+                "max": "2",
+                "samples": 4,
+                "reason": null
+              },
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "cohort",
+          "subject": "WrongPerRegistered",
+          "end": null,
+          "field": "bounds_with_undetermined"
+        },
+        "denominator": {
+          "kind": "property",
+          "property": "Registered",
+          "covers": null,
+          "reason": "state_condition"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": null
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": null
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "end",
+          "end": "returned",
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "end",
+          "end": "returned",
+          "field": "rate"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "end",
+          "end": "posted",
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "end",
+          "end": "posted",
+          "field": "rate"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "1",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "1",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "rejected",
+          "end": null,
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "rejected",
+          "end": null,
+          "field": "rate"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "unfinished",
+          "end": null,
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "unfinished",
+          "end": null,
+          "field": "rate"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "deadlock",
+          "end": null,
+          "field": "expected_count"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "mean": "0",
+              "min": "0",
+              "max": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "key": {
+          "scope": "outcome",
+          "subject": "deadlock",
+          "end": null,
+          "field": "rate"
+        },
+        "values": [
+          {
+            "configuration": "Check",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          },
+          {
+            "configuration": "Fast",
+            "status": "reported",
+            "value": {
+              "point": "0",
+              "samples": 4,
+              "reason": null
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

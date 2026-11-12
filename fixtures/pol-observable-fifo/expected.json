@@ -1,0 +1,40 @@
+{
+  "verdict": "satisfied",
+  "mode": "simulation",
+  "simulation": {
+    "status": "completed",
+    "attempted_replications": 4,
+    "completed_replications": 4,
+    "truncated_replications": 0
+  },
+  "terminals": [],
+  "diagnostics": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "count": 4
+        }
+      ],
+      "unfinished_count": 0,
+      "deadlocked_count": 0
+    },
+    {
+      "case_id": 2,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "count": 4
+        }
+      ],
+      "unfinished_count": 0,
+      "deadlocked_count": 0
+    }
+  ]
+}

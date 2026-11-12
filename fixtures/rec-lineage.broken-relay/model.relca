@@ -1,0 +1,18 @@
+model Records version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed, refused }
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; approval: optional<Verdict>; registered: bool = false; po, receipt: optional<Verdict> }
+actor Extractor { capacity 1; capability extract() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { Entry { confidence = high }, Entry { confidence = low } }; writes entry } }
+actor Clerk { capacity 2; capability match_po(e: Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 3min; result nondet { pass, fail }; writes po }; capability match_receipt(e: Entry) -> Verdict {  duration fixed 5min; result nondet { pass, fail }; writes receipt } }
+actor Invoice { source document }
+actor PurchaseOrder { source record }
+actor ReceiptRecord { source record }
+actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+actor Approver { capacity 1; capability approve(e: Entry, p: Verdict, r: Verdict) -> Verdict { duration fixed 2min; result nondet { pass, fail } } }
+process Flow { e = Extractor.extract(); fork checks { p = Clerk.match_po(e); r = Clerk.match_receipt(e) }; join all checks; if p == fail || r == fail { end returned } else { }; a = Approver.approve(e, p, r); if a == fail { end returned } else { }; ack = Ledger.post(); end posted }
+
+bounds { cases 1; live_tasks 2; clock 20min }
+verify safety no_resource_overcommit
+
+}

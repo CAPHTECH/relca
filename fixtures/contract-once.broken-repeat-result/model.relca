@@ -1,0 +1,8 @@
+model ContractOnce version "0.2" {
+  type Ack = enum { ok, again }
+  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { ok, again } } }
+  process Flow { x = Ledger.post(); if x == again { y = Ledger.post() } else { }; end done }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls { at_most_once Ledger.post.commit per case.id }
+}

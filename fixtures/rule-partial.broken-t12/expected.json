@@ -1,0 +1,20 @@
+{
+  "verdict": "vacuous",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "held",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ]
+}

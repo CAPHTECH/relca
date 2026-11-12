@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor Desk { capacity 1; state flag: bool = false; capability set() -> R { writes flag; finish { flag = true }; duration fixed 1min; result nondet { ok } } }; actor Probe { capacity 1; capability ping() -> R { duration fixed 1min; result nondet { ok } } }
+  process P { fork f { a = Desk.set(); b = Probe.ping() }; join all f; end done }
+  cut C { include [Desk,Probe] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  contract K { invariant Probe.ping.finish -> Desk.flag == true; invariant Desk.set.finish -> Desk.flag == true }
+  verify reachable end.done
+}

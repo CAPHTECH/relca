@@ -1,0 +1,18 @@
+model ContractCancel version "0.2" {
+  type Result = enum { pass, ok }
+  actor Fast { capacity 1; capability win() -> Result { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { capacity 1; capability work() -> Result { commits; duration fixed 3min; result nondet { ok }; cancel forbidden_after_start } }
+  process Flow {
+    fork f { fast = Fast.win(); slow = Slow.work() }
+    join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected
+    end done
+    end rejected
+  }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    invariant Slow.work.finish -> slow == ok
+    at_most_once Slow.work.commit per case.id
+    response Slow.work.finish -> one_of(end.done) by 1min after Slow.work.finish otherwise unresolved
+  }
+}

@@ -1,0 +1,68 @@
+model InvoicePhase0 version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor ReceiptRecord { source record }
+  actor Clerk {
+    capacity 1
+    capability enter() -> Entry { reads [Invoice]; duration fixed 5min; result nondet { entry } }
+    capability match_po(e:Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 3min; result nondet { pass, fail } }
+    capability match_receipt(e:Entry) -> Verdict { reads [ReceiptRecord]; duration fixed 3min; result nondet { pass, fail } }
+  }
+  actor Extractor {
+    capacity 1
+    capability extract() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } }
+  }
+  actor Approver {
+    capacity 1
+    capability approve(e:Entry) -> Verdict { duration fixed 3min; result nondet { pass, fail } }
+  }
+  actor Ledger {
+    capacity 1
+    capability post(p:Verdict, r:Verdict, a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } }
+  }
+  process Serial {
+    entry = Clerk.enter()
+    po = Clerk.match_po(entry)
+    receipt = Clerk.match_receipt(entry)
+    approval = Approver.approve(entry)
+    if po == pass && receipt == pass && approval == pass { } else { end rejected }
+    posted = Ledger.post(po, receipt, approval)
+    end done
+  }
+  process Parallel {
+    entry = Clerk.enter()
+    fork m { po = Clerk.match_po(entry); receipt = Clerk.match_receipt(entry) }
+    join all m
+    approval = Approver.approve(entry)
+    if po == pass && receipt == pass && approval == pass { } else { end rejected }
+    posted = Ledger.post(po, receipt, approval)
+    end done
+  }
+  process Extracted {
+    entry = Extractor.extract()
+    fork m { po = Clerk.match_po(entry); receipt = Clerk.match_receipt(entry) }
+    join all m
+    approval = Approver.approve(entry)
+    if po == pass && receipt == pass && approval == pass { } else { end rejected }
+    posted = Ledger.post(po, receipt, approval)
+    end done
+  }
+  cut InvoiceCut {
+    question "請求書の登録を速く、承認と照合を保ったまま行えるか"
+    include [Invoice, PurchaseOrder, ReceiptRecord, Clerk, Extractor, Approver, Ledger]
+  }
+  configuration AsIs { cut InvoiceCut; process Serial }
+  configuration ToBeP { cut InvoiceCut; process Parallel }
+  configuration ToBeA { cut InvoiceCut; process Extracted; intent {
+    add Extractor reason "抽出の自動化"
+    add Extractor.extract reason "抽出の自動化"
+    retire Clerk.enter reason "入力を抽出に置き換える" loses "人が原本を読んで入力する経路"
+  } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify reachable end.done
+  verify reachable end.rejected
+  verify safety no_resource_overcommit
+}

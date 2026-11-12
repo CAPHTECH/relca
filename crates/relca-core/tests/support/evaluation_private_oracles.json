@@ -1,0 +1,64 @@
+{
+  "cp_nondyadic": {
+    "id": "T23-F14",
+    "plans": ["Good", "Bad"],
+    "cases": 1,
+    "replications": 4,
+    "confidence": "3/4",
+    "hard": [{"cohort": "WrongPerArrival", "op": "<=", "bound": "9/10"}],
+    "observations": [{"case_id": 1, "arrival": 0, "hits": 2, "unknown": 0, "trials": 4}],
+    "m": 2,
+    "alpha": "1/16",
+    "interval": {"lower": "28863/262144", "upper": "233281/262144"},
+    "basis": "statistical",
+    "verdict": "satisfied",
+    "point": "1/2"
+  },
+  "strict_interval_controls": [
+    {"interval": {"lower": "0", "upper": "1/2"}, "op": "<", "bound": "1/2", "verdict": "inconclusive"},
+    {"interval": {"lower": "1/2", "upper": "1"}, "op": ">", "bound": "1/2", "verdict": "inconclusive"},
+    {"interval": {"lower": "1/2", "upper": "1/2"}, "op": "<=", "bound": "1/2", "verdict": "satisfied"},
+    {"interval": {"lower": "1/2", "upper": "1/2"}, "op": "<", "bound": "1/2", "verdict": "violated"},
+    {"interval": {"lower": "1/2", "upper": "1/2"}, "op": ">=", "bound": "1/2", "verdict": "satisfied"},
+    {"interval": {"lower": "1/2", "upper": "1/2"}, "op": ">", "bound": "1/2", "verdict": "violated"}
+  ],
+  "malformed": [
+    {"id": "case-duplicate", "change": "duplicate quality.properties[Wrong].cases[0]"},
+    {"id": "case-missing", "change": "remove quality.properties[Wrong].cases[0]"},
+    {"id": "arrival-mismatch", "change": "quality.properties[Wrong].cases[0].arrival += 1"},
+    {"id": "trials-mismatch", "change": "quality.properties[Wrong].cases[0].trials = 3"},
+    {"id": "hits-plus-unknown", "change": "quality.properties[Wrong].cases[0] hits=3 unknown=2 trials=4"},
+    {"id": "checked-add-overflow", "change": "quality.properties[Wrong].cases[0] hits=u64MAX unknown=1 trials=4"},
+    {"id": "no-reason-null", "change": "quality.cohort[0].value lower=null upper=null basis=null reason=null"},
+    {"id": "reverse-range", "change": "quality.cohort[0].value lower=1 upper=0"},
+    {"id": "cohort-index", "change": "comparison.hard[0].cohort = usizeMAX"},
+    {"id": "numerator-index", "change": "quality.metrics[0].numerator = usizeMAX"},
+    {"id": "denominator-index", "change": "quality.metrics[0].denominator.Property = usizeMAX"},
+    {"id": "bound-range", "change": "comparison.hard[0].bound = 3/2"},
+    {"id": "plan-inconsistency", "change": "second model comparison.plans reversed"},
+    {"id": "multiplicity-overflow", "change": "both models bounds.cases=u64MAX with property denominators"},
+    {"id": "zero-replications", "change": "simulation.replications=0 with ordinary complete report"},
+    {"id": "zero-cases", "change": "both models bounds.cases=0 with ordinary complete report"}
+  ],
+  "malformed_expected": {"verdict": "unsupported", "code": "U-SEM-0", "exit": 4, "evaluation": "absent", "partial_tables": false, "panic": false},
+  "definition_original": {
+    "cohort_name": "WrongPerResolved",
+    "numerator_definition": {"condition": "registered == true && correct == false", "within": null},
+    "denominator_kind": "property",
+    "denominator_property": "Resolved",
+    "within": 10,
+    "terminals": ["posted", "returned"]
+  },
+  "definition_controls": [
+    {"id": "T26-identical", "edit": null, "result": "undetected", "reason": "no_worsening", "assigned_changes": []},
+    {"id": "T26-remove-returned", "edit": {"terminals": ["posted"]}, "result": "detected", "reason": null, "assigned_checks": ["quality_denominator", "comparison_mismatch"]},
+    {"id": "T26-remove-posted", "edit": {"terminals": ["returned"]}, "result": "detected", "reason": null, "assigned_checks": ["quality_denominator", "comparison_mismatch"]}
+  ],
+  "definition_spy": {"lower_calls": 0, "engine_calls": 0, "reference_calls": 0, "compare_calls": 0, "ratio_value": "absent"},
+  "budget": [
+    {"limit": 6, "ordinary_guards": 2, "kind7_detected": 4, "kind7_not_run": 0, "quality_denominator_checked": true},
+    {"limit": 5, "ordinary_guards": 2, "kind7_detected": 3, "kind7_not_run": 1, "quality_denominator_checked": false},
+    {"limit": 2, "ordinary_guards": 2, "kind7_detected": 0, "kind7_not_run": 4, "quality_denominator_checked": false},
+    {"limit": 0, "ordinary_guards": 0, "kind7_detected": 0, "kind7_not_run": 4, "quality_denominator_checked": false}
+  ]
+}

@@ -1,0 +1,9 @@
+model MutationGate version "0.2" {
+  type Result = enum { ok }
+  actor Runner { capacity 1; capability run() -> Result { duration unknown; result nondet { ok } } }
+  process Flow { end done }
+  cut Scope { include [Runner] }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify safety no_resource_overcommit
+  contract Controls { requires_event Runner.run.start after Runner.run.finish(ok) }
+}

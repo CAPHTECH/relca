@@ -1,0 +1,14 @@
+model DiffOverridePerson version "0.2" {
+  type V = enum { pass,fail }
+  people [p,q]
+  actor A { executors [p]; capability seed() -> V { duration fixed 1min; result nondet { pass } }; capability g(v:V) -> V { duration fixed 1min; result nondet { pass,fail } } }
+  actor P { capacity 1; capability post(v:V) -> V { commits; duration fixed 1min; result nondet { pass } } }
+  permit p to A.g
+  process Before { seed = A.seed(); g = A.g(seed); end done }
+  process After { seed = A.seed(); g = A.g(seed); if g == pass { x = P.post(g) } else { end done }; end done }
+  cut C { include [A,P] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After; intent { override P.post by q } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied","bounds":{"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"returned","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null},{"end":"done","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}],
+  "responsibilities":[{"id":1,"rules":"responsibility-p1-1","person":"a1","target":{"kind":"state_condition"},"actors":["Approver"],"observation":{"status":"present","required_sources":["Invoice"],"direct":["Invoice"],"indirect":["Invoice"],"missing_sources":[],"reason":null},"refusal":{"status":"not_derived","effects":[{"capability":"Ledger.post","call":"posted","status":"all_paths","judgements":[{"actor":"Approver","capability":"Approver.approve","call":"ap","stops":"all_paths","bypasses":0}]}],"reason":"noncommit_state_write"},"time_frame":{"status":"unchecked"},"warnings":[]}],
+  "contest_paths":[],"diagnostics":[{"code":"W-RESP-0","severity":"warning"}],
+  "absent_diagnostics":["W-RESP-1","W-RESP-2","W-AGY-0","W-AGY-1","E-POL-LATENT"]
+}

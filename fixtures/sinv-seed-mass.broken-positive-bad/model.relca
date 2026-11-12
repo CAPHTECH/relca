@@ -1,0 +1,10 @@
+model StateInvariant version "0.2" {
+  type T = enum { bad, good }
+  latent case { x: T ~ { bad: 0.5, good: 0.5 } }
+  actor Witness {}
+  process Flow { end done }
+  cut C { include [Witness] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+
+  contract Controls { invariant x == good }
+}

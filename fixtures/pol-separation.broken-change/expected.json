@@ -1,0 +1,44 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-3",
+      "severity": "warning",
+      "message": "process P: executor c1 is never assigned"
+    },
+    {
+      "code": "W-UNREACH-3",
+      "severity": "warning",
+      "message": "process P: executor a1 is never assigned"
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 3,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ]
+}

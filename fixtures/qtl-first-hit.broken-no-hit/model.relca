@@ -1,0 +1,16 @@
+model QtlState version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1;
+    capability on() -> T { duration fixed 2min; result nondet { ok }; writes hit; finish { hit = false } }
+    capability off() -> T { duration fixed 2min; result nondet { ok }; writes hit; finish { hit = false } }
+  }
+  process P { a = A.on(); b = A.off(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 2 seed 1 confidence 0.5
+  verify reachable end.done
+  property case.Hit = reached(hit == true)
+  metric quantile.First = quantile(1, case.Hit)
+  metric quantile.FirstDone = quantile(1, case.Hit given reached)
+}

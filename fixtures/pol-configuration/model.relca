@@ -1,0 +1,16 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [p,q]
+  actor A { executors [p,q];  capability work() -> T {  duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor B { capacity 1;  capability work() -> T {  duration fixed 3min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { a = A.work(); end done }
+  process Q { b = B.work(); end done }
+  configuration CP { cut C; process P }
+  configuration CQ { cut C; process Q }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id then call_order assign first_idle
+  simulation replications 4 seed 0 confidence 0.5
+  verify reachable end.done
+}

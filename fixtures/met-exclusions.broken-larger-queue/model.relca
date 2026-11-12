@@ -1,0 +1,14 @@
+model MetricsExclusions version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability run() -> T { duration fixed 3min; result nondet { pass } } }
+  process P { job = A.run(); end done }
+  cut C { include [A] }
+  arrivals fixed [0min, 0min, 1min, 2min]
+  policy fifo tie_by case_id
+  queue capacity 2 on_overflow reject
+  bounds { cases 4; live_tasks 1; clock 3min }
+  simulation replications 4 seed 0 confidence 0.5
+  metrics { window 10min; currency "JPY"; rate A per_minute 2; rate A.run per_start 5 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

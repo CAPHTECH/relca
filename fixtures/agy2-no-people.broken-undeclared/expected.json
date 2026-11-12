@@ -1,0 +1,71 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [
+          {
+            "effect": "Ledger.post",
+            "call": "k",
+            "status": "derived",
+            "e": {
+              "actors": [
+                "Ledger"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Ledger"
+              ],
+              "permitted": []
+            },
+            "j": [],
+            "u": [],
+            "state_refusers": [
+              {
+                "actor": "Ledger",
+                "capability": "Ledger.post",
+                "reads": [
+                  "Ledger.keys"
+                ],
+                "on_normal_path": false
+              }
+            ],
+            "process_judgements": "derived",
+            "concentration": {
+              "single_actor": true,
+              "single_person": "unknown",
+              "single_generation_root": false,
+              "generation_roots": [],
+              "signal": "判定・拒否・実行の担い手と生成根の集中の兆候",
+              "mechanism": "同じ担い手又は生成根への依存が構成上重なる",
+              "check": "モデル外の統制・原本参照・ログで確認する"
+            }
+          }
+        ],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Ledger.post",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "verdict": "violated",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "A.big",
+            "status": "not_derived",
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": true,
+            "reason": "resource_infeasible"
+          },
+          {
+            "capability": "A.small",
+            "status": "not_derived",
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": true,
+            "reason": "resource_infeasible"
+          }
+        ]
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "done",
+            "status": "not_derived",
+            "reason": "resource_infeasible"
+          }
+        ]
+      }
+    }
+  }
+}

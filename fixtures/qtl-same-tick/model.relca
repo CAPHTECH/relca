@@ -1,0 +1,13 @@
+model Qtl version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1; capability run() -> T { start { hit = true }; duration fixed 1min; result nondet { ok } } }
+  process P { job = A.run(); end done }
+  cut C { include [A] }
+  policy fifo tie_by case_id
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(hit == true)
+  metric quantile.Median = quantile(0.5, case.Done)
+  metric quantile.MedianDone = quantile(0.5, case.Done given reached)
+}

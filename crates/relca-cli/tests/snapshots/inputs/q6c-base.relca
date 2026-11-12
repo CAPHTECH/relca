@@ -1,0 +1,22 @@
+model Connect version "0.2" {
+  type R = enum { ok, bad }
+  people [p,q]
+  latent case { bad: bool = false }
+  kernel Low basis "low assumption" { * -> { 0.9:ok with bad=false; 0.1:bad with bad=true } }
+  kernel Half basis "high assumption" { * -> { 0.5:ok with bad=false; 0.5:bad with bad=true } }
+  performance P basis "selector assumption" { load queued_same_actor_at_start
+    executor q { [0,1): kernel Low; [1,infinity): kernel Half }
+  }
+  actor Desk { control policy; executors [p,q]
+    capability legacy() -> R { writes bad; duration fixed 2min; outcomes kernel Low }
+    capability run() -> R { qualified_executors [q]; writes bad; duration fixed 2min; outcomes performance P }
+  }
+  process After { r = Desk.run(); end done }
+  cut C { include [Desk] }
+  arrivals fixed [0min]
+  policy observable fifo tie_by case_id then call_order assign first_idle
+  bounds { cases 1; live_tasks 4; clock 20min }
+  metrics { window 20min; currency "JPY" }
+  simulation replications 16 seed 1 confidence 0.5
+  verify probability reached bad == true <= 1
+}

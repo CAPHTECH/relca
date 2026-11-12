@@ -1,0 +1,14 @@
+model StateInvariant version "0.2" {
+  type R = enum { ok }
+  type Phase = enum { idle, running }
+  observed case { phase: Phase = idle; registered: bool = false }
+  actor Desk { capacity 1
+    capability work() -> R { duration fixed 2min; result nondet { ok }; start { phase = running }; writes phase; finish { phase = idle } }
+    capability post() -> R { duration fixed 1min; result nondet { ok }; writes registered; finish { registered = true } }
+  }
+  process Flow { b = Desk.post(); a = Desk.work(); end done }
+  cut C { include [Desk] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+
+  contract Controls { invariant phase == running -> registered == false }
+}

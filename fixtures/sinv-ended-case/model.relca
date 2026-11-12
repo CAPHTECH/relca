@@ -1,0 +1,19 @@
+model StateInvariant version "0.2" {
+  type Verdict = enum { pass, fail }
+  observed case { registered: bool = false; approval: optional<Verdict> }
+  actor Approver {
+    capacity 2
+    capability approve() -> Verdict { duration fixed 2min; result nondet { pass, fail }; writes approval }
+  }
+  actor Ledger {
+    capacity 1
+    state posted: 0..1 = 0
+    capability post() -> Verdict { duration fixed 1min; result nondet { pass }; writes [registered, posted]; finish { registered = true; posted += 0 } }
+  }
+  process Flow { j = Approver.approve(); if approval == fail { end returned } else {}; p = Ledger.post(); end posted }
+  cut C { include [Approver, Ledger] }
+  bounds { cases 2; live_tasks 2; clock 10min }
+
+  arrivals fixed [0min,0min]
+  contract Controls { invariant approval == fail -> Ledger.posted == 0 }
+}

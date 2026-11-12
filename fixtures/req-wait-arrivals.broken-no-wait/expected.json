@@ -1,0 +1,117 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 3,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 1,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 6,
+            "max": 6
+          },
+          "elapsed": {
+            "min": 5,
+            "max": 5
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "overall": {
+      "work": {
+        "min": "6",
+        "max": "6",
+        "reason": null
+      },
+      "intentional_wait": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      }
+    },
+    "cases": [
+      {
+        "case_id": 1,
+        "intentional_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "first_start_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "tasks": [
+          {
+            "binding": "r",
+            "wait": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            }
+          }
+        ]
+      },
+      {
+        "case_id": 2,
+        "intentional_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "first_start_wait": {
+          "min": "2",
+          "max": "2",
+          "reason": null
+        },
+        "tasks": [
+          {
+            "binding": "r",
+            "wait": {
+              "min": "2",
+              "max": "2",
+              "reason": null
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

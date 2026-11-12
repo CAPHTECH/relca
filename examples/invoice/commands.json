@@ -1,0 +1,19 @@
+[
+  {"id":"as-is-check","model":"examples/invoice/as-is.relca","args":["check","examples/invoice/as-is.relca"],"expected_exit":0},
+  {"id":"as-is-explain","model":"examples/invoice/as-is.relca","args":["explain","examples/invoice/as-is.relca"],"expected_exit":0},
+  {"id":"as-is-simulate","model":"examples/invoice/as-is.relca","args":["simulate","examples/invoice/as-is.relca"],"expected_exit":4},
+  {"id":"as-is-mutate","model":"examples/invoice/as-is.relca","args":["mutate","examples/invoice/as-is.relca"],"expected_exit":4},
+  {"id":"to-be-p-check","model":"examples/invoice/to-be-p.relca","args":["check","examples/invoice/to-be-p.relca"],"expected_exit":0},
+  {"id":"to-be-p-explain","model":"examples/invoice/to-be-p.relca","args":["explain","examples/invoice/to-be-p.relca"],"expected_exit":0},
+  {"id":"to-be-p-simulate","model":"examples/invoice/to-be-p.relca","args":["simulate","examples/invoice/to-be-p.relca"],"expected_exit":4},
+  {"id":"to-be-p-mutate","model":"examples/invoice/to-be-p.relca","args":["mutate","examples/invoice/to-be-p.relca"],"expected_exit":4},
+  {"id":"to-be-a-check","model":"examples/invoice/to-be-a.relca","args":["check","examples/invoice/to-be-a.relca"],"expected_exit":1},
+  {"id":"to-be-a-explain","model":"examples/invoice/to-be-a.relca","args":["explain","examples/invoice/to-be-a.relca"],"expected_exit":1},
+  {"id":"to-be-a-simulate","model":"examples/invoice/to-be-a.relca","args":["simulate","examples/invoice/to-be-a.relca"],"expected_exit":4},
+  {"id":"to-be-a-mutate","model":"examples/invoice/to-be-a.relca","args":["mutate","examples/invoice/to-be-a.relca"],"expected_exit":4},
+  {"id":"to-be-c-check","model":"examples/invoice/to-be-c.relca","args":["check","examples/invoice/to-be-c.relca"],"expected_exit":3},
+  {"id":"to-be-c-explain","model":"examples/invoice/to-be-c.relca","args":["explain","examples/invoice/to-be-c.relca"],"expected_exit":3},
+  {"id":"compare-exhaustive","model":"examples/invoice/configurations.relca","args":["compare","examples/invoice/configurations.relca","--plans","AsIs,ToBeP,ToBeA","--mode","exhaustive"],"expected_exit":1},
+  {"id":"compare-simulation","model":"examples/invoice/configurations.relca","args":["compare","examples/invoice/configurations.relca","--plans","AsIs,ToBeP,ToBeA","--mode","simulation"],"expected_exit":4},
+  {"id":"diff","model":"examples/invoice/configurations.relca","args":["diff","examples/invoice/configurations.relca","--from","AsIs","--to","ToBeA"],"expected_exit":1}
+]

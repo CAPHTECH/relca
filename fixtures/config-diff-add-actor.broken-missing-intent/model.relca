@@ -1,0 +1,17 @@
+model ConfigurationAdd version "0.2" {
+  type T = enum { pass }
+  actor Office { capacity 1; capability c() -> T { duration fixed 3min; result nondet { pass } } }
+  actor Extractor { capacity 1; capability extract() -> T { duration fixed 2min; result nondet { pass } } }
+  process Before { a = Office.c(); end done }
+  process After { a = Office.c(); b = Extractor.extract(); end done }
+  cut C { include [Office, Extractor] }
+  cut D { include [Office, Extractor] }
+  configuration AsIs { cut C; process Before }
+  configuration ToBe { cut C; process After; intent {
+    add Extractor reason "automate"
+  } }
+  configuration Hold { cut D; process Before }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

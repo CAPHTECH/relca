@@ -1,0 +1,13 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-NAME-0"
+    }
+  ],
+  "bounds": {
+    "truncated": null
+  },
+  "properties": [],
+  "terminals": []
+}

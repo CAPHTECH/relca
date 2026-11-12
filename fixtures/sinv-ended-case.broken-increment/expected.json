@@ -1,0 +1,18 @@
+{
+  "verdict": "violated",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false,
+    "range_violation_stops": true
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    },
+    {
+      "id": "state_in_range",
+      "verdict": "violated"
+    }
+  ]
+}

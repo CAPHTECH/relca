@@ -1,0 +1,17 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "state_in_range",
+      "verdict": "satisfied"
+    }
+  ]
+}

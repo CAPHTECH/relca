@@ -1,0 +1,87 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "unit": "min",
+  "cut": "undeclared",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 20,
+    "truncated": false
+  },
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "absent_diagnostics": [
+    "W-BUDGET-0",
+    "W-DEADLOCK-0"
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [],
+  "admission": {
+    "rejected_count": {
+      "min": 3,
+      "max": 3
+    }
+  },
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 3,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null
+        }
+      ]
+    }
+  ]
+}

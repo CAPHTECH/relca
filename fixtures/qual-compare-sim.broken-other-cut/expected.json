@@ -1,0 +1,12 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-CMP-0",
+      "severity": "error"
+    }
+  ],
+  "tables": {
+    "quality": []
+  }
+}

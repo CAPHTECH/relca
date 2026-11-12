@@ -1,0 +1,7 @@
+{
+  "verdict":"satisfied","bounds":{"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"returned","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null},{"end":"posted","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+  "responsibilities":[],"contest_paths":[],
+  "absent_diagnostics":["W-CONTEST-0","W-RESP-0","W-CUT-1","W-DEADLOCK-0"]
+,"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":380,"start":296}}]}

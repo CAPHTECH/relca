@@ -1,0 +1,34 @@
+model NondetRace version "0.2" {
+  type Verdict = enum { pass, fail, void }
+  actor Office {
+    capacity 2
+    capability quick() -> Verdict {
+      duration fixed 3min
+      result nondet { fail }
+      cancel forbidden_after_start
+    }
+    capability slow() -> Verdict {
+      duration fixed 5min
+      result nondet { pass, fail }
+      cancel cooperative ack_within 2min
+    }
+  }
+  process Check {
+    fork checks {
+      a = Office.quick()
+      b = Office.slow()
+    }
+    join any checks where result == pass
+      tie by [a, b]
+      remaining cancel_then_drain
+      if none -> rejected
+    if a == void { end rejected } else {
+      if a == pass { end fast } else { end slow_ok }
+    }
+  }
+  bounds { cases 1; live_tasks 2; clock 6min }
+  verify safety no_resource_overcommit
+  verify reachable end.fast
+  verify reachable end.slow_ok
+  verify reachable end.rejected
+}

@@ -1,0 +1,13 @@
+model ConfigurationTerminalUnion version "0.2" {
+  type T = enum { pass }
+  actor Office { capacity 1; capability c() -> T { duration fixed 3min; result nondet { pass } } }
+  process Old { a = Office.c(); end old }
+  process New { a = Office.c(); end new }
+  cut C { include [Office] }
+  configuration AsIs { cut C; process Old }
+  configuration ToBe { cut C; process New }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.old
+  verify reachable end.absent
+  verify safety no_resource_overcommit
+}

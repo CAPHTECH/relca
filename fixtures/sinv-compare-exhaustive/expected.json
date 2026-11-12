@@ -1,0 +1,26 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "plans": [
+    {
+      "configuration": "A",
+      "report": {
+        "diagnostics": [
+          {
+            "code": "W-UNREACH-0"
+          }
+        ]
+      }
+    },
+    {
+      "configuration": "B",
+      "report": {
+        "diagnostics": [
+          {
+            "code": "W-UNREACH-0"
+          }
+        ]
+      }
+    }
+  ]
+}

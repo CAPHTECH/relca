@@ -1,0 +1,5142 @@
+[
+  {
+    "name": "rule-basic",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "profile": "A"
+    }
+  },
+  {
+    "name": "rule-basic.broken-t01",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {
+      "profile": "B"
+    }
+  },
+  {
+    "name": "rule-diff",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "diff": true,
+      "w1": 0,
+      "w3": 1,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-diff.broken-t02",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "diff": true,
+      "w1": 1,
+      "w3": 1,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-preserve",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "preserve": "violated",
+      "w1": 0,
+      "w3": 0,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-preserve.broken-t03",
+    "expected": {
+      "verdict": "satisfied"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "preserve": "satisfied",
+      "w1": 0,
+      "w3": 0,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-not-by",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-not-by.broken-t04",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "rule change by a person excluded by not_by",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-self-authorize",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-self-authorize.broken-t05",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "rule change is authorized only under the amended rule",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-prior-version",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-prior-version.broken-t06",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-NAME-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-NAME-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-version-case",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-version-case.broken-t06c",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-NAME-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-NAME-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-other-prior",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-other-prior.broken-t06b",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "rule change Authority is not in force under the prior rule",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-no-grant",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-no-grant.broken-t07",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "Authority does not grant change of the rule to the amender",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-label",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "profile": "A"
+    }
+  },
+  {
+    "name": "rule-label.broken-t08",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "profile": "A",
+      "rule_actor": "Charter"
+    }
+  },
+  {
+    "name": "rule-label-grain",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "profile": "A"
+    }
+  },
+  {
+    "name": "rule-label-grain.broken-t08g",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "profile": "A"
+    }
+  },
+  {
+    "name": "rule-cut",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-cut.broken-t09",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CUT-1",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "E-CUT-1",
+      "error_message": "condition reads an Actor excluded by the cut",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-cut-missing",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-cut-missing.broken-t09b",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CUT-1",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CUT-1",
+      "error_message": "declared Actor ApprovalRule is neither included nor excluded by the cut",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-cut-amend",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-cut-amend.broken-t09c",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CUT-1",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CUT-1",
+      "error_message": "amendment targets an Actor excluded by the cut",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-cut-both",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-cut-both.broken-t09d",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CUT-1",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CUT-1",
+      "error_message": null,
+      "error_count": 2,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-agency",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "profile": "A"
+    }
+  },
+  {
+    "name": "rule-agency.broken-t10",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "mutable": true
+    }
+  },
+  {
+    "name": "rule-reverse",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "diff": true,
+      "w1": 0,
+      "w3": 1,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-reverse.broken-t11",
+    "expected": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "ToBeB",
+      "to": "AsIs"
+    },
+    "oracle": {
+      "reverse": true,
+      "side_expected": {
+        "from": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-reverse-declared",
+    "expected": {
+      "verdict": "satisfied"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "Base",
+      "to": "AsIs"
+    },
+    "oracle": {
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-reverse-declared.broken-t11b",
+    "expected": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "ToBeB",
+      "to": "AsIs"
+    },
+    "oracle": {
+      "reverse": true,
+      "side_expected": {
+        "from": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-partial",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {
+      "partial": "open"
+    }
+  },
+  {
+    "name": "rule-partial.broken-t12",
+    "expected": {
+      "verdict": "vacuous",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {
+      "partial": "strict"
+    }
+  },
+  {
+    "name": "rule-cases",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      }
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "cases": "fifo"
+    }
+  },
+  {
+    "name": "rule-cases.broken-t13",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      }
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "cases": "nondet"
+    }
+  },
+  {
+    "name": "rule-self-issued",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "auth_warnings": 1
+    }
+  },
+  {
+    "name": "rule-self-issued.broken-t15",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "auth_warnings": 0
+    }
+  },
+  {
+    "name": "rule-enables",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {
+      "auth_warnings": 1,
+      "unused_future": "cfo"
+    }
+  },
+  {
+    "name": "rule-enables.broken-t16",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {
+      "auth_warnings": 0,
+      "unused_future": "a1"
+    }
+  },
+  {
+    "name": "rule-repeat",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-repeat.broken-t17",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "repeated amendment of one rule is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-maintain",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "maintain": true,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-maintain.broken-t18",
+    "expected": {
+      "verdict": "unsupported",
+      "from": {
+        "report": {
+          "verdict": "unsupported",
+          "properties": [],
+          "terminals": [],
+          "bounds": {
+            "truncated": null
+          },
+          "diagnostics": [
+            {
+              "code": "U-SEM-0",
+              "severity": "error"
+            }
+          ]
+        }
+      },
+      "to": {
+        "report": {
+          "verdict": "unsupported",
+          "properties": [],
+          "terminals": [],
+          "bounds": {
+            "truncated": null
+          },
+          "diagnostics": [
+            {
+              "code": "U-SEM-0",
+              "severity": "error"
+            }
+          ]
+        }
+      }
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "override of a rule difference is unsupported",
+      "error_count": 1,
+      "parser": false,
+      "error_in_sides": true
+    }
+  },
+  {
+    "name": "rule-cross-rule",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "done",
+          "elapsed": {
+            "min": 0,
+            "max": 0
+          },
+          "work": {
+            "min": 0,
+            "max": 0
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-cross-rule.broken-t19",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "rule change is authorized only under the amended rule",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-qualified-version",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "done",
+          "elapsed": {
+            "min": 0,
+            "max": 0
+          },
+          "work": {
+            "min": 0,
+            "max": 0
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-qualified-version.broken-t20",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-NAME-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-NAME-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-version-after",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-version-after.broken-t22",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SYN-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SYN-0",
+      "error_message": "unsupported syntax: version",
+      "error_count": 1,
+      "parser": true
+    }
+  },
+  {
+    "name": "rule-explain",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "explain"
+    },
+    "oracle": {
+      "explain": true
+    }
+  },
+  {
+    "name": "rule-explain.broken-t23",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "explain"
+    },
+    "oracle": {
+      "explain": false
+    }
+  },
+  {
+    "name": "rule-default",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-default.broken-s02",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule value requires a default",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-version-missing",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-version-missing.broken-s03",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "rule Actor requires version",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-write-finish",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-write-finish.broken-s04finish",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule values cannot be written during a run",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-write-start",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-write-start.broken-s04start",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule values cannot be written during a run",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-write-result",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-write-result.broken-s04result",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule values cannot be written during a run",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-write-atomic",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-write-atomic.broken-s04atomic",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule values cannot be written during a run",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-conditional-amend",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-conditional-amend.broken-s05",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SYN-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SYN-0",
+      "error_message": "unsupported syntax: conditional rule value",
+      "error_count": 1,
+      "parser": true
+    }
+  },
+  {
+    "name": "rule-conditional-default",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-conditional-default.broken-s05d",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SYN-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SYN-0",
+      "error_message": "unsupported syntax: conditional rule value",
+      "error_count": 1,
+      "parser": true
+    }
+  },
+  {
+    "name": "rule-from",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-from.broken-s07",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "amendment must start from the declared rule version",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-same-version",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-same-version.broken-s08",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "amendment must change the rule version",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-non-rule-amend",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-non-rule-amend.broken-s09",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "amend requires a rule Actor",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-non-rule-grant",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-non-rule-grant.broken-s10",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "change grant requires a rule Actor",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-unknown-rule",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-unknown-rule.broken-s11",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-NAME-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-NAME-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-unknown-value",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-unknown-value.broken-s12",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-NAME-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-NAME-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-outside-type",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-outside-type.broken-s13",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-TYPE-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-TYPE-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-duplicate-assignment",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-duplicate-assignment.broken-s24",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "duplicate rule assignment",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-expires",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-expires.broken-s14expires0",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-expires-unused",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-expires-unused.broken-s14expires1",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-scope",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-scope.broken-s14scope0",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-scope-unused",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-scope-unused.broken-s14scope1",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-delegated_from",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-delegated_from.broken-s14delegated_from0",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-restricted-delegated_from-unused",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-restricted-delegated_from-unused.broken-s14delegated_from1",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "restricted rule-change Authority is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-bound-capability",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-bound-capability.broken-s15",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "version-bound Authority with Capability grants is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-per-case",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-per-case.broken-s17",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "per-case rule Actor is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-integer",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-integer.broken-s18",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SYN-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SYN-0",
+      "error_message": "unsupported syntax: integer rule value type",
+      "error_count": 1,
+      "parser": true
+    }
+  },
+  {
+    "name": "rule-type-optional",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-type-optional.broken-s19optional",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule value type is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-type-set",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-type-set.broken-s19set",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule value type is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-type-personid",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-type-personid.broken-s19personid",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule value type is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-type-caseid",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-type-caseid.broken-s19caseid",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule value type is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-non-rule-under",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-non-rule-under.broken-s20",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-CON-0",
+      "error_message": "version binding requires a rule Actor",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-kernel-given",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-kernel-given.broken-s21g",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "kernel reads of rule values are unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-kernel-reads",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-kernel-reads.broken-s21r",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "kernel reads of rule values are unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-kernel-with",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-kernel-with.broken-s21w",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "rule values cannot be written during a run",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-grant-seen",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-grant-seen.broken-s23",
+    "expected": {
+      "verdict": "invalid",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "E-SYN-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "AsIs"
+    },
+    "oracle": {
+      "error_code": "E-SYN-0",
+      "error_message": "Authority requires basis and grants",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-duplicate-state",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-duplicate-state.broken-s25",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "duplicate state variable",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-duplicate-latent",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-duplicate-latent.broken-s25l",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "duplicate state variable",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-duplicate-version",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-duplicate-version.broken-s25v",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": null,
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-duplicate-decides",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-duplicate-decides.broken-s25d",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "duplicate state variable",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-last-write-wins",
+    "expected": {
+      "verdict": "satisfied",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        },
+        {
+          "end": "held",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-last-write-wins.broken-s26l",
+    "expected": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check"
+    },
+    "oracle": {
+      "error_code": "U-SEM-0",
+      "error_message": "last_write_wins outside shared Actor state is unsupported",
+      "error_count": 1,
+      "parser": false
+    }
+  },
+  {
+    "name": "rule-version-only-diff",
+    "expected": {
+      "verdict": "satisfied"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-version-only-diff.broken-edge-version",
+    "expected": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "E-CON-0",
+          "severity": "error"
+        }
+      ]
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "ToBeB",
+      "to": "AsIs"
+    },
+    "oracle": {
+      "reverse": true,
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            },
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-clock",
+    "expected": {
+      "verdict": "violated",
+      "bounds": {
+        "truncated": false
+      },
+      "terminals": [
+        {
+          "end": "posted",
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-clock.broken-edge-clock",
+    "expected": {
+      "verdict": "inconclusive",
+      "bounds": {
+        "truncated": true
+      },
+      "terminals": []
+    },
+    "invocation": {
+      "command": "check",
+      "configuration": "ToBeB"
+    },
+    "oracle": {}
+  },
+  {
+    "name": "rule-preserve-vacuous",
+    "expected": {
+      "verdict": "satisfied"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "preserve": "satisfied",
+      "side_expected": {
+        "from": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "satisfied",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "rule-preserve-vacuous.broken-edge-vacuous",
+    "expected": {
+      "verdict": "violated"
+    },
+    "invocation": {
+      "command": "diff",
+      "from": "AsIs",
+      "to": "ToBeB"
+    },
+    "oracle": {
+      "preserve": "violated",
+      "from_vacuous": true,
+      "side_expected": {
+        "from": {
+          "verdict": "vacuous",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "held",
+              "elapsed": {
+                "min": 2,
+                "max": 2
+              },
+              "work": {
+                "min": 2,
+                "max": 2
+              },
+              "result_at": null
+            }
+          ]
+        },
+        "to": {
+          "verdict": "violated",
+          "bounds": {
+            "truncated": false
+          },
+          "terminals": [
+            {
+              "end": "posted",
+              "elapsed": {
+                "min": 3,
+                "max": 3
+              },
+              "work": {
+                "min": 3,
+                "max": 3
+              },
+              "result_at": null
+            }
+          ]
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,62 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-0"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": {
+        "min": 2,
+        "max": 2
+      }
+    }
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "reachable end.done",
+      "verdict": "satisfied"
+    }
+  ],
+  "metrics": {
+    "rules": "business-metrics-p1-resource-1",
+    "resources": [
+      {
+        "resource": "R",
+        "capacity": 0,
+        "occupancy_time": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "peak_units": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "utilization": {
+          "min": null,
+          "max": null,
+          "reason": "zero_capacity"
+        }
+      }
+    ]
+  }
+}

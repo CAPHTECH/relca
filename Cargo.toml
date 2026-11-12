@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/relca-core", "crates/relca-cli"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+repository = "https://github.com/CAPHTECH/relca"
+publish = false
+
+[workspace.dependencies]
+num-rational = "=0.4.2"
+num-bigint = "=0.4.8"
+num-traits = "=0.2.19"

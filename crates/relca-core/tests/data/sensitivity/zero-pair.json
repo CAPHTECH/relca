@@ -1,0 +1,10 @@
+{
+  "schema": "relca-sensitivity/v1",
+  "scope": {"kind": "enumerated_models", "rationale": "Two planned point tests keep both Bonferroni allocations"},
+  "points": [
+    {"id": "z0", "model": "zero.relca", "configuration": null, "scenario": null},
+    {"id": "z1", "model": "zero.relca", "configuration": null, "scenario": null}
+  ],
+  "targets": [{"kind": "probability_query", "id": "probability reached #1"}],
+  "confidence": "7/8"
+}

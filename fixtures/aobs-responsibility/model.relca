@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  people [p]; actor Doc { source record; state flag: bool = true }; actor Reader { executors [p]; capability read() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } } }
+  process P { a = Reader.read(); end done }
+  cut C { include [Doc,Reader] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  responsible p for (Doc.flag == true)
+  verify safety no_resource_overcommit
+}

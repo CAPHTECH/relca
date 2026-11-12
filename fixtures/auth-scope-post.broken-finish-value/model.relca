@@ -1,0 +1,14 @@
+model Authority version "0.2" {
+  type T = enum { pass }
+  people [r,p,q,z]
+  observed case { enabled: bool = false }
+  actor A { executors [q]; capability run() -> T { duration fixed 2min; result nondet { pass }; writes enabled; finish { enabled = false } } }
+  actor Reset { executors [p]; capability reset() -> T { duration fixed 1min; result nondet { pass }; writes enabled; finish { enabled = false } } }
+  permit q to A.run
+  permit p to Reset.reset
+  authority G { basis "post-write snapshot"; grants q to A.run; issued_by r; scope enabled == true }
+  process Flow { a = A.run(); reset = Reset.reset(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run G }
+}

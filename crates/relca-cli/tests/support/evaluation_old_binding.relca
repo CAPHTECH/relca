@@ -1,0 +1,10 @@
+model OldBinding version "0.2" {
+  type T = enum { pass }
+  actor A {
+    capacity 1
+    capability run() -> T { duration fixed 1min; result nondet { pass } }
+  }
+  process Flow { compare = A.run(); end done }
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify reachable end.done
+}

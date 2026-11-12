@@ -1,0 +1,14 @@
+model DiffAuthority version "0.2" {
+  type V = enum { pass }
+  people [p]
+  actor A { executors [p]; capability a() -> V { duration fixed 1min; result nondet { pass } }; capability b() -> V { commits; duration fixed 1min; result nondet { pass } } }
+  authority G { basis "権限の根拠"; grants p to A.b; issued_by p }
+  process Before { x = A.a(); end done }
+  process After { x = A.a(); end done }
+  contract Ctl { authority_basis A.b G }
+  cut C { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

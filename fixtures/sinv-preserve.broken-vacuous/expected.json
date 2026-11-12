@@ -1,0 +1,31 @@
+{
+  "verdict": "vacuous",
+  "diagnostics": [
+    {
+      "code": "W-DIFF-1"
+    },
+    {
+      "code": "W-DIFF-1"
+    },
+    {
+      "code": "W-DIFF-1"
+    },
+    {
+      "code": "W-DIFF-1"
+    }
+  ],
+  "from": {
+    "report": {
+      "diagnostics": []
+    }
+  },
+  "to": {
+    "report": {
+      "diagnostics": [
+        {
+          "code": "W-UNREACH-0"
+        }
+      ]
+    }
+  }
+}

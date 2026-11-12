@@ -1,0 +1,27 @@
+{
+  "verdict": "inconclusive",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": true
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "inconclusive"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ]
+}

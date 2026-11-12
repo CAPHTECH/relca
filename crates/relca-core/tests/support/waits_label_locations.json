@@ -1,0 +1,234 @@
+[
+  {
+    "path": "/actors/0/name",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/actors/0/boundary/value",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/actors/0/capability/value/0",
+    "kind": "name",
+    "original": "prep",
+    "labelled": "z1"
+  },
+  {
+    "path": "/actors/1/name",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/actors/1/boundary/value",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/actors/1/capability/value/0",
+    "kind": "name",
+    "original": "finish",
+    "labelled": "a0"
+  },
+  {
+    "path": "/metrics/resources/0/resource",
+    "kind": "name",
+    "original": "Desk",
+    "labelled": "Q9"
+  },
+  {
+    "path": "/metrics/rates/actors/0/actor",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/metrics/rates/actors/1/actor",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/metrics/rates/capabilities/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/metrics/rates/capabilities/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/metrics/cases/0/tasks/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/metrics/cases/0/tasks/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/metrics/cases/1/tasks/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/metrics/cases/1/tasks/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/metrics/cases/2/tasks/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/metrics/cases/2/tasks/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/metrics/actors/0/actor",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/metrics/actors/1/actor",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/metrics/capabilities/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/metrics/capabilities/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/agency/origin/0/actor",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/agency/origin/1/actor",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/agency/viewpoints/retention/capabilities/0/capability",
+    "kind": "name",
+    "original": "A.prep",
+    "labelled": "Zeta.z1"
+  },
+  {
+    "path": "/agency/viewpoints/retention/capabilities/1/capability",
+    "kind": "name",
+    "original": "B.finish",
+    "labelled": "Alpha.a0"
+  },
+  {
+    "path": "/model/sha256",
+    "kind": "source_sha256"
+  },
+  {
+    "path": "/cut/include/0",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/cut/include/1",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/assumptions/0/field",
+    "kind": "name",
+    "original": "A.boundary",
+    "labelled": "Zeta.boundary"
+  },
+  {
+    "path": "/assumptions/0/value",
+    "kind": "name",
+    "original": "A",
+    "labelled": "Zeta"
+  },
+  {
+    "path": "/assumptions/1/field",
+    "kind": "name",
+    "original": "A.executors",
+    "labelled": "Zeta.executors"
+  },
+  {
+    "path": "/assumptions/2/field",
+    "kind": "name",
+    "original": "A.control",
+    "labelled": "Zeta.control"
+  },
+  {
+    "path": "/assumptions/3/field",
+    "kind": "name",
+    "original": "A.permission",
+    "labelled": "Zeta.permission"
+  },
+  {
+    "path": "/assumptions/4/field",
+    "kind": "name",
+    "original": "B.boundary",
+    "labelled": "Alpha.boundary"
+  },
+  {
+    "path": "/assumptions/4/value",
+    "kind": "name",
+    "original": "B",
+    "labelled": "Alpha"
+  },
+  {
+    "path": "/assumptions/5/field",
+    "kind": "name",
+    "original": "B.executors",
+    "labelled": "Alpha.executors"
+  },
+  {
+    "path": "/assumptions/6/field",
+    "kind": "name",
+    "original": "B.control",
+    "labelled": "Alpha.control"
+  },
+  {
+    "path": "/assumptions/7/field",
+    "kind": "name",
+    "original": "B.permission",
+    "labelled": "Alpha.permission"
+  },
+  {
+    "path": "/assumptions/8/field",
+    "kind": "name",
+    "original": "resource.Desk",
+    "labelled": "resource.Q9"
+  }
+]

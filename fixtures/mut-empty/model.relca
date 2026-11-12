@@ -1,0 +1,5 @@
+model MutationEmpty version "0.2" {
+  process Flow { end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify safety no_resource_overcommit
+}

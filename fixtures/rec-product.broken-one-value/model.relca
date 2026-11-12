@@ -1,0 +1,11 @@
+model Records version "0.2" {
+type Color = enum { red, green, blue }
+type Pair = record { color: Color; flag: bool }
+actor Work { capacity 1; capability run() -> Pair { duration fixed 1min; result nondet { Pair { flag = false, color = green } } } }
+process Flow { p = Work.run(); if p.flag == false { end off } else { end on } }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.off
+verify reachable end.on
+}

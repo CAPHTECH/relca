@@ -1,0 +1,12 @@
+model DiffResource version "0.2" {
+  type V = enum { pass }
+  people [p,q,s,t]
+  actor A { capacity 2; executors [q,p]; capability a() -> V { duration fixed 1min; result nondet { pass } } }
+  process Before { end done }
+  process After { end done }
+  cut C { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

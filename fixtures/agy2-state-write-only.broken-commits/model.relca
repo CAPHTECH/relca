@@ -1,0 +1,8 @@
+model StateOnly version "0.2" {
+  type Ack = enum { committed }
+  actor A { capacity 1; state n: 0..1 = 0; capability post() -> Ack { commits; writes n; finish { n += 1 }; duration fixed 1min; result nondet { committed } } }
+  process P { k = A.post(); end done }
+  cut K { include [A] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

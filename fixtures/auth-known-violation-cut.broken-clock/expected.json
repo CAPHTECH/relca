@@ -1,0 +1,30 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": true
+  },
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "inconclusive"
+    },
+    {
+      "id": "contract Controls #1 authority_basis",
+      "verdict": "violated"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ]
+}

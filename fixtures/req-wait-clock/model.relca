@@ -1,0 +1,12 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  actor A { capacity 1; capability short() -> T { duration fixed 3min; result nondet { ok } }; capability long() -> T { duration fixed 5min; result nondet { ok } } }
+  process Flow { a = A.short(); wait 4min; b = A.long(); end done }
+  bounds { cases 1; live_tasks 4; clock 12min }
+
+  verify safety no_resource_overcommit
+  verify recoverable end
+  verify terminating end
+  verify almost_sure end
+  contract Controls { response case.received -> one_of(end.done) by 6min after case.received otherwise unresolved }
+}

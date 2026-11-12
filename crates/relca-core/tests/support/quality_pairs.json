@@ -1,0 +1,2000 @@
+[
+  {
+    "base": "qual-base",
+    "broken": "qual-base.broken-no-check",
+    "fault": "no-check",
+    "calculation": "T02: P(W)=0.02=1/50; P(R)=0.90+0.02=23/25. Two arrivals give 1/25 and 46/25; ratios 1/50 and 1/46. No-check gives W=1/10,R=1; ratios 1/10. Quality never changes reachable verdict.",
+    "edits": [
+      {
+        "start": 239,
+        "end": 241,
+        "old": "02",
+        "new": "1"
+      },
+      {
+        "start": 247,
+        "end": 280,
+        "old": " with correct = false; 0.08: fail",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-latent-policy",
+    "broken": "qual-latent-policy.broken-latent",
+    "fault": "latent",
+    "calculation": "T03: Same hand oracle as T02. Property is evaluation, but process reads latent correct: E-POL-LATENT, invalid, no quality.",
+    "edits": [
+      {
+        "start": 633,
+        "end": 634,
+        "old": "v",
+        "new": "correct"
+      },
+      {
+        "start": 638,
+        "end": 642,
+        "old": "pass",
+        "new": "true"
+      }
+    ]
+  },
+  {
+    "base": "qual-zero-denominator",
+    "broken": "qual-zero-denominator.broken-half",
+    "fault": "half",
+    "calculation": "T04: 0/2=0 but 0/0 is null zero_denominator. Half version gives N=D=1, N/2=1/2,N/D=1.",
+    "edits": [
+      {
+        "start": 206,
+        "end": 207,
+        "old": "1",
+        "new": "0.5: pass with correct = false; 0.5"
+      }
+    ]
+  },
+  {
+    "base": "qual-contention",
+    "broken": "qual-contention.broken-no-policy",
+    "fault": "no-policy",
+    "calculation": "T05: FIFO first case ends at3 or4 (inclusive), second at6 or7. OnTime=[1,0], expected1/rate1/2 exact. Without policy each case [0,1], sum[0,2]/2=[0,1] per_case_relaxation, not unknown. Joint count is1 but is not claimed by per-case relaxation.",
+    "edits": [
+      {
+        "start": 1152,
+        "end": 1181,
+        "old": "olicy fifo tie_by case_id\n  p",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-rejected",
+    "broken": "qual-rejected.broken-reject-all",
+    "fault": "reject-all",
+    "calculation": "T07: case2 is rejected; N=1/50,D_R=23/25, arrivals2. A=1/100,B=1/46; rejected1/2, posted23/50, returned1/25. All-reject keeps arrivals2,A=0,B=null zero_denominator, rejected1. Reachable posted fails for rejected case.",
+    "edits": [
+      {
+        "start": 1195,
+        "end": 1196,
+        "old": "1",
+        "new": "0"
+      }
+    ]
+  },
+  {
+    "base": "qual-deadlock",
+    "broken": "qual-deadlock.broken-zero-capacity",
+    "fault": "zero-capacity",
+    "calculation": "T08 ADR pair: remove queue and set Checker capacity0 (one business concept: no progress). See qual-deadlock-single for isolated capacity fault. Closed deadlock gives misses0 not unknown; deadlock2/2=1 and arrivals remains2.",
+    "edits": [
+      {
+        "start": 333,
+        "end": 334,
+        "old": "1",
+        "new": "0"
+      },
+      {
+        "start": 1178,
+        "end": 1216,
+        "old": "  queue capacity 1 on_overflow reject\n",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-deadlock-single",
+    "broken": "qual-deadlock-single.broken-zero-capacity",
+    "fault": "zero-capacity",
+    "calculation": "T08 isolated capacity-only control: capacity1 completes both; capacity0 cannot start, deadlock1. A remains0 rather than removing deadlocked cases from denominator. W-DEADLOCK-0, violated.",
+    "edits": [
+      {
+        "start": 333,
+        "end": 334,
+        "old": "1",
+        "new": "0"
+      }
+    ]
+  },
+  {
+    "base": "qual-sim",
+    "broken": "qual-sim.broken-spaced",
+    "fault": "spaced",
+    "calculation": "T09: four deterministic repetitions. Every repetition N=1,D_A=2,D_R=1: point1/2 and1; samples4 (not8). Spaced arrivals N=D_R=2: both points1; case hits4 each. Original reachable lacks a witness for rejected case: simulation inconclusive, exhaustive violated.",
+    "edits": [
+      {
+        "start": 696,
+        "end": 696,
+        "old": "",
+        "new": "1"
+      }
+    ]
+  },
+  {
+    "base": "qual-sim-check",
+    "broken": "qual-sim-check.broken-spaced",
+    "fault": "spaced",
+    "calculation": "T09 exhaustive counterpart: N=1,D_R=1,arrivals2 then N=D_R=2. Ratios1/2,1 then1,1 exact. Rejected case makes first reachable violated.",
+    "edits": [
+      {
+        "start": 696,
+        "end": 696,
+        "old": "",
+        "new": "1"
+      }
+    ]
+  },
+  {
+    "base": "qual-label",
+    "broken": "qual-label.broken-renamed",
+    "fault": "renamed",
+    "calculation": "T12 meaning-preserving renaming reverses dictionary order, not declaration order. First property has1/25, second46/25; ZRate1/50,ARate1/46. This is a label control, not an input defect.",
+    "edits": [
+      {
+        "start": 864,
+        "end": 865,
+        "old": "W",
+        "new": "Aa"
+      },
+      {
+        "start": 866,
+        "end": 869,
+        "old": "ong",
+        "new": "dvark"
+      },
+      {
+        "start": 936,
+        "end": 937,
+        "old": "R",
+        "new": "Z"
+      },
+      {
+        "start": 938,
+        "end": 943,
+        "old": "giste",
+        "new": "b"
+      },
+      {
+        "start": 944,
+        "end": 946,
+        "old": "ed",
+        "new": "a"
+      },
+      {
+        "start": 993,
+        "end": 999,
+        "old": "WrongP",
+        "new": "ZRat"
+      },
+      {
+        "start": 1000,
+        "end": 1008,
+        "old": "rArrival",
+        "new": ""
+      },
+      {
+        "start": 1031,
+        "end": 1032,
+        "old": "W",
+        "new": "Aa"
+      },
+      {
+        "start": 1033,
+        "end": 1036,
+        "old": "ong",
+        "new": "dvark"
+      },
+      {
+        "start": 1066,
+        "end": 1074,
+        "old": "WrongPer",
+        "new": "A"
+      },
+      {
+        "start": 1075,
+        "end": 1079,
+        "old": "egis",
+        "new": "a"
+      },
+      {
+        "start": 1081,
+        "end": 1084,
+        "old": "red",
+        "new": ""
+      },
+      {
+        "start": 1107,
+        "end": 1108,
+        "old": "W",
+        "new": "Aa"
+      },
+      {
+        "start": 1109,
+        "end": 1112,
+        "old": "ong",
+        "new": "dvark"
+      },
+      {
+        "start": 1137,
+        "end": 1138,
+        "old": "R",
+        "new": "Z"
+      },
+      {
+        "start": 1139,
+        "end": 1144,
+        "old": "giste",
+        "new": "b"
+      },
+      {
+        "start": 1145,
+        "end": 1147,
+        "old": "ed",
+        "new": "a"
+      }
+    ]
+  },
+  {
+    "base": "qual-actor-label",
+    "broken": "qual-actor-label.broken-team",
+    "fault": "team",
+    "calculation": "T12 independent Actor/grain label control. Neither Desk nor grain team supplies quality semantics. Only exact Actor metadata/name/span positions may differ.",
+    "edits": [
+      {
+        "start": 314,
+        "end": 316,
+        "old": "Ch",
+        "new": "D"
+      },
+      {
+        "start": 317,
+        "end": 318,
+        "old": "c",
+        "new": "s"
+      },
+      {
+        "start": 319,
+        "end": 321,
+        "old": "er",
+        "new": ""
+      },
+      {
+        "start": 323,
+        "end": 323,
+        "old": "",
+        "new": " grain team;"
+      },
+      {
+        "start": 613,
+        "end": 615,
+        "old": "Ch",
+        "new": "D"
+      },
+      {
+        "start": 616,
+        "end": 617,
+        "old": "c",
+        "new": "s"
+      },
+      {
+        "start": 618,
+        "end": 620,
+        "old": "er",
+        "new": ""
+      },
+      {
+        "start": 720,
+        "end": 722,
+        "old": "Ch",
+        "new": "D"
+      },
+      {
+        "start": 723,
+        "end": 724,
+        "old": "c",
+        "new": "s"
+      },
+      {
+        "start": 725,
+        "end": 727,
+        "old": "er",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-legacy",
+    "broken": "qual-legacy.broken-no-quality",
+    "fault": "no-quality",
+    "calculation": "T13 quality appended at end: old spans do not move. Remove only model.sha256, quality and quality.* assumptions for this explicit pair; all old fields, metrics.unchecked quality, RNG keys and census remain identical. Never apply projection to historical manifest.",
+    "edits": [
+      {
+        "start": 1006,
+        "end": 1308,
+        "old": "  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-resolved",
+    "broken": "qual-resolved.broken-mixed",
+    "fault": "mixed",
+    "calculation": "T14: posted=(23/25)(19/20)=437/500,returned40/500,exception23/500. Resolved477/500,E=477/250. Finish sets registered even on duplicate: Wrong/Registered stay1/50,23/25. Mixed End/state union unsupported U-SYN-0.",
+    "edits": [
+      {
+        "start": 1312,
+        "end": 1316,
+        "old": "end.",
+        "new": ""
+      },
+      {
+        "start": 1318,
+        "end": 1318,
+        "old": "",
+        "new": "gis"
+      },
+      {
+        "start": 1319,
+        "end": 1320,
+        "old": "u",
+        "new": "e"
+      },
+      {
+        "start": 1321,
+        "end": 1322,
+        "old": "n",
+        "new": ""
+      },
+      {
+        "start": 1324,
+        "end": 1324,
+        "old": "",
+        "new": " == true"
+      }
+    ]
+  },
+  {
+    "base": "qual-covers",
+    "broken": "qual-covers.broken-state-denominator",
+    "fault": "state-denominator",
+    "calculation": "T19: N=1/25,D_Resolved=477/250,ratio10/477,covers[posted,returned]. State denominator D=46/25,ratio1/46,covers null/reason state_condition. No subset proof is implied.",
+    "edits": [
+      {
+        "start": 1492,
+        "end": 1492,
+        "old": "",
+        "new": "gi"
+      },
+      {
+        "start": 1493,
+        "end": 1496,
+        "old": "olv",
+        "new": "ter"
+      }
+    ]
+  },
+  {
+    "base": "qual-compare",
+    "broken": "qual-compare.broken-other-cut",
+    "fault": "other-cut",
+    "calculation": "T11/T20: Check A=1/50,B=1/46; Fast A=B=1/10. Fixed property/cohort/outcome rows, no difference/rank/verdict cells. Distinct Cut name C2 invalid E-CMP-0, quality table empty.",
+    "edits": [
+      {
+        "start": 1516,
+        "end": 1516,
+        "old": "",
+        "new": "2"
+      },
+      {
+        "start": 1534,
+        "end": 1534,
+        "old": "",
+        "new": "  cut C2 { include [Checker, Ledger] "
+      },
+      {
+        "start": 1536,
+        "end": 1536,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-diff",
+    "broken": "qual-diff.broken-other-cut",
+    "fault": "other-cut",
+    "calculation": "T11/T20: Check A=1/50,B=1/46; Fast A=B=1/10. Fixed property/cohort/outcome rows, no difference/rank/verdict cells. Distinct Cut name C2 invalid E-CMP-0, quality table empty.",
+    "edits": [
+      {
+        "start": 1516,
+        "end": 1516,
+        "old": "",
+        "new": "2"
+      },
+      {
+        "start": 1534,
+        "end": 1534,
+        "old": "",
+        "new": "  cut C2 { include [Checker, Ledger] "
+      },
+      {
+        "start": 1536,
+        "end": 1536,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-compare-sim",
+    "broken": "qual-compare-sim.broken-other-cut",
+    "fault": "other-cut",
+    "calculation": "T11 simulation transport supplement: Check correct=true always,N_W0;Fast correct=false always,N_W2. Four replications each,arrivals2/replication. Check A=B0,Fast A=B1;unknown samples0. Closed table also includes unknown_count rows,with4 samples not8.",
+    "edits": [
+      {
+        "start": 1415,
+        "end": 1415,
+        "old": "",
+        "new": "2"
+      },
+      {
+        "start": 1483,
+        "end": 1483,
+        "old": "",
+        "new": "  cut C2 { include [Checker, Ledger] "
+      },
+      {
+        "start": 1485,
+        "end": 1485,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-explain",
+    "broken": "qual-explain.broken-no-quality",
+    "fault": "no-quality",
+    "calculation": "T20: explain is configuration-free. Quality transported in root report only, never made a counterexample target. Explicit no-quality pair preserves old report after hash/quality assumptions projection.",
+    "edits": [
+      {
+        "start": 848,
+        "end": 1150,
+        "old": "  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-clock",
+    "broken": "qual-clock.broken-short-clock",
+    "fault": "short-clock",
+    "calculation": "T06 clock control: third case starts12, judge would finish16,cut14. N=[1/25,26/25],D_R=[46/25,71/25]. A null truncated with[1/75,26/75]; B null truncated with[1/71,13/23]. Outcomes retain known first two and conservative third, never assert a final unfinished probability1/3.",
+    "edits": [
+      {
+        "start": 816,
+        "end": 818,
+        "old": "30",
+        "new": "14"
+      }
+    ]
+  },
+  {
+    "base": "qual-closed-within",
+    "broken": "qual-closed-within.broken-true",
+    "fault": "true",
+    "calculation": "T16: arrival false hit gives1 even with cut; earliest post arrival+5. Within1 closes by clock14 for all3, so true version0, not unknown. Nonzero1 and zero0 coexist with Wrong null truncated.",
+    "edits": [
+      {
+        "start": 1231,
+        "end": 1235,
+        "old": "fals",
+        "new": "tru"
+      }
+    ]
+  },
+  {
+    "base": "qual-closed-within-edge",
+    "broken": "qual-closed-within-edge.broken-true",
+    "fault": "true",
+    "calculation": "T16: arrival false hit gives1 even with cut; earliest post arrival+5. Within2 closes by clock14 for all3, so true version0, not unknown. Nonzero1 and zero0 coexist with Wrong null truncated.",
+    "edits": [
+      {
+        "start": 1231,
+        "end": 1235,
+        "old": "fals",
+        "new": "tru"
+      }
+    ]
+  },
+  {
+    "base": "qual-sim-clock",
+    "broken": "qual-sim-clock.broken-short-clock",
+    "fault": "short-clock",
+    "calculation": "T10 clock: hits W0,0,0;R4,4,0;unknown0,0,4 each. Four replications, N_W=0,U_W=4,D_A=12,N_R=8,U_R=4. A null truncated bounds[0,1/3], B[0,1/2]. Samples4 not12. Observed unfinished1/3 does not claim eventual outcome.",
+    "edits": [
+      {
+        "start": 748,
+        "end": 750,
+        "old": "30",
+        "new": "14"
+      }
+    ]
+  },
+  {
+    "base": "qual-closed-within-sim",
+    "broken": "qual-closed-within-sim.broken-true",
+    "fault": "true",
+    "calculation": "T16 simulation: Early false hits4 for all3 and no unknown, rate1; true hits0,unknown0,rate0. Other properties retain third-case unknown4. Do not blank all quality for one cut.",
+    "edits": [
+      {
+        "start": 1213,
+        "end": 1217,
+        "old": "fals",
+        "new": "tru"
+      }
+    ]
+  },
+  {
+    "base": "qual-max-only-unknown",
+    "broken": "qual-max-only-unknown.broken-short-clock",
+    "fault": "short-clock",
+    "calculation": "T17: normal root actions miss0 or hit1 give b=[0,0,1,1],known schedule width, rate[0,1]. Clock3 changes only long hit suffix to unknown: b=[0,0,0,1],max-only unknown. Rate null truncated,bounds[0,1]. Inspect both min and max endpoint pairs.",
+    "edits": [
+      {
+        "start": 511,
+        "end": 513,
+        "old": "10",
+        "new": "3"
+      }
+    ]
+  },
+  {
+    "base": "qual-min-only-unknown",
+    "broken": "qual-min-only-unknown.broken-short-clock",
+    "fault": "short-clock",
+    "calculation": "T17 symmetric endpoint control: normal both branches hit1; clock3 leaves fast branch hit1 and long branch unknown. b=[0,1,1,1],min-only unknown; rate null truncated,bounds[0,1]. Do not inspect only max endpoints.",
+    "edits": [
+      {
+        "start": 632,
+        "end": 634,
+        "old": "10",
+        "new": "3"
+      }
+    ]
+  },
+  {
+    "base": "qual-union-nondet",
+    "broken": "qual-union-nondet.broken-single-end",
+    "fault": "single-end",
+    "calculation": "T18: every schedule reaches exactly one of a,b. Solve union once:1 exact, not min(a)+min(b)=0 or max sum2. Single End has known scheduler range[0,1],not undetermined.",
+    "edits": [
+      {
+        "start": 376,
+        "end": 385,
+        "old": " || end.b",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-may-zero",
+    "broken": "qual-may-zero.broken-all-denominator",
+    "fault": "all-denominator",
+    "calculation": "T19: All=1,P=[0,1] known nondeterminism. All/P null denominator_may_be_zero,not zero_denominator; no unknown bounds. All/All=1 exact. P/P would not be algebraically cancelled under relaxation.",
+    "edits": [
+      {
+        "start": 556,
+        "end": 557,
+        "old": "P",
+        "new": "All"
+      }
+    ]
+  },
+  {
+    "base": "qual-above-one",
+    "broken": "qual-above-one.broken-unit-denominator",
+    "fault": "unit-denominator",
+    "calculation": "T19: numerator1,denominator1/2 gives2 exact. No numerator-subset check or clamp to probability[0,1]. Change denominator to1 gives1.",
+    "edits": [
+      {
+        "start": 599,
+        "end": 603,
+        "old": "Half",
+        "new": "P"
+      }
+    ]
+  },
+  {
+    "base": "qual-legacy-route",
+    "broken": "qual-legacy-route.broken-arrivals",
+    "fault": "arrivals",
+    "calculation": "T22.1: one fixed1min operation,Done1,rate1. No arrivals uses legacy_route and uses_probability=false; adding arrivals[0] uses new route,quality same. Original terminals must retain absence of probability.",
+    "edits": [
+      {
+        "start": 382,
+        "end": 382,
+        "old": "",
+        "new": "  arrivals fixed [0min]\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-person",
+    "broken": "qual-person.broken-other-executor",
+    "fault": "other-executor",
+    "calculation": "T22.5: named executor p writes owner at1,quality owner==p reaches1. Sole executor q writes q instead:0. Verify reachable done stays satisfied; PersonId identity is not Actor name.",
+    "edits": [
+      {
+        "start": 75,
+        "end": 76,
+        "old": "p",
+        "new": "q"
+      }
+    ]
+  },
+  {
+    "base": "qual-cut-state",
+    "broken": "qual-cut-state.broken-excluded",
+    "fault": "excluded",
+    "calculation": "T15 Cut: property may read included Actor observed flag,probability1. Excluding Observer while property alone reads it must raise E-CUT-1,invalid. Quality reads do not become Agency business reads.",
+    "edits": [
+      {
+        "start": 200,
+        "end": 201,
+        "old": ",",
+        "new": "]; exclude"
+      },
+      {
+        "start": 210,
+        "end": 211,
+        "old": "]",
+        "new": " reason \"outside\" loses \"flag observation\""
+      }
+    ]
+  },
+  {
+    "base": "qual-live-tasks",
+    "broken": "qual-live-tasks.broken-one-task",
+    "fault": "one-task",
+    "calculation": "T22.2: two sibling tasks with legal live_tasks2 complete. Limit1 cuts before completion: b=[0,1,0,1],ratio null truncated,bounds[0,1]. No uniform scheduler or Horizon classification.",
+    "edits": [
+      {
+        "start": 275,
+        "end": 276,
+        "old": "2",
+        "new": "1"
+      }
+    ]
+  },
+  {
+    "base": "qual-overflow",
+    "broken": "qual-overflow.broken-spill-all",
+    "fault": "spill-all",
+    "calculation": "T22.4: case2 overflow spill,rate1/2; rejected0,A1/100. Queue0 spills both,rate1. Spill is not duplicated as ordinary end. Safety still satisfied; overflow not computational truncation.",
+    "edits": [
+      {
+        "start": 1204,
+        "end": 1205,
+        "old": "1",
+        "new": "0"
+      }
+    ]
+  },
+  {
+    "base": "qual-invoice",
+    "broken": "qual-invoice.broken-ai-transfer",
+    "fault": "ai-transfer",
+    "calculation": "T01: human wrong routine=(4/5)(1/100)(1/5)(3/20)(1/10)=3/125000; difficult=(1/5)(3/50)(1/2)(2/5)(3/10)=90/125000;total93/125000. Correct49/50 gives registered122593/125000. AI errors6+225=231/125000;correct119250/125000,registered119481/125000,ratio77/39827. Old verify threshold0.001 means good satisfied,bad violated. Only AsIs first entry call changes.",
+    "edits": [
+      {
+        "start": 3010,
+        "end": 3013,
+        "old": "Cle",
+        "new": "Ext"
+      },
+      {
+        "start": 3014,
+        "end": 3015,
+        "old": "k",
+        "new": "actor"
+      },
+      {
+        "start": 3017,
+        "end": 3018,
+        "old": "n",
+        "new": "x"
+      },
+      {
+        "start": 3019,
+        "end": 3020,
+        "old": "e",
+        "new": ""
+      },
+      {
+        "start": 3021,
+        "end": 3021,
+        "old": "",
+        "new": "act"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-expectation-of-ratio",
+    "fault": "expectation-of-ratio",
+    "edits": [
+      {
+        "start": 1037,
+        "end": 1038,
+        "old": ")",
+        "new": ""
+      },
+      {
+        "start": 1041,
+        "end": 1041,
+        "old": "",
+        "new": "count(c"
+      },
+      {
+        "start": 1042,
+        "end": 1042,
+        "old": "",
+        "new": "se.Registe"
+      },
+      {
+        "start": 1043,
+        "end": 1049,
+        "old": "rivals",
+        "new": "ed))"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-quantile",
+    "fault": "quantile",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1011,
+        "old": "",
+        "new": "quantil"
+      },
+      {
+        "start": 1012,
+        "end": 1019,
+        "old": "xpected",
+        "new": ""
+      },
+      {
+        "start": 1038,
+        "end": 1049,
+        "old": " / arrivals",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-p95",
+    "fault": "p95",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1013,
+        "old": "ex",
+        "new": ""
+      },
+      {
+        "start": 1014,
+        "end": 1019,
+        "old": "ected",
+        "new": "95"
+      },
+      {
+        "start": 1038,
+        "end": 1049,
+        "old": " / arrivals",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-median",
+    "fault": "median",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1017,
+        "old": "expect",
+        "new": "m"
+      },
+      {
+        "start": 1019,
+        "end": 1019,
+        "old": "",
+        "new": "ian"
+      },
+      {
+        "start": 1038,
+        "end": 1049,
+        "old": " / arrivals",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-number-denominator",
+    "fault": "number-denominator",
+    "edits": [
+      {
+        "start": 1041,
+        "end": 1049,
+        "old": "arrivals",
+        "new": "100"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-multiply",
+    "fault": "multiply",
+    "edits": [
+      {
+        "start": 1049,
+        "end": 1049,
+        "old": "",
+        "new": " * 2"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-double-divide",
+    "fault": "double-divide",
+    "edits": [
+      {
+        "start": 1049,
+        "end": 1049,
+        "old": "",
+        "new": " / arrivals"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-bare-count",
+    "fault": "bare-count",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1020,
+        "old": "expected(",
+        "new": ""
+      },
+      {
+        "start": 1036,
+        "end": 1037,
+        "old": ")",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-admitted",
+    "fault": "admitted",
+    "edits": [
+      {
+        "start": 1042,
+        "end": 1044,
+        "old": "rr",
+        "new": "dm"
+      },
+      {
+        "start": 1045,
+        "end": 1049,
+        "old": "vals",
+        "new": "tted"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-received",
+    "fault": "received",
+    "edits": [
+      {
+        "start": 1041,
+        "end": 1042,
+        "old": "a",
+        "new": ""
+      },
+      {
+        "start": 1043,
+        "end": 1044,
+        "old": "r",
+        "new": "ece"
+      },
+      {
+        "start": 1046,
+        "end": 1049,
+        "old": "als",
+        "new": "ed"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-completed",
+    "fault": "completed",
+    "edits": [
+      {
+        "start": 1041,
+        "end": 1047,
+        "old": "arriva",
+        "new": "comp"
+      },
+      {
+        "start": 1048,
+        "end": 1049,
+        "old": "s",
+        "new": "eted"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-business-value",
+    "fault": "business-value",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1011,
+        "old": "",
+        "new": "busin"
+      },
+      {
+        "start": 1012,
+        "end": 1013,
+        "old": "x",
+        "new": "ss_value "
+      },
+      {
+        "start": 1015,
+        "end": 1026,
+        "old": "cted(count(",
+        "new": "r_"
+      },
+      {
+        "start": 1030,
+        "end": 1038,
+        "old": ".Wrong))",
+        "new": ""
+      },
+      {
+        "start": 1039,
+        "end": 1049,
+        "old": "/ arrivals",
+        "new": "1"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-loss",
+    "fault": "loss",
+    "edits": [
+      {
+        "start": 1011,
+        "end": 1013,
+        "old": "ex",
+        "new": "loss "
+      },
+      {
+        "start": 1015,
+        "end": 1017,
+        "old": "ct",
+        "new": "r_"
+      },
+      {
+        "start": 1018,
+        "end": 1032,
+        "old": "d(count(case.W",
+        "new": "r"
+      },
+      {
+        "start": 1034,
+        "end": 1038,
+        "old": "ng))",
+        "new": "r"
+      },
+      {
+        "start": 1039,
+        "end": 1049,
+        "old": "/ arrivals",
+        "new": "1"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-cohort-property",
+    "fault": "cohort-property",
+    "edits": [
+      {
+        "start": 860,
+        "end": 863,
+        "old": "ase",
+        "new": "ohort"
+      },
+      {
+        "start": 864,
+        "end": 867,
+        "old": "Wro",
+        "new": "A"
+      },
+      {
+        "start": 868,
+        "end": 869,
+        "old": "g",
+        "new": "y"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-cohort-probability",
+    "fault": "cohort-probability",
+    "edits": [
+      {
+        "start": 827,
+        "end": 827,
+        "old": "",
+        "new": "probability cohort "
+      },
+      {
+        "start": 832,
+        "end": 835,
+        "old": "abl",
+        "new": ""
+      },
+      {
+        "start": 836,
+        "end": 836,
+        "old": "",
+        "new": "d"
+      },
+      {
+        "start": 837,
+        "end": 837,
+        "old": "",
+        "new": "r"
+      },
+      {
+        "start": 838,
+        "end": 843,
+        "old": "nd.po",
+        "new": "gi"
+      },
+      {
+        "start": 846,
+        "end": 846,
+        "old": "",
+        "new": "re"
+      },
+      {
+        "start": 847,
+        "end": 847,
+        "old": "",
+        "new": " == true <= 1"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-verify-union",
+    "fault": "verify-union",
+    "edits": [
+      {
+        "start": 827,
+        "end": 827,
+        "old": "",
+        "new": "probability "
+      },
+      {
+        "start": 832,
+        "end": 835,
+        "old": "abl",
+        "new": ""
+      },
+      {
+        "start": 836,
+        "end": 836,
+        "old": "",
+        "new": "d"
+      },
+      {
+        "start": 847,
+        "end": 847,
+        "old": "",
+        "new": " || end.returned >= 1"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-hard",
+    "fault": "hard",
+    "edits": [
+      {
+        "start": 820,
+        "end": 821,
+        "old": "v",
+        "new": "hard { WrongP"
+      },
+      {
+        "start": 823,
+        "end": 823,
+        "old": "",
+        "new": "Arr"
+      },
+      {
+        "start": 824,
+        "end": 826,
+        "old": "fy",
+        "new": "val"
+      },
+      {
+        "start": 827,
+        "end": 836,
+        "old": "reachable",
+        "new": "<="
+      },
+      {
+        "start": 837,
+        "end": 847,
+        "old": "end.posted",
+        "new": "1 }"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-property-reference",
+    "fault": "property-reference",
+    "edits": [
+      {
+        "start": 880,
+        "end": 902,
+        "old": "registered == true && ",
+        "new": ""
+      },
+      {
+        "start": 903,
+        "end": 914,
+        "old": "orrect == f",
+        "new": ""
+      },
+      {
+        "start": 915,
+        "end": 916,
+        "old": "l",
+        "new": ""
+      },
+      {
+        "start": 918,
+        "end": 918,
+        "old": "",
+        "new": ".Wrong"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-always",
+    "fault": "always",
+    "edits": [
+      {
+        "start": 880,
+        "end": 880,
+        "old": "",
+        "new": "always("
+      },
+      {
+        "start": 898,
+        "end": 918,
+        "old": " && correct == false",
+        "new": ")"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-eventually",
+    "fault": "eventually",
+    "edits": [
+      {
+        "start": 880,
+        "end": 880,
+        "old": "",
+        "new": "eventually("
+      },
+      {
+        "start": 898,
+        "end": 918,
+        "old": " && correct == false",
+        "new": ")"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-bare-bool",
+    "fault": "bare-bool",
+    "edits": [
+      {
+        "start": 890,
+        "end": 918,
+        "old": " == true && correct == false",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-bang",
+    "fault": "bang",
+    "edits": [
+      {
+        "start": 880,
+        "end": 880,
+        "old": "",
+        "new": "!"
+      },
+      {
+        "start": 890,
+        "end": 918,
+        "old": " == true && correct == false",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-duplicate-property",
+    "fault": "duplicate-property",
+    "edits": [
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.Wrong = reached(registered == true && correct == false)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-duplicate-metric",
+    "fault": "duplicate-metric",
+    "edits": [
+      {
+        "start": 1074,
+        "end": 1077,
+        "old": "Reg",
+        "new": "Arr"
+      },
+      {
+        "start": 1078,
+        "end": 1084,
+        "old": "stered",
+        "new": "val"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-reserved-received",
+    "fault": "reserved-received",
+    "edits": [
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.received = reached(registered == true)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-reserved-admitted",
+    "fault": "reserved-admitted",
+    "edits": [
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.admitted = reached(registered == true)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-reserved-id",
+    "fault": "reserved-id",
+    "edits": [
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.id = reached(registered == true)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-binding-condition",
+    "fault": "binding-condition",
+    "edits": [
+      {
+        "start": 880,
+        "end": 890,
+        "old": "registered",
+        "new": "v"
+      },
+      {
+        "start": 894,
+        "end": 914,
+        "old": "true && correct == f",
+        "new": "p"
+      },
+      {
+        "start": 915,
+        "end": 916,
+        "old": "l",
+        "new": ""
+      },
+      {
+        "start": 917,
+        "end": 918,
+        "old": "e",
+        "new": "s"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-unknown-property",
+    "fault": "unknown-property",
+    "edits": [
+      {
+        "start": 1031,
+        "end": 1033,
+        "old": "Wr",
+        "new": "N"
+      },
+      {
+        "start": 1034,
+        "end": 1036,
+        "old": "ng",
+        "new": "pe"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-unknown-state",
+    "fault": "unknown-state",
+    "edits": [
+      {
+        "start": 880,
+        "end": 881,
+        "old": "r",
+        "new": "nop"
+      },
+      {
+        "start": 882,
+        "end": 890,
+        "old": "gistered",
+        "new": ""
+      },
+      {
+        "start": 897,
+        "end": 917,
+        "old": "e && correct == fals",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-unknown-end",
+    "fault": "unknown-end",
+    "edits": [
+      {
+        "start": 880,
+        "end": 881,
+        "old": "r",
+        "new": ""
+      },
+      {
+        "start": 882,
+        "end": 889,
+        "old": "gistere",
+        "new": "n"
+      },
+      {
+        "start": 890,
+        "end": 903,
+        "old": " == true && c",
+        "new": ".n"
+      },
+      {
+        "start": 904,
+        "end": 917,
+        "old": "rrect == fals",
+        "new": "p"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-unused-unknown-state",
+    "fault": "unused-unknown-state",
+    "edits": [
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.Unused = reached(nope == true)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-missing-name",
+    "fault": "missing-name",
+    "edits": [
+      {
+        "start": 864,
+        "end": 869,
+        "old": "Wrong",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-missing-equal",
+    "fault": "missing-equal",
+    "edits": [
+      {
+        "start": 870,
+        "end": 872,
+        "old": "= ",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-missing-open",
+    "fault": "missing-open",
+    "edits": [
+      {
+        "start": 879,
+        "end": 880,
+        "old": "(",
+        "new": " "
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-missing-close",
+    "fault": "missing-close",
+    "edits": [
+      {
+        "start": 918,
+        "end": 919,
+        "old": ")",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-wrong-type",
+    "fault": "wrong-type",
+    "edits": [
+      {
+        "start": 894,
+        "end": 914,
+        "old": "true && correct == f",
+        "new": "p"
+      },
+      {
+        "start": 915,
+        "end": 916,
+        "old": "l",
+        "new": ""
+      },
+      {
+        "start": 917,
+        "end": 918,
+        "old": "e",
+        "new": "s"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-empty-reached",
+    "fault": "empty-reached",
+    "edits": [
+      {
+        "start": 880,
+        "end": 918,
+        "old": "registered == true && correct == false",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-membership",
+    "fault": "membership",
+    "edits": [
+      {
+        "start": 735,
+        "end": 735,
+        "old": "",
+        "new": ", SetHolder"
+      },
+      {
+        "start": 880,
+        "end": 881,
+        "old": "r",
+        "new": "cas"
+      },
+      {
+        "start": 882,
+        "end": 883,
+        "old": "g",
+        "new": "."
+      },
+      {
+        "start": 884,
+        "end": 885,
+        "old": "s",
+        "new": "d in Se"
+      },
+      {
+        "start": 886,
+        "end": 886,
+        "old": "",
+        "new": "Hold"
+      },
+      {
+        "start": 888,
+        "end": 888,
+        "old": "",
+        "new": ".k"
+      },
+      {
+        "start": 889,
+        "end": 916,
+        "old": "d == true && correct == fal",
+        "new": "y"
+      },
+      {
+        "start": 917,
+        "end": 918,
+        "old": "e",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  actor SetHolder { state keys: set<CaseId> "
+      },
+      {
+        "start": 1152,
+        "end": 1152,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-no-verify",
+    "fault": "no-verify",
+    "edits": [
+      {
+        "start": 820,
+        "end": 850,
+        "old": "verify reachable end.posted\n  ",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-old-property",
+    "fault": "old-property",
+    "edits": [
+      {
+        "start": 859,
+        "end": 869,
+        "old": "case.Wrong",
+        "new": "p"
+      },
+      {
+        "start": 872,
+        "end": 1012,
+        "old": "reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  metric cohort.WrongPerArrival = e",
+        "new": ""
+      },
+      {
+        "start": 1013,
+        "end": 1149,
+        "old": "pected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-old-metric",
+    "fault": "old-metric",
+    "edits": [
+      {
+        "start": 850,
+        "end": 979,
+        "old": "property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  ",
+        "new": ""
+      },
+      {
+        "start": 986,
+        "end": 1008,
+        "old": "cohort.WrongPerArrival",
+        "new": "m"
+      },
+      {
+        "start": 1012,
+        "end": 1013,
+        "old": "x",
+        "new": "la"
+      },
+      {
+        "start": 1014,
+        "end": 1017,
+        "old": "ect",
+        "new": "s"
+      },
+      {
+        "start": 1019,
+        "end": 1149,
+        "old": "(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-configuration-property",
+    "fault": "nested-configuration-property",
+    "edits": [
+      {
+        "start": 864,
+        "end": 936,
+        "old": "Wrong = reached(registered == true && correct == false)\n  property case.",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  configuration Selected { cut C; process Flow; property case.Wrong = reached(registered == true && correct == false) "
+      },
+      {
+        "start": 1152,
+        "end": 1152,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-process-property",
+    "fault": "nested-process-property",
+    "edits": [
+      {
+        "start": 609,
+        "end": 609,
+        "old": "",
+        "new": "property case.Wrong = reached(registered == true && correct == false); "
+      },
+      {
+        "start": 864,
+        "end": 936,
+        "old": "Wrong = reached(registered == true && correct == false)\n  property case.",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-contract-property",
+    "fault": "nested-contract-property",
+    "edits": [
+      {
+        "start": 864,
+        "end": 936,
+        "old": "Wrong = reached(registered == true && correct == false)\n  property case.",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  contract K { property case.Wrong = reached(registered == true && correct == false) "
+      },
+      {
+        "start": 1152,
+        "end": 1152,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-configuration-metric",
+    "fault": "nested-configuration-metric",
+    "edits": [
+      {
+        "start": 1001,
+        "end": 1074,
+        "old": "Arrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPer",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  configuration Selected { cut C; process Flow; metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals "
+      },
+      {
+        "start": 1152,
+        "end": 1152,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-process-metric",
+    "fault": "nested-process-metric",
+    "edits": [
+      {
+        "start": 609,
+        "end": 609,
+        "old": "",
+        "new": "metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals; "
+      },
+      {
+        "start": 1001,
+        "end": 1074,
+        "old": "Arrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPer",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-static",
+    "broken": "qual-static.broken-nested-contract-metric",
+    "fault": "nested-contract-metric",
+    "edits": [
+      {
+        "start": 1001,
+        "end": 1074,
+        "old": "Arrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPer",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  contract K { metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals "
+      },
+      {
+        "start": 1152,
+        "end": 1152,
+        "old": "",
+        "new": "}\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-context-words",
+    "broken": "qual-context-words.broken-bindings",
+    "fault": "bindings",
+    "calculation": "T15: property and metric remain process identifiers,not reserved keywords; quality unchanged. Distinct context determines declaration,not the token alone.",
+    "edits": [
+      {
+        "start": 609,
+        "end": 610,
+        "old": "v",
+        "new": "property"
+      },
+      {
+        "start": 633,
+        "end": 634,
+        "old": "v",
+        "new": "property"
+      },
+      {
+        "start": 669,
+        "end": 670,
+        "old": "a",
+        "new": "metric"
+      }
+    ]
+  },
+  {
+    "base": "qual-forward",
+    "broken": "qual-forward.broken-forward",
+    "fault": "forward",
+    "calculation": "T15: resolve all property names before metrics; moving declarations after metrics is legal. Preserve declaration order and values1/50,1/46.",
+    "edits": [
+      {
+        "start": 850,
+        "end": 979,
+        "old": "property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n  ",
+        "new": ""
+      },
+      {
+        "start": 1150,
+        "end": 1150,
+        "old": "",
+        "new": "  property case.Wrong = reached(registered == true && correct == false)\n  property case.Registered = reached(registered == true)\n"
+      }
+    ]
+  },
+  {
+    "base": "qual-property-only",
+    "broken": "qual-property-only.broken-no-metric",
+    "fault": "no-metric",
+    "calculation": "T15/U6: property-only still reports all outcome rates. Do not claim ratio/denominator checked when no metric declared.",
+    "edits": [
+      {
+        "start": 977,
+        "end": 1150,
+        "old": "  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-union-dedup",
+    "broken": "qual-union-dedup.broken-duplicate-end",
+    "fault": "duplicate-end",
+    "calculation": "T15: repeated End deduplicated in first-occurrence order; union remains1 not2. Canonical condition remains end.a || end.b.",
+    "edits": [
+      {
+        "start": 385,
+        "end": 385,
+        "old": "",
+        "new": " || end.a"
+      }
+    ]
+  },
+  {
+    "base": "qual-late-abort",
+    "broken": "qual-late-abort.broken-nondeterminism",
+    "fault": "nondeterminism",
+    "calculation": "F29: source and seed come from existing report::metrics_tests. Deterministic B control is satisfied. First two replications complete; third calls nondeterministic B and refuses. Finished has no unknown in completed runs. On abort retract all quality estimates: reason aborted,samples0,cases hits/unknown/trials0; no retained samples2.",
+    "edits": [
+      {
+        "start": 647,
+        "end": 647,
+        "old": "",
+        "new": ", second"
+      }
+    ]
+  },
+  {
+    "base": "qual-post-end-state",
+    "broken": "qual-post-end-state.broken-no-hit",
+    "fault": "no-hit",
+    "calculation": "F35: business End returned at1 fixes Returned1. Contest optional nondeterministic branch either absent (Reviewed0) or route finishes3 and writes reviewed=true (Reviewed1). Reviewed range[0,1] known per_case_relaxation. Broken route writes false: Reviewed0. Business End does not close state-property observation.",
+    "edits": [
+      {
+        "start": 329,
+        "end": 332,
+        "old": "tru",
+        "new": "fals"
+      }
+    ]
+  },
+  {
+    "base": "qual-horizon",
+    "broken": "qual-horizon.broken-clock",
+    "fault": "clock",
+    "calculation": "T06: horizon14 cuts case3,not a computational cut. A null undetermined[1/75,26/75],B[1/71,13/23]. Observed outcomes posted46/75,returned4/75,cut_off1/3,unfinished0. Clock counterpart identical property bounds but truncated and no cut_off row.",
+    "edits": [
+      {
+        "start": 741,
+        "end": 741,
+        "old": "",
+        "new": "arrivals fixed [0min, 6min, 12min]\n  bounds { cases 3; live_tasks 2; clock 14min }\n  "
+      },
+      {
+        "start": 1100,
+        "end": 1226,
+        "old": "  scenario Day { arrivals fixed_every 6min during [0min, 18min); horizon 14min; bounds { cases 3; live_tasks 2; clock 30min } ",
+        "new": ""
+      },
+      {
+        "start": 1228,
+        "end": 1230,
+        "old": "}\n",
+        "new": ""
+      }
+    ]
+  },
+  {
+    "base": "qual-sim-horizon",
+    "broken": "qual-sim-horizon.broken-clock",
+    "fault": "clock",
+    "calculation": "T10: hits/unknown from deterministic correct kernel: N_W0,U_W4,N_R8,U_R4,arrivals12. Undetermined A[0,1/3],B[0,1/2]. Clock counterpart truncated. Replications4,not12.",
+    "edits": [
+      {
+        "start": 673,
+        "end": 673,
+        "old": "",
+        "new": "arrivals fixed [0min, 6min, 12min]\n  bounds { cases 3; live_tasks 2; clock 14min }\n  "
+      },
+      {
+        "start": 1035,
+        "end": 1050,
+        "old": "cenario Day { s",
+        "new": ""
+      },
+      {
+        "start": 1096,
+        "end": 1208,
+        "old": "; arrivals fixed_every 6min during [0min, 18min); horizon 14min; bounds { cases 3; live_tasks 2; clock 30min } }",
+        "new": ""
+      }
+    ]
+  }
+]

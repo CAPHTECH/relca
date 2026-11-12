@@ -1,0 +1,15 @@
+model ExecAnonymous version "0.2" {
+  type T = enum { ok }
+  people [p,q]
+  actor A { capacity 1; capability a() -> T { duration fixed 1min; result nondet { ok } } }
+  actor B { executors [q]; capability b() -> T { duration fixed 1min; result nondet { ok } } }
+  authority G { basis "authority table"; grants p to A.a }
+  process Flow { x = A.a(); y = B.b(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    separation A.a.finish, B.b.finish
+    permitted A.a
+    authority_basis A.a G
+  }
+}

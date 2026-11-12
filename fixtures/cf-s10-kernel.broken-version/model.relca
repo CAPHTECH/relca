@@ -1,0 +1,5 @@
+model Kernel version "0.2" {
+ type H=enum{free,taken,conflict};latent case{risk:bool=false};kernel K given[risk]{false->{1:taken};true->{1:taken}}
+ actor Ledger{capacity 1;state holder:H=free;capability claim()->H{kernel_reads latent [risk];writes holder;finish{holder=taken};duration fixed 1min;version_check [holder] else conflict;outcomes kernel K}}
+ process P{r=Ledger.claim();end done};cut C{include[Ledger]};bounds{cases 1;live_tasks 1;clock 5min};verify reachable end.done
+}

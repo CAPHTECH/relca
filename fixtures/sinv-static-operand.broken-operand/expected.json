@@ -1,0 +1,16 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-SYN-0"
+    },
+    {
+      "code": "W-CUT-0"
+    }
+  ],
+  "bounds": {
+    "truncated": null
+  },
+  "properties": [],
+  "terminals": []
+}

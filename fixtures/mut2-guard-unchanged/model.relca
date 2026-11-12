@@ -1,0 +1,21 @@
+model Summary version "0.2" {
+  type Entry = enum { high, low }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { posted }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Extract { via model "doc@v3"; capacity 1; capability make() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { high, low } } }
+  actor Clerk { capacity 1; capability match_po(e:Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 1min; result nondet { pass, fail } } }
+  actor Approver { capacity 1; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post(p:Verdict,a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { posted } } }
+  process Flow {
+    e = Extract.make(); p = Clerk.match_po(e); a = Approver.approve(e)
+    if p == pass && a == pass {} else { end rejected }
+    if e == high {} else { end rejected }
+    z = Ledger.post(p,a); end done
+  }
+  cut Scope { include [Invoice,PurchaseOrder,Extract,Clerk,Approver,Ledger] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

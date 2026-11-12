@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[{"kind":"meaning","target":"end.rejected","change":"added","from":false,"to":true,"reason":"終端追加"}],"diagnostics":[{"code":"W-DIFF-3","severity":"warning","span":null}],"absent_diagnostics":["W-DIFF-1","E-DIFF-0"]}

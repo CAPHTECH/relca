@@ -1,0 +1,22 @@
+model ResponsibilityCut version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { capacity 1; capability recheck() -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Approver { capacity 1; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Vendor {
+    control party
+    standing over [end.returned] basis "invoice claim"
+  }
+  process Flow {
+    entry = Reader.enter()
+    approval = Approver.approve(entry)
+    if approval == fail { end returned } else { end posted }
+  }
+  cut Scope {
+    include [Invoice,Reader,Clerk,Approver,Vendor]
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

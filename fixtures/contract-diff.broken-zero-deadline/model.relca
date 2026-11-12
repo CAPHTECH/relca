@@ -1,0 +1,15 @@
+model ContractDiff version "0.2" {
+  type Ack = enum { ok }
+  actor Worker { capacity 1; capability run() -> Ack { duration fixed 1min; result nondet { ok } } }
+  process BeforeFlow { x = Worker.run(); end done }
+  process AfterFlow { end done }
+  cut C { include [Worker] }
+  configuration Before { cut C; process BeforeFlow }
+  configuration After { cut C; process AfterFlow; intent {
+    retire Worker reason "remove worker" loses "worker execution"
+    retire Worker.run reason "remove step" loses "worker result"
+  } }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls { response Worker.run.start -> one_of(Worker.run.finish) by 0min after Worker.run.start otherwise unresolved }
+}

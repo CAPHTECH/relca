@@ -1,0 +1,20 @@
+model CompareCaseDiff version "0.2" {
+  type T = enum { pass, fail }
+  observed case { hit:T = fail }
+  kernel Klo { * -> { 0.25:pass; 0.75:fail } }
+  kernel Khi { * -> { 0.75:pass; 0.25:fail } }
+  actor A {
+    capacity 1
+    capability lo() -> T { duration fixed 1min; outcomes kernel Klo; writes hit }
+    capability hi() -> T { duration fixed 1min; outcomes kernel Klo; writes hit }
+  }
+  process P { a = A.lo(); if a == pass { end yes } else { end no } }
+  process Q { a = A.hi(); if a == pass { end yes } else { end no } }
+  cut C { include [A] }
+  configuration Aplan { cut C; process P }
+  configuration Bplan { cut C; process Q }
+  arrivals fixed [0min,3min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 6min }
+  verify probability reached hit == pass >= 0
+}

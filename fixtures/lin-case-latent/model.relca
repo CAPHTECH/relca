@@ -1,0 +1,13 @@
+model Common version "0.2" {
+  type Verdict = enum { pass }
+  latent case { difficulty: bool = false }
+  actor Invoice { source document }
+  kernel K given [difficulty] { false -> { 1: pass }; true -> { 1: pass } }
+  actor A { capacity 1
+    capability check() -> Verdict { duration fixed 1min; outcomes kernel K; kernel_reads latent [difficulty] }
+  }
+  process Flow { c1 = A.check(); c2 = A.check(); end done }
+  cut C { include [Invoice,A] }
+  bounds { cases 1; live_tasks 2; clock 30min }
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,13 @@
+model ResponsibilityMissingDuty version "0.2" {
+  type Ack = enum { committed }
+  people [p]
+  actor Record { source record }
+  actor Poster { executors [p]; capability post() -> Ack { reads [Record]; commits; duration fixed 1min; result nondet { committed } } }
+  actor Observer {
+    control party
+  }
+  process Flow { posted = Poster.post(); end done }
+  cut Scope { include [Record,Poster,Observer] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

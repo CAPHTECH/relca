@@ -1,0 +1,8 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  observed case { n: 0..1 = 1 }
+  actor A { capacity 1; capability inc() -> T { duration fixed 1min; result nondet { ok }; writes n; finish { n += 1 } } }
+  process P { a = A.inc(); end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify reachable end.done
+}

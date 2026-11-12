@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "First",
+        "p": "1",
+        "property": "Hit",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "beyond_reached_mass"
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "FirstDone",
+        "p": "1",
+        "property": "Hit",
+        "form": "reached_only",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "zero_denominator"
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

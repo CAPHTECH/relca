@@ -1,0 +1,5 @@
+{
+  "verdict":"invalid", "bounds":{"cases":null,"live_tasks":null,"clock":null,"truncated":null},
+  "properties":[], "terminals":[], "diagnostics":[{"code":"E-NAME-0","severity":"error"},{"code":"W-CUT-0","severity":"warning"}],
+  "absent_diagnostics":["U-SYN-0","W-DEADLOCK-0","W-BUDGET-0"]
+}

@@ -1,0 +1,1 @@
+{"verdict":"satisfied","diagnostics":[{"code":"W-UNREACH-1","severity":"warning","span":{"end":264,"start":220}}],"bounds":{"truncated":false},"explanation":{"version":"invoice-counterexample-v1","status":"complete","shortest_scope":"model","counterexamples":[],"omitted":[],"diagnostics":[]}}

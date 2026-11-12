@@ -1,0 +1,9 @@
+{
+  "verdict":"inconclusive", "cut":{"name":"C"},
+  "contest_summary":{"business_ended_open":{"min":null,"max":null,"reason":"truncated"}},
+  "bounds":{"cases":1,"live_tasks":2,"clock":2,"truncated":true},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"inconclusive"},{"id":"contract Controls #1 contest","verdict":"satisfied"},{"id":"contract Controls #1 contest_response","verdict":"inconclusive"}],
+  "terminals":[{"end":"returned","elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}],
+  "obligations":[], "diagnostics":[],
+  "contest_runtime":[{"case_id":1,"static_id":"contract Controls #1 contest","coverage":"truncated","alternatives":[{"filed":false,"target_at":1,"filed_at":null,"deadline":null,"status":"not_filed","response_at":null,"closed_at":1,"executor":null,"result":null},{"filed":true,"target_at":1,"filed_at":1,"deadline":3,"status":"unresolved","response_at":null,"closed_at":null,"executor":"p","result":null}]}]
+,"unchecked":["unreachable"]}

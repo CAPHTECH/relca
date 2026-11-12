@@ -1,0 +1,35 @@
+{
+  "verdict": "unsupported",
+  "from": {
+    "report": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  "to": {
+    "report": {
+      "verdict": "unsupported",
+      "properties": [],
+      "terminals": [],
+      "bounds": {
+        "truncated": null
+      },
+      "diagnostics": [
+        {
+          "code": "U-SEM-0",
+          "severity": "error"
+        }
+      ]
+    }
+  }
+}

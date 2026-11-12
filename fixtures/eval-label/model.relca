@@ -1,0 +1,18 @@
+model Contention version "0.2" {
+  type T = enum { pass }
+  actor Desk { grain team; capacity 1; capability run() -> T { duration fixed 3min; result nondet { pass } } }
+  actor B { capacity 2; capability run() -> T { duration fixed 4min; result nondet { pass } } }
+  process P { a = Desk.run(); end done }
+  process R { b = B.run(); end done }
+  cut C { include [Desk, B] }
+  configuration Zulu { cut C; process P }
+  configuration Alpha { cut C; process R }
+  arrivals fixed [0min, 0min]
+  bounds { cases 2; live_tasks 2; clock 12min }
+  policy fifo tie_by case_id
+  verify reachable end.done
+  property case.A0 = reached(end.done) within 4min
+  metric cohort.Z1 = expected(count(case.A0)) / arrivals
+  metrics { window 12min; currency "JPY"; rate Desk per_minute 1; rate B per_minute 1; rate Desk.run per_start 0; rate B.run per_start 0 }
+  compare [Zulu, Alpha] cut C hard { cohort.Z1 >= 0.5 } objectives { minimize metrics.overall.work }
+}

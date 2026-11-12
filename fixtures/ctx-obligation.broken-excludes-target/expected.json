@@ -1,0 +1,8 @@
+{
+  "verdict":"violated", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"contract Controls #1 response","verdict":"violated"},{"id":"contract Controls #2 excludes","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":6,"max":6},"work":{"min":6,"max":6},"result_at":null}],
+  "obligations":[{"response_id":"contract Controls #1 response","response_label":null,"case_id":1,"trigger_site":"received","trigger":"case.received","targets":["B.run.finish"],"debtor":null,"debtor_status":"not_configured","non_waivable":false,"coverage":"complete","outcomes":[{"status":"violated","triggered_at":0,"deadline":4,"resolved_at":4,"reason":"expiry","by_clause":null,"executor":null,"authority":null}]}],
+  "diagnostics":[{"code":"W-CUT-0"},{"code":"W-UNREACH-0","severity":"warning","span":{"end":248,"start":181}},{"code":"W-UNREACH-1","severity":"warning","span":{"end":429,"start":379}}], "absent_diagnostics":["W-DEADLOCK-0","W-BUDGET-0","E-CON-0"]
+}

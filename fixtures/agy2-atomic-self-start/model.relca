@@ -1,0 +1,14 @@
+model AgencySecondHalf version "0.2" {
+  type Entry = enum { entry }
+  type V = enum { pass, fail }
+  type Ack = enum { committed, rejected_duplicate }
+  people [c1, a1]
+  actor Doc { source document }
+  actor Clerk { executors [c1]; capability enter() -> Entry { reads [Doc]; duration fixed 1min; result nondet { entry } } }
+  actor Approver { executors [a1]; capability approve(e: Entry) -> V { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; state keys: set<CaseId>; capability post(key: CaseId) -> Ack { commits; writes keys; duration fixed 1min; atomic { if key in keys { result rejected_duplicate } else { keys += key; result committed } }; cancel forbidden_after_start } }
+  process Flow { e = Clerk.enter(); v = Approver.approve(e); if v == pass {} else { end returned }; k = Ledger.post(case.id); end posted }
+  cut Scope { include [Doc, Clerk, Approver, Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

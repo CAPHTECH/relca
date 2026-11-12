@@ -1,0 +1,311 @@
+[
+  {
+    "good": "pol-assign",
+    "bad": "pol-assign.broken-change",
+    "from": " assign first_idle",
+    "to": "",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "pol-separation",
+    "bad": "pol-separation.broken-change",
+    "from": "executors [c1,c2]",
+    "to": "executors [c2,c1]",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-tie-actor",
+    "bad": "pol-tie-actor.broken-change",
+    "from": "a = A.x(); b = A.y()",
+    "to": "b = A.y(); a = A.x()",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-tie-person",
+    "bad": "pol-tie-person.broken-change",
+    "from": "a = A.x(); b = B.y()",
+    "to": "b = B.y(); a = A.x()",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-resource",
+    "bad": "pol-resource.broken-change",
+    "from": "clock 10min",
+    "to": "clock 9min",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-control",
+    "bad": "pol-control.broken-change",
+    "from": "control policy",
+    "to": "control environment",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "pol-label-cofinish",
+    "bad": "pol-label-cofinish.broken-change",
+    "from": " assign first_idle",
+    "to": "",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-label-dtmc",
+    "bad": "pol-label-dtmc.broken-change",
+    "from": "0min,1min",
+    "to": "0min,0min",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-label-env",
+    "bad": "pol-label-env.broken-change",
+    "from": " then call_order",
+    "to": "",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-latent",
+    "bad": "pol-latent.broken-change",
+    "from": "then call_order",
+    "to": "then hard",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-refuse",
+    "bad": "pol-refuse.broken-change",
+    "from": "      requires posted == 0 else rejected\n",
+    "to": "",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-names",
+    "bad": "pol-names.broken-change",
+    "from": "executors [z1,y2]",
+    "to": "executors [y2,z1]",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-round-robin",
+    "bad": "pol-static-round-robin.broken-change",
+    "from": "assign first_idle",
+    "to": "assign round_robin",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-random",
+    "bad": "pol-static-random.broken-change",
+    "from": "assign first_idle",
+    "to": "assign random",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-skill",
+    "bad": "pol-static-skill.broken-change",
+    "from": "assign first_idle",
+    "to": "assign by skill",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-priority",
+    "bad": "pol-static-priority.broken-change",
+    "from": "policy fifo tie_by case_id then call_order assign first_idle",
+    "to": "policy priority",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-optimize",
+    "bad": "pol-static-optimize.broken-change",
+    "from": "policy fifo tie_by case_id then call_order assign first_idle",
+    "to": "policy fifo tie_by case_id then call_order assign first_idle\n  optimize",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-synthesize",
+    "bad": "pol-static-synthesize.broken-change",
+    "from": "policy fifo tie_by case_id then call_order assign first_idle",
+    "to": "policy fifo tie_by case_id then call_order assign first_idle\n  synthesize",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-duplicate-assign",
+    "bad": "pol-static-duplicate-assign.broken-change",
+    "from": "assign first_idle",
+    "to": "assign first_idle assign first_idle",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-duplicate-then",
+    "bad": "pol-static-duplicate-then.broken-change",
+    "from": "then call_order",
+    "to": "then call_order then call_order",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-duplicate-policy",
+    "bad": "pol-static-duplicate-policy.broken-change",
+    "from": "policy fifo tie_by case_id then call_order assign first_idle",
+    "to": "policy fifo tie_by case_id then call_order assign first_idle\n  policy fifo tie_by case_id then call_order assign first_idle",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-static-block",
+    "bad": "pol-static-block.broken-change",
+    "from": "policy fifo tie_by case_id then call_order assign first_idle",
+    "to": "policy { fifo }",
+    "static_bad": true,
+    "invocation": null
+  },
+  {
+    "good": "pol-observable-assign",
+    "bad": "pol-observable-assign.broken-change",
+    "from": " assign first_idle",
+    "to": "",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "pol-observable-fifo",
+    "bad": "pol-observable-fifo.broken-change",
+    "from": "observable ",
+    "to": "",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "pol-resource-hol",
+    "bad": "pol-resource-hol.broken-change",
+    "from": "uses R:1,S:1",
+    "to": "uses R:1",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-no-person-reservation",
+    "bad": "pol-no-person-reservation.broken-change",
+    "from": "duration fixed 1min",
+    "to": "duration fixed 4min",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-cross-class-person",
+    "bad": "pol-cross-class-person.broken-change",
+    "from": "control environment",
+    "to": "control policy",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-cross-class-resource",
+    "bad": "pol-cross-class-resource.broken-change",
+    "from": "control environment",
+    "to": "control policy",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-tie-nondet",
+    "bad": "pol-tie-nondet.broken-change",
+    "from": "tie by [a,b]",
+    "to": "tie nondet",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-permission",
+    "bad": "pol-permission.broken-change",
+    "from": "executors [p,q]",
+    "to": "executors [q,p]",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-late-enqueue",
+    "bad": "pol-late-enqueue.broken-change",
+    "from": "capacity 2",
+    "to": "capacity 1",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-no-effect",
+    "bad": "pol-no-effect.broken-change",
+    "from": "capacity 2",
+    "to": "executors [c1,c2]",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "good": "pol-deadlock",
+    "bad": "pol-deadlock.broken-change",
+    "from": "resource S capacity 0",
+    "to": "resource S capacity 1",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-configuration",
+    "bad": "pol-configuration.broken-change",
+    "from": " assign first_idle",
+    "to": "",
+    "static_bad": false,
+    "invocation": {
+      "command": "simulate",
+      "configuration": "CP"
+    }
+  },
+  {
+    "good": "pol-label-cut",
+    "bad": "pol-label-cut.broken-change",
+    "from": "clock 2min",
+    "to": "clock 1min",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-single-winner",
+    "bad": "pol-single-winner.broken-change",
+    "from": "tie by [a,b]",
+    "to": "tie nondet",
+    "static_bad": false,
+    "invocation": null
+  },
+  {
+    "good": "pol-tie-ack",
+    "bad": "pol-tie-ack.broken-change",
+    "from": "tie by [a,b]",
+    "to": "tie nondet",
+    "static_bad": false,
+    "invocation": null
+  }
+]

@@ -1,0 +1,10 @@
+model ContractOrder version "0.2" {
+  type Ack = enum { ok }
+  actor A { capacity 1; capability a() -> Ack { duration fixed 1min; result nondet { ok } } }
+  actor B { capacity 1; capability b() -> Ack { duration fixed 1min; result nondet { ok } } }
+  actor Slow { capacity 1; capability run() -> Ack { duration fixed 2min; result nondet { ok } } }
+  process Flow { fork f { a = A.a(); b = B.b() }; join all f; s = Slow.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls { response A.a.finish -> one_of(B.b.finish) by 1min after A.a.finish otherwise unresolved }
+}

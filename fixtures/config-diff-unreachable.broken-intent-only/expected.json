@@ -1,0 +1,10 @@
+{
+  "verdict":"invalid", "mismatch":null, "differences":[],
+  "from":{"configuration":"AsIs","report":{"verdict":"satisfied","bounds":{"truncated":false},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":269,"start":200}}]}},
+  "to":{"configuration":"ToBe","report":{"verdict":"satisfied","bounds":{"truncated":false},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":269,"start":200}},{"code":"W-UNREACH-1","severity":"warning","span":{"end":404,"start":361}}]}},
+  "terminals":[{"end":"done","from":{"elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null},"to":{"elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}}],
+  "properties":[{"id":"reachable end.done","from":"satisfied","to":"satisfied"},{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"}],
+  "diagnostics":[{"code":"E-DIFF-0","severity":"error"}], "absent_diagnostics":["E-CMP-0","W-DIFF-1","W-DIFF-2"],
+  "checked":["comparison_mismatch","actor","relation","intent_claims","retire_loses","meaning","authority","resource","time","visibility","contest","preserve","override","maintain","annotations"],
+  "unchecked":[]
+}

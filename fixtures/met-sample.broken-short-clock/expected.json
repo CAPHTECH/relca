@@ -1,0 +1,1 @@
+{"verdict":"inconclusive","mode":"simulation","metrics":{"status":"truncated","overall":{"work":{"mean":"2","min":"2","max":"2","samples":4,"reason":null},"observed_cost_total":{"mean":"17","min":"17","max":"17","samples":4,"reason":null}}},"unchecked":["unreachable"]}

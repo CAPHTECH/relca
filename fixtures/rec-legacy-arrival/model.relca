@@ -1,0 +1,19 @@
+model Records version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed, refused }
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; approval: optional<Verdict>; registered: bool = false }
+type Difficulty = enum { routine, difficult }
+latent case { extraction_correct: bool = false }
+actor Invoice { source document; latent difficulty: Difficulty ~ { routine: 0.8, difficult: 0.2 } }
+actor Extractor { capacity 1; capability extract() -> Entry { duration fixed 1min; outcomes kernel ai_entry; kernel_reads latent [Invoice.difficulty]; writes [entry, extraction_correct] } }
+actor Clerk { capacity 1; capability review(e: Entry) -> Verdict { duration fixed 3min; result nondet { pass, fail } } }
+actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+kernel ai_entry given [Invoice.difficulty] { routine -> { 1: Entry { confidence = high } with extraction_correct = true }; difficult -> { 0.5: Entry { confidence = low } with extraction_correct = false; 0.5: Entry { confidence = high } with extraction_correct = false } }
+process Flow { e = Extractor.extract(); if e.confidence == low { r = Clerk.review(e); end reviewed } else { p = Ledger.post(); end posted } }
+
+arrivals fixed [0min]
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify probability reached registered == true && extraction_correct == false <= 0.1
+}

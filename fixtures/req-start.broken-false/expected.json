@@ -1,0 +1,84 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "refused",
+      "elapsed": {
+        "min": 0,
+        "max": 0
+      },
+      "work": {
+        "min": 0,
+        "max": 0
+      },
+      "result_at": null
+    }
+  ],
+  "capability_refusals": [
+    {
+      "case_id": 1,
+      "call": "r",
+      "capability": "A.run",
+      "result": "denied",
+      "at": {
+        "min": 0,
+        "max": 0
+      },
+      "coverage": "complete"
+    }
+  ],
+  "metrics": {
+    "overall": {
+      "work": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      },
+      "observed_cost_total": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      },
+      "peak_tasks": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      }
+    },
+    "cases": [
+      {
+        "case_id": 1,
+        "tasks": [
+          {
+            "binding": "r",
+            "starts": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "work": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "refused_count": {
+              "min": "1",
+              "max": "1",
+              "reason": null
+            },
+            "cancelled_before_start_count": {
+              "stats": {
+                "min": "0",
+                "max": "0",
+                "reason": null
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

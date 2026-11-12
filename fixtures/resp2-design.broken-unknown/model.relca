@@ -1,0 +1,15 @@
+model DesignLines version "0.2" {
+  type Entry = enum { entry }; type Verdict = enum { pass,fail }; type Ack = enum { committed }
+  people [a1,s1]
+  observed case { registered: bool = false; approval: Verdict = fail }
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability read() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Guard { executors [a1]; capability check(e:Entry) -> Verdict { reads [Invoice]; writes approval; duration fixed 2min; result nondet { pass,fail } } }
+  actor Extractor { executors [s1]; capability extract(v:Verdict) -> Ack { commits; writes registered; finish { registered = true }; duration fixed 3min; result nondet { committed } } }
+  responsible a1 for (registered -> approval == pass)
+  responsible s1 for Unknown.maintenance
+  process Flow { e = Reader.read(); j = Guard.check(e); if j == pass {} else { end returned }; out = Extractor.extract(j); end done }
+  cut Scope { include [Invoice,Reader,Guard,Extractor] }
+  bounds { cases 1; live_tasks 2; clock 120min }
+  verify safety no_resource_overcommit
+}

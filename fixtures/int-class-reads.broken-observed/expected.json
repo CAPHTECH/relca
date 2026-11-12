@@ -1,0 +1,1 @@
+{"verdict":"satisfied","properties":[{"id":"reachable end.done","verdict":"satisfied"}],"terminals":[{"end":"done","elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}]}

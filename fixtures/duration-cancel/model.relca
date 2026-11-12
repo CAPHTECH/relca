@@ -1,0 +1,16 @@
+model DurationCancel version "0.2" {
+  type T = enum { pass, ok }
+  observed case { changed: bool = false }
+  kernel K { * -> { 0.5: ok with changed = true; 0.5: ok with changed = false } }
+  actor Fast { capacity 1; capability win() -> T { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { capacity 1; capability work() -> T { duration {2min:0.5,4min:0.5}; outcomes kernel K; writes changed; cancel cooperative ack_within 1min } }
+  process Flow {
+    fork f { fast = Fast.win(); slow = Slow.work() }
+    join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected
+    end done
+    end rejected
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached changed == true within 4min <= 0.25
+}

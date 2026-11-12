@@ -1,0 +1,37 @@
+{
+  "basis": "ADR 0042 declarations and hand arithmetic, not captured output: actor/scenario names and grain; fixed_every 4 during [0,12) is [0,4,8]; Cut record within 1 -> 2 is metadata only.",
+  "pairs": [
+    {
+      "id":"P10", "left":"scn-label", "right":"scn-label.broken-renamed",
+      "slots": {
+        "/actors/0/name":{"left":"A","right":"Desk"},
+        "/actors/0/boundary/value":{"left":"A","right":"Desk"},
+        "/actors/0/grain/value":{"left":null,"right":"team"},
+        "/actors/0/grain/status":{"left":"default","right":"declared"},
+        "/agency/origin/0/actor":{"left":"A","right":"Desk"},
+        "/agency/viewpoints/retention/capabilities/0/capability":{"left":"A.run","right":"Desk.run"},
+        "/cut/include/0":{"left":"A","right":"Desk"},
+        "/assumptions/0/field":{"left":"A.boundary","right":"Desk.boundary"},
+        "/assumptions/0/value":{"left":"A","right":"Desk"},
+        "/assumptions/1/field":{"left":"A.executors","right":"Desk.executors"},
+        "/assumptions/2/field":{"left":"A.control","right":"Desk.control"},
+        "/assumptions/3/field":{"left":"A.permission","right":"Desk.permission"},
+        "/scenario/name":{"left":"Light","right":"BusyDay"},
+        "/assumptions/7/value":{"left":"Light","right":"BusyDay"}
+      }, "source_spans":[]
+    },
+    {
+      "id":"P11", "left":"scn-fixed-every", "right":"scn-equivalent",
+      "slots": {
+        "/scenario/arrivals/form":{"left":"fixed_every","right":"fixed"},
+        "/scenario/arrivals/every":{"left":4,"right":null},
+        "/scenario/arrivals/until":{"left":12,"right":8},
+        "/assumptions/5/value":{"left":"fixed_every 4min during [0min, 12min) (3 cases)","right":"fixed[0min, 4min, 8min]"}
+      }, "source_spans":[]
+    },
+    {
+      "id":"P22", "left":"scn-cut-record", "right":"scn-cut-record.broken-record",
+      "slots":{"/cut_context/horizon/0/within":{"left":1,"right":2}}, "source_spans":[]
+    }
+  ]
+}

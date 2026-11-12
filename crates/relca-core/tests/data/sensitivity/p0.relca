@@ -1,0 +1,13 @@
+model Nonmonotone version "0.2" {
+  type Coin = enum { yes, no }
+  observed case { a: optional<Coin>; b: optional<Coin> }
+  kernel Flip { * -> { 0: yes; 1: no } }
+  actor A { capacity 1
+    capability first() -> Coin { duration fixed 1min; outcomes kernel Flip; writes a }
+    capability second() -> Coin { duration fixed 1min; outcomes kernel Flip; writes b }
+  }
+  process Flow { x = A.first(); y = A.second(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 2; clock 4min }
+  verify probability reached a == yes && b == no <= 0.25
+}

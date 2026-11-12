@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Z1",
+        "p": "1/2",
+        "property": "Q9",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "3",
+          "upper": "3",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "A0",
+        "p": "1/2",
+        "property": "Q9",
+        "form": "reached_only",
+        "value": {
+          "lower": "3",
+          "upper": "3",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

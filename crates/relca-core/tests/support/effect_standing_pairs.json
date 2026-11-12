@@ -1,0 +1,311 @@
+[
+  {
+    "id": "P01",
+    "good": "sov-basic",
+    "bad": "sov-basic.broken-no-authority",
+    "old": "  authority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo }\n",
+    "new": ""
+  },
+  {
+    "id": "P02",
+    "good": "sov-concurrent",
+    "bad": "sov-concurrent.broken-short",
+    "old": "respond_by 5min",
+    "new": "respond_by 2min"
+  },
+  {
+    "id": "P03",
+    "good": "sov-vacuous",
+    "bad": "sov-vacuous.broken-truncated",
+    "old": "clock 20min",
+    "new": "clock 1min"
+  },
+  {
+    "id": "P04",
+    "good": "sov-warning",
+    "bad": "sov-warning.broken-silent",
+    "old": "; defer Vendor.contest reason \"structure only\" loses \"dispute frequency\"",
+    "new": ""
+  },
+  {
+    "id": "P05",
+    "good": "sov-deadline",
+    "bad": "sov-deadline.broken-zero",
+    "old": "respond_by 5min",
+    "new": "respond_by 0min"
+  },
+  {
+    "id": "P06",
+    "good": "sov-self-candidate",
+    "bad": "sov-self-candidate.broken-no-grant",
+    "old": "  authority PostGrant { basis \"posting rule\"; grants l1 to Ledger.post; issued_by cfo }\n",
+    "new": ""
+  },
+  {
+    "id": "P06b",
+    "good": "sov-effective-single",
+    "bad": "sov-effective-single.broken-single-result",
+    "old": "result nondet { committed, held }",
+    "new": "result nondet { committed }"
+  },
+  {
+    "id": "P07",
+    "good": "sov-mixed",
+    "bad": "sov-mixed.broken-route-excluded",
+    "old": "include [Approver, Ledger, Clerk, Vendor]",
+    "new": "include [Approver, Ledger, Vendor]; exclude Clerk reason \"r\" loses \"l\""
+  },
+  {
+    "id": "P08",
+    "good": "sov-one-site",
+    "bad": "sov-one-site.broken-two-sites",
+    "old": "if approval == fail { end returned } else { }; ack = Ledger.post(); end posted",
+    "new": "if approval == fail { x = Ledger.post(); end returned } else { ack = Ledger.post(); end posted }"
+  },
+  {
+    "id": "P09",
+    "good": "sov-cases",
+    "bad": "sov-cases.broken-short",
+    "old": "respond_by 5min",
+    "new": "respond_by 1min"
+  },
+  {
+    "id": "P10",
+    "good": "sov-sim",
+    "bad": "sov-sim.broken-no-authority",
+    "old": "  authority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo }\n",
+    "new": ""
+  },
+  {
+    "id": "P11",
+    "good": "sov-label",
+    "bad": "sov-label.broken-other-grain",
+    "old": "grain ledger;",
+    "new": "grain document;"
+  },
+  {
+    "id": "P12",
+    "good": "sov-metrics",
+    "bad": "sov-metrics.broken-longer-route",
+    "old": "duration fixed 1min; result nondet { pass, fail }",
+    "new": "duration fixed 2min; result nondet { pass, fail }"
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-start",
+    "bad": "sov-target-start.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger.post.start",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-finish",
+    "bad": "sov-target-finish.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger.post.finish",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-finish-value",
+    "bad": "sov-target-finish-value.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger.post.finish(committed)",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-cancel",
+    "bad": "sov-target-cancel.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger.post.cancel_ack",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-state",
+    "bad": "sov-target-state.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "registered",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-actor",
+    "bad": "sov-target-actor.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-unknown-actor",
+    "bad": "sov-target-unknown-actor.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Nobody.post.commit",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-target-unknown-cap",
+    "bad": "sov-target-unknown-cap.broken-target",
+    "old": "Ledger.post.commit",
+    "new": "Ledger.absent.commit",
+    "all": true
+  },
+  {
+    "id": "P13",
+    "good": "sov-no-commits",
+    "bad": "sov-no-commits.broken-invalid",
+    "old": "commits; ",
+    "new": ""
+  },
+  {
+    "id": "P13",
+    "good": "sov-duplicate",
+    "bad": "sov-duplicate.broken-invalid",
+    "old": "[Ledger.post.commit]",
+    "new": "[Ledger.post.commit, Ledger.post.commit]"
+  },
+  {
+    "id": "P13",
+    "good": "sov-nonparty",
+    "bad": "sov-nonparty.broken-invalid",
+    "old": "control party; ",
+    "new": ""
+  },
+  {
+    "id": "P13",
+    "good": "sov-mismatch",
+    "bad": "sov-mismatch.broken-invalid",
+    "old": "standing over [Ledger.post.commit]",
+    "new": "standing over [end.returned]"
+  },
+  {
+    "id": "P15",
+    "good": "sov-live-tasks",
+    "bad": "sov-live-tasks.broken-one",
+    "old": "live_tasks 2",
+    "new": "live_tasks 1"
+  },
+  {
+    "id": "P16",
+    "good": "sov-equality",
+    "bad": "sov-equality.broken-late",
+    "old": "duration fixed 1min; result nondet { pass, fail }",
+    "new": "duration fixed 2min; result nondet { pass, fail }"
+  },
+  {
+    "id": "P17",
+    "good": "sov-sleep",
+    "bad": "sov-sleep.broken-slow",
+    "old": "duration fixed 1min; result nondet { pass, fail }",
+    "new": "duration fixed 6min; result nondet { pass, fail }"
+  },
+  {
+    "id": "P18",
+    "good": "sov-any",
+    "bad": "sov-any.broken-short",
+    "old": "respond_by 5min",
+    "new": "respond_by 4min"
+  },
+  {
+    "id": "P19",
+    "good": "sov-cut-exact",
+    "bad": "sov-cut-exact.broken-prefix",
+    "old": "Vendor.contest.Ledger.post.commit reason",
+    "new": "Vendor.contest.Ledger reason"
+  },
+  {
+    "id": "P20",
+    "good": "sov-end-open",
+    "bad": "sov-end-open.broken-zero-tail",
+    "old": "duration fixed 10min",
+    "new": "duration fixed 0min"
+  },
+  {
+    "id": "P20b",
+    "good": "sov-two-contests",
+    "bad": "sov-two-contests.broken-longer",
+    "old": "duration fixed 1min; result nondet { pass, fail }",
+    "new": "duration fixed 2min; result nondet { pass, fail }"
+  },
+  {
+    "id": "P21",
+    "good": "sov-route-target",
+    "bad": "sov-route-target.broken-recursive",
+    "old": "route Clerk.recheck",
+    "new": "route Ledger.post"
+  },
+  {
+    "id": "P22",
+    "good": "sov-restricted",
+    "bad": "sov-restricted.broken-expiry",
+    "old": "basis \"posting rule\";",
+    "new": "basis \"posting rule\"; expires 100min;"
+  },
+  {
+    "id": "P23",
+    "good": "sov-kernel",
+    "bad": "sov-kernel.broken-zero-held",
+    "old": "0.5: committed; 0.5: held",
+    "new": "1: committed; 0: held"
+  },
+  {
+    "id": "P25",
+    "good": "sov-diff",
+    "bad": "sov-diff.broken-no-intent",
+    "old": "change contest Ledger.post.commit reason \"effect route\"",
+    "new": ""
+  },
+  {
+    "id": "P26",
+    "good": "sov-resource",
+    "bad": "sov-resource.broken-unshared",
+    "old": "capability recheck() -> Verdict { uses R:1;",
+    "new": "capability recheck() -> Verdict {"
+  },
+  {
+    "id": "P28",
+    "good": "sov-clock",
+    "bad": "sov-clock.broken-deadline",
+    "old": "clock 4min",
+    "new": "clock 5min"
+  },
+  {
+    "id": "P29",
+    "good": "sov-policy",
+    "bad": "sov-policy.broken-environment",
+    "old": "control policy;",
+    "new": "control environment;"
+  },
+  {
+    "id": "P30",
+    "good": "sov-paid",
+    "bad": "sov-paid.broken-missing-route-fee",
+    "old": "rate Clerk.recheck per_start 0; ",
+    "new": ""
+  },
+  {
+    "id": "P31",
+    "good": "sov-effect-and-end",
+    "bad": "sov-effect-and-end.broken-late",
+    "old": "duration fixed 1min; result nondet { pass, fail }",
+    "new": "duration fixed 2min; result nondet { pass, fail }"
+  },
+  {
+    "id": "P32",
+    "good": "sov-route-start",
+    "bad": "sov-route-start.broken-zero-capacity",
+    "old": "actor Clerk { capacity 1;",
+    "new": "actor Clerk { capacity 0;"
+  },
+  {
+    "id": "P14",
+    "good": "sov-atomic",
+    "bad": "sov-atomic.broken-held",
+    "old": "allow: bool = true",
+    "new": "allow: bool = false"
+  }
+]

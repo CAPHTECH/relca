@@ -1,0 +1,55 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 4,
+        "max": 4
+      },
+      "work": {
+        "min": 4,
+        "max": 4
+      },
+      "result_at": null
+    },
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null
+    }
+  ],
+  "agency": {
+    "refusal": [
+      {
+        "effect": "Post.post",
+        "call": "p",
+        "reachable": true,
+        "judgements": [
+          {
+            "call": "j",
+            "capability": "Judge.check",
+            "stops": "all_paths",
+            "bypasses": 0
+          },
+          {
+            "call": "j2",
+            "capability": "Judge2.check",
+            "stops": "all_paths",
+            "bypasses": 0
+          }
+        ]
+      }
+    ]
+  }
+}

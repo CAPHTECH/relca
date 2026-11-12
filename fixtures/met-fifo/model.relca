@@ -1,0 +1,13 @@
+model MetricsFIFO version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability prep() -> T { duration fixed 3min; result nondet { pass } } }
+  actor B { capacity 1; capability finish() -> T { duration fixed 5min; result nondet { pass } } }
+  process P { a = A.prep(); b = B.finish(); end done }
+  cut C { include [A, B] }
+  arrivals fixed [0min, 1min, 2min]
+  policy fifo tie_by case_id
+  bounds { cases 3; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; rate A per_minute 2; rate B per_minute 3; rate A.prep per_start 1; rate B.finish per_start 4 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

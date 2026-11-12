@@ -1,0 +1,14 @@
+model Ordered version "0.2" {
+  type V = enum { pass,fail }
+  resource R capacity 1
+  actor A { capacity 2;
+    capability big() -> V { uses R: 2; duration fixed 1min; result nondet { pass }; cancel cooperative ack_within 1min }
+    capability small() -> V { uses R: 1; duration fixed 1min; result nondet { pass }; cancel cooperative ack_within 1min }
+  }
+  process P { fork f { a = A.big(); b = A.small() }; join any f where result == pass tie by [a,b] remaining cancel_then_drain if none -> done; end done }
+  cut K { include [A] }
+  arrivals fixed [0min]
+  policy fifo tie_by case_id
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

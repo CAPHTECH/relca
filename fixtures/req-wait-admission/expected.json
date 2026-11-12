@@ -1,0 +1,55 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 5,
+            "max": 5
+          },
+          "elapsed": {
+            "min": 5,
+            "max": 5
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 1,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 8,
+            "max": 8
+          },
+          "elapsed": {
+            "min": 7,
+            "max": 7
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ]
+}

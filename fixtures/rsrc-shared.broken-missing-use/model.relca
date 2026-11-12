@@ -1,0 +1,13 @@
+model ResourceAcceptance version "0.2" {
+  type T = enum { ok }
+  resource R capacity 1
+  actor A { capacity 1;  capability x() -> T { uses R: 1; duration fixed 3min; result nondet { ok };  } }
+  actor B { capacity 1;  capability y() -> T { duration fixed 5min; result nondet { ok };  } }
+  process P { fork f { a = A.x(); b = B.y() }; join all f; end done }
+  cut K { question "resource acceptance"; include [A,B] }
+  bounds { cases 1; live_tasks 3; clock 10min }
+  metrics { window 10min; currency "JPY" }
+
+  verify safety no_resource_overcommit
+  verify reachable end.done
+}

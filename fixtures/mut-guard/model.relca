@@ -1,0 +1,26 @@
+model MutationGuard version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { capacity 1; capability match_po(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Approver { capacity 1; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass,fail } } }
+  actor Ledger { capacity 1; capability post(p:Verdict,a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  process Flow {
+    entry = Reader.enter()
+    po = Clerk.match_po(entry)
+    if po == pass { } else { end returned }
+    approval = Approver.approve(entry)
+    if approval == pass { } else { end returned }
+    ack = Ledger.post(po,approval)
+    end done
+  }
+  cut Scope { include [Invoice,Reader,Clerk,Approver,Ledger] }
+  bounds { cases 1; live_tasks 4; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    requires_event Approver.approve.start after Clerk.match_po.finish(pass)
+    invariant Ledger.post.commit -> approval == pass
+  }
+}

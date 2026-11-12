@@ -1,0 +1,18 @@
+model M version "0.2" {
+  type R = enum { committed, rejected }
+  actor Ledger {
+    capacity 1
+    state posted: 0..1 = 0
+    capability post() -> R {
+      duration fixed 1min
+      result nondet { committed }
+      writes posted
+      finish { posted += 1 }
+    }
+  }
+  process P { r = Ledger.post(); if r == committed { end posted } else { end denied } }
+  cut C { include [Ledger] }
+  bounds { cases 2; live_tasks 1; clock 10min }
+  arrivals fixed [0min,3min]
+  verify safety no_resource_overcommit
+}

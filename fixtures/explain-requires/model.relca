@@ -1,0 +1,16 @@
+model ExplainRequires version "0.2" {
+  type Verdict = enum { pass, fail }
+  type T = enum { ok }
+  actor Gate { capacity 1; capability check() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Worker { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow {
+    gate = Gate.check()
+    if gate == pass { } else { end returned }
+    x = Worker.run()
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  cut Scope { question "example"; include [Gate, Worker] }
+  verify safety no_resource_overcommit
+  contract Controls { requires_event Worker.run.start after Gate.check.finish(pass) }
+}

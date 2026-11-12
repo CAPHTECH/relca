@@ -1,0 +1,17 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-POL-LATENT"
+    },
+    {
+      "code": "U-SEM-0"
+    }
+  ],
+  "absent_diagnostics": [
+    "E-SYN-0",
+    "E-TYPE-0",
+    "E-NAME-0",
+    "U-SYN-0"
+  ]
+}

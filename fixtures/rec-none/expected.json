@@ -1,0 +1,36 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 4,
+        "max": 4
+      },
+      "work": {
+        "min": 4,
+        "max": 4
+      },
+      "result_at": null
+    }
+  ],
+  "properties": [
+    {
+      "id": "contract C #1 invariant",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ]
+}

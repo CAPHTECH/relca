@@ -1,0 +1,17 @@
+model PerCase version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok, bad }
+  people [p]
+  actor Invoice { instance per_case; grain document; source document; latent difficulty: Difficulty ~ { routine:0.8, difficult:0.2 } }
+  observed case { obs: Difficulty = routine }
+  kernel K given [Invoice.difficulty] { routine -> { 1: routine with obs = routine }; difficult -> { 1: difficult with obs = difficult } }
+  actor Reader { capacity 1; capability read() -> Difficulty { reads [Invoice]; kernel_reads latent [Invoice.difficulty]; writes obs; duration fixed 1min; outcomes kernel K } }
+  process Flow { a = Reader.read(); end done }
+  cut Scope { question "案件ごとの文書"; include [Invoice,Reader] }
+  arrivals fixed [0min, 0min]
+  policy fifo tie_by case_id
+
+  contract Controls { invariant Reader.read.finish -> obs == routine }
+  bounds { cases 2; live_tasks 2; clock 30min }
+
+}

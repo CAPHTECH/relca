@@ -1,0 +1,28 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false,
+    "range_violation_stops": true
+  },
+  "absent_diagnostics": [
+    "U-SYN-0",
+    "U-SEM-0",
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-TYPE-0",
+    "E-POL-LATENT",
+    "E-CUT-1"
+  ],
+  "terminals": [],
+  "state_range_violations": [
+    {
+      "time": 6,
+      "variable": "Desk.handled",
+      "before": "2",
+      "operand": "1",
+      "attempted": "3",
+      "upper": "2",
+      "phase": "finish"
+    }
+  ]
+}

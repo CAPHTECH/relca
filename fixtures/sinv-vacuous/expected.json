@@ -1,0 +1,31 @@
+{
+  "verdict": "vacuous",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-0"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "vacuous"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ]
+}

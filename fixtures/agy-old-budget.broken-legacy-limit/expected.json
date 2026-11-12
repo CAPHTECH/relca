@@ -1,0 +1,132 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-1",
+      "scope": "selected_process_lexical_calls_and_declared_contest_routes",
+      "observation": {
+        "status": "derived",
+        "sources": [
+          {
+            "actor": "Invoice",
+            "normal": {
+              "actors": [
+                "Reader",
+                "Reviewer"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Reader",
+                "Reviewer"
+              ]
+            },
+            "contest": {
+              "actors": [],
+              "people": [],
+              "unattributed_actors": [],
+              "routes": []
+            }
+          }
+        ],
+        "people": [],
+        "fallback": "unchecked"
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "rejected",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "approval",
+                "capability": "Reviewer.review",
+                "selects": "all_contexts"
+              }
+            ],
+            "read_only": []
+          },
+          {
+            "end": "done",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "approval",
+                "capability": "Reviewer.review",
+                "selects": "all_contexts"
+              }
+            ],
+            "read_only": []
+          }
+        ],
+        "actors": [
+          "Reviewer"
+        ],
+        "complete": true,
+        "unchecked": [
+          "type_domain_authority",
+          "practical_framing"
+        ]
+      },
+      "proposal": {
+        "status": "not_derived",
+        "reason": "no_proposal_contract"
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Reader.enter",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Reviewer.review",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Ledger.post",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ],
+        "notice": "行使回数から不要とは判定しない",
+        "unchecked": [
+          "fallback_dependency",
+          "retention_basis",
+          "actual_skill"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+model Nonwaivable version "0.2" {
+  type T = enum { ok, bad }
+  people [p,q,issuer]
+  actor Officer { executors [p]; capability release() -> T { commits; duration fixed 1min; result nondet { ok } } }
+  permit [p,q] to Officer.release
+  authority G { basis "registered authority"; grants [p,q] to Officer.release; issued_by issuer }
+  process Flow { o = Officer.release(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    response audit: case.received -> one_of(end.done) by 3min after case.received otherwise unresolved non_waivable
+    waive audit on Officer.release.finish reason "registered exception" authorized_by G
+  }
+}

@@ -1,0 +1,14 @@
+model ProbabilityCut version "0.2" {
+  type Route = enum { short, long }
+  type T = enum { ok }
+  observed case { seen: bool = false; route: Route = short }
+  kernel K { * -> { 0.5: short with seen = true, route = short; 0.5: long with seen = false, route = long } }
+  actor A { capacity 1
+    capability coin() -> Route { duration fixed 1min; outcomes kernel K; writes [seen,route] }
+    capability wait() -> T { duration fixed 3min; result nondet { ok }; writes seen; finish { seen = true } }
+  }
+  process Flow { c = A.coin(); if route == long { w = A.wait() } else {}; end done }
+  bounds { cases 1; live_tasks 2; clock 4min }
+  verify safety no_resource_overcommit
+  verify probability reached seen == true >= 0.75
+}

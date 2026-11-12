@@ -1,0 +1,86 @@
+{
+ "generated_from": "変更前の binary(ADR 0035 の前の 7f8ee1e)の出力を保存した記録。現実装から期待値を採り直していない",
+ "rows": [
+  {
+   "name": "duty-selected",
+   "source": "model Duty version \"0.2\" {\n type T=enum{yes,no}\n people[p]\n observed case{flag:bool=true}\n actor A{executors[p];capability check()->T{duration fixed 1min;result nondet{yes}}}\n process P{approved=A.check();end done}\n process Q{end done}\n cut K{include[A]}\n configuration Active{cut K;process P}\n configuration Hidden{cut K;process Q}\n responsible p for (approved == yes)\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check",
+    "--configuration",
+    "Active"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":\"Duty\",\"sha256\":\"34bf24e287e0421e3c49d0cec532e613d2e46741b441099fb2584881ed7fb0cc\"},\"cut\":\"unresolved\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SEM-0\",\"severity\":\"error\",\"message\":\"probability conditions require state\",\"span\":{\"start\":353,\"end\":361}}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SEM-0: probability conditions require state\n"
+  },
+  {
+   "name": "duty-unselected",
+   "source": "model Duty version \"0.2\" {\n type T=enum{yes,no}\n people[p]\n observed case{flag:bool=true}\n actor A{executors[p];capability check()->T{duration fixed 1min;result nondet{yes}}}\n process P{end done}\n process Q{approved=A.check();end done}\n cut K{include[A]}\n configuration Active{cut K;process P}\n configuration Hidden{cut K;process Q}\n responsible p for (approved == yes)\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check",
+    "--configuration",
+    "Active"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":\"Duty\",\"sha256\":\"479051c085ec68dc2806483db47812d7916e9ba08d13e0afe1a79a06b24179e3\"},\"cut\":\"unresolved\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SEM-0\",\"severity\":\"error\",\"message\":\"probability conditions require state\",\"span\":{\"start\":353,\"end\":361}}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SEM-0: probability conditions require state\n"
+  },
+  {
+   "name": "formula-selected",
+   "source": "model Duty version \"0.2\" {\n type T=enum{yes,no}\n people[p]\n observed case{flag:bool=true}\n actor A{executors[p];capability check()->T{duration fixed 1min;result nondet{yes}}}\n process P{approved=A.check();end done}\n process Q{end done}\n cut K{include[A]}\n configuration Active{cut K;process P}\n configuration Hidden{cut K;process Q}\n responsible p for (approved == yes -> flag == true)\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check",
+    "--configuration",
+    "Active"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":\"Duty\",\"sha256\":\"169bb2fb5ef1260f807402c2b8df195fdca28ef87eb56d0fb7b80f3ad7993ff1\"},\"cut\":\"unresolved\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SEM-0\",\"severity\":\"error\",\"message\":\"probability conditions require state\",\"span\":{\"start\":353,\"end\":361}}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SEM-0: probability conditions require state\n"
+  },
+  {
+   "name": "formula-unselected",
+   "source": "model Duty version \"0.2\" {\n type T=enum{yes,no}\n people[p]\n observed case{flag:bool=true}\n actor A{executors[p];capability check()->T{duration fixed 1min;result nondet{yes}}}\n process P{end done}\n process Q{approved=A.check();end done}\n cut K{include[A]}\n configuration Active{cut K;process P}\n configuration Hidden{cut K;process Q}\n responsible p for (approved == yes -> flag == true)\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check",
+    "--configuration",
+    "Active"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":\"Duty\",\"sha256\":\"e643aafc0e5717a65bf54f55a15cdae6eab6309ca46aaa9fcdde3195374d28d6\"},\"cut\":\"unresolved\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SEM-0\",\"severity\":\"error\",\"message\":\"probability conditions require state\",\"span\":{\"start\":353,\"end\":361}}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SEM-0: probability conditions require state\n"
+  },
+  {
+   "name": "executor-start",
+   "source": "model Selector version \"0.2\" {\n type T=enum{ok}\n people[p]\n observed case{flag:bool=false}\n actor A{executors[p];capability go()->T{start{flag=executor.name};duration fixed 1min;result nondet{ok}}}\n process P{a=A.go();end done}\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":null,\"sha256\":\"96b73c2db78623b850464ae915dc7e4c436089e8431362e8fc2306399c39e6a9\"},\"cut\":\"undeclared\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SYN-0\",\"severity\":\"error\",\"message\":\"unsupported syntax: start expression\",\"span\":{\"start\":151,\"end\":152}},{\"code\":\"W-CUT-0\",\"severity\":\"warning\",\"message\":\"Cut is undeclared; exclusions are unknown\",\"span\":null}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SYN-0: unsupported syntax: start expression\nW-CUT-0: Cut is undeclared; exclusions are unknown\n"
+  },
+  {
+   "name": "executor-finish",
+   "source": "model Selector version \"0.2\" {\n type T=enum{ok}\n people[p]\n observed case{flag:bool=false}\n actor A{executors[p];capability go()->T{writes flag;finish{flag=executor.name};duration fixed 1min;result nondet{ok}}}\n process P{a=A.go();end done}\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check"
+   ],
+   "exit": 4,
+   "stdout": "{\"actors\":null,\"cut_context\":{\"notices\":[\"Cut 外の存在(未知の被影響者、一度だけの拒否、登録されていない当事者)が作用しないとは主張しない\",\"この結果を運用の範囲決定に使う場合は採用経路を別に追うこと\"],\"reentry\":[],\"horizon\":[]},\"agency\":null,\"verdict\":\"unsupported\",\"mode\":\"exhaustive\",\"unit\":\"min\",\"model\":{\"name\":null,\"sha256\":\"712ec41f903d247e16e082d8435ea4287cc8f42a1380e6518317a61f1a25a932\"},\"cut\":\"undeclared\",\"assumptions\":[],\"diagnostics\":[{\"code\":\"U-SYN-0\",\"severity\":\"error\",\"message\":\"unsupported syntax: finish expression\",\"span\":{\"start\":164,\"end\":165}},{\"code\":\"W-CUT-0\",\"severity\":\"warning\",\"message\":\"Cut is undeclared; exclusions are unknown\",\"span\":null}],\"bounds\":{\"cases\":null,\"live_tasks\":null,\"clock\":null,\"truncated\":null},\"properties\":[],\"terminals\":[]}\n",
+   "stderr": "U-SYN-0: unsupported syntax: finish expression\nW-CUT-0: Cut is undeclared; exclusions are unknown\n"
+  },
+  {
+   "name": "atomic-unknown",
+   "source": "model Unknown version \"0.2\" {\n type T=enum{ok}\n actor A{capacity 1;capability go()->T{duration fixed 1min;result nondet{ok};atomic{foo}}}\n process P{a=A.go();end done}\n bounds{cases 1;live_tasks 1;clock 3min}\n verify safety no_resource_overcommit\n}\n",
+   "args": [
+    "check"
+   ],
+   "exit": 4,
+   "verdict": "unsupported",
+   "codes": [
+    "U-SYN-0",
+    "W-CUT-0"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+model DurationSerial version "0.2" {
+  type T = enum { ok }
+  observed case { done: bool = false }
+  actor A {
+    capacity 1
+    capability first() -> T { duration {3min:0.5,5min:0.5}; result nondet { ok } }
+    capability second() -> T { duration {3min:0.5,5min:0.5}; result nondet { ok }; writes done; finish { done = true } }
+  }
+  process Flow { a = A.first(); b = A.second(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached done == true within 6min <= 0.25
+  verify probability reached done == true within 8min >= 0.75
+  verify probability reached done == true within 10min >= 1
+}

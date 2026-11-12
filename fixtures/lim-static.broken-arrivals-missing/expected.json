@@ -1,0 +1,12 @@
+{
+  "verdict": "invalid",
+  "mode": "exhaustive",
+  "diagnostics": [
+    {
+      "code": "E-ARR-0",
+      "severity": "error"
+    }
+  ],
+  "properties": [],
+  "terminals": []
+}

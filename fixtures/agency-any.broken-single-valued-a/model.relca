@@ -1,0 +1,33 @@
+model AgencyAny version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor Reader {
+    capacity 1
+    capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } }
+  }
+  actor JA {
+    capacity 1
+    capability check(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start }
+  }
+  actor JB {
+    capacity 1
+    capability check(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail }; cancel forbidden_after_start }
+  }
+  actor Ledger {
+    capacity 1
+    capability post() -> Ack { commits; duration fixed 1min; result nondet { committed } }
+  }
+  process Flow {
+    entry = Reader.enter()
+    fork f { a = JA.check(entry); b = JB.check(entry) }
+    join any f where result == pass tie by [a,b] remaining drain if none -> rejected
+    posted = Ledger.post()
+    end done
+    end rejected
+  }
+  bounds { cases 1; live_tasks 4; clock 32min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

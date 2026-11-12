@@ -1,0 +1,10 @@
+model Records version "0.2" {
+type T = enum { a, b }
+observed case { c: T = a }
+actor Work { capability seed() -> T { duration fixed 1min; result nondet { a } }; capacity 1; capability run(p: enum {a,b}) -> T { duration fixed 1min; result nondet { a } } }
+process Flow { x = Work.seed(); y = Work.run(x); end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.done
+}

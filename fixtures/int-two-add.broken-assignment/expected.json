@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false},"properties":[{"id":"reachable end.done","verdict":"violated"},{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"state_in_range","verdict":"satisfied"}],"terminals":[{"end":"wrong","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}]}

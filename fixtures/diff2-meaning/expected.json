@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[{"kind":"meaning","target":"end.rejected","change":"added","from":false,"to":true,"reason":null,"loses":null}],"terminals":[{"end":"done","from":{"elapsed":{"min":1,"max":1}},"to":{"elapsed":{"min":1,"max":1}}},{"end":"rejected","from":null,"to":{"elapsed":{"min":1,"max":1}}}]}

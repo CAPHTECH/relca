@@ -1,0 +1,9 @@
+model ContractCut version "0.2" {
+  type Ack = enum { ok }
+  actor Worker { capacity 1; capability run() -> Ack { duration fixed 1min; result nondet { ok } } }
+  actor Slow { capacity 1; capability run() -> Ack { duration fixed 5min; result nondet { ok } } }
+  process Flow { x = Worker.run(); y = Slow.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 3min }
+  verify safety no_resource_overcommit
+  contract Controls { response case.received -> one_of(Slow.run.finish) by 2min after case.received otherwise unresolved }
+}

@@ -1,0 +1,11 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  people [p]
+  observed case { flag: bool = false; begun: bool = false; finished: bool = false }
+  actor A { executors [p]; capability run() -> T { duration fixed 4min; result nondet { ok }; requires flag == true else denied; start { begun = true }; writes finished; finish { finished = true }; commits } }
+  process Flow { r = A.run(); if r == ok { end accepted } else { end refused } }
+  bounds { cases 1; live_tasks 4; clock 30min }
+  metrics { window 30min; currency "JPY"; rate A per_minute 2; rate A.run per_start 7 }
+  verify safety no_resource_overcommit
+  verify reachable end.accepted
+}

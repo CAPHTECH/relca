@@ -1,0 +1,18 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-POL-LATENT",
+      "severity": "error"
+    },
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "properties": [],
+  "terminals": [],
+  "bounds": {
+    "truncated": null
+  }
+}

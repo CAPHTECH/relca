@@ -1,0 +1,11 @@
+model LegacyProbe version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { r = A.run(); end done }
+  cut C { include [A] }
+  configuration Left { cut C; process P }
+  configuration Right { cut C; process P }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 4 seed 1 confidence 0.5
+  verify reachable end.done
+}

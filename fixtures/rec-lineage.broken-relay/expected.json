@@ -1,0 +1,44 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 9,
+        "max": 9
+      },
+      "work": {
+        "min": 12,
+        "max": 12
+      },
+      "result_at": null
+    },
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 6,
+        "max": 8
+      },
+      "work": {
+        "min": 9,
+        "max": 11
+      },
+      "result_at": null
+    }
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"diagnostics":[{"code":"W-CUT-0"}],"properties":[{"id":"reachable end.done","verdict":"satisfied"},{"id":"safety no_resource_overcommit","verdict":"satisfied"}],"terminals":[{"end":"done","elapsed":{"min":9,"max":9},"work":{"min":9,"max":9},"result_at":null}]}

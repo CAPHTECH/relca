@@ -1,0 +1,24 @@
+model ConfigurationParallel version "0.2" {
+  type T = enum { pass }
+  actor Office {
+    capacity 2
+    capability short() -> T { duration fixed 3min; result nondet { pass } }
+    capability long() -> T { duration fixed 5min; result nondet { pass } }
+  }
+  process Serial {
+    a = Office.short()
+    b = Office.long()
+    end done
+  }
+  process Parallel {
+    fork f { a = Office.short(); b = Office.long() }
+    join all f
+    end done
+  }
+  cut C { include [Office] }
+  configuration AsIs { cut C; process Serial }
+  configuration ToBeP { cut C; process Parallel; intent { add Office reason "unused claim" } }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

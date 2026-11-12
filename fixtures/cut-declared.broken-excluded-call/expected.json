@@ -1,0 +1,9 @@
+{
+  "verdict": "invalid",
+  "bounds": { "truncated": null },
+  "absent_diagnostics": ["W-CUT-0"],
+  "cut": "unresolved",
+  "diagnostics": [{ "code": "E-CUT-1", "severity": "error" }],
+  "properties": [],
+  "terminals": []
+}

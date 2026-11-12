@@ -1,0 +1,12 @@
+model MetricsPerson version "0.2" {
+  type T = enum { pass }
+  people [p, q]
+  actor A { capacity 1; executors [p]; capability a() -> T { duration fixed 3min; result nondet { pass } } }
+  actor B { capacity 1; executors [q]; capability b() -> T { duration fixed 5min; result nondet { pass } } }
+  process P { fork f { a = A.a(); b = B.b() }; join all f; end done }
+  cut C { include [A, B] }
+  bounds { cases 1; live_tasks 2; clock 4min }
+  metrics { window 10min; currency "JPY"; rate A per_minute 100; rate B per_minute 10; rate A.a per_start 2; rate B.b per_start 3 ; breakdown waits }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,74 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1/10",
+            "max": "1/10"
+          }
+        }
+      ]
+    }
+  ],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "reviewed",
+          "elapsed": {
+            "min": 4,
+            "max": 4
+          },
+          "work": {
+            "min": 4,
+            "max": 4
+          },
+          "probability": {
+            "min": "1/10",
+            "max": "1/10"
+          }
+        },
+        {
+          "kind": "end",
+          "end": "posted",
+          "elapsed": {
+            "min": 2,
+            "max": 2
+          },
+          "work": {
+            "min": 2,
+            "max": 2
+          },
+          "probability": {
+            "min": "9/10",
+            "max": "9/10"
+          }
+        }
+      ]
+    }
+  ]
+}

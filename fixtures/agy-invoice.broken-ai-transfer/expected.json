@@ -1,0 +1,338 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "W-LIN-2",
+      "severity": "warning"
+    },
+    {
+      "code": "W-RESP-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-RESP-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-RESP-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-1",
+      "scope": "selected_process_lexical_calls_and_declared_contest_routes",
+      "observation": {
+        "status": "derived",
+        "sources": [
+          {
+            "actor": "Invoice",
+            "normal": {
+              "actors": [
+                "Extractor"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Extractor"
+              ]
+            },
+            "contest": {
+              "actors": [
+                "Clerk"
+              ],
+              "people": [
+                "c1",
+                "c2"
+              ],
+              "unattributed_actors": [],
+              "routes": [
+                "Clerk.recheck"
+              ]
+            }
+          },
+          {
+            "actor": "PurchaseOrder",
+            "normal": {
+              "actors": [
+                "Clerk"
+              ],
+              "people": [
+                "c1",
+                "c2"
+              ],
+              "unattributed_actors": []
+            },
+            "contest": {
+              "actors": [],
+              "people": [],
+              "unattributed_actors": [],
+              "routes": []
+            }
+          },
+          {
+            "actor": "ReceiptRecord",
+            "normal": {
+              "actors": [
+                "Clerk"
+              ],
+              "people": [
+                "c1",
+                "c2"
+              ],
+              "unattributed_actors": []
+            },
+            "contest": {
+              "actors": [],
+              "people": [],
+              "unattributed_actors": [],
+              "routes": []
+            }
+          }
+        ],
+        "people": [
+          {
+            "person": "c1",
+            "normal": {
+              "direct": [
+                "PurchaseOrder",
+                "ReceiptRecord"
+              ],
+              "indirect": [
+                "Invoice"
+              ]
+            },
+            "contest": {
+              "direct": [
+                "Invoice"
+              ]
+            }
+          },
+          {
+            "person": "c2",
+            "normal": {
+              "direct": [
+                "PurchaseOrder",
+                "ReceiptRecord"
+              ],
+              "indirect": [
+                "Invoice"
+              ]
+            },
+            "contest": {
+              "direct": [
+                "Invoice"
+              ]
+            }
+          },
+          {
+            "person": "a1",
+            "normal": {
+              "direct": [],
+              "indirect": [
+                "Invoice",
+                "PurchaseOrder",
+                "ReceiptRecord"
+              ]
+            },
+            "contest": {
+              "direct": []
+            }
+          },
+          {
+            "person": "cfo",
+            "normal": {
+              "direct": [],
+              "indirect": []
+            },
+            "contest": {
+              "direct": []
+            }
+          }
+        ],
+        "fallback": "unchecked"
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "returned",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "approvalV",
+                "capability": "Approver.approve",
+                "selects": "some_contexts"
+              }
+            ],
+            "read_only": [
+              {
+                "call": "poV",
+                "capability": "Clerk.match_po"
+              },
+              {
+                "call": "receiptV",
+                "capability": "Clerk.match_receipt"
+              }
+            ]
+          },
+          {
+            "end": "posted",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "poV",
+                "capability": "Clerk.match_po",
+                "selects": "all_contexts"
+              },
+              {
+                "call": "receiptV",
+                "capability": "Clerk.match_receipt",
+                "selects": "all_contexts"
+              },
+              {
+                "call": "approvalV",
+                "capability": "Approver.approve",
+                "selects": "all_contexts"
+              }
+            ],
+            "read_only": [
+              {
+                "call": "posted",
+                "capability": "Ledger.post"
+              }
+            ]
+          },
+          {
+            "end": "exception",
+            "status": "derived",
+            "reachable": false,
+            "selectors": [],
+            "read_only": []
+          }
+        ],
+        "actors": [
+          "Clerk",
+          "Approver"
+        ],
+        "complete": true,
+        "unchecked": [
+          "type_domain_authority",
+          "practical_framing"
+        ]
+      },
+      "proposal": {
+        "status": "not_derived",
+        "reason": "no_proposal_contract"
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Clerk.enter",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 0
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Clerk.match_po",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Clerk.match_receipt",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Clerk.recheck",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 0
+            },
+            "contest_route": true,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Extractor.extract",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Approver.approve",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Ledger.post",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ],
+        "notice": "行使回数から不要とは判定しない",
+        "unchecked": [
+          "fallback_dependency",
+          "retention_basis",
+          "actual_skill"
+        ]
+      }
+    }
+  }
+}

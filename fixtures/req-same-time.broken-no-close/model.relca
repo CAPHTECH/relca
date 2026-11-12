@@ -1,0 +1,13 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { flag: bool = true }
+  actor A { capacity 1
+    capability gate() -> T { duration fixed 2min; result nondet { ok } }
+    capability run() -> T { duration fixed 1min; result nondet { ok }; requires flag == true else denied }
+  }
+  actor Writer { capacity 1; capability close() -> T { duration fixed 2min; result nondet { ok }; writes flag; finish { flag = true } } }
+  process Flow { fork f { g = A.gate(); r = A.run(); w = Writer.close() }; join all f; if r == ok { end accepted } else { end refused } }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,12 @@
+model M version "0.2" {
+  type R = enum { win,lose }
+  actor Slow { capacity 1; state started: bool = false; state finished: bool = false;
+    capability run() -> R { start { started = true }; writes finished; finish { finished = true }; duration fixed 5min; result nondet { lose }; cancel forbidden_after_start } }
+  actor Fast { capacity 1; capability run() -> R { duration fixed 1min; result nondet { win }; cancel immediate } }
+  actor Probe { capacity 1; capability check() -> R { duration fixed 1min; result nondet { win } } }
+  process P { fork f { slow = Slow.run(); fast = Fast.run() }; join any f where result == win tie by [fast,slow] remaining cancel_then_drain if none -> absent; p = Probe.check(); end done; end absent }
+  cut C { include [Slow,Fast,Probe] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  contract K { invariant Probe.check.finish -> Slow.started == true && Slow.finished == false }
+
+}

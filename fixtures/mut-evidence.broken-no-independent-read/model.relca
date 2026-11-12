@@ -1,0 +1,14 @@
+model MutationEvidence version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Clerk { capacity 1; capability match_po(e:Entry) -> Verdict { reads [Invoice]; duration fixed 1min; result nondet { pass,fail } } }
+  actor Ledger { capacity 1; capability post(v:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  process Flow { entry = Reader.enter(); po = Clerk.match_po(entry); ack = Ledger.post(po); end done }
+  cut Scope { include [Invoice,PurchaseOrder,Reader,Clerk,Ledger] }
+  bounds { cases 1; live_tasks 4; clock 20min }
+  verify safety no_resource_overcommit
+}

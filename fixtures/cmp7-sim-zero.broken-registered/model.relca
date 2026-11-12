@@ -1,0 +1,25 @@
+model Simulation version "0.2" {
+  type V = enum { pass }
+  type Ack = enum { committed }
+  observed case { registered: bool = false }
+  latent case { correct: bool = false }
+  kernel good { * -> { 1: pass with correct = true } }
+  kernel bad { * -> { 1: pass with correct = false } }
+  actor Checker { capacity 2; capability check() -> V { duration fixed 3min; outcomes kernel good; writes correct }; capability quick() -> V { duration fixed 1min; outcomes kernel bad; writes correct } }
+  actor Ledger { capacity 2; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+  process GoodFlow { v = Checker.check(); a = Ledger.post(); end posted }
+  process BadFlow { v = Checker.quick(); a = Ledger.post(); end posted }
+  cut C { include [Checker, Ledger] }
+  configuration Good { cut C; process GoodFlow }
+  configuration Bad { cut C; process BadFlow }
+  arrivals fixed [0min]
+  bounds { cases 1; live_tasks 2; clock 20min }
+  simulation replications 1 seed 1 confidence 0.5
+  verify reachable end.posted
+  property case.Wrong = reached(registered == true && correct == false)
+  property case.Registered = reached(registered == true)
+  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals
+  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))
+  metrics { window 20min; currency "JPY"; rate Checker per_minute 1; rate Ledger per_minute 1; rate Checker.check per_start 0; rate Checker.quick per_start 0; rate Ledger.post per_start 0 }
+  compare [Good, Bad] cut C hard { cohort.WrongPerRegistered <= 1 }
+}

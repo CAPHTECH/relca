@@ -1,0 +1,26 @@
+{
+  "verdict": "vacuous",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "vacuous",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied"
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "verdict": "vacuous"
+        }
+      ]
+    }
+  ],
+  "terminals": []
+}

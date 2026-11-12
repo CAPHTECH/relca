@@ -1,0 +1,13 @@
+model Union version "0.2" {
+  type Choice = enum { left, right }
+  actor A { capacity 1; capability choose() -> Choice { duration fixed 1min; outcomes kernel coin } }
+  process P { c = A.choose(); if c == left { end a } else { end b } }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.a
+  property case.P = reached(end.a || end.b)
+  metric cohort.Rate = expected(count(case.P)) / arrivals
+  kernel coin { * -> { 0.5: left; 0.5: right } }
+  property case.Half = reached(end.a)
+  metric cohort.MoreThanOne = expected(count(case.P)) / expected(count(case.P))
+}

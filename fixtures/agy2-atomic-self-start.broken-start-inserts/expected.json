@@ -1,0 +1,58 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [
+          {
+            "effect": "Ledger.post",
+            "call": "k",
+            "status": "derived",
+            "e": {
+              "actors": [
+                "Ledger"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Ledger"
+              ],
+              "permitted": []
+            },
+            "state_refusers": [
+              {
+                "actor": "Ledger",
+                "capability": "Ledger.post",
+                "reads": [
+                  "Ledger.keys"
+                ],
+                "on_normal_path": "unknown"
+              }
+            ],
+            "process_judgements": {
+              "status": "not_derived",
+              "reason": "state_guards"
+            },
+            "concentration": {
+              "single_actor": "unknown",
+              "single_person": "unknown",
+              "single_generation_root": "unknown",
+              "generation_roots": {
+                "status": "not_derived",
+                "reason": "state_guards"
+              },
+              "signal": "判定・拒否・実行の担い手と生成根の集中の兆候",
+              "mechanism": "同じ担い手又は生成根への依存が構成上重なる",
+              "check": "モデル外の統制・原本参照・ログで確認する"
+            }
+          }
+        ],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      }
+    }
+  }
+}

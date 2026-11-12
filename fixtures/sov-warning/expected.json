@@ -1,0 +1,32 @@
+{
+  "verdict": "satisfied",
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    },
+    {
+      "end": "posted",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null
+    }
+  ],
+  "absent_diagnostics": [
+    "W-CONTEST-0"
+  ]
+}

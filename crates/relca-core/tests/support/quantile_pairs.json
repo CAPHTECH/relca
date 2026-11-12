@@ -1,0 +1,325 @@
+[
+  {
+    "base": "qtl-sample",
+    "broken": "qtl-sample.broken-shifted",
+    "old": "2min:0.5, 4min:0.5",
+    "new": "2min:0.4, 4min:0.6"
+  },
+  {
+    "base": "qtl-sample-sim",
+    "broken": "qtl-sample-sim.broken-short-clock",
+    "old": "clock 10min",
+    "new": "clock 3min"
+  },
+  {
+    "base": "qtl-identifiable",
+    "broken": "qtl-identifiable.broken-clock",
+    "old": "clock 10min",
+    "new": "clock 3min"
+  },
+  {
+    "base": "qtl-censor",
+    "broken": "qtl-censor.broken-clock",
+    "old": "clock 30min",
+    "new": "clock 12min"
+  },
+  {
+    "base": "qtl-contention",
+    "broken": "qtl-contention.broken-no-policy",
+    "old": "  policy fifo tie_by case_id\n",
+    "new": ""
+  },
+  {
+    "base": "qtl-maybe",
+    "broken": "qtl-maybe.broken-pass-only",
+    "old": "result nondet { pass, fail }",
+    "new": "result nondet { pass }"
+  },
+  {
+    "base": "qtl-maybe",
+    "broken": "qtl-maybe.broken-fail-only",
+    "old": "result nondet { pass, fail }",
+    "new": "result nondet { fail }"
+  },
+  {
+    "base": "qtl-one",
+    "broken": "qtl-one.broken-zero-all",
+    "old": "quantile(1, case.Done)",
+    "new": "quantile(0, case.Done)"
+  },
+  {
+    "base": "qtl-one",
+    "broken": "qtl-one.broken-zero-given",
+    "old": "quantile(1, case.Done given reached)",
+    "new": "quantile(0, case.Done given reached)"
+  },
+  {
+    "base": "qtl-label",
+    "broken": "qtl-label.broken-renamed",
+    "edits": "bijection"
+  },
+  {
+    "base": "qtl-nondeterminism",
+    "broken": "qtl-nondeterminism.broken-no-policy",
+    "old": "  policy fifo tie_by case_id\n",
+    "new": ""
+  },
+  {
+    "base": "qtl-first-hit",
+    "broken": "qtl-first-hit.broken-no-hit",
+    "old": "finish { hit = true }",
+    "new": "finish { hit = false }"
+  },
+  {
+    "base": "qtl-first-hit-sim",
+    "broken": "qtl-first-hit-sim.broken-no-hit",
+    "old": "finish { hit = true }",
+    "new": "finish { hit = false }"
+  },
+  {
+    "base": "qtl-within",
+    "broken": "qtl-within.broken-short-within",
+    "old": "within 4min",
+    "new": "within 3min"
+  },
+  {
+    "base": "qtl-initial",
+    "broken": "qtl-initial.broken-false",
+    "old": "hit: bool = true",
+    "new": "hit: bool = false"
+  },
+  {
+    "base": "qtl-same-tick",
+    "broken": "qtl-same-tick.broken-no-hit",
+    "old": "start { hit = true }",
+    "new": "start { hit = false }"
+  },
+  {
+    "base": "qtl-denominator",
+    "broken": "qtl-denominator.broken-clock",
+    "old": "clock 2min",
+    "new": "clock 1min"
+  },
+  {
+    "base": "qtl-direct-b",
+    "broken": "qtl-direct-b.broken-redistributed",
+    "old": "1min:0.4, 3min:0.6",
+    "new": "1min:0.8, 3min:0.2"
+  },
+  {
+    "base": "qtl-crossing",
+    "broken": "qtl-crossing.broken-later-right",
+    "old": "duration fixed 3min",
+    "new": "duration fixed 6min"
+  },
+  {
+    "base": "qtl-offset",
+    "broken": "qtl-offset.broken-later-arrival",
+    "old": "[0min, 0min]",
+    "new": "[0min, 1min]"
+  },
+  {
+    "base": "qtl-union",
+    "broken": "qtl-union.broken-single-end",
+    "old": "end.done || end.returned",
+    "new": "end.done"
+  },
+  {
+    "base": "qtl-rejected",
+    "broken": "qtl-rejected.broken-reject-all",
+    "old": "queue capacity 1",
+    "new": "queue capacity 0"
+  },
+  {
+    "base": "qtl-deadlock",
+    "broken": "qtl-deadlock.broken-zero-capacity",
+    "old": "capacity 1",
+    "new": "capacity 0"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-given",
+    "old": "given reached",
+    "new": "given case.Done"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-given-missing",
+    "old": "given reached",
+    "new": "given"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-unknown",
+    "old": "quantile(0.5, case.Done)",
+    "new": "quantile(0.5, case.Absent)"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-zero",
+    "old": "quantile(0.5,",
+    "new": "quantile(0,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-too-large",
+    "old": "quantile(0.5,",
+    "new": "quantile(1.5,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-negative",
+    "old": "quantile(0.5,",
+    "new": "quantile(-0.1,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-fraction",
+    "old": "quantile(0.5,",
+    "new": "quantile(1/2,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-exponent",
+    "old": "quantile(0.5,",
+    "new": "quantile(5e-1,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-duplicate",
+    "old": "quantile.MedianDone",
+    "new": "quantile.Median"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-equal",
+    "old": "quantile.Median =",
+    "new": "quantile.Median"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-open",
+    "old": "quantile(0.5,",
+    "new": "quantile 0.5,"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-comma",
+    "old": "quantile(0.5,",
+    "new": "quantile(0.5"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-close",
+    "old": "quantile(0.5, case.Done)",
+    "new": "quantile(0.5, case.Done"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-property-name",
+    "old": "quantile(0.5, case.Done)",
+    "new": "quantile(0.5, case.)"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-quantiles",
+    "old": "  verify reachable end.done",
+    "new": "  metrics { quantiles [0.5] }\n  verify reachable end.done"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-p95",
+    "old": "  verify reachable end.done",
+    "new": "  metrics { p95 lead_time }\n  verify reachable end.done"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-median",
+    "old": "  verify reachable end.done",
+    "new": "  metrics { median lead_time }\n  verify reachable end.done"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-nested-process",
+    "old": "process P { job = A.run(); end done }",
+    "new": "process P { job = A.run();\n  metric quantile.Nested = quantile(0.5, case.Done)\n end done }"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-nested-configuration",
+    "old": "  cut C { include [A] }",
+    "new": "  cut C { include [A] }\n  configuration Plan { cut C; process P;\n  metric quantile.Nested = quantile(0.5, case.Done)\n }"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-nested-scenario",
+    "old": "  bounds { cases 1; live_tasks 1; clock 10min }",
+    "new": "  bounds { cases 1; live_tasks 1; clock 10min }\n  scenario Day {\n  metric quantile.Nested = quantile(0.5, case.Done)\n }"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-cohort-first",
+    "old": "  metric quantile.Median = quantile(0.5, case.Done)\n",
+    "new": "  metric cohort.Median = expected(count(case.Done)) / arrivals\n  metric quantile.Median = quantile(0.5, case.Done)\n"
+  },
+  {
+    "base": "qtl-static",
+    "broken": "qtl-static.broken-quantile-first",
+    "old": "  metric quantile.Median = quantile(0.5, case.Done)\n",
+    "new": "  metric quantile.Median = quantile(0.5, case.Done)\n  metric cohort.Median = expected(count(case.Done)) / arrivals\n"
+  },
+  {
+    "base": "qtl-pooling",
+    "broken": "qtl-pooling.broken-horizon",
+    "old": "horizon 6min",
+    "new": "horizon 4min"
+  },
+  {
+    "base": "qtl-denominator-horizon",
+    "broken": "qtl-denominator-horizon.broken-horizon",
+    "old": "horizon 2min",
+    "new": "horizon 1min"
+  },
+  {
+    "base": "qtl-censor-within",
+    "broken": "qtl-censor-within.broken-no-within",
+    "old": " within 3min",
+    "new": ""
+  },
+  {
+    "base": "qtl-objective",
+    "broken": "qtl-objective.broken-no-policy",
+    "old": "  policy fifo tie_by case_id\n",
+    "new": ""
+  },
+  {
+    "base": "qtl-pareto",
+    "broken": "qtl-pareto.broken-pricier-parallel",
+    "old": "rate Office.fastlong per_start 3",
+    "new": "rate Office.fastlong per_start 300"
+  },
+  {
+    "base": "qtl-missing-rate",
+    "broken": "qtl-missing-rate.broken-missing-rate",
+    "old": "; rate Office.long per_start 3",
+    "new": ""
+  },
+  {
+    "base": "qtl-null-objective",
+    "broken": "qtl-null-objective.broken-pass-only",
+    "old": "result nondet { pass, fail }",
+    "new": "result nondet { pass }"
+  },
+  {
+    "base": "qtl-interval-objective",
+    "broken": "qtl-interval-objective.broken-fifo",
+    "old": "  arrivals fixed [0min, 0min]",
+    "new": "  arrivals fixed [0min, 0min]\n  policy fifo tie_by case_id"
+  },
+  {
+    "base": "qtl-objective",
+    "broken": "qtl-objective.broken-quantile-hard",
+    "old": "hard { cohort.OnTimePerArrival >= 0.5 }",
+    "new": "hard { quantile.Median <= 0.5 }"
+  }
+]

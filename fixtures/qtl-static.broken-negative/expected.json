@@ -1,0 +1,10 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-PROB-0",
+      "severity": "error",
+      "message": "probability outside 0..1"
+    }
+  ]
+}

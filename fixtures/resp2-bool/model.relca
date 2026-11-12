@@ -1,0 +1,9 @@
+model BoolDuty version "0.2" {
+  type Flag = enum { off,on }
+  people [p]
+  observed case { r: bool = false }
+  responsible p for (r)
+  process Flow { end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify safety no_resource_overcommit
+}

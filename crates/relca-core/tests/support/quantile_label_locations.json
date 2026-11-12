@@ -1,0 +1,92 @@
+{
+  "basis": "Source-declared name/grain bijection and ADR 0049 quantile names; no old executable dependency. Source SHA is independently recomputed at runtime.",
+  "positions": [
+    {
+      "path": "/quality/properties/0/name",
+      "left": "Done",
+      "right": "Q9"
+    },
+    {
+      "path": "/actors/0/name",
+      "left": "A",
+      "right": "Desk"
+    },
+    {
+      "path": "/actors/0/boundary/value",
+      "left": "A",
+      "right": "Desk"
+    },
+    {
+      "path": "/actors/0/grain/value",
+      "left": null,
+      "right": "team"
+    },
+    {
+      "path": "/actors/0/grain/status",
+      "left": "default",
+      "right": "declared"
+    },
+    {
+      "path": "/agency/origin/0/actor",
+      "left": "A",
+      "right": "Desk"
+    },
+    {
+      "path": "/agency/viewpoints/retention/capabilities/0/capability",
+      "left": "A.run",
+      "right": "Desk.run"
+    },
+    {
+      "path": "/cut/include/0",
+      "left": "A",
+      "right": "Desk"
+    },
+    {
+      "path": "/assumptions/0/field",
+      "left": "A.boundary",
+      "right": "Desk.boundary"
+    },
+    {
+      "path": "/assumptions/0/value",
+      "left": "A",
+      "right": "Desk"
+    },
+    {
+      "path": "/assumptions/1/field",
+      "left": "A.executors",
+      "right": "Desk.executors"
+    },
+    {
+      "path": "/assumptions/2/field",
+      "left": "A.control",
+      "right": "Desk.control"
+    },
+    {
+      "path": "/assumptions/3/field",
+      "left": "A.permission",
+      "right": "Desk.permission"
+    }
+  ],
+  "quantile_positions": [
+    {
+      "path": "/quality/quantiles/0/name",
+      "left": "Median",
+      "right": "Z1"
+    },
+    {
+      "path": "/quality/quantiles/1/name",
+      "left": "MedianDone",
+      "right": "A0"
+    },
+    {
+      "path": "/quality/quantiles/0/property",
+      "left": "Done",
+      "right": "Q9"
+    },
+    {
+      "path": "/quality/quantiles/1/property",
+      "left": "Done",
+      "right": "Q9"
+    }
+  ]
+}

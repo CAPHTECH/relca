@@ -1,0 +1,20 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Conditional",
+        "p": "4/5",
+        "property": "Done",
+        "form": "reached_only",
+        "value": {
+          "lower": "4",
+          "upper": "4",
+          "basis": "per_case_relaxation",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

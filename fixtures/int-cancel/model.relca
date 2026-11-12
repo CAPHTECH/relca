@@ -1,0 +1,9 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  observed case { n: 0..3 = 0 }
+  actor Fast { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok }; cancel immediate } }
+  actor Slow { capacity 1; capability run() -> T { duration fixed 3min; result nondet { no }; cancel immediate; start { n += 1 }; writes n; finish { n += 1 } } }
+  process P { fork f { fast = Fast.run(); slow = Slow.run() }; join any f where result == ok tie by [fast,slow] remaining cancel_then_drain if none -> rejected; if n == 1 { end done } else { end drained }; end rejected }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+}

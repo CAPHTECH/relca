@@ -1,0 +1,7 @@
+# sov-atomic.broken-held
+
+Hand oracle (minutes), fixed before implementation. ADR 0040; design v0.2 §22.3.
+
+P14: Single edit 'allow: bool = true' → 'allow: bool = false'. sov-self-candidate with post as ADR 0035 atomic (writes [registered]; if allow == true { registered = true; result committed } else { result held }). approve0..2; fail End returned2/work2. pass: post2..3 by l1, allow true selects the commit branch, so commit3; filing at3: declined closes3, filed recheck3..4 by c1 responds4 <= deadline8 (pass/fail). End posted3/work3, route excluded; summary0..1. Static: candidates Approver.approve (guard) and Ledger.post itself (atomic, ADR 0040 U2); l1 reaches via Ledger.post and PostGrant, satisfied. Root satisfied (exit0). Broken allow false: post2..3 still finishes normally with held (the reject branch, ADR 0035 U5), registered stays false and no commit occurs, so no effect on any path: alternatives [], contest_response vacuous, static still satisfied (structural), root vacuous (exit5), End posted3/work3 (post work1 kept: a normal finish, not a requires refusal), summary0..0. A finish of a commits Capability is not a commit unless it takes the atomic commit branch (F07).
+
+Commit finish → same-tick filing/queue management → ordinary process/End → dispatch. Filing is nondeterministic, not a probability. Route work is excluded from the business terminal and included in occupation/overall work. A business End is not execution close. Existing responsibility/completion warnings are not errors. RED is not semantic verification.

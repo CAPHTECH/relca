@@ -1,0 +1,12 @@
+model ExplainResponse version "0.2" {
+  type T = enum { ok }
+  actor Worker { capacity 1; capability run() -> T { duration fixed 6min; result nondet { ok } } }
+  process Flow {
+    x = Worker.run()
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  cut Scope { question "example"; include [Worker] }
+  verify safety no_resource_overcommit
+  contract Controls { response case.received -> one_of(end.done) by 5min after case.received otherwise unresolved }
+}

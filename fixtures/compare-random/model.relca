@@ -1,0 +1,22 @@
+model CompareRandom version "0.2" {
+  type T = enum { first, second }
+  latent case { z:T ~ {first:0.5,second:0.5} }
+  observed case { y:T = second }
+  kernel K { * -> { 0.5:first; 0.5:second } }
+  actor A {
+    latent z:T ~ {first:0.5,second:0.5}
+    capacity 1
+    capability c() -> T { duration {1min:1}; outcomes kernel K; writes y }
+  }
+  process P { a = A.c(); if a == first { end yes } else { end no } }
+  process Q { a = A.c(); if a == first { end yes } else { end no } }
+  cut C { include [A] }
+  configuration Aplan { cut C; process P }
+  configuration Bplan { cut C; process Q }
+  arrivals fixed [0min]
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify probability reached z == first >= 0.5
+  verify probability reached A.z == first <= 1
+  verify probability reached y == first <= 1
+  simulation replications 4 seed 0 confidence 0.625
+}

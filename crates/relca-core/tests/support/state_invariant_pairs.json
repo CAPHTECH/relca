@@ -1,0 +1,374 @@
+[
+  {
+    "name": "sinv-approval",
+    "fault": "bypass",
+    "from": "if approval == fail { end returned } else {}; ",
+    "to": ""
+  },
+  {
+    "name": "sinv-rewrite",
+    "fault": "reapprove",
+    "from": "end posted",
+    "to": "again = Approver.approve(); end posted"
+  },
+  {
+    "name": "sinv-vacuous",
+    "fault": "register",
+    "from": "end returned",
+    "to": "p = Ledger.post(); end returned"
+  },
+  {
+    "name": "sinv-clock",
+    "fault": "truncated",
+    "from": "clock 10min",
+    "to": "clock 2min"
+  },
+  {
+    "name": "sinv-transient",
+    "fault": "same-time",
+    "from": "fixed 5min",
+    "to": "fixed 3min"
+  },
+  {
+    "name": "sinv-latent",
+    "fault": "policy",
+    "from": "if approval == fail",
+    "to": "if extraction_correct == true"
+  },
+  {
+    "name": "sinv-cut",
+    "fault": "excluded",
+    "from": "include [Approver, Ledger, Invoice]",
+    "to": "include [Approver, Ledger]; exclude Invoice reason \"outside\" loses \"difficulty\""
+  },
+  {
+    "name": "sinv-shared",
+    "fault": "no-guard",
+    "from": "requires posted == 0 else rejected; ",
+    "to": ""
+  },
+  {
+    "name": "sinv-ended-case",
+    "fault": "increment",
+    "from": "posted += 0",
+    "to": "posted += 1"
+  },
+  {
+    "name": "sinv-ended-clean",
+    "fault": "increment",
+    "from": "posted += 0",
+    "to": "posted += 1"
+  },
+  {
+    "name": "sinv-range",
+    "fault": "twice",
+    "from": "end done",
+    "to": "s = Desk.take(); end done"
+  },
+  {
+    "name": "sinv-initial",
+    "fault": "initial",
+    "from": "ok: bool = true",
+    "to": "ok: bool = false"
+  },
+  {
+    "name": "sinv-start-effect",
+    "fault": "order",
+    "from": "a = Desk.work(); b = Desk.post()",
+    "to": "b = Desk.post(); a = Desk.work()"
+  },
+  {
+    "name": "sinv-label",
+    "fault": "person",
+    "from": "grain document",
+    "to": "grain person"
+  },
+  {
+    "name": "sinv-mutation",
+    "fault": "no-invariant",
+    "from": "invariant registered -> approval == pass; ",
+    "to": ""
+  },
+  {
+    "name": "sinv-cancel",
+    "fault": "drain",
+    "from": "cancel cooperative ack_within 1min",
+    "to": "cancel forbidden_after_start"
+  },
+  {
+    "name": "sinv-simulation",
+    "fault": "initial",
+    "from": "ok: bool = true",
+    "to": "ok: bool = false"
+  },
+  {
+    "name": "sinv-sticky",
+    "fault": "bad",
+    "from": "r = Fix.fix()",
+    "to": "b = Bad.bad(); r = Fix.fix()"
+  },
+  {
+    "name": "sinv-rejected",
+    "fault": "zero-queue",
+    "from": "queue capacity 1",
+    "to": "queue capacity 0"
+  },
+  {
+    "name": "sinv-bool-type",
+    "fault": "optional",
+    "from": "ok: bool = true",
+    "to": "ok: optional<bool> = true"
+  },
+  {
+    "name": "sinv-grouping",
+    "fault": "nested",
+    "from": "(approval == pass)",
+    "to": "(registered -> approval == pass)"
+  },
+  {
+    "name": "sinv-static-enum",
+    "fault": "enum",
+    "from": "ok: bool = true",
+    "to": "ok: Truth = true"
+  },
+  {
+    "name": "sinv-static-binding-bare",
+    "fault": "binding-bare",
+    "from": "invariant registered",
+    "to": "invariant j"
+  },
+  {
+    "name": "sinv-static-binding-compare",
+    "fault": "binding-compare",
+    "from": "approval == pass }",
+    "to": "j == pass }"
+  },
+  {
+    "name": "sinv-static-unknown",
+    "fault": "unknown",
+    "from": "invariant registered",
+    "to": "invariant absent_name"
+  },
+  {
+    "name": "sinv-static-chained",
+    "fault": "chained",
+    "from": "invariant registered -> approval == pass",
+    "to": "invariant registered -> approval == pass -> registered"
+  },
+  {
+    "name": "sinv-static-terminal",
+    "fault": "terminal",
+    "from": "invariant registered",
+    "to": "invariant end.posted"
+  },
+  {
+    "name": "sinv-static-receipt",
+    "fault": "receipt",
+    "from": "invariant registered",
+    "to": "invariant case.received"
+  },
+  {
+    "name": "sinv-static-event-bare",
+    "fault": "event-bare",
+    "from": "-> ok == true",
+    "to": "-> ok"
+  },
+  {
+    "name": "sinv-static-event-nested",
+    "fault": "event-nested",
+    "from": "-> ok == true",
+    "to": "-> (ok -> ok == true)"
+  },
+  {
+    "name": "sinv-static-event-chained",
+    "fault": "event-chained",
+    "from": "-> ok == true",
+    "to": "-> ok == true -> ok == true"
+  },
+  {
+    "name": "sinv-static-operand",
+    "fault": "operand",
+    "from": "invariant ok",
+    "to": "invariant ok =="
+  },
+  {
+    "name": "sinv-static-delimiter",
+    "fault": "delimiter",
+    "from": "invariant ok",
+    "to": "invariant (ok"
+  },
+  {
+    "name": "sinv-static-mixed",
+    "fault": "mixed",
+    "from": "invariant ok",
+    "to": "invariant ok && ok || ok"
+  },
+  {
+    "name": "sinv-static-qualified-name",
+    "fault": "qualified-name",
+    "from": "invariant registered",
+    "to": "invariant Absent.flag == true"
+  },
+  {
+    "name": "sinv-static-qualified-field",
+    "fault": "qualified-field",
+    "from": "invariant registered",
+    "to": "invariant Ledger.absent == true"
+  },
+  {
+    "name": "sinv-static-always",
+    "fault": "always",
+    "from": "invariant ok",
+    "to": "invariant always ok"
+  },
+  {
+    "name": "sinv-static-eventually",
+    "fault": "eventually",
+    "from": "invariant ok",
+    "to": "invariant eventually ok"
+  },
+  {
+    "name": "sinv-static-until",
+    "fault": "until",
+    "from": "invariant ok",
+    "to": "invariant until ok"
+  },
+  {
+    "name": "sinv-static-forall",
+    "fault": "forall",
+    "from": "invariant ok",
+    "to": "invariant forall ok"
+  },
+  {
+    "name": "sinv-static-exists",
+    "fault": "exists",
+    "from": "invariant ok",
+    "to": "invariant exists ok"
+  },
+  {
+    "name": "sinv-static-clock",
+    "fault": "clock",
+    "from": "invariant ok",
+    "to": "invariant clock ok"
+  },
+  {
+    "name": "sinv-static-task",
+    "fault": "task",
+    "from": "invariant ok",
+    "to": "invariant task ok"
+  },
+  {
+    "name": "sinv-static-queue",
+    "fault": "queue",
+    "from": "invariant ok",
+    "to": "invariant queue ok"
+  },
+  {
+    "name": "sinv-static-resource",
+    "fault": "resource",
+    "from": "invariant ok",
+    "to": "invariant resource ok"
+  },
+  {
+    "name": "sinv-static-obligation",
+    "fault": "obligation",
+    "from": "invariant ok",
+    "to": "invariant obligation ok"
+  },
+  {
+    "name": "sinv-static-history",
+    "fault": "history",
+    "from": "invariant ok",
+    "to": "invariant history ok"
+  },
+  {
+    "name": "sinv-static-case-id",
+    "fault": "case-id",
+    "from": "invariant ok",
+    "to": "invariant case.id"
+  },
+  {
+    "name": "sinv-static-qualified-bare",
+    "fault": "qualified-bare",
+    "from": "invariant Ledger.flag == true",
+    "to": "invariant Ledger.flag"
+  },
+  {
+    "name": "sinv-static-collision",
+    "fault": "collision",
+    "from": "approvalV = Approver",
+    "to": "j = Approver"
+  },
+  {
+    "name": "sinv-static-integer",
+    "fault": "bare",
+    "from": "invariant count <= 1",
+    "to": "invariant count"
+  },
+  {
+    "name": "sinv-integer-collision",
+    "fault": "alias",
+    "from": "approvalV = Approver",
+    "to": "j = Approver"
+  },
+  {
+    "name": "sinv-conjunction",
+    "fault": "consequent",
+    "from": "&& receipt == pass",
+    "to": "&& receipt == none"
+  },
+  {
+    "name": "sinv-alias",
+    "fault": "other-writer",
+    "from": "capability other() -> V { duration fixed 1min; result nondet { pass }; writes approval }",
+    "to": "capability other() -> V { duration fixed 1min; result nondet { pass } }"
+  },
+  {
+    "name": "sinv-future",
+    "fault": "received",
+    "from": "clock 4min",
+    "to": "clock 5min"
+  },
+  {
+    "name": "sinv-seed",
+    "fault": "nondet",
+    "from": "flag: bool = true",
+    "to": "flag: bool"
+  },
+  {
+    "name": "sinv-seed-mass",
+    "fault": "positive-bad",
+    "from": "{ bad: 0, good: 1 }",
+    "to": "{ bad: 0.5, good: 0.5 }"
+  },
+  {
+    "name": "sinv-bundle",
+    "fault": "false",
+    "from": "b = true",
+    "to": "b = false"
+  },
+  {
+    "name": "sinv-no-prune",
+    "fault": "second",
+    "from": "end done",
+    "to": "s = Fix.fix(); end done"
+  },
+  {
+    "name": "sinv-compare-exhaustive",
+    "fault": "bad-plan",
+    "from": "process BFlow { r = Desk.good()",
+    "to": "process BFlow { r = Desk.bad()"
+  },
+  {
+    "name": "sinv-compare-simulation",
+    "fault": "bad-plan",
+    "from": "process BFlow { r = Desk.good()",
+    "to": "process BFlow { r = Desk.bad()"
+  },
+  {
+    "name": "sinv-preserve",
+    "fault": "vacuous",
+    "from": "process ToFlow { j = Approver.approve(); if approval == fail { end returned } else {}; p = Ledger.post(); end posted }",
+    "to": "process ToFlow { j = Approver.approve(); end returned }"
+  }
+]

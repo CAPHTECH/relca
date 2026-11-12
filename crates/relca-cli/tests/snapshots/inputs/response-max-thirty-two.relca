@@ -1,0 +1,14 @@
+model Correlated version "0.2" {
+  type V = enum { pass, fail }
+  latent case { bad: bool ~ { true:0.1, false:0.9 } }
+  kernel K given [bad] { true -> { 1.0: fail }; false -> { 1.0: pass } }
+  actor Check { capacity 1; capability run() -> V { duration fixed 1min;
+    outcomes kernel K; kernel_reads latent [bad]; cancel forbidden_after_start } }
+  process Flow { v = Check.run() response_loss none
+    retry max_attempts 32 when result [fail] backoff fixed 0min exhausted end failed;
+    if v == pass { end ok } else { end failed } }
+  cut C { include [Check] }
+  bounds { cases 1; live_tasks 2; clock 40min }
+  verify safety no_resource_overcommit
+  verify probability reached end.failed <= 0.1
+}

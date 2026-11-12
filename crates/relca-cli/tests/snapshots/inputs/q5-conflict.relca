@@ -1,0 +1,14 @@
+model Conflict version "0.2" {
+  type R = enum { committed, conflict } type H = enum { free, taken }
+  actor A { capacity 2; state holder: H = free
+    capability claim() -> R { duration fixed 2min; result nondet { committed };
+      version_check [holder] else conflict resolve priority descending; commits;
+      writes holder; finish { holder = taken } } }
+  process Flow { r = A.claim(); if r == committed { end won } else { end lost } }
+  cut C { include [A] } bounds { cases 2; live_tasks 2; clock 20min }
+  arrivals fixed [0min, 0min] case_priority fixed [0, 9]
+  policy fifo tie_by case_id
+  metrics { window 20min; currency "JPY"; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.won >= 0
+}

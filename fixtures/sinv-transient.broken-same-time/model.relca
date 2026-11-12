@@ -1,0 +1,13 @@
+model StateInvariant version "0.2" {
+  type V = enum { pass }
+  observed case { po: optional<V>; receipt: optional<V> }
+  actor Clerk { capacity 2
+    capability po() -> V { duration fixed 3min; result nondet { pass }; writes po }
+    capability receipt() -> V { duration fixed 3min; result nondet { pass }; writes receipt }
+  }
+  process Flow { fork f { a = Clerk.po(); b = Clerk.receipt() }; join all f; end done }
+  cut C { include [Clerk] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+
+  contract Controls { invariant po == pass -> receipt == pass }
+}

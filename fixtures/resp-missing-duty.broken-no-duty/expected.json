@@ -1,0 +1,7 @@
+{
+  "verdict":"satisfied","bounds":{"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}],
+  "responsibilities":[],"contest_paths":[],"diagnostics":[{"code":"W-RESP-0","severity":"warning"}],
+  "absent_diagnostics":["W-RESP-1","W-RESP-2","W-CONTEST-0","W-DEADLOCK-0"]
+}

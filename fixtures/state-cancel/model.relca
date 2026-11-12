@@ -1,0 +1,17 @@
+model StateCancel version "0.2" {
+  type T = enum { pass, ok }
+  observed case { changed: bool = false }
+  actor Fast { capacity 1; capability win() -> T { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { capacity 1; capability work() -> T { duration fixed 5min; result nondet { ok }; writes changed; finish { changed = true }; cancel cooperative ack_within 1min } }
+  actor Probe { capacity 1; capability check() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow {
+    fork f { fast = Fast.win(); slow = Slow.work() }
+    join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected
+    probe = Probe.check()
+    end done
+    end rejected
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { invariant Probe.check.finish -> changed == false }
+}

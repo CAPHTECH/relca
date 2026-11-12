@@ -1,0 +1,58 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 5,
+        "max": 5
+      },
+      "result_at": {
+        "min": 2,
+        "max": 2
+      }
+    }
+  ],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "reachable end.done",
+      "verdict": "satisfied"
+    }
+  ],
+  "metrics": {
+    "rules": "business-metrics-p1-resource-1",
+    "resources": [
+      {
+        "resource": "R",
+        "capacity": 1,
+        "occupancy_time": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        },
+        "peak_units": {
+          "min": "1",
+          "max": "1",
+          "reason": null
+        },
+        "utilization": {
+          "min": "3/10",
+          "max": "3/10",
+          "reason": null
+        }
+      }
+    ]
+  }
+}

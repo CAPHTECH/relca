@@ -1,0 +1,424 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 30,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        },
+        {
+          "case_id": 2,
+          "arrival": 4,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        },
+        {
+          "case_id": 3,
+          "arrival": 8,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 3,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 4,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 7,
+            "max": 7
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 3,
+      "arrival": 8,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 11,
+            "max": 11
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "scenario": {
+    "name": "Light",
+    "arrivals": {
+      "form": "fixed_every",
+      "every": 4,
+      "from": 0,
+      "until": 12,
+      "count": 3
+    },
+    "horizon": null,
+    "drain": {
+      "from": 8,
+      "until": "all_terminal_or_clock"
+    },
+    "aggregation": {
+      "from": 0,
+      "until": "all_terminal_or_clock",
+      "observed_until": {
+        "min": "11",
+        "max": "11",
+        "reason": null
+      }
+    },
+    "warmup": 0
+  },
+  "metrics": {
+    "status": "complete",
+    "observation_scope": "until_execution_stop_no_extra_drain",
+    "overall": {
+      "counts": {
+        "offered": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "received": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "completed": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "unfinished": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "deadlocked": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "rejected": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "not_arrived": {
+          "stats": {
+            "min": "0",
+            "max": "0",
+            "reason": null
+          },
+          "observed_total": null
+        }
+      },
+      "observed_until": {
+        "min": "11",
+        "max": "11",
+        "reason": null
+      },
+      "work": {
+        "min": "9",
+        "max": "9",
+        "reason": null
+      },
+      "occupancy_cost": {
+        "min": "9",
+        "max": "9",
+        "reason": null
+      },
+      "start_cost": {
+        "min": "0",
+        "max": "0",
+        "reason": null
+      },
+      "observed_cost_total": {
+        "min": "9",
+        "max": "9",
+        "reason": null
+      },
+      "observed_cost_per_arrival": {
+        "min": "3",
+        "max": "3",
+        "reason": null
+      }
+    },
+    "actors": [
+      {
+        "actor": "A",
+        "work": {
+          "min": "9",
+          "max": "9",
+          "reason": null
+        },
+        "utilization": {
+          "min": "3/10",
+          "max": "3/10",
+          "reason": null
+        },
+        "occupancy_cost": {
+          "min": "9",
+          "max": "9",
+          "reason": null
+        }
+      }
+    ],
+    "capabilities": [
+      {
+        "capability": "A.run",
+        "starts": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        },
+        "start_cost": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        }
+      }
+    ],
+    "terminals": [
+      {
+        "end": "done",
+        "count": {
+          "stats": {
+            "min": "3",
+            "max": "3",
+            "reason": null
+          },
+          "observed_total": null
+        },
+        "cost_per_case": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        }
+      }
+    ],
+    "cases": [
+      {
+        "case_id": 1,
+        "arrival": 0,
+        "counts": {
+          "unfinished": {
+            "stats": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "observed_total": null
+          }
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            },
+            "cost_per_case": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null
+          }
+        ],
+        "work": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        }
+      },
+      {
+        "case_id": 2,
+        "arrival": 4,
+        "counts": {
+          "unfinished": {
+            "stats": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "observed_total": null
+          }
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            },
+            "cost_per_case": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null
+          }
+        ],
+        "work": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        }
+      },
+      {
+        "case_id": 3,
+        "arrival": 8,
+        "counts": {
+          "unfinished": {
+            "stats": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            },
+            "observed_total": null
+          }
+        },
+        "terminals": [
+          {
+            "kind": "end",
+            "end": "done",
+            "lead_time": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            },
+            "cost_per_case": {
+              "min": "3",
+              "max": "3",
+              "reason": null
+            }
+          },
+          {
+            "kind": "rejected",
+            "end": null
+          }
+        ],
+        "work": {
+          "min": "3",
+          "max": "3",
+          "reason": null
+        }
+      }
+    ]
+  }
+}

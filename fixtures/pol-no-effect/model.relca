@@ -1,0 +1,13 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  people [c1,c2]
+  actor Clerk { capacity 2;  capability work() -> T {  duration fixed 3min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { a = Clerk.work(); end done }
+  cut C { include [Clerk] }
+  bounds { cases 2; live_tasks 8; clock 20min }
+  arrivals fixed [0min,1min]
+  policy fifo tie_by case_id assign first_idle
+  simulation replications 4 seed 0 confidence 0.5
+  verify reachable end.done
+}

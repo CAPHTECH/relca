@@ -1,0 +1,1486 @@
+[
+  {
+    "name": "scn-clock-priority",
+    "pair": "P14",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-clock-priority.broken-short-clock",
+    "pair": "P14",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-compare",
+    "pair": "P07",
+    "kind": "runtime",
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-compare-cutoff",
+    "pair": "H-PROJECTION",
+    "kind": "runtime",
+    "invocation": {
+      "command": "compare",
+      "scenario": "Day",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    }
+  },
+  {
+    "name": "scn-compare-cutoff.broken-full-drain",
+    "pair": "H-PROJECTION",
+    "kind": "runtime",
+    "invocation": {
+      "command": "compare",
+      "scenario": "Day",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    }
+  },
+  {
+    "name": "scn-compare-many",
+    "pair": "P13/U14",
+    "kind": "runtime",
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-compare-many.broken-many",
+    "pair": "P13/U14",
+    "kind": "static",
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Light,Busy"
+    }
+  },
+  {
+    "name": "scn-compare.broken-busy",
+    "pair": "P07",
+    "kind": "runtime",
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-cut-record",
+    "pair": "P22",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-cut-record.broken-record",
+    "pair": "P22",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-diff",
+    "pair": "P18",
+    "kind": "runtime",
+    "invocation": {
+      "command": "diff",
+      "from": "Slow",
+      "to": "Fast",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-diff-cutoff",
+    "pair": "H-PROJECTION",
+    "kind": "runtime",
+    "invocation": {
+      "command": "diff",
+      "scenario": "Day",
+      "from": "Slow",
+      "to": "Fast"
+    }
+  },
+  {
+    "name": "scn-diff-cutoff.broken-full-drain",
+    "pair": "H-PROJECTION",
+    "kind": "runtime",
+    "invocation": {
+      "command": "diff",
+      "scenario": "Day",
+      "from": "Slow",
+      "to": "Fast"
+    }
+  },
+  {
+    "name": "scn-diff.broken-busy",
+    "pair": "P18",
+    "kind": "runtime",
+    "invocation": {
+      "command": "diff",
+      "from": "Slow",
+      "to": "Fast",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-direct-every",
+    "pair": "P21",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check"
+    }
+  },
+  {
+    "name": "scn-direct-every.broken-end",
+    "pair": "P21",
+    "kind": "static",
+    "invocation": {
+      "command": "check"
+    }
+  },
+  {
+    "name": "scn-drain",
+    "pair": "P05",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-drain.broken-short-horizon",
+    "pair": "P05",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-arrivals",
+    "pair": "P13/U6",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-arrivals.broken-both",
+    "pair": "P13/U6",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-bounds",
+    "pair": "P13/U6",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-bounds.broken-both",
+    "pair": "P13/U6",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-queue",
+    "pair": "P13/U6",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-queue.broken-both",
+    "pair": "P13/U6",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-simulation",
+    "pair": "P13/U6",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-duplicate-common-simulation.broken-both",
+    "pair": "P13/U6",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-equivalent",
+    "pair": "P11",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-equivalent.broken-first",
+    "pair": "P11",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-explain",
+    "pair": "P24",
+    "kind": "runtime",
+    "invocation": {
+      "command": "explain",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-explain.broken-later-deadline",
+    "pair": "P24",
+    "kind": "runtime",
+    "invocation": {
+      "command": "explain",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-fixed-every",
+    "pair": "P01",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-fixed-every.broken-end",
+    "pair": "P01",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-future-arrival",
+    "pair": "P16",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-future-arrival.broken-after",
+    "pair": "P16",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-horizon",
+    "pair": "P03",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-horizon-equal-clock",
+    "pair": "P03/P14",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-horizon-equal-clock.broken-no-horizon",
+    "pair": "P03/P14",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-horizon.broken-earlier",
+    "pair": "P03",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-inclusive",
+    "pair": "P15",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-inclusive.broken-earlier",
+    "pair": "P15",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-label",
+    "pair": "P10",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-label.broken-renamed",
+    "pair": "P10",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "BusyDay"
+    }
+  },
+  {
+    "name": "scn-missing-price",
+    "pair": "P23",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-missing-price.broken-unset",
+    "pair": "P23",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-mutate",
+    "pair": "P25",
+    "kind": "mutation",
+    "invocation": {
+      "command": "mutate",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-mutate.broken-no-selector",
+    "pair": "P25",
+    "kind": "mutation",
+    "invocation": {
+      "command": "mutate"
+    }
+  },
+  {
+    "name": "scn-no-simulation",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-no-simulation.broken-missing",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-obligation",
+    "pair": "P04",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-obligation.broken-short",
+    "pair": "P04",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-probability-mass",
+    "pair": "H34",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-probability-mass.broken-full-window",
+    "pair": "H34",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-random-name",
+    "pair": "P27",
+    "kind": "simulation",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "X"
+    }
+  },
+  {
+    "name": "scn-random-name.broken-renamed",
+    "pair": "P27",
+    "kind": "simulation",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Y"
+    }
+  },
+  {
+    "name": "scn-rejected-not-cutoff",
+    "pair": "H-REJECT",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-rejected-not-cutoff.broken-admit",
+    "pair": "H-REJECT",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-route",
+    "pair": "P12",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "One"
+    }
+  },
+  {
+    "name": "scn-route.broken-no-scenario",
+    "pair": "P12",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check"
+    }
+  },
+  {
+    "name": "scn-select",
+    "pair": "P02",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-select-required-check",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-select-required-check.broken-missing",
+    "pair": "P13/U7",
+    "kind": "static",
+    "invocation": {
+      "command": "check"
+    }
+  },
+  {
+    "name": "scn-select-required-compare",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "compare",
+      "scenario": "Light",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    }
+  },
+  {
+    "name": "scn-select-required-compare.broken-missing",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "compare",
+      "plans": [
+        "Slow",
+        "Fast"
+      ],
+      "mode": "exhaustive"
+    }
+  },
+  {
+    "name": "scn-select-required-diff",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "diff",
+      "scenario": "Light",
+      "from": "Slow",
+      "to": "Fast"
+    }
+  },
+  {
+    "name": "scn-select-required-diff.broken-missing",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "diff",
+      "from": "Slow",
+      "to": "Fast"
+    }
+  },
+  {
+    "name": "scn-select-required-explain",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "explain",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-select-required-explain.broken-missing",
+    "pair": "P13/U7",
+    "kind": "static",
+    "invocation": {
+      "command": "explain"
+    }
+  },
+  {
+    "name": "scn-select-required-mutate",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "mutate",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-select-required-mutate.broken-missing",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "mutate"
+    }
+  },
+  {
+    "name": "scn-select-required-simulate",
+    "pair": "P13/U7",
+    "kind": "invocation",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-select-required-simulate.broken-missing",
+    "pair": "P13/U7",
+    "kind": "static",
+    "invocation": {
+      "command": "simulate"
+    }
+  },
+  {
+    "name": "scn-select.broken-busy",
+    "pair": "P02",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-set-limit",
+    "pair": "P28",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Small"
+    }
+  },
+  {
+    "name": "scn-set-limit.broken-large65",
+    "pair": "P28",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Small"
+    }
+  },
+  {
+    "name": "scn-shared",
+    "pair": "P08",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-shared.broken-both",
+    "pair": "P08",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-sim",
+    "pair": "P06",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-sim-clock30",
+    "pair": "P06",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-sim-clock30.broken-earlier",
+    "pair": "P06",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-sim.broken-no-horizon",
+    "pair": "P06",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-simulation-fifo",
+    "pair": "P26",
+    "kind": "runtime",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-simulation-fifo.broken-no-policy",
+    "pair": "P26",
+    "kind": "simulation_abort",
+    "invocation": {
+      "command": "simulate",
+      "scenario": "Busy"
+    }
+  },
+  {
+    "name": "scn-static-actor",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-actor.broken-actor",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-analysis",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-analysis.broken-analysis",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-bounds-live-old",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-bounds-live-old.broken-bounds-live-old",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-bounds-queue",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-bounds-queue.broken-bounds-queue",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-calendar",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-calendar.broken-calendar",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-case-mix",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-case-mix.broken-case-mix",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-config-scenario",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "configuration": "Slow",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-config-scenario.broken-config-scenario",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "configuration": "Slow",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-configuration",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-configuration.broken-configuration",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-contract",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-contract.broken-contract",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-cut",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-cut.broken-cut",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-direct-horizon",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-direct-horizon.broken-direct-horizon",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-arrivals",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-arrivals.broken-duplicate-arrivals",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-bounds",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-bounds.broken-duplicate-bounds",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-name",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-name.broken-duplicate-name",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-simulation",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-duplicate-simulation.broken-duplicate-simulation",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-equal-interval",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-equal-interval.broken-equal-interval",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-expansion",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-expansion.broken-10001",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-horizon-zero",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-horizon-zero.broken-horizon-zero",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-input",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-input.broken-input",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-left-open",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-left-open.broken-left-open",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-metrics",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-metrics.broken-metrics",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-brace",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-brace.broken-missing-brace",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-duration",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-duration.broken-missing-duration",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-during",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-during.broken-missing-during",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-name",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-missing-name.broken-missing-name",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-poisson",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-poisson.broken-poisson",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-process",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-process.broken-process",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-queue-old",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-queue-old.broken-queue-old",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-resources",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-resources.broken-resources",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-reverse-interval",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-reverse-interval.broken-reverse-interval",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-right-closed",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-right-closed.broken-right-closed",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-step-zero",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-step-zero.broken-step-zero",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-stop",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-stop.broken-stop",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-verify",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-verify.broken-verify",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-warmup",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-static-warmup.broken-warmup",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-unknown",
+    "pair": "P13",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-unknown.broken-name",
+    "pair": "P13",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Nope"
+    }
+  },
+  {
+    "name": "scn-unselected",
+    "pair": "P09",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-unselected-window",
+    "pair": "P19",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-unselected-window.broken-spare-clock",
+    "pair": "P19",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-unselected.broken-spare",
+    "pair": "P09",
+    "kind": "static",
+    "invocation": {
+      "command": "check",
+      "scenario": "Light"
+    }
+  },
+  {
+    "name": "scn-within",
+    "pair": "P17",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  },
+  {
+    "name": "scn-within.broken-long-window",
+    "pair": "P17",
+    "kind": "runtime",
+    "invocation": {
+      "command": "check",
+      "scenario": "Day"
+    }
+  }
+]

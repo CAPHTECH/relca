@@ -1,0 +1,14 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "from": {
+    "report": {
+      "diagnostics": []
+    }
+  },
+  "to": {
+    "report": {
+      "diagnostics": []
+    }
+  }
+}

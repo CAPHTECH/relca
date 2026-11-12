@@ -1,0 +1,19 @@
+model ConfigurationUnreachable version "0.2" {
+  type T = enum { pass }
+  actor Gate { capacity 1; capability pick() -> T { duration fixed 1min; result nondet { pass } } }
+  actor Extra { capacity 1; capability run() -> T { duration fixed 2min; result nondet { pass } } }
+  process Before { x = Gate.pick(); end done }
+  process After {
+    x = Gate.pick()
+    if x == pass { end done } else { end done }
+  }
+  cut C { include [Gate, Extra] }
+  configuration AsIs { cut C; process Before }
+  configuration ToBe { cut C; process After; intent {
+    add Extra reason "fallback actor"
+    add Extra.run reason "fallback step"
+  } }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

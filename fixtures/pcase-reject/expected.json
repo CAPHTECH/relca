@@ -1,0 +1,27 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "cases": [
+        {
+          "case_id": 1,
+          "probability": {
+            "min": "1/5",
+            "max": "1/5"
+          }
+        },
+        {
+          "case_id": 2,
+          "probability": {
+            "min": "0",
+            "max": "0"
+          }
+        }
+      ]
+    }
+  ]
+}

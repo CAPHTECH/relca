@@ -1,0 +1,11 @@
+model Records version "0.2" {
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: Entry = Entry { confidence = high } }
+type Ack = enum { done, refused }
+actor Seed { capacity 1; capability seed() -> Entry { duration fixed 1min; result nondet { Entry { confidence = high } } } }
+process Flow { e = Seed.seed(); end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify probability reached entry.confidence == high >= 1
+}

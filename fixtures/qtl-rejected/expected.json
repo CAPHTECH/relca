@@ -1,0 +1,46 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Median",
+        "p": "1/2",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "3",
+          "upper": "3",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P95",
+        "p": "19/20",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": null,
+          "upper": null,
+          "basis": null,
+          "reason": "beyond_reached_mass"
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "P95Done",
+        "p": "19/20",
+        "property": "Done",
+        "form": "reached_only",
+        "value": {
+          "lower": "3",
+          "upper": "3",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor Desk {
+    capacity 1
+    state handled: 0..2 = 0
+    capability take() -> R {
+      duration fixed 2min
+      result nondet { ok }
+      writes handled
+      finish { handled += 1 }
+    }
+  }
+  process P { a = Desk.take(); b = Desk.take(); c = Desk.take(); end done }
+  cut C { include [Desk] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  contract K { invariant Desk.take.finish -> Desk.handled >= 1 }
+  verify reachable end.done
+}

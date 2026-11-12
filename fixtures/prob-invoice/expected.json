@@ -1,0 +1,16 @@
+{
+ "verdict":"satisfied","mismatch":null,"differences":[{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Clerk.match_po","to":["fork"]},{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Clerk.match_receipt","to":["fork"]}],"diagnostics":[{"code":"W-DIFF-1","message":"computed change for time Clerk.match_po has no intent","severity":"warning","span":null},{"code":"W-DIFF-1","message":"computed change for time Clerk.match_receipt has no intent","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for time Clerk.match_po has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for time Clerk.match_receipt has no preserve, override, maintain or loses annotation","severity":"warning","span":null}],
+ "absent_diagnostics":["W-DIFF-2","E-CMP-0","E-DIFF-0"],
+ "from":{"configuration":"AsIs","report":{
+  "verdict":"satisfied","mode":"exhaustive","unit":"min","cut":{"name":"InvoiceCut"},"bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},"diagnostics":[{"code":"W-LIN-2","severity":"warning"},{"code":"W-UNREACH-0","severity":"warning","span":{"end":2589,"start":2416}}],
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"probability reached #1","verdict":"satisfied","probability":{"min":"93/125000","max":"93/125000"}}],
+  "terminals":[{"end":"posted","elapsed":{"min":17,"max":17},"work":{"min":17,"max":17},"result_at":null,"probability":{"min":"122593/125000","max":"122593/125000"}},{"end":"returned","elapsed":{"min":14,"max":16},"work":{"min":14,"max":16},"result_at":null,"probability":{"min":"2407/125000","max":"2407/125000"}}],
+  "absent_diagnostics":["W-CUT-0","W-BUDGET-0","W-DEADLOCK-0","E-PROB-0","U-SEM-0"]}},
+ "to":{"configuration":"ToBeP","report":{
+  "verdict":"satisfied","mode":"exhaustive","unit":"min","cut":{"name":"InvoiceCut"},"bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},"diagnostics":[{"code":"W-LIN-2","severity":"warning"},{"code":"W-UNREACH-0","severity":"warning","span":{"end":2589,"start":2416}}],
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"probability reached #1","verdict":"satisfied","probability":{"min":"93/125000","max":"93/125000"}}],
+  "terminals":[{"end":"posted","elapsed":{"min":14,"max":14},"work":{"min":17,"max":17},"result_at":null,"probability":{"min":"122593/125000","max":"122593/125000"}},{"end":"returned","elapsed":{"min":11,"max":13},"work":{"min":14,"max":16},"result_at":null,"probability":{"min":"2407/125000","max":"2407/125000"}}],
+  "absent_diagnostics":["W-CUT-0","W-BUDGET-0","W-DEADLOCK-0","E-PROB-0","U-SEM-0"]}},
+ "properties":[{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"},{"id":"probability reached #1","from":"satisfied","to":"satisfied"}],
+ "terminals":[{"end":"posted","from":{"elapsed":{"min":17,"max":17},"work":{"min":17,"max":17},"result_at":null},"to":{"elapsed":{"min":14,"max":14},"work":{"min":17,"max":17},"result_at":null}},{"end":"returned","from":{"elapsed":{"min":14,"max":16},"work":{"min":14,"max":16},"result_at":null},"to":{"elapsed":{"min":11,"max":13},"work":{"min":14,"max":16},"result_at":null}}]
+}

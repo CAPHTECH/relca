@@ -1,0 +1,3 @@
+model OldModel version "0.2" {
+  compare A B
+}

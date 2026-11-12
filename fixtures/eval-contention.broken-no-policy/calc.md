@@ -1,0 +1,118 @@
+# eval-contention.broken-no-policy — ADR 0047 T02
+
+Hand oracle, authored before implementation. Stage C RED is not verified semantics.
+
+Each fixed One case may finish3 or6. Casewise [0,1] summed/2 is [0,1], not exact1/2, so hard I. Two stays S; among=[Two].
+
+Expected root: inconclusive.
+Closed evaluation:
+
+```json
+{
+  "rules": "compare-evaluation-p1-1",
+  "declared": {
+    "plans": [
+      "One",
+      "Two"
+    ],
+    "under": null,
+    "scenario": null,
+    "cut": "C"
+  },
+  "hard": [
+    {
+      "constraint": "cohort.OnTimePerArrival >= 1/2",
+      "cohort": "OnTimePerArrival",
+      "op": ">=",
+      "bound": "1/2",
+      "values": [
+        {
+          "configuration": "One",
+          "verdict": "inconclusive",
+          "basis": "per_case_relaxation",
+          "interval": {
+            "lower": "0",
+            "upper": "1"
+          },
+          "reason": null,
+          "source_reason": null
+        },
+        {
+          "configuration": "Two",
+          "verdict": "satisfied",
+          "basis": "exact",
+          "interval": {
+            "lower": "1",
+            "upper": "1"
+          },
+          "reason": null,
+          "source_reason": null
+        }
+      ]
+    }
+  ],
+  "plans": [
+    {
+      "configuration": "One",
+      "verify_verdict": "satisfied",
+      "hard_verdict": "inconclusive",
+      "status": "undetermined",
+      "reasons": [
+        {
+          "kind": "hard",
+          "constraint": "cohort.OnTimePerArrival >= 1/2",
+          "verdict": "inconclusive",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "configuration": "Two",
+      "verify_verdict": "satisfied",
+      "hard_verdict": "satisfied",
+      "status": "admissible",
+      "reasons": []
+    }
+  ],
+  "objectives": [
+    {
+      "objective": "minimize metrics.overall.work",
+      "direction": "minimize",
+      "values": [
+        {
+          "configuration": "One",
+          "lower": "6",
+          "upper": "6",
+          "basis": "path_range",
+          "reason": null
+        },
+        {
+          "configuration": "Two",
+          "lower": "8",
+          "upper": "8",
+          "basis": "path_range",
+          "reason": null
+        }
+      ]
+    }
+  ],
+  "pareto": {
+    "status": "computed",
+    "reason": null,
+    "among": [
+      "Two"
+    ],
+    "non_dominated": [
+      "Two"
+    ],
+    "dominated": [],
+    "undetermined_pairs": [],
+    "not_evaluated": [
+      {
+        "configuration": "One",
+        "status": "undetermined"
+      }
+    ]
+  }
+}
+```

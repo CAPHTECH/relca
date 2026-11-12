@@ -1,0 +1,15 @@
+model StateObservedRange version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok }
+  observed case { route: optional<Difficulty> }
+  actor Picker { capacity 1; capability choose() -> Difficulty { duration fixed 1min; result nondet { routine, difficult }; writes route; finish { route = routine } } }
+  actor Fast { capacity 1; capability work() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Slow { capacity 1; capability work() -> T { duration fixed 4min; result nondet { ok } } }
+  process Flow {
+    choice = Picker.choose()
+    if route == difficult { s = Slow.work() } else { f = Fast.work() }
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

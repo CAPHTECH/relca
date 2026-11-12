@@ -1,0 +1,15 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-POL-LATENT",
+      "severity": "error"
+    }
+  ],
+  "properties": [],
+  "terminals": [],
+  "agency": null,
+  "bounds": {
+    "truncated": null
+  }
+}

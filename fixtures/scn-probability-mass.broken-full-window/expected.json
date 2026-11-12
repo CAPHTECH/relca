@@ -1,0 +1,55 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "scenario": {
+    "horizon": 3
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 1,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 1,
+            "max": 3
+          },
+          "work": {
+            "min": 1,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

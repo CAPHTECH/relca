@@ -1,0 +1,12 @@
+{
+  "verdict": "satisfied", "mode": "exhaustive", "unit": "min", "cut": {"name": "C"},
+  "bounds": {"cases": 1, "live_tasks": 2, "clock": 20, "truncated": false},
+  "properties": [
+    {"id": "safety no_resource_overcommit", "verdict": "satisfied"},
+    {"id": "probability reached #1", "verdict": "satisfied", "probability": {"min": "1/10", "max": "1/10"}},
+    {"id": "probability reached #2", "verdict": "satisfied", "probability": {"min": "1/10", "max": "1/10"}},
+    {"id": "probability reached #3", "verdict": "satisfied", "probability": {"min": "1/10", "max": "1/10"}}
+  ],
+  "terminals": [{"end": "done", "elapsed": {"min": 2, "max": 2}, "work": {"min": 2, "max": 2}, "result_at": null, "probability": {"min": "1", "max": "1"}}],
+  "absent_diagnostics": ["W-CUT-0", "W-BUDGET-0", "W-DEADLOCK-0", "U-SEM-0", "E-PROB-0", "E-POL-LATENT"]
+}

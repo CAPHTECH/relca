@@ -1,0 +1,158 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 30,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        },
+        {
+          "case_id": 2,
+          "arrival": 4,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        },
+        {
+          "case_id": 3,
+          "arrival": 8,
+          "verdict": "satisfied",
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 3,
+            "max": 3
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 4,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 7,
+            "max": 7
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 3,
+      "arrival": 8,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 11,
+            "max": 11
+          },
+          "elapsed": {
+            "min": 3,
+            "max": 3
+          },
+          "work": {
+            "min": 3,
+            "max": 3
+          },
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "scenario": {
+    "name": "BusyDay",
+    "arrivals": {
+      "form": "fixed_every",
+      "every": 4,
+      "from": 0,
+      "until": 12,
+      "count": 3
+    },
+    "horizon": null,
+    "drain": {
+      "from": 8,
+      "until": "all_terminal_or_clock"
+    },
+    "aggregation": {
+      "from": 0,
+      "until": "all_terminal_or_clock",
+      "observed_until": {
+        "min": "11",
+        "max": "11",
+        "reason": null
+      }
+    },
+    "warmup": 0
+  }
+}

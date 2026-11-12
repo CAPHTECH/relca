@@ -1,0 +1,643 @@
+[
+  {
+    "id": "cli-refusal-00",
+    "args": [
+      "check",
+      ""
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-01",
+    "args": [
+      "check",
+      "-"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-02",
+    "args": [
+      "check",
+      "-missing.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-03",
+    "args": [
+      "check",
+      "--configuration"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-04",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/cli-selectors.relca",
+      "--configuration",
+      ""
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-NAME-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-05",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/cli-selectors.relca",
+      "--configuration",
+      "-x"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-NAME-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-06",
+    "args": [
+      "check",
+      "-missing.relca",
+      "--configuration",
+      "Left"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-07",
+    "args": [
+      "simulate",
+      "-missing.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-08",
+    "args": [
+      "simulate",
+      "-"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-09",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/cli-selectors.relca",
+      "--configuration",
+      "-x"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-NAME-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-10",
+    "args": [
+      "compare",
+      "-missing.relca",
+      "--plans",
+      "Left,Right",
+      "--mode",
+      "exhaustive"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-11",
+    "args": [
+      "compare",
+      "-",
+      "--mode",
+      "simulation",
+      "--plans",
+      "Left,Right"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-12",
+    "args": [
+      "diff",
+      "",
+      "--from",
+      "Left",
+      "--to",
+      "Right"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-13",
+    "args": [
+      "diff",
+      "-missing.relca",
+      "--from",
+      "Left",
+      "--to",
+      "Right"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SYN-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-14",
+    "args": [
+      "diff",
+      "crates/relca-cli/tests/snapshots/inputs/cli-selectors.relca",
+      "--from",
+      "",
+      "--to",
+      "Right"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-NAME-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "cli-refusal-15",
+    "args": [
+      "diff",
+      "crates/relca-cli/tests/snapshots/inputs/cli-selectors.relca",
+      "--to",
+      "-x",
+      "--from",
+      "Left"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-NAME-0"
+    ],
+    "reason": "Restore one of the sixteen hand-classified fail-closed CLI forms."
+  },
+  {
+    "id": "wait-refusal-revocation-q0-rule0-rev0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q0-rule0-rev0.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-revocation-q0-rule0-rev1",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q0-rule0-rev1.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-revocation-q1-rule0-rev0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q1-rule0-rev0.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-revocation-q1-rule0-rev1",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q1-rule0-rev1.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-revocation-q1-rule1-rev0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q1-rule1-rev0.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-revocation-q1-rule1-rev1",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-revocation-q1-rule1-rev1.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": [
+      "E-SIM-0"
+    ],
+    "reason": "An explicit simulation clause is missing."
+  },
+  {
+    "id": "wait-refusal-completion-terminating-rule0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-completion-terminating-rule0.relca",
+      "--scenario",
+      "Day"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "expected_error_codes": [
+      "U-SEM-0"
+    ],
+    "reason": "Structural completion is not sampled."
+  },
+  {
+    "id": "wait-refusal-completion-recoverable-rule0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-completion-recoverable-rule0.relca",
+      "--scenario",
+      "Day"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "expected_error_codes": [
+      "U-SEM-0"
+    ],
+    "reason": "Structural completion is not sampled."
+  },
+  {
+    "id": "wait-refusal-completion-almost_sure-rule0",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-completion-almost_sure-rule0.relca",
+      "--scenario",
+      "Day"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "expected_error_codes": [
+      "U-SEM-0"
+    ],
+    "reason": "Structural completion is not sampled."
+  },
+  {
+    "id": "wait-refusal-completion-terminating-rule1",
+    "args": [
+      "simulate",
+      "crates/relca-cli/tests/snapshots/inputs/wait-refusal-completion-terminating-rule1.relca",
+      "--scenario",
+      "Day"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported",
+    "expected_error_codes": [
+      "U-SEM-0"
+    ],
+    "reason": "Structural completion is not sampled."
+  },
+  {
+    "id": "excluded-requires-start-same-time",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/excluded-requires-start-same-time.relca"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "Restore an inline IR-derived excluded-pair control; expected case_local count is one."
+  },
+  {
+    "id": "excluded-requires-after-queue",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/excluded-requires-after-queue.relca"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "Restore an inline IR-derived excluded-pair control; expected case_local count is one."
+  },
+  {
+    "id": "excluded-initial-product",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/excluded-initial-product.relca"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "Restore an inline IR-derived excluded-pair control; expected case_local count is one."
+  },
+  {
+    "id": "excluded-range-stop-with-queue",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/excluded-range-stop-with-queue.relca"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "reason": "Restore an inline IR-derived excluded-pair control; expected case_local count is one."
+  },
+  {
+    "id": "response-g-unknown",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/response-g-unknown.relca"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "ADR 0056 positive g-unknown: two real attempts, one effect, unresolved receipt is not success. Hand oracle: response_loss_retry."
+  },
+  {
+    "id": "response-g-probability",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/response-g-probability.relca"
+    ],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "reason": "ADR 0056 positive g-probability: declared 0.1 independent channel loss; posted 0.9, duplicate 0.09, unknown 0.01. Hand oracle: response_loss_retry."
+  },
+  {
+    "id": "response-max-thirty-two",
+    "args": [
+      "check",
+      "crates/relca-cli/tests/snapshots/inputs/response-max-thirty-two.relca"
+    ],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0056 positive max-thirty-two: finite retry expansion boundary, shared bad=0.1 persists across 32 attempts, not independent repeated failure. Hand oracle: response_loss_retry."
+  },
+  {
+    "id": "q3-conform-ok",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/q3-conform-model.relca", "--log", "crates/relca-cli/tests/snapshots/inputs/q3-conform-ok.jsonl", "--scope", "event-contracts"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0058 U6: first conform snapshot kind, complete six-event observation and its ledger."
+  },
+  {
+    "id": "q3-conform-unknown",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/q3-conform-model.relca", "--log", "crates/relca-cli/tests/snapshots/inputs/q3-conform-unknown.jsonl", "--scope", "event-contracts"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "expected_error_codes": [],
+    "reason": "ADR 0058 U6: one missing start remains unknown, not success or a violation."
+  },
+  {
+    "id": "q3-conform-arguments",
+    "args": ["conform"],
+    "expected_exit": 3,
+    "expected_verdict": "invalid",
+    "expected_error_codes": ["E-LOG-0"],
+    "reason": "ADR 0058 U6: conform argument refusal also owns a ledger."
+  },
+  {
+    "id": "q8-approval-baseline",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/q8-approval.relca", "--log", "crates/relca-cli/tests/snapshots/inputs/q8-approval-baseline.jsonl", "--scope", "approval-burden", "--approval-spec", "crates/relca-cli/tests/snapshots/inputs/q8-approval-baseline.json"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0061 A01: explicit decisions N2/D3 and observed person-minutes total7/mean7/3, synthetic acceptance input."
+  },
+  {
+    "id": "q8-approval-ineligible",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/q8-approval.relca", "--log", "crates/relca-cli/tests/snapshots/inputs/q8-approval-ineligible.jsonl", "--scope", "approval-burden", "--approval-spec", "crates/relca-cli/tests/snapshots/inputs/q8-approval-ineligible.json"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0061 A02: ineligible proposal excluded from rate D3 but included in independent time denominator4, mean7/4."
+  },
+  {
+    "id": "q8-approval-person-union",
+    "args": ["conform", "crates/relca-cli/tests/snapshots/inputs/q8-approval.relca", "--log", "crates/relca-cli/tests/snapshots/inputs/q8-approval-person-union.jsonl", "--scope", "approval-burden", "--approval-spec", "crates/relca-cli/tests/snapshots/inputs/q8-approval-person-union.json"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0061 A08: same-person overlapping intervals have union4 person-minutes, not task sum5."
+  },
+  {
+    "id": "q4-calendar-open",
+    "args": ["check", "crates/relca-core/tests/support/q4/open.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0059 C01: explicit opening at 5, start 5, end 7, calendar wait 5; independent q4 hand oracle."
+  },
+  {
+    "id": "q4-condition-true",
+    "args": ["check", "crates/relca-core/tests/support/q4/condition-constant.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0059 C08: initially observed true, zero condition wait, task work 2; independent q4 hand oracle."
+  },
+  {
+    "id": "q4-finite-arrivals",
+    "args": ["simulate", "crates/relca-core/tests/support/q4/arrivals.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0059 C11/C12: four independent schedule keys, two burst and two spaced draws; independent q4 hand oracle."
+  },
+  {
+    "id": "q5-start",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q5-start.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0062 P01: priority starts give End6/2/4 and work2 each, independently checked by the fixed Q5 hand oracle."
+  },
+  {
+    "id": "q5-external",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q5-external.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0062 P05: Held-only readmission0/8/4 and End4/12/8; receipt remains0/1/2."
+  },
+  {
+    "id": "q5-conflict",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q5-conflict.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "reason": "ADR 0062 P07: same-time checked intersection selects case2 without changing service work or clearing stale."
+  },
+  {
+    "id": "q7-sensitivity-values",
+    "args": ["sensitivity", "crates/relca-core/tests/data/sensitivity/values.json", "--mode", "exhaustive"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0060 A1: exactly three declared points; hand probabilities 1/250, 1/125, 1/200, no implicit product."
+  },
+  {
+    "id": "q7-sensitivity-endpoints",
+    "args": ["sensitivity", "crates/relca-core/tests/data/sensitivity/endpoints.json", "--mode", "exhaustive"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0060 A8: only p=0 and p=1 are declared; finite maximum zero is not a worst-case or robust guarantee."
+  },
+  {
+    "id": "q9-rates-check",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q9-rates.relca"],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "expected_error_codes": [],
+    "reason": "ADR 0063 C: p1/4 and positive long support violate the contest response deadline; hand oracle in contest_rates_calculations.md."
+  },
+  {
+    "id": "q9-rates-simulate",
+    "args": ["simulate", "crates/relca-cli/tests/snapshots/inputs/q9-rates.relca"],
+    "expected_exit": 2,
+    "expected_verdict": "inconclusive",
+    "expected_error_codes": [],
+    "reason": "ADR 0063 C: seed1/16 replications file four short routes; no violation witness is not exhaustive safety."
+  },
+  {
+    "id": "q6a-qualified-check",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q6a-qualified.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0064 A1: qualify q before first_idle; q works0..2, p works0. Independent skills_load hand oracle, not a skill score."
+  },
+  {
+    "id": "q6a-burst-simulate",
+    "args": ["simulate", "crates/relca-cli/tests/snapshots/inputs/q6a-burst.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0064 A4: frozen backlogs2/1/0, independent seed1/16 bad masks2d31/d38e/0200 yield17/16 cases and17/48 per offered arrival."
+  },
+  {
+    "id": "q6b-a7-check",
+    "args": ["check", "crates/relca-cli/tests/snapshots/inputs/q6b-a7.relca"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "ADR 0064 A7: fixed independent q6b hand table; normal Fast1, degraded Clerk3, common Probe1, total time/work2..4."
+  },
+  {
+    "id": "q6c-work-compare",
+    "args": ["compare", "crates/relca-cli/tests/snapshots/inputs/q6c-work.relca", "--plans", "From,To", "--mode", "exhaustive"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "Q6c I17 hand W: qualification q and complete P selector are explicit changes; both plans keep bad1/10 and fixed time/work2. Fixed q6c_oracle::compare checks the live output."
+  },
+  {
+    "id": "q6c-degrade-diff",
+    "args": ["diff", "crates/relca-cli/tests/snapshots/inputs/q6c-degrade.relca", "--from", "From", "--to", "To"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "Q6c I17 hand D: explicit Manual condition/producer; old If lacks side dependency, so both sides are not_comparable rather than equal. Fixed q6c_oracle::diff checks scope and old whole-process L."
+  },
+  {
+    "id": "q6c-work-sensitivity",
+    "args": ["sensitivity", "crates/relca-cli/tests/snapshots/inputs/q6c-sensitivity.json", "--mode", "exhaustive"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "Q6c I18 hand S: explicit base/probability points bad1/10 and1/4, both fixed time2; all effective selector kernels and aleatory/model evidence checked by fixed q6c_oracle::suite."
+  },
+  {
+    "id": "p2c-q9-range-stop",
+    "args": ["simulate", "crates/relca-cli/tests/snapshots/inputs/p2c-q9-range-stop.relca"],
+    "expected_exit": 1,
+    "expected_verdict": "violated",
+    "reason": "Cleanup hand Q9: target/refusal at1, later range stop at3; two replications preserve failed2 versus unresolved2 and no_samples versus unfinished. Fixed p2_cleanup_calculations.md, connected by p2c_snapshot_oracle."
+  },
+  {
+    "id": "p2c-prefix-diff",
+    "args": ["diff", "crates/relca-cli/tests/snapshots/inputs/p2c-prefix-diff.relca", "--from", "From", "--to", "To"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "Cleanup hand C1: only common_prefix changes Probe.check1..1 to2..2, both side dependencies unchanged; exact Count arrays in p2_cleanup_calculations.md."
+  },
+  {
+    "id": "p2c-withdrawn-diff",
+    "args": ["diff", "crates/relca-cli/tests/snapshots/inputs/p2c-withdrawn-diff.relca", "--from", "From", "--to", "To"],
+    "expected_exit": 0,
+    "expected_verdict": "satisfied",
+    "expected_error_codes": [],
+    "reason": "Cleanup hand C4: both whole tables are not_derived multiple_case_interference; normal/degraded/common_prefix are three keyless not_comparable rows with exact owner reasons, never empty equality."
+  }
+]

@@ -1,0 +1,10 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  observed case { n: 0..1 = 0 }
+  actor A { capacity 1; capability inc() -> T { duration fixed 1min; result nondet { ok }; writes n; finish { n += 1 } } }
+  process P { a = A.inc(); if n == 1 { end done } else { end wrong } }
+  arrivals fixed [0min, 0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 2; clock 10min }
+  verify reachable end.done
+}

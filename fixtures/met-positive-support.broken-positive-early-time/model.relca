@@ -1,0 +1,10 @@
+model MetricsSupport version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability job() -> T { duration {1min:0.25, 2min:0.25, 4min:0.5, 9min:0}; result nondet { pass } } }
+  process P { job = A.job(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  metrics { window 10min; currency "JPY"; rate A per_minute 7; rate A.job per_start 3 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

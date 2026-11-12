@@ -1,0 +1,72 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 10,
+        "max": 10
+      },
+      "work": {
+        "min": 8,
+        "max": 8
+      },
+      "result_at": null
+    }
+  ],
+  "metrics": {
+    "overall": {
+      "work": {
+        "min": "8",
+        "max": "8",
+        "reason": null
+      },
+      "intentional_wait": {
+        "min": "2",
+        "max": "2",
+        "reason": null
+      },
+      "observed_cost_total": {
+        "min": "22",
+        "max": "22",
+        "reason": null
+      }
+    },
+    "cases": [
+      {
+        "case_id": 1,
+        "intentional_wait": {
+          "min": "2",
+          "max": "2",
+          "reason": null
+        },
+        "first_start_wait": {
+          "min": "0",
+          "max": "0",
+          "reason": null
+        },
+        "tasks": [
+          {
+            "binding": "a",
+            "wait": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            }
+          },
+          {
+            "binding": "b",
+            "wait": {
+              "min": "0",
+              "max": "0",
+              "reason": null
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

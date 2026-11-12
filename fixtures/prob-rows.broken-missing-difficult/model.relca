@@ -1,0 +1,14 @@
+model ProbabilityRows version "0.2" {
+  type Difficulty = enum { routine, difficult }
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor Invoice { latent difficulty: Difficulty ~ { routine: 0.5, difficult: 0.5 } }
+  kernel K given [Invoice.difficulty] {
+    routine -> { 0.2: ok with hit = true; 0.8: ok with hit = false }
+  }
+  actor A { capacity 1; capability sample() -> T { duration fixed 1min; outcomes kernel K; writes hit; kernel_reads latent [Invoice.difficulty] } }
+  process Flow { s = A.sample(); if hit == true { end bad } else { end good } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true <= 0.4
+}

@@ -1,0 +1,84 @@
+{
+  "verdict": "satisfied",
+  "mode": "exhaustive",
+  "unit": "min",
+  "bounds": {
+    "cases": 1,
+    "live_tasks": 2,
+    "clock": 10,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "recoverable end",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "terminating end",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "almost_sure end",
+      "verdict": "satisfied",
+      "probability": {
+        "min": "1",
+        "max": "1"
+      }
+    },
+    {
+      "id": "reachable end.normal",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "probability reached #1",
+      "verdict": "satisfied",
+      "probability": {
+        "min": "1",
+        "max": "1"
+      }
+    }
+  ],
+  "terminals": [
+    {
+      "end": "normal",
+      "elapsed": {
+        "min": 1,
+        "max": 1
+      },
+      "work": {
+        "min": 1,
+        "max": 1
+      },
+      "result_at": null,
+      "probability": {
+        "min": "1",
+        "max": "1"
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-0",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "absent_diagnostics": [
+    "W-UNREACH-3"
+  ]
+}

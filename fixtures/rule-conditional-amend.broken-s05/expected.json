@@ -1,0 +1,14 @@
+{
+  "verdict": "unsupported",
+  "properties": [],
+  "terminals": [],
+  "bounds": {
+    "truncated": null
+  },
+  "diagnostics": [
+    {
+      "code": "U-SYN-0",
+      "severity": "error"
+    }
+  ]
+}

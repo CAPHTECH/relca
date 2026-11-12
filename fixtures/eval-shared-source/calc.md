@@ -1,0 +1,97 @@
+# eval-shared-source — ADR 0047 T08
+
+Hand oracle, authored before implementation. Stage C RED is not verified semantics.
+
+T08: work3+5=8;cost100*8+2+3=805 on both. Equal points have no strict improvement, no unknown pair. compare.pareto must name work and observed_cost_total as shared observation.
+
+Expected root: satisfied.
+Closed evaluation:
+
+```json
+{
+  "rules": "compare-evaluation-p1-1",
+  "declared": {
+    "plans": [
+      "AsIs",
+      "ToBeP"
+    ],
+    "under": null,
+    "scenario": null,
+    "cut": "C"
+  },
+  "hard": [],
+  "plans": [
+    {
+      "configuration": "AsIs",
+      "verify_verdict": "satisfied",
+      "hard_verdict": "satisfied",
+      "status": "admissible",
+      "reasons": []
+    },
+    {
+      "configuration": "ToBeP",
+      "verify_verdict": "satisfied",
+      "hard_verdict": "satisfied",
+      "status": "admissible",
+      "reasons": []
+    }
+  ],
+  "objectives": [
+    {
+      "objective": "minimize metrics.overall.work",
+      "direction": "minimize",
+      "values": [
+        {
+          "configuration": "AsIs",
+          "lower": "8",
+          "upper": "8",
+          "basis": "path_range",
+          "reason": null
+        },
+        {
+          "configuration": "ToBeP",
+          "lower": "8",
+          "upper": "8",
+          "basis": "path_range",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "objective": "minimize metrics.overall.observed_cost_total",
+      "direction": "minimize",
+      "values": [
+        {
+          "configuration": "AsIs",
+          "lower": "805",
+          "upper": "805",
+          "basis": "path_range",
+          "reason": null
+        },
+        {
+          "configuration": "ToBeP",
+          "lower": "805",
+          "upper": "805",
+          "basis": "path_range",
+          "reason": null
+        }
+      ]
+    }
+  ],
+  "pareto": {
+    "status": "computed",
+    "reason": null,
+    "among": [
+      "AsIs",
+      "ToBeP"
+    ],
+    "non_dominated": [
+      "AsIs",
+      "ToBeP"
+    ],
+    "dominated": [],
+    "undetermined_pairs": [],
+    "not_evaluated": []
+  }
+}
+```

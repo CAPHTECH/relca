@@ -1,0 +1,20 @@
+[
+  {"id":"p1-as-is-check","model":"examples/invoice/phase1.relca","args":["check","examples/invoice/phase1.relca","--configuration","AsIs"],"expected_exit":0},
+  {"id":"p1-to-be-p-check","model":"examples/invoice/phase1.relca","args":["check","examples/invoice/phase1.relca","--configuration","ToBeP"],"expected_exit":0},
+  {"id":"p1-to-be-a-check","model":"examples/invoice/phase1.relca","args":["check","examples/invoice/phase1.relca","--configuration","ToBeA"],"expected_exit":1},
+  {"id":"p1-compare-exhaustive","model":"examples/invoice/phase1.relca","args":["compare","examples/invoice/phase1.relca","--plans","AsIs,ToBeP,ToBeA","--mode","exhaustive"],"expected_exit":1},
+  {"id":"p1-compare-simulation","model":"examples/invoice/phase1.relca","args":["compare","examples/invoice/phase1.relca","--plans","AsIs,ToBeP,ToBeA","--mode","simulation"],"expected_exit":4},
+  {"id":"p1-diff","model":"examples/invoice/phase1.relca","args":["diff","examples/invoice/phase1.relca","--from","AsIs","--to","ToBeA"],"expected_exit":1},
+  {"id":"p1-a-check","model":"examples/invoice/to-be-a-phase1.relca","args":["check","examples/invoice/to-be-a-phase1.relca"],"expected_exit":1},
+  {"id":"p1-a-explain","model":"examples/invoice/to-be-a-phase1.relca","args":["explain","examples/invoice/to-be-a-phase1.relca"],"expected_exit":1},
+  {"id":"p1-a-simulate","model":"examples/invoice/to-be-a-phase1.relca","args":["simulate","examples/invoice/to-be-a-phase1.relca"],"expected_exit":4},
+  {"id":"p1-a-mutate","model":"examples/invoice/to-be-a-phase1.relca","args":["mutate","examples/invoice/to-be-a-phase1.relca"],"expected_exit":4},
+  {"id":"rule-a-check","model":"examples/invoice/rules.relca","args":["check","examples/invoice/rules.relca","--configuration","ToBeA"],"expected_exit":5},
+  {"id":"rule-b-check","model":"examples/invoice/rules.relca","args":["check","examples/invoice/rules.relca","--configuration","ToBeB"],"expected_exit":1},
+  {"id":"rule-diff","model":"examples/invoice/rules.relca","args":["diff","examples/invoice/rules.relca","--from","ToBeA","--to","ToBeB"],"expected_exit":1},
+  {"id":"busyday-as-is-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","AsIs","--scenario","BusyDay"],"expected_exit":4},
+  {"id":"busyday-to-be-p-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeP","--scenario","BusyDay"],"expected_exit":4},
+  {"id":"busyday-to-be-a-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeA","--scenario","BusyDay"],"expected_exit":4},
+  {"id":"busyday-compare-simulation","model":"examples/invoice/busyday.relca","args":["compare","examples/invoice/busyday.relca","--plans","AsIs,ToBeP,ToBeA","--mode","simulation","--scenario","BusyDay"],"expected_exit":4},
+  {"id":"p1-compare-quantile","model":"examples/invoice/quantile-compare.relca","args":["compare","examples/invoice/quantile-compare.relca","--plans","AsIs,ToBeP,ToBeA","--mode","exhaustive"],"expected_exit":1}
+]

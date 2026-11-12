@@ -1,0 +1,13 @@
+model Completion version "0.2" {
+  type T = enum { ok, good, bad }
+  actor Judge { capacity 1; capability run() -> T {  duration fixed 1min; result nondet { good } } }
+  actor Blocked { capacity 0; capability run() -> T {  duration fixed 1min; result nondet { ok } } }
+  process Flow { j = Judge.run(); if j == good { end done } else { b = Blocked.run(); end done } }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify safety no_resource_overcommit
+  verify recoverable end
+  verify terminating end
+  verify almost_sure end
+  verify reachable end.done
+  verify probability reached end.done within 10min >= 1
+}

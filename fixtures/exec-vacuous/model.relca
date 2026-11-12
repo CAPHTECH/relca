@@ -1,0 +1,20 @@
+model ExecVacuous version "0.2" {
+  type T = enum { ok }
+  people [c1,a1]
+  actor Clerk { executors [c1]; capability enter() -> T { duration fixed 2min; result nondet { ok } } }
+  actor Approver { executors [a1]; capability approve() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Extractor { capacity 1; capability extract() -> T { duration fixed 1min; result nondet { ok } } }
+  process AsIsFlow { x = Clerk.enter(); y = Approver.approve(); end done }
+  process ToBeAFlow { x = Extractor.extract(); y = Approver.approve(); end done }
+  cut C { include [Clerk,Approver,Extractor] }
+  configuration AsIs { cut C; process AsIsFlow }
+  configuration ToBeA { cut C; process ToBeAFlow; intent {
+    add Extractor reason "add extractor"
+    add Extractor.extract reason "add extraction"
+    retire Clerk reason "remove clerk" loses "human entry"
+    retire Clerk.enter reason "remove entry" loses "entry result"
+  } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { separation Clerk.enter.finish, Approver.approve.finish }
+}

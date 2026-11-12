@@ -1,0 +1,13 @@
+model ZeroObservations version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  kernel K { * -> { 0: ok with hit = true; 1: ok with hit = false } }
+  actor A { capacity 1
+    capability sample() -> T { duration fixed 1min; outcomes kernel K; writes hit }
+  }
+  process Flow { x = A.sample(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 4min }
+  verify probability reached hit == true <= 0.55
+  simulation replications 4 seed 0 confidence 0.875
+}

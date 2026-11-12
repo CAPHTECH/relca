@@ -1,0 +1,14 @@
+{
+  "verdict": "unsupported",
+  "mode": "simulation",
+  "diagnostics": [
+    {
+      "code": "U-SEM-0",
+      "severity": "error"
+    }
+  ],
+  "simulation": {
+    "attempted_replications": 1,
+    "completed_replications": 0
+  }
+}

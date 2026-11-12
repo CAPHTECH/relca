@@ -1,0 +1,31 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": []
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "W-DEADLOCK-0"
+    },
+    {
+      "code": "W-UNREACH-0"
+    },
+    {
+      "code": "W-UNREACH-0"
+    },
+    {
+      "code": "W-UNREACH-0"
+    },
+    {
+      "code": "W-UNREACH-2"
+    }
+  ]
+}

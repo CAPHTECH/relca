@@ -1,0 +1,33 @@
+{
+  "verdict": "vacuous",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-0"
+    },
+    {
+      "code": "W-UNREACH-2"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "vacuous",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "vacuous"
+        },
+        {
+          "case_id": 2,
+          "arrival": 0,
+          "verdict": "vacuous"
+        }
+      ]
+    }
+  ],
+  "terminals": []
+}

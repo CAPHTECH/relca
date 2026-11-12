@@ -1,0 +1,79 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-1",
+      "severity": "warning"
+    },
+    {
+      "code": "W-UNREACH-2",
+      "severity": "warning"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "claimed",
+          "completed_at": {
+            "min": 1,
+            "max": 1
+          },
+          "elapsed": {
+            "min": 1,
+            "max": 1
+          },
+          "work": {
+            "min": 1,
+            "max": 1
+          },
+          "result_at": null
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "claimed",
+          "completed_at": {
+            "min": 1,
+            "max": 1
+          },
+          "elapsed": {
+            "min": 1,
+            "max": 1
+          },
+          "work": {
+            "min": 1,
+            "max": 1
+          },
+          "result_at": null
+        }
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "id": "reachable end.claimed",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "state_in_range",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "no_lost_update Ledger.holder",
+      "verdict": "violated"
+    }
+  ]
+}

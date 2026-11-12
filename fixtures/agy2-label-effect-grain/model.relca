@@ -1,0 +1,16 @@
+model Concentration version "0.2" {
+  type Entry = enum { entry }
+  type V = enum { pass,fail }
+  type Ack = enum { committed }
+  people [p1,p2,p3]
+  actor Doc { source document }
+  actor A { executors [p1];
+    capability enter() -> Entry { reads [Doc]; duration fixed 1min; result nondet { entry } }
+    capability approve(e: Entry) -> V { duration fixed 1min; result nondet { pass,fail } }
+    capability post(v: V) -> Ack { commits; duration fixed 1min; result nondet { committed } }
+  }
+  process Flow { e = A.enter(); v = A.approve(e); if v == pass {} else { end returned }; k = A.post(v); end posted }
+  cut Scope { include [Doc,A] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+}

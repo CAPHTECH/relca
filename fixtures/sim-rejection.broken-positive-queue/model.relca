@@ -1,0 +1,12 @@
+model Rejection version "0.2" {
+  type T = enum { ok }
+  observed case { hit:bool = true }
+  actor A { capacity 1; capability c() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { a = A.c(); end done }
+  arrivals fixed [0min,1min]
+  policy fifo tie_by case_id
+  queue capacity 1 on_overflow reject
+  bounds { cases 2; live_tasks 1; clock 3min }
+  verify probability reached hit == true <= 0.5
+  simulation replications 4 seed 0 confidence 0.5
+}

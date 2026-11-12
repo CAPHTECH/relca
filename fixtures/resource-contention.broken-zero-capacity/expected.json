@@ -1,0 +1,11 @@
+{
+  "verdict": "violated",
+  "bounds": { "truncated": false },
+  "cut": "undeclared",
+  "diagnostics": [{ "code": "W-CUT-0" }, { "code": "W-DEADLOCK-0" },{"code":"W-UNREACH-0","severity":"warning","span":{"end":200,"start":108}},{"code":"W-UNREACH-0","severity":"warning","span":{"end":296,"start":205}},{"code":"W-UNREACH-2","severity":"warning","span":{"end":424,"start":416}}],
+  "properties": [
+    { "id": "safety no_resource_overcommit", "verdict": "satisfied" },
+    { "id": "reachable end.done", "verdict": "violated" }
+  ],
+  "terminals": []
+}

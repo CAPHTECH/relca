@@ -1,0 +1,212 @@
+[
+  {
+    "id": "P01",
+    "good": "rsrc-exact",
+    "bad": "rsrc-exact.broken-one-unit",
+    "from": "R capacity 2",
+    "to": "R capacity 1"
+  },
+  {
+    "id": "P02",
+    "good": "rsrc-shared",
+    "bad": "rsrc-shared.broken-missing-use",
+    "from": "capability y() -> T { uses R: 1;",
+    "to": "capability y() -> T {"
+  },
+  {
+    "id": "P03",
+    "good": "rsrc-weighted",
+    "bad": "rsrc-weighted.broken-less-capacity",
+    "from": "R capacity 3",
+    "to": "R capacity 2"
+  },
+  {
+    "id": "P04",
+    "good": "rsrc-atomic",
+    "bad": "rsrc-atomic.broken-excess-demand",
+    "from": "uses R: 1, S: 1",
+    "to": "uses R: 2, S: 1"
+  },
+  {
+    "id": "P05",
+    "good": "rsrc-reuse",
+    "bad": "rsrc-reuse.broken-excess-next",
+    "from": "capability y() -> T { uses R: 2",
+    "to": "capability y() -> T { uses R: 3"
+  },
+  {
+    "id": "P06",
+    "good": "rsrc-cooperative",
+    "bad": "rsrc-cooperative.broken-drain",
+    "from": "result nondet { fail }; cancel cooperative ack_within 1min",
+    "to": "result nondet { fail }; cancel forbidden_after_start"
+  },
+  {
+    "id": "P07",
+    "good": "rsrc-immediate",
+    "bad": "rsrc-immediate.broken-cooperative",
+    "from": "result nondet { fail }; cancel immediate",
+    "to": "result nondet { fail }; cancel cooperative ack_within 1min"
+  },
+  {
+    "id": "P08",
+    "good": "rsrc-request-held",
+    "bad": "rsrc-request-held.broken-longer-ack",
+    "from": "result nondet { fail }; cancel cooperative ack_within 1min",
+    "to": "result nondet { fail }; cancel cooperative ack_within 2min"
+  },
+  {
+    "id": "P09",
+    "good": "rsrc-refusal",
+    "bad": "rsrc-refusal.broken-enabled",
+    "from": "flag: bool = false",
+    "to": "flag: bool = true"
+  },
+  {
+    "id": "P10",
+    "good": "rsrc-gate-after-wait",
+    "bad": "rsrc-gate-after-wait.broken-no-use",
+    "from": "capability y() -> T { uses R: 1;",
+    "to": "capability y() -> T {"
+  },
+  {
+    "id": "P11",
+    "good": "rsrc-competition",
+    "bad": "rsrc-competition.broken-same-actor",
+    "from": "y = B.y()",
+    "to": "y = A.y()"
+  },
+  {
+    "id": "P12",
+    "good": "rsrc-global",
+    "bad": "rsrc-global.broken-two-units",
+    "from": "R capacity 1",
+    "to": "R capacity 2"
+  },
+  {
+    "id": "P13",
+    "good": "rsrc-people",
+    "bad": "rsrc-people.broken-two-people",
+    "from": "executors [p]",
+    "to": "executors [p,q]"
+  },
+  {
+    "id": "P14",
+    "good": "rsrc-over-demand",
+    "bad": "rsrc-over-demand.broken-too-much",
+    "from": "uses R: 1",
+    "to": "uses R: 2"
+  },
+  {
+    "id": "P15",
+    "good": "rsrc-unused-zero",
+    "bad": "rsrc-unused-zero.broken-used",
+    "from": "capability x() -> T {",
+    "to": "capability x() -> T { uses R: 1;"
+  },
+  {
+    "id": "P16",
+    "good": "rsrc-members",
+    "bad": "rsrc-members.broken-members",
+    "from": "R capacity 1",
+    "to": "R capacity 1 members [p]"
+  },
+  {
+    "id": "P17",
+    "good": "rsrc-actor-use",
+    "bad": "rsrc-actor-use.broken-actor-use",
+    "from": "actor A {",
+    "to": "actor A { uses R;"
+  },
+  {
+    "id": "P18",
+    "good": "rsrc-collision",
+    "bad": "rsrc-collision.broken-same-name",
+    "from": "resource R capacity 1",
+    "to": "resource R capacity 1; resource A capacity 1"
+  },
+  {
+    "id": "P19",
+    "good": "rsrc-zero-amount",
+    "bad": "rsrc-zero-amount.broken-zero",
+    "from": "uses R: 1",
+    "to": "uses R: 0"
+  },
+  {
+    "id": "P20",
+    "good": "rsrc-unknown",
+    "bad": "rsrc-unknown.broken-unknown",
+    "from": "uses R: 1",
+    "to": "uses Missing: 1"
+  },
+  {
+    "id": "P21",
+    "good": "rsrc-duplicate",
+    "bad": "rsrc-duplicate.broken-duplicate",
+    "from": "uses R: 1",
+    "to": "uses R: 1, R: 1"
+  },
+  {
+    "id": "P22",
+    "good": "rsrc-second-use",
+    "bad": "rsrc-second-use.broken-second-use",
+    "from": "uses R: 1;",
+    "to": "uses R: 1; uses R: 1;"
+  },
+  {
+    "id": "P23",
+    "good": "rsrc-actor-capacity",
+    "bad": "rsrc-actor-capacity.broken-no-capacity",
+    "from": "capacity 1;  capability",
+    "to": " capability"
+  },
+  {
+    "id": "P24",
+    "good": "rsrc-all-start",
+    "bad": "rsrc-all-start.broken-no-proof",
+    "from": "R capacity 2",
+    "to": "R capacity 1"
+  },
+  {
+    "id": "P25",
+    "good": "rsrc-clock",
+    "bad": "rsrc-clock.broken-short-clock",
+    "from": "clock 10min",
+    "to": "clock 4min"
+  },
+  {
+    "id": "H02",
+    "good": "rsrc-release-fork",
+    "bad": "rsrc-release-fork.broken-parallel",
+    "from": "R capacity 2",
+    "to": "R capacity 4"
+  },
+  {
+    "id": "H06",
+    "good": "rsrc-queued-cancel",
+    "bad": "rsrc-queued-cancel.broken-startable",
+    "from": "R capacity 0",
+    "to": "R capacity 1"
+  },
+  {
+    "id": "H08",
+    "good": "rsrc-huge",
+    "bad": "rsrc-huge.broken-fits",
+    "from": "uses R: 18446744073709551615",
+    "to": "uses R: 18446744073709551614"
+  },
+  {
+    "id": "H09",
+    "good": "rsrc-zero-time",
+    "bad": "rsrc-zero-time.broken-positive",
+    "from": "duration fixed 0min",
+    "to": "duration fixed 1min"
+  },
+  {
+    "id": "H16",
+    "good": "rsrc-half-open",
+    "bad": "rsrc-half-open.broken-longer",
+    "from": "duration fixed 2min",
+    "to": "duration fixed 3min"
+  }
+]

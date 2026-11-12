@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "refused",
+      "elapsed": {
+        "min": 0,
+        "max": 0
+      },
+      "work": {
+        "min": 0,
+        "max": 0
+      },
+      "result_at": null
+    }
+  ],
+  "capability_refusals": [
+    {
+      "case_id": 1,
+      "call": "r",
+      "capability": "A.run",
+      "result": "denied",
+      "at": {
+        "min": 0,
+        "max": 0
+      },
+      "coverage": "complete"
+    }
+  ]
+}

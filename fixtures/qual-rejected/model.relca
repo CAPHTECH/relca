@@ -1,0 +1,20 @@
+model QualityBase version "0.2" {
+  type V = enum { pass, fail }
+  type Ack = enum { committed }
+  observed case { registered: bool = false }
+  latent case { correct: bool = false }
+  kernel judge { * -> { 0.9: pass with correct = true; 0.02: pass with correct = false; 0.08: fail with correct = false } }
+  actor Checker { capacity 1; capability check() -> V { duration fixed 3min; outcomes kernel judge; writes correct } }
+  actor Ledger { capacity 2; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }
+  cut C { include [Checker, Ledger] }
+  arrivals fixed [0min, 0min]
+  bounds { cases 2; live_tasks 2; clock 30min }
+  verify reachable end.posted
+  property case.Wrong = reached(registered == true && correct == false)
+  property case.Registered = reached(registered == true)
+  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals
+  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))
+  policy fifo tie_by case_id
+  queue capacity 1 on_overflow reject
+}

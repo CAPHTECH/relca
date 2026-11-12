@@ -1,0 +1,10 @@
+model Records version "0.2" {
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; allowed: bool = false }
+actor Work { capacity 1; capability run() -> Entry { duration fixed 2min; result nondet { Entry { confidence = high } }; writes entry } }
+process Flow { e = Work.run(); if e.confidence == low { end held } else { end done } }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.held
+}

@@ -1,0 +1,1 @@
+{"verdict":"satisfied","properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"state_in_range","verdict":"satisfied"}],"terminals":[{"end":"refused","elapsed":{"min":0,"max":0},"work":{"min":0,"max":0},"result_at":null}],"capability_refusals":[{"case_id":1,"call":"a","capability":"A.inc","result":"no","at":{"min":0,"max":0},"coverage":"complete"}]}

@@ -1,0 +1,15 @@
+model MetricsSample version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability run() -> T { duration {2min:0.5, 4min:0.5}; result nondet { pass } } }
+  process P { job = A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 4 seed 41020 confidence 0.5
+  metrics { window 10min; currency "JPY"; rate A per_minute 7; rate A.run per_start 3 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+  property case.Done = reached(end.done) within 3min
+  metric quantile.Median = quantile(0.5, case.Done)
+  metric quantile.P95 = quantile(0.95, case.Done)
+  metric quantile.P95Done = quantile(0.95, case.Done given reached)
+}

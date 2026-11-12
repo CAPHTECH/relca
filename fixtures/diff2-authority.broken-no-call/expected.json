@@ -1,0 +1,1 @@
+{"verdict":"vacuous","differences":[],"diagnostics":[],"properties":[{"id":"contract Ctl #1 authority_basis","from":"vacuous","to":"vacuous"},{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"}]}

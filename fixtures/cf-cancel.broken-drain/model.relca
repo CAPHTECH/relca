@@ -1,0 +1,10 @@
+model Cancel version "0.2" {
+ type Pick=enum{long,short};type H=enum{free,taken};type R=enum{committed,conflict}
+ actor Picker{capacity 2;capability choose()->Pick{duration fixed 1min;result nondet{long,short}}}
+ actor Fast{capacity 2;capability go()->R{duration fixed 1min;result nondet{committed};cancel forbidden_after_start}}
+ actor Ledger{capacity 2;state holder:H=free;
+ capability long()->R{version_check [holder] else conflict;commits;writes holder;finish{holder=taken};duration fixed 5min;result nondet{committed}}
+ capability slow()->R{version_check [holder] else conflict;writes holder;finish{holder=taken};duration fixed 3min;result nondet{committed};cancel forbidden_after_start}}
+ process P{p=Picker.choose();if p==long {a=Ledger.long();if a==conflict{end conflicted}else{end committed_end}}else{fork group{f=Fast.go();s=Ledger.slow()};join any group where result==committed tie by [f,s] remaining cancel_then_drain if none -> cancelled;end cancelled}}
+ cut C{include[Picker,Fast,Ledger]};bounds{cases 2;live_tasks 2;clock 10min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify reachable end.committed_end
+}

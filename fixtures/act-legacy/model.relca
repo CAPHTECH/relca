@@ -1,0 +1,12 @@
+model Legacy version "0.2" {
+  type T = enum { ok }
+  actor Office {
+    capacity 1
+    capability short() -> T { duration fixed 3min; result nondet { ok } }
+    capability long() -> T { duration fixed 5min; result nondet { ok } }
+  }
+  process Serial { a = Office.short(); b = Office.long(); end done }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

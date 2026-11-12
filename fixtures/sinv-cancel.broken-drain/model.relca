@@ -1,0 +1,11 @@
+model StateInvariant version "0.2" {
+  type T = enum { pass, ok }
+  observed case { changed: bool = false }
+  actor Fast { capacity 1; capability win() -> T { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { capacity 1; capability work() -> T { duration fixed 5min; result nondet { ok }; writes changed; finish { changed = true }; cancel forbidden_after_start } }
+  process Flow { fork f { fast = Fast.win(); slow = Slow.work() }; join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected; end done; end rejected }
+  cut C { include [Fast, Slow] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+
+  contract Controls { invariant changed == false }
+}

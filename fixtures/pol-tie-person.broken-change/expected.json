@@ -1,0 +1,36 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false
+  },
+  "diagnostics": [],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "end",
+          "end": "done",
+          "completed_at": {
+            "min": 5,
+            "max": 6
+          },
+          "elapsed": {
+            "min": 5,
+            "max": 6
+          },
+          "work": {
+            "min": 5,
+            "max": 6
+          },
+          "result_at": {
+            "min": 5,
+            "max": 5
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+model Lin version "0.2" {
+  type Entry = enum { item }
+  type Verdict = enum { pass, fail }
+  latent case { bad: bool = false }
+  observed case { a, b: optional<Verdict>; c: optional<Verdict> = pass }
+  actor S { source document }
+  actor R { source record }
+  kernel K0 { * -> { 1: item with bad = false } }
+  kernel KA given [bad] { false -> { 1: pass }; true -> { 1: pass } }
+  kernel KB given [bad,c] { false, none -> { 1: pass }; false, pass -> { 1: pass }; false, fail -> { 1: pass }; true, none -> { 1: pass }; true, pass -> { 1: pass }; true, fail -> { 1: pass } }
+  actor P { capacity 1
+    capability make() -> Entry { reads [S]; duration fixed 1min; outcomes kernel K0; writes bad }
+  }
+  actor A { capacity 1
+    capability check(e:Entry) -> Verdict { reads [R]; duration fixed 1min; outcomes kernel KA; kernel_reads latent [bad]; writes a }
+  }
+  actor B { capacity 1
+    capability check(e:Entry) -> Verdict { duration fixed 1min; outcomes kernel KB; kernel_reads latent [bad]; writes b }
+  }
+  process Flow {
+    e = P.make()
+    aV = A.check(e)
+    bV = B.check(e)
+    end done
+  }
+  cut C { include [S,R,P,A,B] }
+  bounds { cases 1; live_tasks 2; clock 30min }
+  verify safety no_resource_overcommit
+}

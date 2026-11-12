@@ -1,0 +1,3 @@
+model OldScenario version "0.2" {
+  scenario Day { compare A B }
+}

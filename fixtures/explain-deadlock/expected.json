@@ -1,0 +1,1 @@
+{"verdict":"satisfied","diagnostics":[],"bounds":{"truncated":false},"explanation":{"version":"invoice-counterexample-v1","status":"complete","shortest_scope":"model","counterexamples":[],"omitted":[{"id":"reachable end.done","verdict":"satisfied","reason":"non_path_property"}],"diagnostics":[]}}

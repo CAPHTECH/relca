@@ -1,0 +1,9 @@
+{
+  "verdict":"invalid", "mismatch":{"from_cut":"C","to_cut":"D","differences":[]},
+  "from":{"configuration":"AsIs","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"C"},"terminals":[{"end":"done","elapsed":{"min":3,"max":3},"work":{"min":3,"max":3},"result_at":null}],"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":268,"start":195}}]}},
+  "to":{"configuration":"ToBe","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"D"},"terminals":[{"end":"done","elapsed":{"min":5,"max":5},"work":{"min":5,"max":5},"result_at":null}],"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"]}},
+  "differences":[], "terminals":[], "properties":[],
+  "diagnostics":[{"code":"E-CMP-0","severity":"error"}], "absent_diagnostics":["E-DIFF-0","W-DIFF-1","W-DIFF-2"],
+  "checked":["comparison_mismatch"],
+  "unchecked":["time_intent","resource","meaning","authority","visibility","contest","preserve","override","maintain","actor","relation","intent_claims","retire_loses"]
+}

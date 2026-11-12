@@ -1,0 +1,6 @@
+model Range version "0.2" {
+  process P { end done }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify reachable end.done
+  simulation replications 1 seed 18446744073709551615 confidence 0.5
+}

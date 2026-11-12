@@ -1,0 +1,1 @@
+{"verdict":"satisfied","metrics":{"status":"complete","overall":{"work":{"min":"8","max":"8","reason":null},"occupancy_cost":{"min":"800","max":"800","reason":null},"start_cost":{"min":null,"max":null,"reason":"not_configured"},"observed_cost_total":{"min":null,"max":null,"reason":"not_configured"},"business_value":{"value":null,"reason":"not_configured"}}}}

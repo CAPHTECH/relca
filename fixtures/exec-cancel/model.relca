@@ -1,0 +1,22 @@
+model ExecCancel version "0.2" {
+  type T = enum { pass, ok }
+  people [p,q]
+  actor Fast { capacity 1; capability win() -> T { duration fixed 1min; result nondet { pass }; cancel forbidden_after_start } }
+  actor Slow { executors [p]; capability work() -> T { commits; duration fixed 5min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor Next { executors [p]; capability follow() -> T { duration fixed 1min; result nondet { ok } } }
+  authority G { basis "authority table"; grants q to Slow.work }
+  process Flow {
+    fork f { fast = Fast.win(); slow = Slow.work() }
+    join any f where result == pass tie by [fast,slow] remaining cancel_then_drain if none -> rejected
+    next = Next.follow()
+    end done
+    end rejected
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    permitted Slow.work
+    authority_basis Slow.work G
+    separation Slow.work.finish, Next.follow.finish
+  }
+}

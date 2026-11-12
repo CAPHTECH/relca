@@ -1,0 +1,7 @@
+model Reachable version "0.2" {
+  observed case { flag:bool = false }
+  process P { if flag == true { end other } else { end done } }
+  bounds { cases 1; live_tasks 1; clock 1min }
+  verify reachable end.done
+  simulation replications 4 seed 0 confidence 0.5
+}

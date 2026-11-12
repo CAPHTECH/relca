@@ -1,0 +1,18 @@
+model StateAgency version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  observed case { decision: optional<Verdict> }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Source { capacity 1; capability read() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Judge { capacity 1; capability check(e: Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 1min; result nondet { pass, fail }; writes decision } }
+  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  process Flow {
+    e = Source.read()
+    j = Judge.check(e)
+    if decision == pass { p = Ledger.post(); end done } else { end rejected }
+  }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

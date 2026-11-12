@@ -1,0 +1,12 @@
+model DiffVisibility version "0.2" {
+  type V = enum { pass }
+  actor S { source document }
+  actor A { capacity 1; capability a() -> V { reads [S]; duration fixed 1min; result nondet { pass } }; capability b() -> V { duration fixed 1min; result nondet { pass } } }
+  process Before { x = A.a(); end done }
+  process After { y = A.b(); end done }
+  cut C { include [S,A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

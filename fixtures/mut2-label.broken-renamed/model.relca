@@ -1,0 +1,20 @@
+model Summary version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { posted }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Desk { capacity 1; capability make() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Robot { capacity 1; capability match_po(e:Entry) -> Verdict { reads [PurchaseOrder]; duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger2 { grain service; via model "doc@v3"; capacity 1; capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Book { capacity 1; capability post(p:Verdict,a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { posted } } }
+  process Flow {
+    doc = Desk.make(); p = Robot.match_po(doc); a = Ledger2.approve(doc)
+    if p == pass && a == pass {} else { end rejected }
+    z = Book.post(p,a); end done
+  }
+  cut Scope { include [Invoice,PurchaseOrder,Desk,Robot,Ledger2,Book] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

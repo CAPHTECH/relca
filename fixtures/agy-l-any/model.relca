@@ -1,0 +1,10 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor A { capacity 1; capability draw() -> V { cancel immediate; duration fixed 1min; result nondet { pass,fail } } }
+  actor B { capacity 1; capability draw() -> V { cancel immediate; duration fixed 1min; result nondet { pass,fail } } }
+  process Flow { fork f { a = A.draw(); b = B.draw() } join any f where result == pass tie by [a,b] remaining cancel_then_drain if none -> returned; end done; end returned }
+  cut K { include [A,B] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

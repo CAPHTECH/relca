@@ -1,0 +1,10 @@
+model ExecSeparation version "0.2" {
+  type T = enum { ok }
+  people [c1,a1]
+  actor Clerk { executors [c1]; capability enter() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Approver { executors [a1]; capability approve() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { x = Clerk.enter(); y = Approver.approve(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { separation Clerk.enter.finish, Approver.approve.finish }
+}

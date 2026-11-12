@@ -1,0 +1,13 @@
+model Authority version "0.2" {
+  type T = enum { pass }
+  people [r,p,q,z]
+  actor A { executors [q]; capability run() -> T { duration fixed 2min; result nondet { pass } } }
+  permit q to A.run
+  authority Parent { basis "root"; grants [p,q] to A.run; issued_by r; not_by [z]; expires 10min }
+  authority Child { basis "child"; grants q to A.run; issued_by p; expires 5min; delegated_from Parent }
+  process Flow { a = A.run(); end done }
+  cut Scope { include [A] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run Child }
+}

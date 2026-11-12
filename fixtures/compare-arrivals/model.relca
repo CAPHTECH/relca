@@ -1,0 +1,19 @@
+model CompareArrivals version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A {
+    capacity 1
+    capability slow() -> T { duration {1min:0.5,3min:0.5}; result nondet { ok }; writes hit; finish { hit = true } }
+    capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }
+  }
+  process P { a = A.slow(); end done }
+  process Q { a = A.fast(); end done }
+  cut C { include [A] }
+  configuration Aplan { cut C; process P }
+  configuration Bplan { cut C; process Q }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true within 2min >= 0.25
+}

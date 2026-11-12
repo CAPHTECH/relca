@@ -1,0 +1,16 @@
+model Cross version "0.2" {
+people [cfo]
+actor A { version "r1"; decides x: bool = true }
+actor B { version "r1"; decides x: bool = true }
+authority GA { basis "a"; grants cfo to change A; under B "r2" }
+authority GB { basis "b"; grants cfo to change B }
+process P { end done }
+cut C { include [A, B] }
+configuration AsIs { cut C; process P }
+configuration ToBeB { cut C; process P
+amend A from "r1" to "r2" by cfo under GA { x = false }
+amend B from "r1" to "r2" by cfo under GB { x = false }
+}
+bounds { cases 1; live_tasks 1; clock 10min }
+verify safety no_resource_overcommit
+}

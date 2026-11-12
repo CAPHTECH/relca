@@ -1,0 +1,16 @@
+{
+  "verdict": "satisfied",
+  "bounds": { "truncated": false },
+  "absent_diagnostics": ["W-DEADLOCK-0"],
+  "cut": "undeclared",
+  "diagnostics": [{ "code": "W-CUT-0" },{"code":"W-UNREACH-1","severity":"warning","span":{"end":632,"start":585}},{"code":"W-UNREACH-2","severity":"warning","span":{"end":580,"start":391}}],
+  "properties": [{ "id": "reachable end.done", "verdict": "satisfied" }],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": { "min": 4, "max": 4 },
+      "work": { "min": 7, "max": 7 },
+      "result_at": { "min": 3, "max": 3 }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "verdict": "satisfied",
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "metrics": {
+    "overall": {
+      "queue_wait_observed": {
+        "min": "5",
+        "max": "5",
+        "reason": null,
+        "mean": "5",
+        "samples": 4
+      }
+    }
+  }
+}

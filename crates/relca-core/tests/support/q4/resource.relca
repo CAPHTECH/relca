@@ -1,0 +1,17 @@
+model AllResources version "0.2" {
+  type R = enum { ok }
+  calendar Always through 21min on_close continue { [0min, 21min) capacity 1 }
+  calendar Day through 21min on_close continue { [0min, 4min) capacity 0; [4min, 21min) capacity 1 }
+  resource Terminal capacity 1 calendar Day
+  actor Desk { capacity 1; calendar Always
+    capability run() -> R { uses Terminal: 1; duration fixed 2min; result nondet { ok } }
+  }
+  process Flow { r = Desk.run(); end done }
+  cut C { include [Desk] }
+  arrivals fixed [0min]
+  policy fifo tie_by case_id
+  bounds { cases 1; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; rate Desk per_minute 2; rate Desk.run per_start 0; breakdown waits }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

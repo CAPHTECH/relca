@@ -1,0 +1,8 @@
+{
+  "verdict":"invalid", "mismatch":null, "differences":[], "terminals":[], "properties":[], "diagnostics":[],
+  "from":{"configuration":"AsIs","report":{"verdict":"invalid","bounds":{"truncated":null},"terminals":[],"properties":[],"diagnostics":[{"code":"E-NAME-0","severity":"error"}],"absent_diagnostics":["W-CUT-0"]}},
+  "to":{"configuration":"ToBe","report":{"verdict":"invalid","bounds":{"truncated":null},"terminals":[],"properties":[],"diagnostics":[{"code":"E-NAME-0","severity":"error"}],"absent_diagnostics":["W-CUT-0"]}},
+  "absent_diagnostics":["E-NAME-0","E-DIFF-0","E-CMP-0","W-DIFF-1","W-DIFF-2"],
+  "checked":[],
+  "unchecked":["time_intent","resource","meaning","authority","visibility","contest","preserve","override","maintain","comparison_mismatch","actor","relation","intent_claims","retire_loses"]
+}

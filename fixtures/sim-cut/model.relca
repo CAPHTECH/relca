@@ -1,0 +1,10 @@
+model Cut version "0.2" {
+  type T = enum { ok }
+  observed case { hit:bool = false }
+  actor A { capacity 1; capability c() -> T { duration fixed 3min; result nondet { ok }; writes hit; finish { hit = true } } }
+  process P { a = A.c(); end done }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify probability reached hit == true <= 0.5
+  verify probability reached hit == true >= 0.5
+  simulation replications 4 seed 0 confidence 0.5
+}

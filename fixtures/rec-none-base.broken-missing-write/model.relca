@@ -1,0 +1,13 @@
+model Records version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed, refused }
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; approval: optional<Verdict>; registered: bool = false }
+actor Extractor { capacity 1; capability extract() -> Entry { duration fixed 1min; result nondet { Entry { confidence = high }, Entry { confidence = low } } } }
+actor Approver { capacity 1; capability approve(e: Entry) -> Verdict { duration fixed 2min; result nondet { pass, fail }; writes approval } }
+process Flow { e = Extractor.extract(); a = Approver.approve(e); end done }
+contract C { invariant Approver.approve.finish -> entry.confidence == high || entry.confidence == low }
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+
+}

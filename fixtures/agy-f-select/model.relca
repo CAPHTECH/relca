@@ -1,0 +1,9 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  actor Checker { capacity 1; capability check() -> V {  duration fixed 1min; result nondet { pass,fail } } }
+  process Flow { j = Checker.check(); if j == pass { end done } else { end returned } }
+  cut K { include [Checker] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

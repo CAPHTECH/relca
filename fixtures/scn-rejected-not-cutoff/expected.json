@@ -1,0 +1,137 @@
+{
+  "verdict": "violated",
+  "mode": "exhaustive",
+  "bounds": {
+    "cases": 3,
+    "live_tasks": 1,
+    "clock": 30,
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "probability reached #1",
+      "verdict": "violated",
+      "cases": [
+        {
+          "case_id": 1,
+          "arrival": 0,
+          "verdict": "violated",
+          "probability": {
+            "min": "0",
+            "max": "0"
+          }
+        },
+        {
+          "case_id": 2,
+          "arrival": 2,
+          "verdict": "violated",
+          "probability": {
+            "min": "0",
+            "max": "0"
+          }
+        },
+        {
+          "case_id": 3,
+          "arrival": 4,
+          "verdict": "violated",
+          "probability": {
+            "min": "0",
+            "max": "0"
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [],
+  "case_outcomes": [
+    {
+      "case_id": 1,
+      "arrival": 0,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 2,
+      "arrival": 2,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": 3,
+      "arrival": 4,
+      "terminals": [
+        {
+          "kind": "rejected",
+          "end": null,
+          "completed_at": null,
+          "elapsed": null,
+          "work": null,
+          "result_at": null,
+          "probability": {
+            "min": "1",
+            "max": "1"
+          }
+        }
+      ]
+    }
+  ],
+  "absent_diagnostics": [
+    "W-DEADLOCK-0",
+    "W-BUDGET-0"
+  ],
+  "scenario": {
+    "name": "Day",
+    "arrivals": {
+      "form": "fixed_every",
+      "every": 2,
+      "from": 0,
+      "until": 6,
+      "count": 3
+    },
+    "horizon": 12,
+    "drain": {
+      "from": 4,
+      "until": 12
+    },
+    "aggregation": {
+      "from": 0,
+      "until": "horizon_or_all_terminal_or_clock",
+      "observed_until": {
+        "min": "4",
+        "max": "4",
+        "reason": null
+      }
+    },
+    "warmup": 0
+  },
+  "admission": {
+    "rejected_count": {
+      "min": 3,
+      "max": 3
+    }
+  }
+}

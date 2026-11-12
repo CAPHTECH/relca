@@ -1,0 +1,586 @@
+{
+  "rec-proxy": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-proxy.broken-latent-route": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-kernel": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-kernel.broken-sum": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-case-var": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-case-var.broken-no-write": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-approval": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-approval.broken-bypass": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-explain": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-explain.broken-bypass": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-label": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-label.broken-unrenamed": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-fork": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-fork.broken-reextract": {
+    "phase": "lower",
+    "message": "fork siblings write the same observed variable"
+  },
+  "rec-lineage": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-lineage.broken-relay": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-inline-result": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-inline-result.broken-write-declared": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-nominal": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-nominal.broken-same-members": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-size": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-size.broken-oversize": {
+    "phase": "lower",
+    "message": "record domain exceeds the supported size"
+  },
+  "rec-requires": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-requires.broken-latent-requires": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-none": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-none.broken-order": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-none-base": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-none-base.broken-missing-write": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-agency-f": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-agency-f.broken-case-guard": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-default": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-default.broken-default-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-start-finish": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-start-finish.broken-no-start": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-finish": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-finish.broken-wrong-finish": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-record-refusal": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-record-refusal.broken-no-guard": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-product": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-product.broken-one-value": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-singleton": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-singleton.broken-present": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-prob-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-prob-field.broken-bound": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-alias": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-alias.broken-stale-binding": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-legacy-arrival": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-legacy-arrival.broken-clock": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s01-latent-case": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s01-latent-case.broken-unsupported": {
+    "phase": "lower",
+    "message": "latent record is unsupported"
+  },
+  "rec-s02-latent-actor": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s02-latent-actor.broken-unsupported": {
+    "phase": "lower",
+    "message": "latent record is unsupported"
+  },
+  "rec-s03-optional-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s03-optional-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s04-integer-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s04-integer-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s05-person-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s05-person-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s06-caseid-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s06-caseid-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s07-set-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s07-set-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s08-nested-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s08-nested-field.broken-unsupported": {
+    "phase": "lower",
+    "message": "record field type is unsupported"
+  },
+  "rec-s09-inline-record-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s09-inline-record-field.broken-unsupported": {
+    "phase": "parse",
+    "message": "record field type is unsupported"
+  },
+  "rec-s11-whole-compare": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s11-whole-compare.broken-unsupported": {
+    "phase": "parse",
+    "message": "record comparison is unsupported"
+  },
+  "rec-s16-inline-record-result": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s16-inline-record-result.broken-unsupported": {
+    "phase": "parse",
+    "message": "inline record is unsupported"
+  },
+  "rec-s17-actor-state": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s17-actor-state.broken-unsupported": {
+    "phase": "lower",
+    "message": "Actor record state is unsupported"
+  },
+  "rec-s20-missing": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s20-missing.broken-invalid": {
+    "phase": "lower",
+    "message": "record value missing field"
+  },
+  "rec-s21-duplicate": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s21-duplicate.broken-invalid": {
+    "phase": "lower",
+    "message": "record value duplicate field"
+  },
+  "rec-s22-unknown": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s22-unknown.broken-invalid": {
+    "phase": "lower",
+    "message": "record value unknown field"
+  },
+  "rec-s23-undefined-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s23-undefined-field.broken-invalid": {
+    "phase": "lower",
+    "message": "undefined record field"
+  },
+  "rec-s24-ambiguous": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s24-ambiguous.broken-invalid": {
+    "phase": "lower",
+    "message": "ambiguous Actor and record"
+  },
+  "rec-s25-member": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s25-member.broken-invalid": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-s27-field-default": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s27-field-default.broken-unsupported": {
+    "phase": "parse",
+    "message": null
+  },
+  "rec-s27-field-distribution": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s27-field-distribution.broken-unsupported": {
+    "phase": "parse",
+    "message": null
+  },
+  "rec-s32-empty-declaration": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s32-empty-declaration.broken-invalid": {
+    "phase": "parse",
+    "message": "record requires a field"
+  },
+  "rec-s33-duplicate-declaration": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s33-duplicate-declaration.broken-unsupported": {
+    "phase": "lower",
+    "message": "duplicate record field"
+  },
+  "rec-s34-nominal-literal": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s34-nominal-literal.broken-invalid": {
+    "phase": "lower",
+    "message": "record value has different type"
+  },
+  "rec-s28-operator-0": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s28-operator-0.broken-comparison": {
+    "phase": "lower",
+    "message": "record field comparison is unsupported"
+  },
+  "rec-s28-operator-1": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s28-operator-1.broken-comparison": {
+    "phase": "lower",
+    "message": "record field comparison is unsupported"
+  },
+  "rec-s28-operator-2": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s28-operator-2.broken-comparison": {
+    "phase": "lower",
+    "message": "record field comparison is unsupported"
+  },
+  "rec-s28-operator-3": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s28-operator-3.broken-comparison": {
+    "phase": "lower",
+    "message": "record field comparison is unsupported"
+  },
+  "rec-s28-operator-4": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s28-operator-4.broken-comparison": {
+    "phase": "lower",
+    "message": "record field comparison is unsupported"
+  },
+  "rec-s12-none": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s12-none.broken-non-eq": {
+    "phase": "lower",
+    "message": "record comparison is unsupported"
+  },
+  "rec-s13-case": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s13-case.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s15-state": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s15-state.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s15-latent-case": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s15-latent-case.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s15-latent-actor": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s15-latent-actor.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s13-optional": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s13-optional.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s14-parameter": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s14-parameter.broken-inline": {
+    "phase": "parse",
+    "message": "inline enum position is unsupported"
+  },
+  "rec-s31-default": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s31-default.broken-missing-default": {
+    "phase": "lower",
+    "message": null
+  },
+  "rec-s26-distribution": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s26-distribution.broken-distribution": {
+    "phase": "parse",
+    "message": "record distribution is unsupported"
+  },
+  "rec-s10-field-write": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s10-field-write.broken-field": {
+    "phase": "lower",
+    "message": "record field assignment is unsupported"
+  },
+  "rec-s30-field-arithmetic": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s30-field-arithmetic.broken-field": {
+    "phase": "lower",
+    "message": "record field assignment is unsupported"
+  },
+  "rec-s18-given": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s18-given.broken-record": {
+    "phase": "lower",
+    "message": "record in kernel given is unsupported"
+  },
+  "rec-s19-given-field": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-s19-given-field.broken-record": {
+    "phase": "lower",
+    "message": "record in kernel given is unsupported"
+  },
+  "rec-context-requires": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-requires.broken-parameter": {
+    "phase": "lower",
+    "message": "record parameter condition is unsupported"
+  },
+  "rec-context-scope": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-scope.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  },
+  "rec-context-probability": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-probability.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  },
+  "rec-context-event": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-event.broken-binding-control": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-duty-compare": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-duty-compare.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  },
+  "rec-context-duty-and": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-duty-and.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  },
+  "rec-context-duty-or": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-duty-or.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  },
+  "rec-context-duty-implies": {
+    "phase": "runtime",
+    "message": null
+  },
+  "rec-context-duty-implies.broken-binding": {
+    "phase": "lower",
+    "message": "record binding is unsupported in this condition"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "verdict": "invalid",
+  "diagnostics": [
+    {
+      "code": "E-CAP-0"
+    }
+  ],
+  "properties": [],
+  "terminals": []
+}

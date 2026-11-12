@@ -1,0 +1,37 @@
+model ExpenseMin version "0.2" {
+  type Claim = enum { filed }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  people [e1, m1]
+  observed case { approval: optional<Verdict>; paid: bool = false }
+  actor Receipt { source document }
+  actor Applicant { executors [e1]
+    capability submit() -> Claim { reads [Receipt]; duration fixed 10min; result nondet { filed } }
+  }
+  actor Manager { executors [m1]
+    capability review(c:Claim) -> Verdict { reads [Receipt]; duration fixed 5min; result nondet { pass, fail }; writes approval }
+  }
+  actor Ledger { capacity 1
+    capability post(a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed }; writes paid; finish { paid = true } }
+  }
+  responsible m1 for Manager.review
+  cut ExpenseCut {
+    question "One expense claim from receipt to ledger"
+    include [Receipt, Applicant, Manager, Ledger]
+    exclude Payment reason "bank transfer is a separate domain" loses "payment errors"
+  }
+  bounds { cases 1; live_tasks 1; clock 30min }
+  verify safety no_resource_overcommit
+  verify reachable end.paid
+  contract ExpenseControls {
+    invariant Ledger.post.commit -> approval == pass
+    separation Applicant.submit.finish, Manager.review.finish
+  }
+  process Flow {
+    claim = Applicant.submit()
+    approvalV = Manager.review(claim)
+    if approvalV == pass {} else { end rejected }
+    posted = Ledger.post(approvalV)
+    if posted == committed { end paid } else { end exception }
+  }
+}

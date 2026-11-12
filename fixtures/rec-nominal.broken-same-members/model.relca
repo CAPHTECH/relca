@@ -1,0 +1,11 @@
+model Records version "0.2" {
+type Choice = enum { withdraw, dispute }
+observed case { outcome: optional<Choice> }
+actor Desk { capacity 1; capability decide() -> enum { withdraw, dispute } { writes outcome; duration fixed 1min; result nondet { withdraw, dispute } } }
+process Flow { d = Desk.decide(); if d == dispute { end disputed } else { end withdrawn } }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.disputed
+verify reachable end.withdrawn
+}

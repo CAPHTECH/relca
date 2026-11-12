@@ -1,0 +1,16 @@
+model Authority version "0.2" {
+  type T = enum { ok, bad }
+  people [p,q,issuer]
+  actor Officer { executors [p]; capability release() -> T { commits; duration fixed 1min; result nondet { ok } } }
+  actor B { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Wait { capacity 1; capability run() -> T { duration fixed 4min; result nondet { ok } } }
+  permit [p,q] to Officer.release
+  authority G { basis "registered authority"; grants [p,q] to Officer.release; issued_by issuer }
+  process Flow { o = Officer.release(); w = Wait.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    response delivery: case.received -> one_of(B.run.finish) by 2min after case.received otherwise unresolved
+    waive delivery on Officer.release.finish reason "registered exception" authorized_by G
+  }
+}

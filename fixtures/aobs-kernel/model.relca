@@ -1,0 +1,9 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  kernel K { * -> { 1: ok } }; actor A { capacity 1; state flag: bool = true; capability run() -> R { duration fixed 1min; outcomes kernel K } }
+  process P { a = A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+
+  verify safety no_resource_overcommit
+}

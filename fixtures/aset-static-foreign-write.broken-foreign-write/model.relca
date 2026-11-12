@@ -1,0 +1,22 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered: bool = false }
+
+  actor Other{state keys:set<CaseId>};actor Ledger { capacity 1; state keys: set<CaseId>; capability post(key: CaseId) -> Ack {
+      commits
+      writes [keys, registered]
+      duration fixed 1min
+      atomic {
+        if key in keys { result rejected_duplicate }
+        else { Other.keys += key; registered = true; result committed }
+      }
+      cancel forbidden_after_start
+    } }
+  process Flow { a = Ledger.post(case.id); b = Ledger.post(case.id); if b == rejected_duplicate { end dup } else { end twice } }
+  cut K { include [Ledger,Other] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  contract C { at_most_once Ledger.post.commit per case.id }
+  verify reachable end.dup
+}

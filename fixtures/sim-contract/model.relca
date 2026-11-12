@@ -1,0 +1,16 @@
+model Contract version "0.2" {
+  type T = enum { ok }
+  observed case { good:bool = true }
+  actor A { capacity 1; capability a() -> T { commits; duration fixed 1min; result nondet { ok } } }
+  actor B { capacity 1; capability b() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { a = A.a(); b = B.b(); end done }
+  bounds { cases 1; live_tasks 1; clock 3min }
+  verify safety no_resource_overcommit
+  contract Controls {
+    invariant A.a.finish -> good == true
+    at_most_once A.a.commit per case.id
+    response case.received -> one_of(end.done) by 2min after case.received otherwise unresolved
+    requires_event B.b.start after A.a.finish
+  }
+  simulation replications 4 seed 0 confidence 0.5
+}

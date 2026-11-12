@@ -1,0 +1,23 @@
+model SensitivityValues version "0.2" {
+  type Verdict = enum { pass, fail }
+  latent case { wrong: bool ~ { true: 0.02, false: 0.98 } }
+  observed case { v: optional<Verdict> }
+  kernel Inspect given [wrong] {
+    true -> { 0.25: pass; 0.75: fail }
+    false -> { 1: pass }
+  }
+  actor Check { capacity 1
+    capability inspect() -> Verdict {
+      duration fixed 1min
+      outcomes kernel Inspect
+      kernel_reads latent [wrong]
+      writes v
+    }
+  }
+  process Flow { v = Check.inspect(); if v == pass { end accepted } else { end rejected } }
+  cut C { include [Check] }
+  bounds { cases 1; live_tasks 2; clock 4min }
+  verify safety no_resource_overcommit
+  verify probability reached wrong == true && v == pass <= 0.008
+  simulation replications 4 seed 0 confidence 0.875
+}

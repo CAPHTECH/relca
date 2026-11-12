@@ -1,0 +1,92 @@
+model Conflict version "0.2" {
+  type R = enum { committed, conflict }
+  type H = enum { free, taken }
+  actor Ledger {
+    capacity 2
+    state padding0:bool=false
+    state padding1:bool=false
+    state padding2:bool=false
+    state padding3:bool=false
+    state padding4:bool=false
+    state padding5:bool=false
+    state padding6:bool=false
+    state padding7:bool=false
+    state padding8:bool=false
+    state padding9:bool=false
+    state padding10:bool=false
+    state padding11:bool=false
+    state padding12:bool=false
+    state padding13:bool=false
+    state padding14:bool=false
+    state padding15:bool=false
+    state padding16:bool=false
+    state padding17:bool=false
+    state padding18:bool=false
+    state padding19:bool=false
+    state padding20:bool=false
+    state padding21:bool=false
+    state padding22:bool=false
+    state padding23:bool=false
+    state padding24:bool=false
+    state padding25:bool=false
+    state padding26:bool=false
+    state padding27:bool=false
+    state padding28:bool=false
+    state padding29:bool=false
+    state padding30:bool=false
+    state padding31:bool=false
+    state padding32:bool=false
+    state padding33:bool=false
+    state padding34:bool=false
+    state padding35:bool=false
+    state padding36:bool=false
+    state padding37:bool=false
+    state padding38:bool=false
+    state padding39:bool=false
+    state padding40:bool=false
+    state padding41:bool=false
+    state padding42:bool=false
+    state padding43:bool=false
+    state padding44:bool=false
+    state padding45:bool=false
+    state padding46:bool=false
+    state padding47:bool=false
+    state padding48:bool=false
+    state padding49:bool=false
+    state padding50:bool=false
+    state padding51:bool=false
+    state padding52:bool=false
+    state padding53:bool=false
+    state padding54:bool=false
+    state padding55:bool=false
+    state padding56:bool=false
+    state padding57:bool=false
+    state padding58:bool=false
+    state padding59:bool=false
+    state padding60:bool=false
+    state padding61:bool=false
+    state padding62:bool=false
+    state padding63:bool=false
+    state padding64:bool=false
+    state holder: H = free
+    state claims: 0..1 = 0
+    capability claim() -> R {
+      version_check [holder] else conflict
+      commits
+      duration fixed 1min
+      result nondet { committed }
+      writes [holder, claims]
+      finish { holder = taken; claims += 1 }
+    }
+  }
+  process P {
+    r = Ledger.claim()
+    if r == committed { end claimed } else { end retry_needed }
+  }
+  cut C { include [Ledger] }
+  bounds { cases 2; live_tasks 1; clock 10min }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  verify reachable end.claimed
+  verify reachable end.retry_needed
+}

@@ -1,0 +1,21 @@
+model ResponsibilityRefusal version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  people [a1]
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Approver { executors [a1]; capability approve(e:Entry) -> Verdict { reads [Invoice]; duration fixed 1min; result nondet { pass,fail } } }
+  actor Ledger { capacity 1; capability post(v:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } } }
+  responsible a1 for Approver.approve
+  process Flow {
+    entry = Reader.enter()
+    approval = Approver.approve(entry)
+    if approval == pass { } else { }
+    posted = Ledger.post(approval)
+    end done
+  }
+  cut Scope { include [Invoice,Reader,Approver,Ledger] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

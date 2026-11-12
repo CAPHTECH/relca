@@ -1,0 +1,16 @@
+model ExplainInvariant version "0.2" {
+  type Verdict = enum { pass, fail }
+  type Ack = enum { ok }
+  actor Approver { capacity 1; capability check() -> Verdict { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post() -> Ack { commits; duration fixed 1min; result nondet { ok } } }
+  process Flow {
+    approval = Approver.check()
+    if approval == pass { } else { }
+    posted = Ledger.post()
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  cut Scope { question "example"; include [Approver, Ledger] }
+  verify safety no_resource_overcommit
+  contract Controls { invariant Ledger.post.commit -> approval == pass }
+}

@@ -1,0 +1,31 @@
+model M version "0.2" {
+type T = enum { ok }
+observed case { hit: bool = false }
+actor A {
+  capacity 1
+  capability run() -> T {
+    duration fixed 3min
+    result nondet { ok }
+    writes hit
+    finish { hit = true }
+  }
+  capability fast() -> T { duration fixed 1min; result nondet { ok }; writes hit; finish { hit = true } }
+}
+process Q { q = A.fast(); end done }
+process Flow { r = A.run(); end done }
+cut C { include [A] }
+policy fifo tie_by case_id
+scenario Light {
+  arrivals fixed_every 4min during [0min, 12min)
+  bounds { cases 3; live_tasks 1; clock 30min }
+
+}
+scenario Busy {
+  arrivals fixed_every 1min during [0min, 3min)
+  bounds { cases 3; live_tasks 1; clock 30min }
+
+}
+configuration Slow { cut C; process Flow }
+configuration Fast { cut C; process Q }
+verify probability reached hit == true within 4min >= 1
+}

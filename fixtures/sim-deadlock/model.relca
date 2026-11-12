@@ -1,0 +1,9 @@
+model Deadlock version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability a() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { a = A.a(); end done }
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify safety no_resource_overcommit
+  verify reachable end.done
+  simulation replications 4 seed 0 confidence 0.5
+}

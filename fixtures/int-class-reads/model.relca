@@ -1,0 +1,9 @@
+model Classification version "0.2" {
+  type T = enum { ok, no }
+  observed case { flag: bool = false }
+  actor S { source record }
+  actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok }; reads [S] } }
+  process P { a = A.run(); end done }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

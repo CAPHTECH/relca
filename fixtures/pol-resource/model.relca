@@ -1,0 +1,14 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  resource R capacity 1
+  actor A { capacity 2;  capability x() -> T { uses R:1; duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+  actor B { capacity 2;  capability y() -> T { uses R:1; duration fixed 3min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { a = A.x(); b = B.y(); end done }
+  cut C { include [A,B] }
+  bounds { cases 2; live_tasks 8; clock 10min }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id then call_order
+  verify safety no_resource_overcommit
+verify reachable end.done
+}

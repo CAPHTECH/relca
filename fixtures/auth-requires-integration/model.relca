@@ -1,0 +1,12 @@
+model Authority version "0.2" {
+  type T = enum { rejected }
+  people [r,q]
+  observed case { enabled: bool = false; allowed: bool = false }
+  actor A { executors [q]; capability run() -> T { requires enabled == true else rejected; commits; duration fixed 2min; result nondet { rejected } } }
+  permit q to A.run
+  authority G { basis "no finish on rejection"; grants q to A.run; issued_by r; scope allowed == true; expires 100min }
+  process Flow { a = A.run(); end returned }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis A.run G }
+}

@@ -1,0 +1,1 @@
+{"verdict":"invalid","mode":"mutation","analysis":"exhaustive","set":"bpr-default","original_verdict":"invalid","run":{"completion":"blocked","reason":"original_not_decidable","mutant_limit":128,"limit_reached":false},"original":{"diagnostics":[{"code":"E-NAME-0","severity":"error"},{"code":"W-CUT-0","severity":"warning"}]}}

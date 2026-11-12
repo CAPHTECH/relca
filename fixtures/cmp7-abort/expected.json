@@ -1,0 +1,139 @@
+{
+  "verdict": "unsupported",
+  "evaluation": {
+    "rules": "compare-evaluation-p1-1",
+    "declared": {
+      "plans": [
+        "Good",
+        "Bad"
+      ],
+      "under": null,
+      "scenario": null,
+      "cut": "C"
+    },
+    "hard": [
+      {
+        "constraint": "cohort.WrongPerArrival <= 3/5",
+        "cohort": "WrongPerArrival",
+        "op": "<=",
+        "bound": "3/5",
+        "values": [
+          {
+            "configuration": "Good",
+            "verdict": "unsupported",
+            "basis": null,
+            "interval": null,
+            "reason": "aborted",
+            "source_reason": null,
+            "point": null
+          },
+          {
+            "configuration": "Bad",
+            "verdict": "inconclusive",
+            "basis": "statistical",
+            "interval": {
+              "lower": "1/2",
+              "upper": "1"
+            },
+            "reason": null,
+            "source_reason": null,
+            "point": "1"
+          }
+        ]
+      }
+    ],
+    "plans": [
+      {
+        "configuration": "Good",
+        "verify_verdict": "unsupported",
+        "hard_verdict": "unsupported",
+        "status": "undetermined",
+        "reasons": [
+          {
+            "kind": "verify",
+            "constraint": null,
+            "verdict": "unsupported",
+            "reason": null
+          },
+          {
+            "kind": "hard",
+            "constraint": "cohort.WrongPerArrival <= 3/5",
+            "verdict": "unsupported",
+            "reason": "aborted"
+          }
+        ]
+      },
+      {
+        "configuration": "Bad",
+        "verify_verdict": "satisfied",
+        "hard_verdict": "inconclusive",
+        "status": "undetermined",
+        "reasons": [
+          {
+            "kind": "hard",
+            "constraint": "cohort.WrongPerArrival <= 3/5",
+            "verdict": "inconclusive",
+            "reason": null
+          }
+        ]
+      }
+    ],
+    "objectives": [
+      {
+        "objective": "minimize metrics.overall.work",
+        "direction": "minimize",
+        "values": [
+          {
+            "configuration": "Good",
+            "sample": {
+              "mean": null,
+              "min": null,
+              "max": null,
+              "samples": 0,
+              "reason": "aborted"
+            },
+            "reason": "aborted"
+          },
+          {
+            "configuration": "Bad",
+            "sample": {
+              "mean": "2",
+              "min": "2",
+              "max": "2",
+              "samples": 3,
+              "reason": null
+            },
+            "reason": null
+          }
+        ]
+      }
+    ],
+    "pareto": {
+      "status": "not_computed",
+      "reason": "simulation_estimates",
+      "among": [],
+      "non_dominated": [],
+      "dominated": [],
+      "undetermined_pairs": [],
+      "not_evaluated": [
+        {
+          "configuration": "Good",
+          "status": "undetermined"
+        },
+        {
+          "configuration": "Bad",
+          "status": "undetermined"
+        }
+      ]
+    },
+    "statistics": {
+      "interval_method": "clopper-pearson-per-case-sum",
+      "multiplicity": {
+        "method": "bonferroni",
+        "m": 2,
+        "alpha": "1/8"
+      },
+      "confidence": "1/2"
+    }
+  }
+}

@@ -1,0 +1,704 @@
+[
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-no-hard",
+    "start": 1754,
+    "end": 1794,
+    "old": "hard { cohort.WrongPerArrival <= 0.05 } ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-latent-fast",
+    "start": 1350,
+    "end": 1350,
+    "old": "",
+    "new": "if correct == true {} else {}; ",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-contention",
+    "broken": "eval-contention.broken-no-policy",
+    "start": 515,
+    "end": 544,
+    "old": "policy fifo tie_by case_id\n  ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-clock",
+    "broken": "cmp7-clock.broken-short-clock",
+    "start": 906,
+    "end": 908,
+    "old": "30",
+    "new": "14",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-clock-loose",
+    "broken": "cmp7-clock-loose.broken-crossing",
+    "start": 1794,
+    "end": 1795,
+    "old": "5",
+    "new": "3",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-clock-strict",
+    "broken": "cmp7-clock-strict.broken-crossing",
+    "start": 1794,
+    "end": 1796,
+    "old": "01",
+    "new": "3",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-zero",
+    "broken": "eval-zero.broken-all-fail",
+    "start": 206,
+    "end": 274,
+    "old": "0.9: pass with correct = true; 0.02: pass with correct = false; 0.08",
+    "new": "1",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-sim",
+    "broken": "eval-sim.broken-tight",
+    "start": 1644,
+    "end": 1645,
+    "old": "6",
+    "new": "4",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-sim-ratio",
+    "broken": "eval-sim-ratio.broken-tight",
+    "start": 1647,
+    "end": 1648,
+    "old": "1",
+    "new": "05",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-pareto",
+    "broken": "eval-pareto.broken-work-only",
+    "start": 1776,
+    "end": 1809,
+    "old": "cohort.WrongPerArrival; minimize ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-cost",
+    "broken": "cmp7-cost.broken-missing-rate",
+    "start": 1642,
+    "end": 1674,
+    "old": "check per_start 0; rate Checker.",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-shared-source",
+    "broken": "eval-shared-source.broken-one-objective",
+    "start": 857,
+    "end": 903,
+    "old": "; minimize metrics.overall.observed_cost_total",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-vacuous",
+    "broken": "eval-vacuous.broken-reached",
+    "start": 1553,
+    "end": 1558,
+    "old": "Quick",
+    "new": "Flow",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-agency",
+    "broken": "eval-agency.broken-swapped",
+    "start": 796,
+    "end": 807,
+    "old": "AsIs, ToBeP",
+    "new": "ToBeP, AsIs",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-agency",
+    "broken": "eval-agency.broken-implicit-cut",
+    "start": 808,
+    "end": 814,
+    "old": " cut C",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-mut7",
+    "broken": "eval-mut7.broken-no-cohort",
+    "start": 1040,
+    "end": 1309,
+    "old": "  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals\n  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))\n  metric cohort.WrongPerResolved = expected(count(case.Wrong)) / expected(count(case.Resolved))\n",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-label",
+    "broken": "eval-label.broken-no-policy",
+    "start": 539,
+    "end": 568,
+    "old": "policy fifo tie_by case_id\n  ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-equality-le",
+    "broken": "cmp7-equality-le.broken-strict",
+    "start": 1707,
+    "end": 1708,
+    "old": "=",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-equality-ge",
+    "broken": "cmp7-equality-ge.broken-strict",
+    "start": 1707,
+    "end": 1708,
+    "old": "=",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-row-multiplicity",
+    "broken": "cmp7-row-multiplicity.broken-another-row",
+    "start": 1644,
+    "end": 1644,
+    "old": "",
+    "new": "; cohort.WrongPerArrival <= 0.95",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-case-multiplicity",
+    "broken": "cmp7-case-multiplicity.broken-one-case",
+    "start": 958,
+    "end": 985,
+    "old": ", 10min]\n  bounds { cases 2",
+    "new": "]\n  bounds { cases 1",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-sim-zero",
+    "broken": "cmp7-sim-zero.broken-registered",
+    "start": 645,
+    "end": 649,
+    "old": "fals",
+    "new": "tru",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-overlap",
+    "broken": "cmp7-overlap.broken-narrow",
+    "start": 112,
+    "end": 131,
+    "old": "{3min:0.5,6min:0.5}",
+    "new": "fixed 3min",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-maximize",
+    "broken": "cmp7-maximize.broken-minimize",
+    "start": 1694,
+    "end": 1696,
+    "old": "ax",
+    "new": "in",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-no-admissible",
+    "broken": "cmp7-no-admissible.broken-one-admissible",
+    "start": 1711,
+    "end": 1713,
+    "old": "05",
+    "new": "1",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-abort",
+    "broken": "cmp7-abort.broken-deterministic",
+    "start": 388,
+    "end": 394,
+    "old": ", fail",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-report",
+    "start": 1838,
+    "end": 1838,
+    "old": "",
+    "new": " report [work]",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-weight",
+    "start": 1838,
+    "end": 1838,
+    "old": "",
+    "new": " weight 1",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-score",
+    "start": 1838,
+    "end": 1838,
+    "old": "",
+    "new": " score 1",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-hard-metric",
+    "start": 1761,
+    "end": 1783,
+    "old": "cohort.WrongPerArrival",
+    "new": "metrics.overall.work",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-hard-quantile",
+    "start": 1761,
+    "end": 1783,
+    "old": "cohort.WrongPerArrival",
+    "new": "quantile.Median",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-hard-case",
+    "start": 1762,
+    "end": 1783,
+    "old": "ohort.WrongPerArrival",
+    "new": "ase.Wrong",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-no-direction",
+    "start": 1808,
+    "end": 1817,
+    "old": "inimize m",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-utilization",
+    "start": 1832,
+    "end": 1836,
+    "old": "work",
+    "new": "utilization",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-waiting",
+    "start": 1832,
+    "end": 1836,
+    "old": "work",
+    "new": "queue_wait_observed",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-agency",
+    "start": 1816,
+    "end": 1836,
+    "old": "metrics.overall.work",
+    "new": "agency.F",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-case-objective",
+    "start": 1816,
+    "end": 1836,
+    "old": "metrics.overall.work",
+    "new": "case.Wrong",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-quantile",
+    "start": 1816,
+    "end": 1836,
+    "old": "metrics.overall.work",
+    "new": "quantile.Median",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-duplicate-declaration",
+    "start": 1839,
+    "end": 1839,
+    "old": "",
+    "new": "  compare [Check, Fast] cut C hard { cohort.WrongPerArrival <= 0.05 } objectives { minimize metrics.overall.work }\n",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-duplicate-hard",
+    "start": 1791,
+    "end": 1791,
+    "old": "",
+    "new": "; cohort.WrongPerArrival <= 0.050",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-duplicate-objective",
+    "start": 1836,
+    "end": 1836,
+    "old": "",
+    "new": "; minimize metrics.overall.work",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-unknown-plan",
+    "start": 1742,
+    "end": 1746,
+    "old": "Fast",
+    "new": "Missing",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-unknown-cohort",
+    "start": 1768,
+    "end": 1783,
+    "old": "WrongPerArrival",
+    "new": "Missing",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-unknown-objective",
+    "start": 1816,
+    "end": 1836,
+    "old": "metrics.overall.work",
+    "new": "cohort.Missing",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-unknown-cut",
+    "start": 1752,
+    "end": 1753,
+    "old": "C",
+    "new": "Missing",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-out-of-range",
+    "start": 1787,
+    "end": 1790,
+    "old": "0.0",
+    "new": "1.",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-fraction",
+    "start": 1787,
+    "end": 1791,
+    "old": "0.05",
+    "new": "1/2",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-exponent",
+    "start": 1787,
+    "end": 1791,
+    "old": "0.05",
+    "new": "5e-2",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-one-plan",
+    "start": 1740,
+    "end": 1746,
+    "old": ", Fast",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-same-plan",
+    "start": 1742,
+    "end": 1746,
+    "old": "Fast",
+    "new": "Check",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-empty-plans",
+    "start": 1735,
+    "end": 1746,
+    "old": "Check, Fast",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-empty-hard",
+    "start": 1760,
+    "end": 1792,
+    "old": " cohort.WrongPerArrival <= 0.05 ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-empty-objectives",
+    "start": 1806,
+    "end": 1837,
+    "old": " minimize metrics.overall.work ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-missing-bracket",
+    "start": 1746,
+    "end": 1747,
+    "old": "]",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-process",
+    "start": 1350,
+    "end": 1350,
+    "old": "",
+    "new": "compare [Check, Fast]; ",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-configuration",
+    "start": 1512,
+    "end": 1512,
+    "old": "",
+    "new": "ompare [Check, Fast]; c",
+    "invocation_only": false
+  },
+  {
+    "base": "eval-hard",
+    "broken": "eval-hard.broken-plan-order",
+    "start": 1841,
+    "end": 1841,
+    "old": "",
+    "new": "",
+    "invocation_only": true
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-duplicate",
+    "start": 1918,
+    "end": 1923,
+    "old": "Spare",
+    "new": "Day",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-unknown",
+    "start": 1918,
+    "end": 1923,
+    "old": "Spare",
+    "new": "Missing",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-empty",
+    "start": 1913,
+    "end": 1923,
+    "old": "Day, Spare",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-cut",
+    "start": 1930,
+    "end": 1930,
+    "old": "",
+    "new": "2",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-scenario-body",
+    "start": 1760,
+    "end": 1760,
+    "old": "",
+    "new": "compare [Check, Fast]; ",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-outside",
+    "start": 2018,
+    "end": 2018,
+    "old": "",
+    "new": "",
+    "invocation_only": true
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-omitted",
+    "start": 2018,
+    "end": 2018,
+    "old": "",
+    "new": "",
+    "invocation_only": true
+  },
+  {
+    "base": "cmp7-under",
+    "broken": "cmp7-under.broken-several",
+    "start": 2018,
+    "end": 2018,
+    "old": "",
+    "new": "",
+    "invocation_only": true
+  },
+  {
+    "base": "cmp7-under-one",
+    "broken": "cmp7-under-one.broken-omitted",
+    "start": 2011,
+    "end": 2011,
+    "old": "",
+    "new": "",
+    "invocation_only": true
+  },
+  {
+    "base": "cmp7-overall",
+    "broken": "cmp7-overall.broken-opposite-direction",
+    "start": 904,
+    "end": 906,
+    "old": "in",
+    "new": "ax",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-mut-state",
+    "broken": "cmp7-mut-state.broken-ends",
+    "start": 957,
+    "end": 975,
+    "old": "registered == true",
+    "new": "end.posted || end.returned",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-mut-singleton",
+    "broken": "cmp7-mut-singleton.broken-union",
+    "start": 967,
+    "end": 967,
+    "old": "",
+    "new": " || end.returned",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-sim-no-hard",
+    "broken": "cmp7-sim-no-hard.broken-no-objectives",
+    "start": 1608,
+    "end": 1653,
+    "old": " objectives { minimize metrics.overall.work }",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-overlap-max",
+    "broken": "cmp7-overlap-max.broken-narrow",
+    "start": 112,
+    "end": 131,
+    "old": "{6min:0.5,9min:0.5}",
+    "new": "fixed 9min",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-responsibility",
+    "broken": "cmp7-responsibility.broken-no-inspect",
+    "start": 980,
+    "end": 1004,
+    "old": "i = Approver.inspect(); ",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-three-plans",
+    "broken": "cmp7-three-plans.broken-another-excluded",
+    "start": 1764,
+    "end": 1768,
+    "old": "Flow",
+    "new": "Quick",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-shared-cohort",
+    "broken": "cmp7-shared-cohort.broken-one-objective",
+    "start": 1798,
+    "end": 1834,
+    "old": "; minimize cohort.WrongPerRegistered",
+    "new": "",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-no-metrics",
+    "broken": "cmp7-no-metrics.broken-configured",
+    "start": 588,
+    "end": 588,
+    "old": "",
+    "new": "metrics { window 10min; currency \"JPY\"; rate Office per_minute 100; rate Office.short per_start 2; rate Office.long per_start 3 }\n  ",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-named-work",
+    "broken": "cmp7-named-work.broken-anonymous",
+    "start": 83,
+    "end": 99,
+    "old": "executors [p, q]",
+    "new": "capacity 2",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-verify-excluded",
+    "broken": "cmp7-verify-excluded.broken-verify-satisfied",
+    "start": 1785,
+    "end": 1789,
+    "old": "fals",
+    "new": "tru",
+    "invocation_only": false
+  },
+  {
+    "base": "cmp7-nondyadic",
+    "broken": "cmp7-nondyadic.broken-tight",
+    "start": 1636,
+    "end": 1637,
+    "old": "9",
+    "new": "88",
+    "invocation_only": false
+  }
+]

@@ -1,0 +1,9 @@
+model Vector version "0.2" {
+ type Pick=enum{long,short};type H=enum{free,taken};type R=enum{committed,conflict}
+ actor Picker{capacity 2;capability choose()->Pick{duration fixed 1min;result nondet{long,short}}}
+ actor Ledger{capacity 2;state x:H=free;state y:H=free last_write_wins;
+ capability long()->R{version_check [x] else conflict;commits;writes[x,y];finish{x=taken;y=taken};duration fixed 5min;result nondet{committed}}
+ capability short()->R{version_check [y] else conflict;commits;writes y;finish{y=taken};duration fixed 1min;result nondet{committed}}}
+ process P{p=Picker.choose();if p==long {a=Ledger.long()} else {b=Ledger.short()};end done}
+ cut C{include[Picker,Ledger]};bounds{cases 2;live_tasks 1;clock 10min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify safety no_resource_overcommit
+}

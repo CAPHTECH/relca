@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[{"kind":"relation","target":"A.b","change":"added"},{"kind":"relation","target":"A.a","change":"removed"},{"kind":"visibility","target":"S","change":"modified","from":["A"],"to":[],"reason":null,"loses":null}]}

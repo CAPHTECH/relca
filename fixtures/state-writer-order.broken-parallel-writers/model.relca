@@ -1,0 +1,11 @@
+model StateWriterOrder version "0.2" {
+  type T = enum { ok }
+  observed case { flag: bool = false }
+  actor A { capacity 1; capability set() -> T { duration fixed 1min; result nondet { ok }; writes flag; finish { flag = true } } }
+  actor B { capacity 1; capability clear() -> T { duration fixed 1min; result nondet { ok }; writes flag; finish { flag = false } } }
+  actor Probe { capacity 1; capability check() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { fork f { a = A.set(); b = B.clear() }; join all f; p = Probe.check(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { invariant Probe.check.finish -> flag == false }
+}

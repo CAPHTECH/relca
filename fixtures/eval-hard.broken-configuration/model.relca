@@ -1,0 +1,24 @@
+model QualityBase version "0.2" {
+  type V = enum { pass, fail }
+  type Ack = enum { committed }
+  observed case { registered: bool = false }
+  latent case { correct: bool = false }
+  kernel judge { * -> { 0.9: pass with correct = true; 0.02: pass with correct = false; 0.08: fail with correct = false } }
+  actor Checker { capacity 2; capability quick() -> V { duration fixed 1min; outcomes kernel lenient; writes correct }; capability check() -> V { duration fixed 3min; outcomes kernel judge; writes correct } }
+  actor Ledger { capacity 2; capability post() -> Ack { commits; duration fixed 1min; result nondet { committed }; writes registered; finish { registered = true } } }
+  process Flow { v = Checker.check(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }
+  cut C { include [Checker, Ledger] }
+  arrivals fixed [0min, 10min]
+  bounds { cases 2; live_tasks 2; clock 30min }
+  verify reachable end.posted
+  property case.Wrong = reached(registered == true && correct == false)
+  property case.Registered = reached(registered == true)
+  metric cohort.WrongPerArrival = expected(count(case.Wrong)) / arrivals
+  metric cohort.WrongPerRegistered = expected(count(case.Wrong)) / expected(count(case.Registered))
+  kernel lenient { * -> { 0.9: pass with correct = true; 0.1: pass with correct = false } }
+  process Quick { v = Checker.quick(); if v == pass {} else { end returned }; a = Ledger.post(); end posted }
+  configuration Check { cut C; process Flow }
+  configuration Fast { compare [Check, Fast]; cut C; process Quick }
+  metrics { window 30min; currency "JPY"; rate Checker per_minute 1; rate Ledger per_minute 1; rate Checker.check per_start 0; rate Checker.quick per_start 0; rate Ledger.post per_start 0 }
+  compare [Check, Fast] cut C hard { cohort.WrongPerArrival <= 0.05 } objectives { minimize metrics.overall.work }
+}

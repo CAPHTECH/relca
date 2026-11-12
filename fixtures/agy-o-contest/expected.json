@@ -1,0 +1,179 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [],
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-1",
+      "scope": "selected_process_lexical_calls_and_declared_contest_routes",
+      "observation": {
+        "status": "derived",
+        "sources": [
+          {
+            "actor": "Invoice",
+            "normal": {
+              "actors": [
+                "Reader"
+              ],
+              "people": [],
+              "unattributed_actors": [
+                "Reader"
+              ]
+            },
+            "contest": {
+              "actors": [
+                "Clerk"
+              ],
+              "people": [
+                "c1",
+                "c2"
+              ],
+              "unattributed_actors": [],
+              "routes": [
+                "Clerk.recheck"
+              ]
+            }
+          }
+        ],
+        "people": [
+          {
+            "person": "c1",
+            "normal": {
+              "direct": [],
+              "indirect": []
+            },
+            "contest": {
+              "direct": [
+                "Invoice"
+              ]
+            }
+          },
+          {
+            "person": "c2",
+            "normal": {
+              "direct": [],
+              "indirect": []
+            },
+            "contest": {
+              "direct": [
+                "Invoice"
+              ]
+            }
+          },
+          {
+            "person": "a1",
+            "normal": {
+              "direct": [],
+              "indirect": [
+                "Invoice"
+              ]
+            },
+            "contest": {
+              "direct": []
+            }
+          },
+          {
+            "person": "cfo",
+            "normal": {
+              "direct": [],
+              "indirect": []
+            },
+            "contest": {
+              "direct": []
+            }
+          }
+        ],
+        "fallback": "unchecked"
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "returned",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "approval",
+                "capability": "Approver.approve",
+                "selects": "all_contexts"
+              }
+            ],
+            "read_only": []
+          },
+          {
+            "end": "posted",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [
+              {
+                "call": "approval",
+                "capability": "Approver.approve",
+                "selects": "all_contexts"
+              }
+            ],
+            "read_only": []
+          }
+        ],
+        "actors": [
+          "Approver"
+        ],
+        "complete": true,
+        "unchecked": [
+          "type_domain_authority",
+          "practical_framing"
+        ]
+      },
+      "proposal": {
+        "status": "not_derived",
+        "reason": "no_proposal_contract"
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "Reader.enter",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Clerk.recheck",
+            "status": "derived",
+            "normal": {
+              "min": 0,
+              "max": 0
+            },
+            "contest_route": true,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "Approver.approve",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ],
+        "notice": "行使回数から不要とは判定しない",
+        "unchecked": [
+          "fallback_dependency",
+          "retention_basis",
+          "actual_skill"
+        ]
+      }
+    }
+  }
+}

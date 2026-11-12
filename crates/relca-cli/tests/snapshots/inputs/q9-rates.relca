@@ -1,0 +1,21 @@
+model Q9 version "0.2" {
+  type T = enum { pass, fail }
+  people [j,r]
+  actor Judge { executors [j]; capability decide() -> T { duration fixed 1min; result nondet { fail } } }
+  actor Reviewer { executors [r]; capability reply() -> T { duration { 2min:0.75, 4min:0.25 }; result nondet { pass } } }
+  actor Party { control party; standing over [end.returned,end.posted] basis "synthetic claim" }
+  permit j to Judge.decide
+  permit r to Reviewer.reply
+  authority G { basis "decision"; grants j to Judge.decide }
+  process Flow { d = Judge.decide(); if d == fail { end returned } else { end posted } }
+  cut Scope { include [Judge,Reviewer,Party] }
+  bounds { cases 1; live_tasks 4; clock 20min }
+  metrics { window 20min; currency "JPY"; rate Judge per_minute 0; rate Reviewer per_minute 10; rate Judge.decide per_start 0; rate Reviewer.reply per_start 2 }
+  verify reachable end.returned
+  simulation replications 16 seed 1 confidence 0.95
+  contract Controls { contest Party on end.returned route Reviewer.reply reversible_by [j] respond_by 3min rates {
+      occurrence probability 0.25 basis "synthetic occurrence fixture; not measured"
+      service_time basis "synthetic service fixture; not measured"
+      independence per_case_per_clause
+  } }
+}

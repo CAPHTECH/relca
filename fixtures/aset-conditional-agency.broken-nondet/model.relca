@@ -1,0 +1,17 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered:bool=false;gate:bool=false }
+
+  actor Ledger{capacity 1;state keys:set<CaseId>;capability post(key: CaseId) -> Ack {
+      commits
+      duration fixed 3min;result nondet{committed,rejected_duplicate}
+      cancel cooperative ack_within 1min
+    }};actor Next{capacity 1;capability go()->Ack{duration fixed 2min;result nondet{committed}}};actor Toggle{capacity 1;capability go()->Ack{writes gate;finish{gate=true};duration fixed 1min;result nondet{committed};cancel forbidden_after_start}}
+  process Flow { fork f{a=Ledger.post(case.id);q=Toggle.go()};join all f;if a==committed{z=Next.go();end committed_end}else{end rejected} }
+  cut K { include [Ledger,Toggle,Next] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  contract C { at_most_once Ledger.post.commit per case.id }
+  verify safety no_resource_overcommit
+}

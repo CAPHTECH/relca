@@ -1,0 +1,16 @@
+model QtlCrossing version "0.2" {
+  type C = enum { left, right }
+  type T = enum { ok }
+  actor A { capacity 1;
+    capability choose() -> C { duration fixed 1min; result nondet { left, right } }
+    capability left() -> T { duration {1min:0.6, 5min:0.4}; result nondet { ok } }
+    capability right() -> T { duration fixed 3min; result nondet { ok } }
+  }
+  process P { c = A.choose(); if c == left { lwork = A.left() } else { rwork = A.right() }; end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric quantile.Median = quantile(0.5, case.Done)
+  metric quantile.P90 = quantile(0.9, case.Done)
+}

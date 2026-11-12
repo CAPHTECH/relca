@@ -1,0 +1,11 @@
+model AgencyFirstHalf version "0.2" {
+  type V = enum { pass,fail }
+  type T = enum { ok }
+  people [x1]
+  actor Invoice { source document }
+  actor Extractor { executors [x1]; capability extract() -> T { reads [Invoice]; duration fixed 1min; result nondet { ok } } }
+  process Flow { x = Extractor.extract(); end done }
+  cut K { include [Invoice,Extractor] }
+  bounds { cases 1; live_tasks 8; clock 100min }
+  verify safety no_resource_overcommit
+}

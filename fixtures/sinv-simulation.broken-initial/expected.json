@@ -1,0 +1,14 @@
+{
+  "verdict": "violated",
+  "diagnostics": [],
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    }
+  ],
+  "simulation": {
+    "completed_replications": 4,
+    "truncated_replications": 0
+  }
+}

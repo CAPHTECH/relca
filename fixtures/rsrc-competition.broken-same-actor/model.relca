@@ -1,0 +1,15 @@
+model ResourceAcceptance version "0.2" {
+  type T = enum { ok }
+  resource R capacity 1
+  actor A { capacity 2;  capability y() -> T { uses R: 1; duration fixed 3min; result nondet { ok } } capability x() -> T { uses R: 1; duration fixed 2min; result nondet { ok };  } }
+  actor B { capacity 2;  capability y() -> T { uses R: 1; duration fixed 3min; result nondet { ok };  } }
+  process P { x = A.x(); y = A.y(); end done }
+  cut K { question "resource acceptance"; include [A,B] }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 3; clock 10min }
+  metrics { window 10min; currency "JPY" }
+
+  verify safety no_resource_overcommit
+  verify reachable end.done
+}

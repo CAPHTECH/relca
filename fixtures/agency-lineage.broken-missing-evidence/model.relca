@@ -1,0 +1,37 @@
+model AgencyLineage version "0.2" {
+  type Entry = enum { entry }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { committed }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor ReceiptRecord { source record }
+  actor Reader {
+    capacity 1
+    capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } }
+  }
+  actor Clerk {
+    capacity 1
+    capability match_po(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } }
+    capability match_receipt(e:Entry) -> Verdict { reads [ReceiptRecord]; duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Approver {
+    capacity 1
+    capability approve(e:Entry) -> Verdict { duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Ledger {
+    capacity 1
+    capability post(p:Verdict,r:Verdict,a:Verdict) -> Ack { commits; duration fixed 1min; result nondet { committed } }
+  }
+  process Flow {
+    entry = Reader.enter()
+    po = Clerk.match_po(entry)
+    receipt = Clerk.match_receipt(entry)
+    approval = Approver.approve(entry)
+    if po == pass && receipt == pass && approval == pass { } else { end rejected }
+    posted = Ledger.post(po, receipt, approval)
+    end done
+  }
+  bounds { cases 1; live_tasks 4; clock 32min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

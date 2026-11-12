@@ -1,0 +1,12 @@
+model M version "0.2" {
+  type T = enum { ok, pass, bad, late }
+  latent case { coin: bool ~ { true:0.5,false:0.5 } }
+  actor A { capacity 1;  capability work() -> T {  duration fixed 2min; result nondet { pass }; cancel cooperative ack_within 1min } }
+  actor B { capacity 1;  capability work() -> T {  duration fixed 2min; result nondet { ok }; cancel cooperative ack_within 1min } }
+
+  process P { fork f { a = A.work(); b = B.work() }; join any f where result == pass tie nondet remaining drain if none -> done; end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 8; clock 20min }
+  policy fifo tie_by case_id then call_order
+  verify probability reached coin == true <= 0.5
+}

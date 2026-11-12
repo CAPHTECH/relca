@@ -1,0 +1,13 @@
+model RequiresAcceptance version "0.2" {
+  type T = enum { ok, pass, fail, denied, bad, posted }
+  observed case { approval: optional<T>; review: optional<T> }
+  actor Source { source document }
+  actor Producer { capacity 1; capability produce() -> T { reads [Source]; duration fixed 1min; result nondet { ok } } }
+  actor Judge { capacity 1; capability check(e:T) -> T { writes approval; duration fixed 1min; result nondet { pass, fail } } }
+  actor Post { capacity 1; capability post(v:T,w:T) -> T { duration fixed 1min; result nondet { posted }; requires approval == pass && review == pass else denied; commits } }
+  actor Judge2 { capacity 1; capability check(e:T) -> T { writes review; duration fixed 1min; result nondet { pass, fail } } }
+  process Flow { e = Producer.produce(); j = Judge.check(e); j2 = Judge2.check(e); p = Post.post(j,j2); if p == posted { end posted } else { end returned } }
+  bounds { cases 1; live_tasks 4; clock 30min }
+
+  verify safety no_resource_overcommit
+}

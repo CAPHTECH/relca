@@ -1,0 +1,18 @@
+model DurationNoLookahead version "0.2" {
+  type T = enum { ok }
+  type Choice = enum { early, late }
+  observed case { guess: Choice = early; marker: bool = false; hit: bool = false }
+  kernel Match given [marker,guess] {
+    false, early -> { 1: ok with hit = true }
+    false, late -> { 1: ok with hit = false }
+    true, early -> { 1: ok with hit = false }
+    true, late -> { 1: ok with hit = true }
+  }
+  actor Guess { capacity 1; capability choose() -> Choice { duration fixed 3min; result nondet { early, late }; writes guess } }
+  actor Marker { capacity 1; capability mark() -> T { duration fixed 4min; result nondet { ok }; writes marker; finish { marker = true } } }
+  actor Random { capacity 1; capability sample() -> T { duration {3min:0.5,5min:0.5}; outcomes kernel Match; writes hit } }
+  process Flow { fork f { g = Guess.choose(); m = Marker.mark(); r = Random.sample() }; join all f; end done }
+  bounds { cases 1; live_tasks 3; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true within 5min <= 0.5
+}

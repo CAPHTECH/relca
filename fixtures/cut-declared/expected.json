@@ -1,0 +1,31 @@
+{
+  "verdict": "satisfied",
+  "bounds": { "truncated": false },
+  "absent_diagnostics": ["W-DEADLOCK-0", "W-CUT-0", "W-CUT-1"],
+  "cut": {
+    "name": "CheckCut",
+    "question": "直列の 2 検査の経過と作業量",
+    "include": ["Office"],
+    "exclude": [
+      { "target": "Archive", "actor": true, "reason": "保管は別業務", "loses": "保管の遅れが検査に与える影響" },
+      { "target": "Payment", "actor": false, "reason": "送金は別 Domain", "loses": "支払誤りの検出" }
+    ],
+    "defer": [
+      { "target": "Office.short.rates", "actor": false, "reason": "検査の失敗率の根拠なし", "loses": "再検査の負荷" }
+    ],
+    "externality": ["Vendor.dispute_effort"],
+    "reentry": ["review cut quarterly by cfo"],
+    "checked": ["actor_membership", "excluded_call", "missing_loses"],
+    "unchecked": ["party_contest_path", "retired_capability", "comparison_mismatch", "deferred_metrics"]
+  },
+  "diagnostics": [],
+  "properties": [{ "id": "reachable end.done", "verdict": "satisfied" }],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": { "min": 8, "max": 8 },
+      "work": { "min": 8, "max": 8 },
+      "result_at": null
+    }
+  ]
+}

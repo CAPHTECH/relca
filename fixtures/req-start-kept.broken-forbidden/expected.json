@@ -1,0 +1,23 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "finished",
+      "elapsed": {
+        "min": 5,
+        "max": 5
+      },
+      "work": {
+        "min": 6,
+        "max": 6
+      },
+      "result_at": {
+        "min": 1,
+        "max": 1
+      }
+    }
+  ]
+}

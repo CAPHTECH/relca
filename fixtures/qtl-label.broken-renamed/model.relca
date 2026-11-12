@@ -1,0 +1,13 @@
+model Qtl version "0.2" {
+  type T = enum { ok }
+  actor Desk { grain team; capacity 1; capability run() -> T { duration fixed 3min; result nondet { ok } } }
+  process P { job = Desk.run(); end done }
+  cut C { include [Desk] }
+  arrivals fixed [0min, 0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Q9 = reached(end.done)
+  metric quantile.Z1 = quantile(0.5, case.Q9)
+  metric quantile.A0 = quantile(0.5, case.Q9 given reached)
+}

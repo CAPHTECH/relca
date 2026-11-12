@@ -1,0 +1,11 @@
+{
+  "verdict":"satisfied","mode":"exhaustive","unit":"min","cut":"undeclared",
+  "bounds":{"cases":2,"live_tasks":1,"clock":20,"truncated":false},
+  "diagnostics":[{"code":"W-CUT-0","severity":"warning"}],"absent_diagnostics":["W-BUDGET-0","W-DEADLOCK-0"],
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"probability reached #1","verdict":"satisfied","cases":[{"case_id":1,"arrival":5,"verdict":"satisfied","probability":{"min":"1","max":"1"}},{"case_id":2,"arrival":6,"verdict":"satisfied","probability":{"min":"1","max":"1"}}]}],
+  "terminals":[],"admission":{"rejected_count":{"min":0,"max":0}},
+  "case_outcomes":[
+    {"case_id":1,"arrival":5,"terminals":[{"kind":"end","end":"done","completed_at":{"min":7,"max":7},"elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null,"probability":{"min":"1","max":"1"}}]},
+    {"case_id":2,"arrival":6,"terminals":[{"kind":"end","end":"done","completed_at":{"min":8,"max":8},"elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null,"probability":{"min":"1","max":"1"}}]}
+  ]
+}

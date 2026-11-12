@@ -1,0 +1,1 @@
+{"verdict":"satisfied","differences":[],"preservation":{"properties":[{"id":"contract Ctl #1 at_most_once","from":"satisfied","to":"satisfied"}],"summary":{"satisfied":1,"vacuous":0,"violated":0,"inconclusive":0,"unsupported":0,"invalid":0}},"diagnostics":[]}

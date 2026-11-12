@@ -1,0 +1,9 @@
+model Overlap version "0.2" {
+  type T = enum { ok }
+  actor Team { overlaps [Member]; capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Member { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { t = Team.run(); m = Member.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 3min }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

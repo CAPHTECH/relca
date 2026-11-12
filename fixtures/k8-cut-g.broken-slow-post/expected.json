@@ -1,0 +1,12 @@
+{
+  "verdict": "violated", "mode": "exhaustive", "unit": "min", "cut": {"name": "G"},
+  "bounds": {"cases": 1, "live_tasks": 2, "clock": 20, "truncated": false},
+  "properties": [
+    {"id": "safety no_resource_overcommit", "verdict": "satisfied"},
+    {"id": "probability reached #1", "verdict": "satisfied", "probability": {"min": "1/50", "max": "1/50"}},
+    {"id": "probability reached #2", "verdict": "violated", "probability": {"min": "0", "max": "0"}},
+    {"id": "contract C #1 at_most_once", "verdict": "satisfied"}
+  ],
+  "terminals": [{"end": "done", "elapsed": {"min": 3, "max": 3}, "work": {"min": 3, "max": 3}, "result_at": null, "probability": {"min": "1", "max": "1"}}],
+  "absent_diagnostics": ["W-CUT-0", "W-BUDGET-0", "W-DEADLOCK-0", "U-SEM-0", "E-PROB-0"]
+}

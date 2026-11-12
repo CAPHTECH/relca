@@ -1,0 +1,8 @@
+{
+  "verdict":"satisfied", "mode":"exhaustive", "unit":"min", "cut":"undeclared",
+  "bounds":{"cases":1,"live_tasks":2,"clock":20,"truncated":false},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"}],
+  "terminals":[{"end":"done","elapsed":{"min":2,"max":2},"work":{"min":2,"max":2},"result_at":null}],
+  "diagnostics":[{"code":"W-CUT-0"},{"code":"W-UNREACH-0","severity":"warning","span":{"end":522,"start":454}},{"code":"W-UNREACH-1","severity":"warning","span":{"end":641,"start":575}}],
+  "absent_diagnostics":["E-POL-LATENT","U-SEM-0","W-DEADLOCK-0","W-BUDGET-0"]
+}

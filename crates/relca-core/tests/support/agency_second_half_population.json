@@ -1,0 +1,988 @@
+[
+  {
+    "name": "agy2-rsrc-any",
+    "codes": [
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-any.broken-no-feasible-match",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0",
+      "W-UNREACH-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-drain",
+    "codes": [
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-drain.broken-drain",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0",
+      "W-UNREACH-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-join-all",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0",
+      "W-UNREACH-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-join-all.broken-fits",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-seq",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-seq.broken-feasible",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-callorder",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0",
+      "W-UNREACH-0",
+      "W-UNREACH-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-rsrc-callorder.broken-no-call-order",
+    "codes": [
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-scenario-callorder-substrate",
+    "codes": [
+      "W-DEADLOCK-0",
+      "W-UNREACH-0",
+      "W-UNREACH-0",
+      "W-UNREACH-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-scenario-callorder-substrate.broken-loose",
+    "codes": [
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-jue",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-jue.broken-no-guard",
+    "codes": [
+      "W-AGY-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-concentration",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-concentration.broken-separate-ledger",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-single-actor-many-people",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-single-actor-many-people.broken-separate-ledger",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-single-person-many-actors",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-single-person-many-actors.broken-different-person",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-known-two-plus-anonymous",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-known-two-plus-anonymous.broken-one-known",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-permission-not-filter",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-permission-not-filter.broken-other-permit",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-atomic-u",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {
+      "/agency/refusal": []
+    },
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-atomic-u.broken-second-post",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {
+      "/agency/refusal": []
+    },
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-atomic-self-start",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {
+      "/agency/refusal": []
+    },
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-atomic-self-start.broken-start-inserts",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {
+      "/agency/refusal": []
+    },
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-keep-fallback",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-keep-fallback.broken-plain-retire",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-reads-observed",
+    "codes": [
+      "W-AGY-0",
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-reads-observed.broken-latent-read",
+    "codes": [
+      "E-NAME-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-diff-items",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-diff-items.broken-state-guard",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-resp0-undeclared",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-resp0-undeclared.broken-declared",
+    "codes": [
+      "W-RESP-1",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-name",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-name.broken-label",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Renamed"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-grain",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-grain.broken-label",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-boundary",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-boundary.broken-label",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-via",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-effect-via.broken-label",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "A"
+    ]
+  },
+  {
+    "name": "agy2-label-diff-name",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-name.broken-label",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-grain",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-grain.broken-label",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-boundary",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-boundary.broken-label",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-via",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-label-diff-via.broken-label",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-actor",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-actor.broken-rejected",
+    "codes": [
+      "U-SYN-0",
+      "W-CUT-0"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-path",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-path.broken-rejected",
+    "codes": [
+      "U-SYN-0",
+      "W-CUT-0"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-action",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-action.broken-rejected",
+    "codes": [
+      "E-SYN-0",
+      "W-CUT-0"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-missing-fallback",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-missing-fallback.broken-rejected",
+    "codes": [
+      "E-SYN-0",
+      "W-CUT-0"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-still-called",
+    "codes": [
+      "W-AGY-3",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0",
+      "W-UNREACH-3"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-still-called.broken-rejected",
+    "codes": [
+      "E-DIFF-0"
+    ],
+    "invocation": {
+      "command": "check",
+      "configuration": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-actor-state",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-actor-state.broken-qualified",
+    "codes": [
+      "U-SYN-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-param",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-param.broken-explicit-param",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-static-fork-writer-first",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-fork-writer-first.broken-concurrent",
+    "codes": [
+      "U-SEM-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-fork-reader-first",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-static-fork-reader-first.broken-concurrent",
+    "codes": [
+      "U-SEM-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-later-writer",
+    "codes": [
+      "W-AGY-0",
+      "W-RESP-0",
+      "W-RESP-0",
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-later-writer.broken-later-call",
+    "codes": [
+      "W-AGY-0",
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-initial-read",
+    "codes": [
+      "W-RESP-0",
+      "W-UNREACH-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-initial-read.broken-preceding-writer",
+    "codes": [
+      "W-RESP-0",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Approver",
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-no-people",
+    "codes": [
+      "W-AGY-2",
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-no-people.broken-undeclared",
+    "codes": [
+      "W-AGY-2"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-state-write-only",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-state-write-only.broken-commits",
+    "codes": [],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-version-check",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-version-check.broken-no-check",
+    "codes": [
+      "W-RESP-0"
+    ],
+    "invocation": null,
+    "probes": {},
+    "responsibility_targets": [
+      "Ledger"
+    ]
+  },
+  {
+    "name": "agy2-responsibility-diff",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  },
+  {
+    "name": "agy2-responsibility-diff.broken-no-inspect",
+    "codes": null,
+    "invocation": {
+      "command": "diff",
+      "from": "From",
+      "to": "To"
+    },
+    "probes": {},
+    "responsibility_targets": []
+  }
+]

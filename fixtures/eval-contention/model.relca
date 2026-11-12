@@ -1,0 +1,18 @@
+model Contention version "0.2" {
+  type T = enum { pass }
+  actor A { capacity 1; capability run() -> T { duration fixed 3min; result nondet { pass } } }
+  actor B { capacity 2; capability run() -> T { duration fixed 4min; result nondet { pass } } }
+  process P { a = A.run(); end done }
+  process R { b = B.run(); end done }
+  cut C { include [A, B] }
+  configuration One { cut C; process P }
+  configuration Two { cut C; process R }
+  arrivals fixed [0min, 0min]
+  bounds { cases 2; live_tasks 2; clock 12min }
+  policy fifo tie_by case_id
+  verify reachable end.done
+  property case.OnTime = reached(end.done) within 4min
+  metric cohort.OnTimePerArrival = expected(count(case.OnTime)) / arrivals
+  metrics { window 12min; currency "JPY"; rate A per_minute 1; rate B per_minute 1; rate A.run per_start 0; rate B.run per_start 0 }
+  compare [One, Two] cut C hard { cohort.OnTimePerArrival >= 0.5 } objectives { minimize metrics.overall.work }
+}

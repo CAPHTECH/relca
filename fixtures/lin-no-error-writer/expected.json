@@ -1,0 +1,32 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "agency": {},
+  "diagnostics": [{"code":"W-UNREACH-0","severity":"warning","span":{"end":671,"start":574}}],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null,
+      "probability": {
+        "min": "1",
+        "max": "1"
+      }
+    }
+  ]
+}

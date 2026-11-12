@@ -1,0 +1,41 @@
+{
+  "verdict": "satisfied",
+  "terminals": [
+    {
+      "end": "by_c1",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null
+    },
+    {
+      "end": "by_c2",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "absent_diagnostics": [
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-TYPE-0",
+    "E-CUT-1",
+    "E-POL-LATENT",
+    "U-SYN-0",
+    "U-SEM-0"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "First",
+        "p": "1",
+        "property": "Hit",
+        "form": "all_arrivals",
+        "value": {
+          "point": "2",
+          "observations": 2,
+          "censored": 0,
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "FirstDone",
+        "p": "1",
+        "property": "Hit",
+        "form": "reached_only",
+        "value": {
+          "point": "2",
+          "observations": 2,
+          "censored": 0,
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

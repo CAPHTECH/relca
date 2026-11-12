@@ -1,0 +1,7 @@
+model Gate version "0.2" {
+ type V=enum{pass,fail};type R=enum{committed,conflict};observed case{gate:optional<V>}
+ actor Source{capacity 1;capability read()->V{duration fixed 1min;result nondet{pass,fail}}}
+ actor Judge{capacity 1;capability test(v:V)->V{duration fixed 1min;result nondet{pass,fail};writes gate}}
+ actor Poster{capacity 1;capability post()->R{commits;requires gate==pass else conflict;duration fixed 1min;result nondet{committed}}}
+ process P{s=Source.read();j=Judge.test(s);r=Poster.post();end done};cut C{include[Source,Judge,Poster]};bounds{cases 1;live_tasks 1;clock 5min};verify reachable end.done
+}

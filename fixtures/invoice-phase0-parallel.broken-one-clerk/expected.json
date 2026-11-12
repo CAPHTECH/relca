@@ -1,0 +1,713 @@
+{
+ "verdict": "satisfied",
+ "mismatch": null,
+ "differences": [{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Clerk.match_po","to":["fork"]},{"change":"modified","from":["sequential"],"kind":"time","loses":null,"reason":null,"target":"Clerk.match_receipt","to":["fork"]}],
+ "absent_diagnostics": ["E-CMP-0","E-DIFF-0","W-DIFF-2","U-SEM-0"],
+ "from": {
+  "configuration": "AsIs",
+  "report": {
+   "verdict": "satisfied",
+   "bounds": {
+    "truncated": false
+   },
+   "cut": {
+    "name": "InvoiceCut"
+   },
+   "properties": [
+    {
+     "id": "reachable end.done",
+     "verdict": "satisfied"
+    },
+    {
+     "id": "reachable end.rejected",
+     "verdict": "satisfied"
+    },
+    {
+     "id": "safety no_resource_overcommit",
+     "verdict": "satisfied"
+    }
+   ],
+   "terminals": [
+    {
+     "end": "rejected",
+     "elapsed": {
+      "min": 14,
+      "max": 14
+     },
+     "work": {
+      "min": 14,
+      "max": 14
+     },
+     "result_at": null
+    },
+    {
+     "end": "done",
+     "elapsed": {
+      "min": 15,
+      "max": 15
+     },
+     "work": {
+      "min": 15,
+      "max": 15
+     },
+     "result_at": null
+    }
+   ],
+   "agency": {
+    "rules": "agency-p0-1",
+    "origin": [
+     {
+      "actor": "Invoice",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "PurchaseOrder",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "ReceiptRecord",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "Clerk",
+      "direct": [
+       "Invoice",
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ],
+      "indirect": [
+       "Invoice"
+      ]
+     },
+     {
+      "actor": "Extractor",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "Approver",
+      "direct": [],
+      "indirect": [
+       "Invoice"
+      ]
+     },
+     {
+      "actor": "Ledger",
+      "direct": [],
+      "indirect": [
+       "Invoice",
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ]
+     }
+    ],
+    "lineage": [
+     {
+      "call": "po",
+      "capability": "Clerk.match_po",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": [
+       "PurchaseOrder"
+      ]
+     },
+     {
+      "call": "receipt",
+      "capability": "Clerk.match_receipt",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": [
+       "ReceiptRecord"
+      ]
+     },
+     {
+      "call": "approval",
+      "capability": "Approver.approve",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": []
+     }
+    ],
+    "lineage_groups": [
+     {
+      "subject_sources": [
+       "Invoice"
+      ],
+      "judgements": 3,
+      "actors": 2,
+      "independent_sources": [
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ]
+     }
+    ],
+    "refusal": [
+     {
+      "effect": "Ledger.post",
+      "call": "posted",
+      "reachable": true,
+      "judgements": [
+       {
+        "call": "po",
+        "capability": "Clerk.match_po",
+        "stops": "all_paths",
+        "bypasses": 0
+       },
+       {
+        "call": "receipt",
+        "capability": "Clerk.match_receipt",
+        "stops": "all_paths",
+        "bypasses": 0
+       },
+       {
+        "call": "approval",
+        "capability": "Approver.approve",
+        "stops": "all_paths",
+        "bypasses": 0
+       }
+      ]
+     }
+    ],
+    "unchecked": [
+     "W-RESP-1",
+     "contest_path",
+     "fallback_path",
+     "executors",
+     "via_model"
+    ]
+   },
+   "absent_diagnostics": [
+    "W-AGY-0",
+    "W-AGY-1",
+    "W-DEADLOCK-0",
+    "W-CUT-0",
+    "W-CUT-1",
+    "W-CONF-0"
+   ]
+  ,"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":765,"start":670}}]}
+ },
+ "to": {
+  "configuration": "ToBeP",
+  "report": {
+   "verdict": "satisfied",
+   "bounds": {
+    "truncated": false
+   },
+   "cut": {
+    "name": "InvoiceCut"
+   },
+   "properties": [
+    {
+     "id": "reachable end.done",
+     "verdict": "satisfied"
+    },
+    {
+     "id": "reachable end.rejected",
+     "verdict": "satisfied"
+    },
+    {
+     "id": "safety no_resource_overcommit",
+     "verdict": "satisfied"
+    }
+   ],
+   "terminals": [
+    {
+     "end": "rejected",
+     "elapsed": {
+      "min": 14,
+      "max": 14
+     },
+     "work": {
+      "min": 14,
+      "max": 14
+     },
+     "result_at": null
+    },
+    {
+     "end": "done",
+     "elapsed": {
+      "min": 15,
+      "max": 15
+     },
+     "work": {
+      "min": 15,
+      "max": 15
+     },
+     "result_at": null
+    }
+   ],
+   "agency": {
+    "rules": "agency-p0-1",
+    "origin": [
+     {
+      "actor": "Invoice",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "PurchaseOrder",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "ReceiptRecord",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "Clerk",
+      "direct": [
+       "Invoice",
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ],
+      "indirect": [
+       "Invoice"
+      ]
+     },
+     {
+      "actor": "Extractor",
+      "direct": [],
+      "indirect": []
+     },
+     {
+      "actor": "Approver",
+      "direct": [],
+      "indirect": [
+       "Invoice"
+      ]
+     },
+     {
+      "actor": "Ledger",
+      "direct": [],
+      "indirect": [
+       "Invoice",
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ]
+     }
+    ],
+    "lineage": [
+     {
+      "call": "po",
+      "capability": "Clerk.match_po",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": [
+       "PurchaseOrder"
+      ]
+     },
+     {
+      "call": "receipt",
+      "capability": "Clerk.match_receipt",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": [
+       "ReceiptRecord"
+      ]
+     },
+     {
+      "call": "approval",
+      "capability": "Approver.approve",
+      "subject_sources": [
+       "Invoice"
+      ],
+      "independent_sources": []
+     }
+    ],
+    "lineage_groups": [
+     {
+      "subject_sources": [
+       "Invoice"
+      ],
+      "judgements": 3,
+      "actors": 2,
+      "independent_sources": [
+       "PurchaseOrder",
+       "ReceiptRecord"
+      ]
+     }
+    ],
+    "refusal": [
+     {
+      "effect": "Ledger.post",
+      "call": "posted",
+      "reachable": true,
+      "judgements": [
+       {
+        "call": "po",
+        "capability": "Clerk.match_po",
+        "stops": "all_paths",
+        "bypasses": 0
+       },
+       {
+        "call": "receipt",
+        "capability": "Clerk.match_receipt",
+        "stops": "all_paths",
+        "bypasses": 0
+       },
+       {
+        "call": "approval",
+        "capability": "Approver.approve",
+        "stops": "all_paths",
+        "bypasses": 0
+       }
+      ]
+     }
+    ],
+    "unchecked": [
+     "W-RESP-1",
+     "contest_path",
+     "fallback_path",
+     "executors",
+     "via_model"
+    ]
+   },
+   "absent_diagnostics": [
+    "W-AGY-0",
+    "W-AGY-1",
+    "W-DEADLOCK-0",
+    "W-CUT-0",
+    "W-CUT-1",
+    "W-CONF-0"
+   ]
+  ,"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":765,"start":670}}]}
+ },
+ "terminals": [
+  {
+   "end": "rejected",
+   "from": {
+    "elapsed": {
+     "min": 14,
+     "max": 14
+    },
+    "work": {
+     "min": 14,
+     "max": 14
+    },
+    "result_at": null
+   },
+   "to": {
+    "elapsed": {
+     "min": 14,
+     "max": 14
+    },
+    "work": {
+     "min": 14,
+     "max": 14
+    },
+    "result_at": null
+   }
+  },
+  {
+   "end": "done",
+   "from": {
+    "elapsed": {
+     "min": 15,
+     "max": 15
+    },
+    "work": {
+     "min": 15,
+     "max": 15
+    },
+    "result_at": null
+   },
+   "to": {
+    "elapsed": {
+     "min": 15,
+     "max": 15
+    },
+    "work": {
+     "min": 15,
+     "max": 15
+    },
+    "result_at": null
+   }
+  }
+ ],
+ "properties": [
+  {
+   "id": "reachable end.done",
+   "from": "satisfied",
+   "to": "satisfied"
+  },
+  {
+   "id": "reachable end.rejected",
+   "from": "satisfied",
+   "to": "satisfied"
+  },
+  {
+   "id": "safety no_resource_overcommit",
+   "from": "satisfied",
+   "to": "satisfied"
+  }
+ ],
+ "agency": {
+  "from": {
+   "rules": "agency-p0-1",
+   "origin": [
+    {
+     "actor": "Invoice",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "PurchaseOrder",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "ReceiptRecord",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "Clerk",
+     "direct": [
+      "Invoice",
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ],
+     "indirect": [
+      "Invoice"
+     ]
+    },
+    {
+     "actor": "Extractor",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "Approver",
+     "direct": [],
+     "indirect": [
+      "Invoice"
+     ]
+    },
+    {
+     "actor": "Ledger",
+     "direct": [],
+     "indirect": [
+      "Invoice",
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ]
+    }
+   ],
+   "lineage": [
+    {
+     "call": "po",
+     "capability": "Clerk.match_po",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": [
+      "PurchaseOrder"
+     ]
+    },
+    {
+     "call": "receipt",
+     "capability": "Clerk.match_receipt",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": [
+      "ReceiptRecord"
+     ]
+    },
+    {
+     "call": "approval",
+     "capability": "Approver.approve",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": []
+    }
+   ],
+   "lineage_groups": [
+    {
+     "subject_sources": [
+      "Invoice"
+     ],
+     "judgements": 3,
+     "actors": 2,
+     "independent_sources": [
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ]
+    }
+   ],
+   "refusal": [
+    {
+     "effect": "Ledger.post",
+     "call": "posted",
+     "reachable": true,
+     "judgements": [
+      {
+       "call": "po",
+       "capability": "Clerk.match_po",
+       "stops": "all_paths",
+       "bypasses": 0
+      },
+      {
+       "call": "receipt",
+       "capability": "Clerk.match_receipt",
+       "stops": "all_paths",
+       "bypasses": 0
+      },
+      {
+       "call": "approval",
+       "capability": "Approver.approve",
+       "stops": "all_paths",
+       "bypasses": 0
+      }
+     ]
+    }
+   ],
+   "unchecked": [
+    "W-RESP-1",
+    "contest_path",
+    "fallback_path",
+    "executors",
+    "via_model"
+   ]
+  },
+  "to": {
+   "rules": "agency-p0-1",
+   "origin": [
+    {
+     "actor": "Invoice",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "PurchaseOrder",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "ReceiptRecord",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "Clerk",
+     "direct": [
+      "Invoice",
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ],
+     "indirect": [
+      "Invoice"
+     ]
+    },
+    {
+     "actor": "Extractor",
+     "direct": [],
+     "indirect": []
+    },
+    {
+     "actor": "Approver",
+     "direct": [],
+     "indirect": [
+      "Invoice"
+     ]
+    },
+    {
+     "actor": "Ledger",
+     "direct": [],
+     "indirect": [
+      "Invoice",
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ]
+    }
+   ],
+   "lineage": [
+    {
+     "call": "po",
+     "capability": "Clerk.match_po",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": [
+      "PurchaseOrder"
+     ]
+    },
+    {
+     "call": "receipt",
+     "capability": "Clerk.match_receipt",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": [
+      "ReceiptRecord"
+     ]
+    },
+    {
+     "call": "approval",
+     "capability": "Approver.approve",
+     "subject_sources": [
+      "Invoice"
+     ],
+     "independent_sources": []
+    }
+   ],
+   "lineage_groups": [
+    {
+     "subject_sources": [
+      "Invoice"
+     ],
+     "judgements": 3,
+     "actors": 2,
+     "independent_sources": [
+      "PurchaseOrder",
+      "ReceiptRecord"
+     ]
+    }
+   ],
+   "refusal": [
+    {
+     "effect": "Ledger.post",
+     "call": "posted",
+     "reachable": true,
+     "judgements": [
+      {
+       "call": "po",
+       "capability": "Clerk.match_po",
+       "stops": "all_paths",
+       "bypasses": 0
+      },
+      {
+       "call": "receipt",
+       "capability": "Clerk.match_receipt",
+       "stops": "all_paths",
+       "bypasses": 0
+      },
+      {
+       "call": "approval",
+       "capability": "Approver.approve",
+       "stops": "all_paths",
+       "bypasses": 0
+      }
+     ]
+    }
+   ],
+   "unchecked": [
+    "W-RESP-1",
+    "contest_path",
+    "fallback_path",
+    "executors",
+    "via_model"
+   ]
+  }
+ }
+}

@@ -1,0 +1,14 @@
+model MetricsMissingRate version "0.2" {
+  type T = enum { pass }
+  actor Office {
+    capacity 2
+    capability short() -> T { duration fixed 3min; result nondet { pass } }
+    capability long() -> T { duration fixed 5min; result nondet { pass } }
+  }
+  process Serial { a = Office.short(); b = Office.long(); end done }
+  cut C { include [Office] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  metrics { window 10min; currency "JPY"; rate Office per_minute 100; rate Office.short per_start 2 }
+  verify reachable end.done
+  verify safety no_resource_overcommit
+}

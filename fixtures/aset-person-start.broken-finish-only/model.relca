@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { input_by:optional<PersonId> }
+
+  actor Slow{executors[c1];capability go()->Ack{writes input_by;finish{input_by=executor.id};duration fixed 3min;result nondet{committed};cancel cooperative ack_within 1min}};actor Fast {capacity 1;capability go()->Ack{duration fixed 1min;result nondet{committed};cancel forbidden_after_start}}
+  process Flow { fork f{a=Slow.go();q=Fast.go()};join any f where result==committed tie by [q,a] remaining cancel_then_drain if none -> unset;if input_by==c1{end recorded}else{end unset} }
+  cut K { include [Slow,Fast] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.recorded
+}

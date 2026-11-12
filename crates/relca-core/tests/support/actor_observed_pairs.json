@@ -1,0 +1,194 @@
+[
+  {
+    "id": "F01",
+    "name": "aobs-counter",
+    "fault": "overflow",
+    "from": "b = Desk.take(); end",
+    "to": "b = Desk.take(); c = Desk.take(); end",
+    "command": "check"
+  },
+  {
+    "id": "F02",
+    "name": "aobs-optional",
+    "fault": "missing-default",
+    "from": "flag: bool = false",
+    "to": "flag: bool",
+    "command": "check"
+  },
+  {
+    "id": "F03",
+    "name": "aobs-owner",
+    "fault": "external-writer",
+    "from": "A.x",
+    "to": "B.x",
+    "command": "check"
+  },
+  {
+    "id": "F04",
+    "name": "aobs-capacity",
+    "fault": "two-writers",
+    "from": "capacity 1",
+    "to": "capacity 2",
+    "command": "check"
+  },
+  {
+    "id": "F05",
+    "name": "aobs-shared-order",
+    "fault": "no-requires",
+    "from": "      requires posted == 0 else rejected\n",
+    "to": "",
+    "command": "check"
+  },
+  {
+    "id": "F06",
+    "name": "aobs-start-visible",
+    "fault": "no-start",
+    "from": "start { busy = true };",
+    "to": "",
+    "command": "check"
+  },
+  {
+    "id": "F07",
+    "name": "aobs-policy",
+    "fault": "latent",
+    "from": "state mode",
+    "to": "latent mode",
+    "command": "check"
+  },
+  {
+    "id": "F08",
+    "name": "aobs-cut",
+    "fault": "excluded-read",
+    "from": "include [D,Probe]",
+    "to": "include [Probe]; exclude D reason \"out\" loses \"state\"",
+    "command": "check"
+  },
+  {
+    "id": "F09",
+    "name": "aobs-late",
+    "fault": "no-requires",
+    "from": "      requires posted == 0 else rejected\n",
+    "to": "",
+    "command": "check"
+  },
+  {
+    "id": "F10",
+    "name": "aobs-cancel",
+    "fault": "finish-after-drain",
+    "from": "cancel immediate } }\n  actor Fast",
+    "to": "cancel forbidden_after_start } }\n  actor Fast",
+    "command": "check"
+  },
+  {
+    "id": "F11",
+    "name": "aobs-symbolic-initial",
+    "fault": "initial-no",
+    "from": "permit: R = ok",
+    "to": "permit: R = no",
+    "command": "check"
+  },
+  {
+    "id": "F12",
+    "name": "aobs-symbolic-writer",
+    "fault": "case-storage",
+    "from": "actor A { capacity 1; state permit: optional<R>;",
+    "to": "observed case { permit: optional<R> }; actor A { capacity 1;",
+    "command": "check"
+  },
+  {
+    "id": "F13",
+    "name": "aobs-reserved",
+    "fault": "set",
+    "from": "state mode: Mode = ok",
+    "to": "state keys: set<PersonId>",
+    "command": "check"
+  },
+  {
+    "id": "F14",
+    "name": "aobs-labels",
+    "fault": "renamed",
+    "from": "Ledger",
+    "to": "Registry",
+    "command": "check"
+  },
+  {
+    "id": "F15",
+    "name": "aobs-scope",
+    "fault": "latent",
+    "from": "state allow",
+    "to": "latent allow",
+    "command": "check"
+  },
+  {
+    "id": "F16",
+    "name": "aobs-responsibility",
+    "fault": "no-read",
+    "from": "reads [Doc];",
+    "to": "",
+    "command": "check"
+  },
+  {
+    "id": "F17",
+    "name": "aobs-read-write-order",
+    "fault": "later-arrival",
+    "from": "[0min,2min]",
+    "to": "[0min,3min]",
+    "command": "check"
+  },
+  {
+    "id": "F18",
+    "name": "aobs-postwrite",
+    "fault": "same-tick",
+    "from": "capability ping() -> R { duration fixed 2min",
+    "to": "capability ping() -> R { duration fixed 1min",
+    "command": "check"
+  },
+  {
+    "id": "F19",
+    "name": "aobs-truncation",
+    "fault": "clock",
+    "from": "clock 10min",
+    "to": "clock 0min",
+    "command": "check"
+  },
+  {
+    "id": "F20",
+    "name": "aobs-per-case",
+    "fault": "false",
+    "from": "flag: bool = true",
+    "to": "flag: bool = false",
+    "command": "check"
+  },
+  {
+    "id": "F21",
+    "name": "aobs-names",
+    "fault": "case-clash",
+    "from": "case_flag",
+    "to": "flag",
+    "command": "check"
+  },
+  {
+    "id": "F22",
+    "name": "aobs-integer-compare",
+    "fault": "noninteger",
+    "from": "n: 0..2 = 1",
+    "to": "n: Mode = ok",
+    "command": "check"
+  },
+  {
+    "id": "F23",
+    "name": "aobs-kernel",
+    "fault": "observed-read",
+    "from": "outcomes kernel K",
+    "to": "outcomes kernel K; kernel_reads latent [A.flag]",
+    "command": "check"
+  },
+  {
+    "id": "F24",
+    "name": "aobs-simulation",
+    "fault": "nondeterminism",
+    "from": "[0min,2min]",
+    "to": "[0min,0min]",
+    "command": "simulate"
+  }
+]

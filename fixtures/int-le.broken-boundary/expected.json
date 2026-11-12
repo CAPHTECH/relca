@@ -1,0 +1,1 @@
+{"verdict":"violated","properties":[{"id":"reachable end.done","verdict":"violated"},{"id":"state_in_range","verdict":"satisfied"}],"terminals":[{"end":"wrong","elapsed":{"min":0,"max":0},"work":{"min":0,"max":0},"result_at":null}]}

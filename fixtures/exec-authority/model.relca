@@ -1,0 +1,11 @@
+model ExecAuthority version "0.2" {
+  type T = enum { ok }
+  people [p,q,issuer,excluded]
+  actor Runner { executors [p,q]; capability run() -> T { commits; duration fixed 1min; result nondet { ok } } }
+  permit [p,q] to Runner.run
+  authority Grant { basis "権限表"; grants p to Runner.run; grants q to Runner.run; issued_by issuer; not_by [excluded] }
+  process Flow { x = Runner.run(); end done }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+  contract Controls { authority_basis Runner.run Grant }
+}

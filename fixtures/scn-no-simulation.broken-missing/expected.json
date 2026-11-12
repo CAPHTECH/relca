@@ -1,0 +1,14 @@
+{
+  "verdict": "invalid",
+  "bounds": {
+    "truncated": null
+  },
+  "properties": [],
+  "terminals": [],
+  "diagnostics": [
+    {
+      "code": "E-SIM-0",
+      "severity": "error"
+    }
+  ]
+}

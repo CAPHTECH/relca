@@ -1,0 +1,10 @@
+model StateInvariant version "0.2" {
+  type R = enum { ok }
+  observed case { a: bool = false; b: bool = false }
+  actor Desk { capacity 1; capability run() -> R { duration fixed 1min; result nondet { ok }; writes [a,b]; finish { a = true; b = false } } }
+  process Flow { r = Desk.run(); end done }
+  cut C { include [Desk] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+
+  contract Controls { invariant a == true -> b == true }
+}

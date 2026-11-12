@@ -1,0 +1,77 @@
+{
+  "verdict": "vacuous",
+  "bounds": {
+    "truncated": false
+  },
+  "terminals": [
+    {
+      "end": "returned",
+      "elapsed": {
+        "min": 2,
+        "max": 2
+      },
+      "work": {
+        "min": 2,
+        "max": 2
+      },
+      "result_at": null
+    }
+  ],
+  "contest_paths": [
+    {
+      "id": "contract Controls #1 contest",
+      "rules": "contest-p1-2",
+      "party": "Vendor",
+      "end": null,
+      "effect": "Ledger.post.commit",
+      "route": "Clerk.recheck",
+      "respond_by": 5,
+      "verdict": "satisfied",
+      "basis": "構造上存在",
+      "checks": {
+        "route_exists": {
+          "satisfied": true,
+          "reason": null
+        },
+        "reversal_authority": {
+          "satisfied": true
+        },
+        "deadline_defined": {
+          "satisfied": true,
+          "reason": null
+        }
+      },
+      "missing": []
+    }
+  ],
+  "contest_runtime": [
+    {
+      "case_id": 1,
+      "static_id": "contract Controls #1 contest",
+      "target": "Ledger.post.commit",
+      "target_kind": "effect",
+      "alternatives": []
+    }
+  ],
+  "contest_summary": {
+    "business_ended_open": {
+      "min": "0",
+      "max": "0",
+      "reason": null
+    }
+  },
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "contract Controls #1 contest",
+      "verdict": "satisfied"
+    },
+    {
+      "id": "contract Controls #1 contest_response",
+      "verdict": "vacuous"
+    }
+  ]
+}

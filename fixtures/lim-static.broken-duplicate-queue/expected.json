@@ -1,0 +1,12 @@
+{
+  "verdict": "unsupported",
+  "mode": "exhaustive",
+  "diagnostics": [
+    {
+      "code": "U-SEM-0",
+      "severity": "error"
+    }
+  ],
+  "properties": [],
+  "terminals": []
+}

@@ -1,0 +1,21 @@
+model RuleExample version "0.2" {
+type V = enum { pass, fail }
+type Ack = enum { committed, held }
+people [a1, cfo]
+observed case { approval: optional<V> }
+actor ApprovalRule { control policy; version "r1"; decides approval_required: bool = true }
+actor Approver { executors [a1]; capability approve() -> V { duration fixed 2min; result nondet { pass, fail }; writes approval } }
+actor Ledger { capacity 1; capability post() -> Ack { requires ApprovalRule.approval_required == false || approval == pass else held; commits; duration fixed 1min; result nondet { committed } } }
+authority ApprovalGrant { basis "approval table"; grants a1 to Approver.approve; issued_by cfo }
+authority RuleChange { basis "amendment procedure"; not_by [a1] }
+process Flow { a = Approver.approve(); ack = Ledger.post(); if ack == committed { end posted } else { end held } }
+cut C { include [ApprovalRule, Approver, Ledger] }
+configuration AsIs { cut C; process Flow }
+configuration ToBeB { cut C; process Flow
+  amend ApprovalRule from "r1" to "r2" by cfo under RuleChange { approval_required = false }
+  intent { change rule ApprovalRule reason "exempt approval" }
+}
+bounds { cases 1; live_tasks 2; clock 20min }
+verify safety no_resource_overcommit
+contract K { invariant Ledger.post.commit -> approval == pass }
+}

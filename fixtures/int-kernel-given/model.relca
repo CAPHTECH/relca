@@ -1,0 +1,10 @@
+model Count version "0.2" {
+  type T = enum { ok, no }
+  type H = enum { zero, one }
+  latent case { h: H }
+  kernel K given [h] { zero -> { 1: ok }; one -> { 1: ok } }
+  actor A { capacity 1; capability inc() -> T { duration fixed 1min; outcomes kernel K; kernel_reads latent [h] } }
+  process P { a = A.inc(); end done }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

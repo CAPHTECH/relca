@@ -1,0 +1,13 @@
+model Legacy version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability c() -> T { duration fixed 1min; result nondet { ok } } }
+  process P { a = A.c(); end done }
+  cut C { include [A, Observer] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric cohort.Rate = expected(count(case.Done)) / arrivals
+  actor Observer { state flag: bool = true }
+  property case.Flag = reached(Observer.flag == true)
+  metric cohort.FlagPerArrival = expected(count(case.Flag)) / arrivals
+}

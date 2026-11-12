@@ -1,0 +1,12 @@
+{
+  "verdict": "invalid",
+  "mode": "exhaustive",
+  "diagnostics": [
+    {
+      "code": "E-SYN-0",
+      "severity": "error"
+    }
+  ],
+  "properties": [],
+  "terminals": []
+}

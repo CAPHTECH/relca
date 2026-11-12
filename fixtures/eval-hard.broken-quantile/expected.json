@@ -1,0 +1,31 @@
+{
+  "verdict": "invalid",
+  "plans": [
+    {
+      "configuration": "Check",
+      "report": {
+        "verdict": "invalid",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "code": "E-NAME-0",
+            "message": "unknown quantile metric: Median"
+          }
+        ]
+      }
+    },
+    {
+      "configuration": "Fast",
+      "report": {
+        "verdict": "invalid",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "code": "E-NAME-0",
+            "message": "unknown quantile metric: Median"
+          }
+        ]
+      }
+    }
+  ]
+}

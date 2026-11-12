@@ -1,0 +1,1 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"responsibilities":[{"id":1,"rules":"responsibility-p1-1","observation":{"status":"present","required_sources":["Record"]},"refusal":{"status":"present","effects":[{"capability":"SetR.put","call":"out","status":"all_paths"}],"reason":null},"time_frame":{"status":"unchecked"},"warnings":[]}],"contest_paths":[]}

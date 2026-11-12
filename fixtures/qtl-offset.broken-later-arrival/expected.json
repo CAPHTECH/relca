@@ -1,0 +1,33 @@
+{
+  "verdict": "satisfied",
+  "quality": {
+    "quantiles": [
+      {
+        "name": "Median",
+        "p": "1",
+        "property": "Done",
+        "form": "all_arrivals",
+        "value": {
+          "lower": "5",
+          "upper": "5",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      },
+      {
+        "name": "MedianDone",
+        "p": "1",
+        "property": "Done",
+        "form": "reached_only",
+        "value": {
+          "lower": "5",
+          "upper": "5",
+          "basis": "exact",
+          "reason": null
+        },
+        "lower_bound": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "verdict":"invalid", "bounds":{"truncated":null}, "terminals":[], "properties":[],
+  "diagnostics":[{"code":"E-CONF-0","severity":"error"}], "absent_diagnostics":["W-CUT-0"]
+}

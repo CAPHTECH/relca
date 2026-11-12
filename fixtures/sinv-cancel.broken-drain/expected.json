@@ -1,0 +1,34 @@
+{
+  "verdict": "violated",
+  "diagnostics": [
+    {
+      "code": "W-UNREACH-2"
+    }
+  ],
+  "bounds": {
+    "truncated": false
+  },
+  "properties": [
+    {
+      "id": "contract Controls #1 invariant",
+      "verdict": "violated"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 5,
+        "max": 5
+      },
+      "work": {
+        "min": 6,
+        "max": 6
+      },
+      "result_at": {
+        "min": 1,
+        "max": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "verdict": "satisfied",
+  "diagnostics": [
+    {
+      "code": "W-CUT-0",
+      "severity": "warning"
+    }
+  ]
+}

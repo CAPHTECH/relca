@@ -1,0 +1,16 @@
+{
+  "verdict": "violated",
+  "bounds": {
+    "truncated": false,
+    "range_violation_stops": true
+  },
+  "absent_diagnostics": [
+    "U-SYN-0",
+    "U-SEM-0",
+    "E-SYN-0",
+    "E-NAME-0",
+    "E-TYPE-0",
+    "E-POL-LATENT",
+    "E-CUT-1"
+  ]
+}

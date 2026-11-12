@@ -1,0 +1,53 @@
+{
+  "verdict": "satisfied",
+  "bounds": {
+    "truncated": false
+  },
+  "agency": {
+    "model_uncertainties": {
+      "rules": "wlin2-suppression-p1-1",
+      "scope": "selected_process_lexical_calls",
+      "items": [
+        {
+          "kind": "wlin2_basis",
+          "call": "bV",
+          "capability": "B.check",
+          "kernel": "KB",
+          "targets": [
+            "e"
+          ],
+          "error_latents": [
+            "bad"
+          ],
+          "basis": "sample X measured independent detection",
+          "notice": "basis は分析者の宣言であり、測定根拠の正しさは検査していない"
+        }
+      ]
+    }
+  },
+  "diagnostics": [],
+  "properties": [
+    {
+      "id": "safety no_resource_overcommit",
+      "verdict": "satisfied"
+    }
+  ],
+  "terminals": [
+    {
+      "end": "done",
+      "elapsed": {
+        "min": 3,
+        "max": 3
+      },
+      "work": {
+        "min": 3,
+        "max": 3
+      },
+      "result_at": null,
+      "probability": {
+        "min": "1",
+        "max": "1"
+      }
+    }
+  ]
+}

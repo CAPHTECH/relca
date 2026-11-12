@@ -1,0 +1,10 @@
+model M version "0.2" {
+  type R = enum { ok, no }
+  actor A { capacity 1; state x: R = ok; capability run() -> R { duration fixed 1min; result nondet { ok }; writes B.x; finish { B.x = ok } } }
+  actor B { state x: R = ok }
+  process P { a = A.run(); end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+
+  verify reachable end.done
+}

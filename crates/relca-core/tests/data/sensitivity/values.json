@@ -1,0 +1,11 @@
+{
+  "schema": "relca-sensitivity/v1",
+  "scope": {"kind": "enumerated_models", "rationale": "Three explicit combinations, not a Cartesian grid"},
+  "points": [
+    {"id": "base", "model": "base.relca", "configuration": null, "scenario": null},
+    {"id": "high", "model": "high.relca", "configuration": null, "scenario": null},
+    {"id": "miss", "model": "miss.relca", "configuration": null, "scenario": null}
+  ],
+  "targets": [{"kind": "probability_query", "id": "probability reached #1"}],
+  "confidence": null
+}

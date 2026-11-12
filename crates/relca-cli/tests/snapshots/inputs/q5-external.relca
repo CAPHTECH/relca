@@ -1,0 +1,14 @@
+model Priority version "0.2" {
+  type R = enum { ok }
+  actor A { capacity 1; capability run() -> R { duration fixed 4min; result nondet { ok } } }
+  process Flow { r = A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 3; live_tasks 2; clock 20min }
+  arrivals fixed [0min, 1min, 2min]
+  case_priority fixed [0, 1, 9]
+  policy fifo tie_by case_id
+  metrics { window 20min; currency "JPY"; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.done within 2min >= 0
+  concurrent cases 1 on_overflow wait_external priority descending
+}

@@ -1,0 +1,26 @@
+model KnownFailure version "0.2" {
+  type R = enum { ok, denied }
+  observed case { ready: bool = false; n: 0..1 = 1 }
+  people [p,r]
+  actor Judge { executors [p]; control policy; capability decide() -> R { duration fixed 1min; result nondet { ok } } }
+  actor Reply { executors [r]; control policy
+    capability reject() -> R { requires ready == true else denied; duration fixed 1min; result nondet { ok } }
+    capability break_range() -> R { writes n; duration fixed 2min; finish { n += 1 }; result nondet { ok } }
+  }
+  actor Party { control party; standing over [end.done] basis "assumed standing" }
+  authority G { basis "assumed decision"; grants p to Judge.decide }
+  process Flow { a = Judge.decide(); end done }
+  cut C { include [Judge,Reply,Party] }
+  arrivals fixed [0min]
+  policy observable fifo tie_by case_id then call_order assign first_idle
+  bounds { cases 1; live_tasks 4; clock 10min }
+  metrics { window 10min; currency "JPY" }
+  simulation replications 2 seed 1 confidence 0.5
+  verify reachable end.done
+  contract Controls {
+    contest Party on end.done route Reply.reject reversible_by [p] respond_by 5min
+      rates { occurrence probability 1 basis "assumed occurrence"; service_time basis "assumed service"; independence per_case_per_clause }
+    contest Party on end.done route Reply.break_range reversible_by [p] respond_by 5min
+      rates { occurrence probability 1 basis "assumed occurrence"; service_time basis "assumed service"; independence per_case_per_clause }
+  }
+}

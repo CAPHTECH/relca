@@ -1,0 +1,13 @@
+model DiffMaintain version "0.2" {
+  type V = enum { pass }
+  people [p,q,s,t]
+  actor A { capacity 2; executors [q,p]; capability a() -> V { duration fixed 1min; result nondet { pass } } }
+  responsible s for A.maintenance
+  process Before { end done }
+  process After { x = A.a(); end done }
+  cut C { include [A] }
+  configuration From { cut C; process Before }
+  configuration To { cut C; process After; intent { maintain actor A by t reason "保守" } }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify safety no_resource_overcommit
+}

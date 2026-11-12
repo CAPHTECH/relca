@@ -1,0 +1,13 @@
+model ArrivalsRejectMass version "0.2" {
+  type T = enum { ok }
+  observed case { hit: bool = false }
+  actor A { capacity 1; capability run() -> T { duration {1min:0.5,3min:0.5}; result nondet { ok }; writes hit; finish { hit = true } } }
+  process Flow { r = A.run(); end done }
+  arrivals fixed [0min, 1min, 2min]
+  policy fifo tie_by case_id
+  queue capacity 1 on_overflow reject
+  bounds { cases 3; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+  verify probability reached hit == true >= 0.5
+  verify probability reached hit == true within 3min <= 1
+}

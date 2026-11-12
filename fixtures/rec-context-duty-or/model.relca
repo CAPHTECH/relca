@@ -1,0 +1,15 @@
+model Records version "0.2" {
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: Entry = Entry { confidence = high } }
+type Ack = enum { done, refused }
+people [p]
+actor Record { source record }
+actor Seed { capacity 1; capability seed() -> Entry { duration fixed 1min; result nondet { Entry { confidence = high } } } }
+actor Work { executors [p]; capability run() -> Ack { commits; reads [Record]; duration fixed 1min; result nondet { done }; writes entry; finish { entry = Entry { confidence = high } } } }
+responsible p for (entry.confidence == low || entry.confidence == high)
+process Flow { e = Seed.seed(); r = Work.run(); end done }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.done
+}

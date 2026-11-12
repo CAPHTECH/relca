@@ -1,0 +1,11 @@
+{
+  "verdict":"satisfied", "mismatch":null, "diagnostics":[{"code":"W-DIFF-1","message":"computed change for resource Extra has no intent","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for actor Extra has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for relation Extra.run has no preserve, override, maintain or loses annotation","severity":"warning","span":null},{"code":"W-DIFF-3","message":"computed change for resource Extra has no preserve, override, maintain or loses annotation","severity":"warning","span":null}],
+  "from":{"configuration":"AsIs","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"C"},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":269,"start":200}}]}},
+  "to":{"configuration":"ToBe","report":{"verdict":"satisfied","bounds":{"truncated":false},"cut":{"name":"C"},"absent_diagnostics":["W-CUT-0","W-DEADLOCK-0","W-CONF-0"],"diagnostics":[{"code":"W-UNREACH-0","severity":"warning","span":{"end":269,"start":200}},{"code":"W-UNREACH-1","severity":"warning","span":{"end":421,"start":361}}]}},
+  "differences":[{"kind":"actor","target":"Extra","change":"added","reason":"fallback actor","loses":null},{"kind":"relation","target":"Extra.run","change":"added","reason":"fallback step","loses":null},{"change":"added","from":null,"kind":"resource","loses":null,"reason":null,"target":"Extra","to":{"capacity":1,"executors":null}}],
+  "terminals":[{"end":"done","from":{"elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null},"to":{"elapsed":{"min":1,"max":1},"work":{"min":1,"max":1},"result_at":null}}],
+  "properties":[{"id":"reachable end.done","from":"satisfied","to":"satisfied"},{"id":"safety no_resource_overcommit","from":"satisfied","to":"satisfied"}],
+  "absent_diagnostics":["E-DIFF-0","E-CMP-0","W-DIFF-2"],
+  "checked":["comparison_mismatch","actor","relation","intent_claims","retire_loses","meaning","authority","resource","time","visibility","contest","preserve","override","maintain","annotations"],
+  "unchecked":[]
+}

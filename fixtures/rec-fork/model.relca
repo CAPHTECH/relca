@@ -1,0 +1,13 @@
+model Records version "0.2" {
+type Verdict = enum { pass, fail }
+type Ack = enum { committed, refused }
+type Entry = record { confidence: enum { high, low } }
+observed case { entry: optional<Entry>; approval: optional<Verdict>; registered: bool = false; po, receipt: optional<Verdict> }
+actor Extractor { capacity 1; capability extract() -> Entry { duration fixed 1min; result nondet { Entry { confidence = high }, Entry { confidence = low } }; writes entry } }
+actor Clerk { capacity 2; capability match_po(e: Entry) -> Verdict { duration fixed 3min; result nondet { pass }; writes po }; capability match_receipt(e: Entry) -> Verdict { duration fixed 5min; result nondet { pass }; writes receipt } }
+process Flow { e = Extractor.extract(); fork checks { p = Clerk.match_po(e); r = Clerk.match_receipt(e) }; join all checks; end done }
+
+bounds { cases 1; live_tasks 2; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.done
+}

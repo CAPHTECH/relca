@@ -1,0 +1,9 @@
+model Records version "0.2" {
+type One = record { flag: enum { yes } }
+observed case { one: optional<One> = One { flag = yes } }
+process Flow { if one.flag == yes { end bad } else { end safe } }
+
+bounds { cases 1; live_tasks 1; clock 20min }
+verify safety no_resource_overcommit
+verify reachable end.safe
+}

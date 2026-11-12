@@ -1,0 +1,6 @@
+model Mix version "0.2" {
+ type T=enum{ok};actor Ledger{capacity 2;state x:0..6=2;
+ capability a()->T{duration fixed 1min;result nondet{ok};writes x;finish{x+=1}}
+ capability b()->T{duration fixed 1min;result nondet{ok};writes x;finish{x-=1}}}
+ process P{a=Ledger.a();b=Ledger.b();end done};cut C{include[Ledger]};bounds{cases 2;live_tasks 1;clock 5min};arrivals fixed[0min,0min];policy fifo tie_by case_id;verify reachable end.done
+}

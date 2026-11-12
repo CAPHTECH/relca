@@ -1,0 +1,57 @@
+{
+  "verdict": "satisfied",
+  "agency": {
+    "viewpoints": {
+      "rules": "agency-viewpoints-p1-2",
+      "effects": {
+        "status": "derived",
+        "rows": [],
+        "unchecked": [
+          "authority",
+          "fallback_path"
+        ]
+      },
+      "retention": {
+        "status": "derived",
+        "capabilities": [
+          {
+            "capability": "A.x",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          },
+          {
+            "capability": "A.y",
+            "status": "derived",
+            "normal": {
+              "min": 1,
+              "max": 1
+            },
+            "contest_route": false,
+            "basis": "unknown",
+            "fallback": "unchecked",
+            "join_any_cancellation": false
+          }
+        ]
+      },
+      "framing": {
+        "status": "derived",
+        "ends": [
+          {
+            "end": "done",
+            "status": "derived",
+            "reachable": true,
+            "selectors": [],
+            "read_only": []
+          }
+        ]
+      }
+    }
+  }
+}

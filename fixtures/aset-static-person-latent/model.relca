@@ -1,0 +1,13 @@
+model CaseSet version "0.2" {
+  type Ack = enum { committed, rejected_duplicate }
+  type T = enum { ok, no }
+  people [c1,c2]
+  observed case { registered: bool = false }
+
+  actor Ledger{state keys:set<CaseId>}
+  process Flow { end done }
+  cut K { include [Ledger] }
+  bounds { cases 1; live_tasks 3; clock 20min }
+
+  verify reachable end.done
+}

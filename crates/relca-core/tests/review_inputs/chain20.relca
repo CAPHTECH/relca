@@ -1,0 +1,10 @@
+model M version "0.2" { type T = enum { pass,fail }
+  observed case { done:bool = false }
+  kernel K { * -> { 0.000000000000000000000000000000000000000000000000000000000000001:pass; 0.999999999999999999999999999999999999999999999999999999999999999:fail } }
+  actor A { capacity 1;
+    capability toss() -> T { duration fixed 1min; outcomes kernel K }
+    capability mark() -> T { duration fixed 1min; result nondet { pass }; writes done; finish { done = true } } }
+  process P { r0 = A.toss(); if r0 == pass { r1 = A.toss(); if r1 == pass { r2 = A.toss(); if r2 == pass { r3 = A.toss(); if r3 == pass { r4 = A.toss(); if r4 == pass { r5 = A.toss(); if r5 == pass { r6 = A.toss(); if r6 == pass { r7 = A.toss(); if r7 == pass { r8 = A.toss(); if r8 == pass { r9 = A.toss(); if r9 == pass { r10 = A.toss(); if r10 == pass { r11 = A.toss(); if r11 == pass { r12 = A.toss(); if r12 == pass { r13 = A.toss(); if r13 == pass { r14 = A.toss(); if r14 == pass { r15 = A.toss(); if r15 == pass { r16 = A.toss(); if r16 == pass { r17 = A.toss(); if r17 == pass { r18 = A.toss(); if r18 == pass { r19 = A.toss(); if r19 == pass { z = A.mark(); end success } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } else { end failed } } bounds { cases 1;clock 50min;live_tasks 1 }
+  verify safety no_resource_overcommit
+  verify probability reached done == true <= 1
+  verify probability reached done == true >= 0 }
