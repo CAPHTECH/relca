@@ -19,8 +19,8 @@
 
 ## 検査
 
-- 変更ごとに `./scripts/check.sh`。fmt、clippy、test、版つき節番号と受入表の照合を
-  この順で実行する。同じ内容での合格は記録され、`--force` で再実行する。
+- 変更ごとに `./scripts/check.sh`。fmt、clippy、test、版つき節番号と受入表の照合、
+  確認用ページの試験をこの順で実行する。同じ内容での合格は記録され、`--force` で再実行する。
 - PATH 上に `cargo-nextest` があれば test は `cargo nextest run --workspace` の後に
   `cargo test --doc --workspace`。無ければ従来の `cargo test --workspace` で doctest も含めて実行する。
   選択はログに出す。`.config/nextest.toml` で同時16試験、再試行なし、時間切れによる打切りなしとし、

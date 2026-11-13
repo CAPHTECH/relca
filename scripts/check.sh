@@ -26,6 +26,9 @@ else
 fi
 step python3 -B scripts/check-refs.py
 step python3 -B scripts/test-phase1-acceptance.py
+# 確認用ページの試験は、いま build した relca を使う(古い binary で黙って食い違わない)。
+step cargo build --quiet -p relca-cli
+step python3 -B scripts/test-review-page.py
 mkdir -p target
 echo "$current" > "$stamp"
 echo "check: 全段合格"

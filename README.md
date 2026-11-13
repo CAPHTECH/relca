@@ -132,7 +132,7 @@ cargo build --release
 | `docs/guide/` | 利用ガイドと受入対応表 |
 | `scripts/` | 検査と snapshot の更新 |
 
-変更したら `./scripts/check.sh` を通してください。fmt、clippy(警告をエラーとして扱う)、workspace の試験、節参照、Phase 1 の39行対応表、公開準備の検査を順に実行します(公開版では公開準備の検査を除きます)。
+変更したら `./scripts/check.sh` を通してください。fmt、clippy(警告をエラーとして扱う)、workspace の試験、節参照、Phase 1 の39行対応表、確認用ページ(`skills/relca-model/scripts`)の試験、公開準備の検査を順に実行します(公開版では公開準備の検査を除きます)。
 `cargo-nextest` が PATH にあれば、`cargo nextest run --workspace` で unit/integration test を並列実行し、続けて `cargo test --doc --workspace` で doctest を実行します。
 設定は `.config/nextest.toml` にあり、通常の試験は1枠、job を並列実行する大きな試験は4枠を使い、全体を16枠に収めます。試験内の job worker は最大4です。失敗時の再試行や時間切れによる打切りはせず、最適化しない標準の test build を使います。
 nextest が無ければ、従来どおり `cargo test --workspace` で doctest も含めて実行します。選んだ実行方法はログに表示し、nextest 自体のエラーを fallback で隠すことはしません。
