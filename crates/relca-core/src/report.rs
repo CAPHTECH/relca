@@ -109,6 +109,8 @@ macro_rules! declare_report {
 }
 declare_report! {
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub repetition: Option<repetition::Table>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub response_recovery: Option<crate::recovery::Recovery>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_profiles: Option<work_profiles::WorkProfiles>,
@@ -172,6 +174,7 @@ pub mod priority;
 #[cfg(test)]
 #[path = "report/q4_review_tests.rs"]
 mod q4_review_tests;
+mod repetition;
 mod response;
 pub mod work_profiles;
 pub use response::{ResponseAnalysis, ResponseCoverage};
@@ -712,6 +715,8 @@ fn simulation_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<&'static st
 type SimulationModeName = &'static str;
 declare_simulation_report! {
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub repetition: Option<repetition::Table>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub response_recovery: Option<crate::recovery::Recovery>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub response_analysis: Option<Box<ResponseAnalysis>>,
@@ -976,6 +981,7 @@ fn simulation_base(mut base: Report) -> SimulationReport {
     };
     base.ledger.simulation_mode(base.model.sha256.is_none());
     SimulationReport {
+        repetition: base.repetition,
         response_recovery: None,
         response_analysis: None,
         work_profiles: base.work_profiles,
@@ -1368,6 +1374,7 @@ fn simulate_model_raw(
         base.cut = Cut::Declared(Box::new(declared_cut(m, c)));
     }
     base.diagnostics = m.diagnostics.clone();
+    repetition::agency(&mut base, m);
     let mut out = simulation_base(base);
     if m.tracks_obligations() {
         out.unchecked.push("obligation_outcomes".into());
@@ -1389,6 +1396,7 @@ fn simulate_model_raw(
         truncated: None,
     };
     let sampled = execute(m);
+    out.repetition = repetition::sampled(m, &sampled);
     out.response_recovery = sampled.response_recovery.clone();
     if out.response_recovery.is_some() {
         out.response_analysis = Some(Box::new(response::sampled_analysis(m)));
@@ -1406,6 +1414,11 @@ fn simulate_model_raw(
         .iter()
         .any(|d| d.severity == diag::Severity::Error);
     out.metrics = summarize_metrics(&sampled, aborted);
+    if m.has_loops()
+        && let Some(metrics) = &mut out.metrics
+    {
+        repetition::metrics(m, metrics);
+    }
     if let Some(metrics) = &mut out.metrics {
         match crate::metrics::contests::summarize(m, &sampled, aborted) {
             Ok(table) => {
@@ -2176,6 +2189,7 @@ fn empty_report(src: &str) -> Report {
         write!(sha256, "{byte:02x}").expect("writing into a String cannot fail");
     }
     Report {
+        repetition: None,
         priority_policy: None,
         work_profiles: None,
         resource_time: None,
@@ -2571,6 +2585,7 @@ fn place_waiting_assumption(rows: &mut Vec<Assumption>) {
 }
 
 fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Outcome) -> Report {
+    mut_report.repetition = repetition::exhaustive(model, &outcome);
     let response_exercise = outcome.response_exercise.clone();
     mut_report.response_receipts = outcome.response_receipts.clone();
     mut_report.response_recovery = outcome.response_recovery.clone();
@@ -2621,6 +2636,11 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
         agency.unchecked_mut().push("obligation_debtor".into());
     }
     mut_report.metrics = outcome.metrics.clone();
+    if model.has_loops()
+        && let Some(metrics) = &mut mut_report.metrics
+    {
+        repetition::metrics(model, metrics);
+    }
     // Alternate exhaustive drivers (notably explain's trace collector) also
     // pass this boundary. Projection is idempotent and never alters the trace.
     if let Some(metrics) = &mut mut_report.metrics {
@@ -2807,6 +2827,7 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
             .collect(),
     );
     crate::agency::response::apply(&mut final_report, model, response_exercise.as_deref());
+    repetition::agency(&mut final_report, model);
     if model.recovery().is_some() && final_report.response_recovery.is_none() {
         final_report.response_analysis = Some(Box::new(response::unavailable_transport(model)));
         for p in final_report

@@ -55,12 +55,14 @@ impl TryFrom<ViewpointsWire> for Viewpoints {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LimitReason {
+    LoopControl,
     ResponseControl,
     DerivationLimit,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StateReason {
+    LoopControl,
     ResponseControl,
     StateGuards,
     /// A `uses` amount exceeds its resource's capacity: the call never starts.

@@ -294,7 +294,7 @@ pub(super) fn resolve_probe(fault: &str) -> serde_json::Value {
     json!({"unresolved":unresolved(&f).iter().map(|b|m.site_name(*b)).collect::<Vec<_>>(),"pay_visible":response::visible_values(&f,&m,None)[command.0].is_some(),"charge_commits":f.trace.iter().filter(|o|o.matches_event(Event{capability:target,kind:EventKind::Commit},&m)).count(),"refund_commits":f.trace.iter().filter(|o|matches!(o.event,Occurrence::Completion(c,_) if m.capabilities[c.0].name=="refund")).count(),"work_added":work(&f)-before_work,"time_added":f.now-before})
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct QueryEvidence {
     pub case: usize,
     pub command: BindingId,
@@ -306,7 +306,7 @@ pub(super) struct QueryEvidence {
     pub at: Tick,
     pub value: ValueId,
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Resolution {
     pub command: BindingId,
     pub query: BindingId,

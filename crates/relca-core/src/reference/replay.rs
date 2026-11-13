@@ -19,6 +19,7 @@ pub(super) fn interpreter(m: &Model) -> Interpreter<'_> {
     Interpreter {
         case_index: 0,
         probability_stack: Vec::new(),
+        run_work: None,
         probability_result: None,
         probability_scheduler: false,
         probability_chance: false,
@@ -149,7 +150,7 @@ pub(super) fn same_values(f: &Frame<'_>, m: &Model, s: &Stage) -> bool {
             )) == Some(&(v.value.clone(), v.visibility))
         })
 }
-fn runnable(i: &Interpreter<'_>, f: &Frame<'_>) -> Result<bool> {
+fn runnable<'a>(i: &Interpreter<'a>, f: &Frame<'a>) -> Result<bool> {
     for (n, t) in f.tasks.iter().enumerate() {
         if reference(i.can_start(f, n))? {
             let actor = &i.model.actors[i.model.capabilities[t.call.capability.0].actor.0];
@@ -169,7 +170,7 @@ fn due(f: &Frame<'_>) -> bool {
         .iter()
         .any(|t| t.phase == Phase::Running && (t.finish == Some(f.now) || t.ack == Some(f.now)))
 }
-pub(super) fn instant(i: &Interpreter<'_>, f: &Frame<'_>) -> Result<bool> {
+pub(super) fn instant<'a>(i: &Interpreter<'a>, f: &Frame<'a>) -> Result<bool> {
     if f.waiting.is_none()
         && f.sleep().is_none()
         && let Some(statement) = f.control.iter().rev().find_map(|b| b.first())
@@ -1371,6 +1372,16 @@ pub(super) fn apply<'a>(
                     .is_some())
             {
                 f.waiting = None;
+            }
+        }
+        Kind::LoopControl => {
+            let stmt = next_statement(f)?;
+            legal(stage.location.span == stmt.span)?;
+            let Stmt::LoopControl(control) = &stmt.kind else {
+                return Err(ReplayReason::IllegalTransition);
+            };
+            for (id, x) in &control.updates {
+                f.state_values[id.0] = *x;
             }
         }
         Kind::Branch => {

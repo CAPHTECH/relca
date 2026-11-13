@@ -705,7 +705,8 @@ impl Model {
                 | Stmt::WaitUntil(_)
                 | Stmt::End(_)
                 | Stmt::ResolveEffect { .. }
-                | Stmt::StopReceiptUnknown => false,
+                | Stmt::StopReceiptUnknown
+                | Stmt::LoopControl(_) => false,
             })
         }
         layers.process = layers.opaque
@@ -1307,6 +1308,27 @@ impl Model {
         }
         contains(&self.process.body)
     }
+    pub fn has_metric_wait(&self) -> bool {
+        fn walk(m: &Model, b: &Block, inside: bool) -> bool {
+            b.iter().any(|s| match &s.kind {
+                Stmt::Wait(t) => *t > 0 || !inside,
+                Stmt::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
+                    walk(m, then_body, inside || m.is_loop_guard(condition))
+                        || walk(m, else_body, inside || m.is_loop_guard(condition))
+                }
+                Stmt::Response(_, r) => {
+                    (r.retry_span.is_some() && r.max_attempts > 1)
+                        || r.recovery.as_ref().is_some_and(|b| walk(m, b, inside))
+                }
+                _ => false,
+            })
+        }
+        walk(self, &self.process.body, false)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1406,6 +1428,8 @@ pub struct Degradation {
 /// A call result is absent until finish. Cancelled tasks have no enum value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Binding {
+    /// Output provenance only; never part of the execution or random site key.
+    pub repetition: Option<LoopSite>,
     pub name: String,
     pub ty: TypeId,
     pub span: Span,
@@ -1425,6 +1449,9 @@ pub struct Statement {
 /// End terminates control immediately; suffix statements are not executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    /// Compiler-only forward control for a finitely expanded repeat. No Task,
+    /// elapsed time, random draw, or user state is created by this operation.
+    LoopControl(LoopControl),
     Query(Call, BindingId),
     ResolveEffect {
         command: BindingId,
@@ -1456,6 +1483,37 @@ pub struct Call {
     pub binding: BindingId,
     pub capability: CapabilityId,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoopControl {
+    pub updates: Vec<(StateVarId, StateValue)>,
+    /// Non-executable result aliases for static provenance/typing, not Tasks.
+    pub aliases: Vec<Call>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LoopSite {
+    pub loop_name: String,
+    pub round: Option<u64>,
+    pub phase: LoopPhase,
+    pub call_site: String,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopPhase {
+    Body,
+    OnLimit,
+}
+
+impl From<Vec<(StateVarId, StateValue)>> for LoopControl {
+    fn from(updates: Vec<(StateVarId, StateValue)>) -> Self {
+        Self {
+            updates,
+            aliases: vec![],
+        }
+    }
 }
 
 /// A statically expanded attempt. Original and internal result slots are
@@ -1888,7 +1946,7 @@ impl StateVariable {
                     .get(self.base.0)
                     .map_or(0, |t| t.members.len() as u128)
             },
-            |n| u128::from(n) + 1,
+            |n| u128::from(n) + u128::from(!self.is_loop_round()),
         )
     }
     pub fn domain<'a>(
@@ -1899,7 +1957,7 @@ impl StateVariable {
             return Box::new(std::iter::empty());
         }
         match self.integer_max {
-            Some(n) => Box::new((0..=n).map(StateValue::Integer)),
+            Some(n) => Box::new((u64::from(self.is_loop_round())..=n).map(StateValue::Integer)),
             None => Box::new(
                 (0..types.get(self.base.0).map_or(0, |t| t.members.len()))
                     .map(|i| StateValue::Value(ValueId(i))),
@@ -1911,7 +1969,7 @@ impl StateVariable {
             return matches!(value, StateValue::Set(bits) if n > 0 && n <= 64 && (n == 64 || bits >> n == 0));
         }
         match (self.integer_max, value) {
-            (Some(n), StateValue::Integer(v)) => v <= n,
+            (Some(n), StateValue::Integer(v)) => v <= n && (!self.is_loop_round() || v >= 1),
             (None, StateValue::Value(v)) => types
                 .get(self.base.0)
                 .is_some_and(|t| v.0 < t.members.len()),
@@ -1923,7 +1981,61 @@ impl StateVariable {
 
 impl Model {
     pub fn has_integers(&self) -> bool {
-        self.state_variables.iter().any(|v| v.integer_max.is_some())
+        self.state_variables
+            .iter()
+            .any(|v| v.integer_max.is_some() && !v.name.starts_with("@loop:"))
+    }
+}
+
+impl StateVariable {
+    pub fn is_loop_round(&self) -> bool {
+        self.loop_role() == Some("round")
+    }
+
+    fn loop_role(&self) -> Option<&str> {
+        let (name, role) = self.name.strip_prefix("@loop:")?.split_once(':')?;
+        (!name.is_empty() && matches!(role, "round" | "active" | "limit" | "continue" | "started"))
+            .then_some(role)
+    }
+}
+
+impl Model {
+    pub fn has_loops(&self) -> bool {
+        self.state_variables
+            .iter()
+            .any(StateVariable::is_loop_round)
+    }
+
+    pub(crate) fn is_loop_guard(&self, c: &Cond) -> bool {
+        matches!(c, Cond::IntCompare { variable, .. } if self.state_variables.get(variable.0).is_some_and(|v| matches!(v.loop_role(),Some("active"|"continue"))))
+    }
+
+    /// Original public result slot. It has no Task/history of its own.
+    pub fn loop_alias(&self, binding: BindingId) -> Option<BindingId> {
+        // Keep the execution link independent of optional output provenance.
+        let name = &self.process.bindings.get(binding.0)?.name;
+        let mut parts = name.strip_prefix("@loop:")?.splitn(3, ':');
+        parts.next()?;
+        parts.next()?.parse::<u64>().ok()?;
+        let alias = parts.next()?;
+        self.process
+            .bindings
+            .iter()
+            .position(|b| b.name == alias)
+            .map(BindingId)
+    }
+
+    pub fn loop_site(&self, binding: BindingId) -> Option<&LoopSite> {
+        self.process.bindings.get(binding.0)?.repetition.as_ref()
+    }
+
+    pub(crate) fn loop_site_named(&self, name: &str) -> Option<&LoopSite> {
+        self.process
+            .bindings
+            .iter()
+            .find(|b| b.name == name)?
+            .repetition
+            .as_ref()
     }
 }
 

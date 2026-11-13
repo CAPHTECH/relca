@@ -531,6 +531,14 @@ pub fn compare_with_scenario(
     scenario: Option<&str>,
 ) -> CompareReport {
     if let Ok(ast) = crate::syntax::parse(src) {
+        if ast.has_repetition() {
+            let mut result = CompareReport::empty(Some(analysis));
+            result.diagnostic(
+                diag::U_SEM_0,
+                "loop_feature_combination: repeat comparison is not connected",
+            );
+            return result.finish();
+        }
         let distribution = ast.items.iter().any(|i| match i {
             crate::ast::Item::ArrivalsDistribution(_) => true,
             crate::ast::Item::Scenario(s) => s

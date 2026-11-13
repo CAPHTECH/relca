@@ -21,6 +21,7 @@ pub(super) fn scalar(n: BigInt) -> Value {
 pub(super) fn calls<'a>(b: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
     for s in b {
         match &s.kind {
+            ir::Stmt::LoopControl(_) => {}
             ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => out.push(c),
             ir::Stmt::Response(c, r) => {
                 out.push(c);

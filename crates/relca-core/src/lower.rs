@@ -472,6 +472,11 @@ pub fn lower_configuration_with_scenario(
 fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
     for statement in block {
         match &statement.value {
+            ast::Stmt::Repeat { body, on_limit, .. } => {
+                collect_comparison_ends(body, names);
+                collect_comparison_ends(on_limit, names);
+            }
+            ast::Stmt::Again | ast::Stmt::Leave => {}
             ast::Stmt::End(name) => {
                 names.insert(name.value.clone());
             }
@@ -507,6 +512,11 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
 fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
     for statement in block {
         match &statement.value {
+            ast::Stmt::Repeat { body, on_limit, .. } => {
+                collect_calls(body, calls);
+                collect_calls(on_limit, calls);
+            }
+            ast::Stmt::Again | ast::Stmt::Leave => {}
             ast::Stmt::Call(call) => {
                 calls.push(call);
                 if let Some(body) = &call.recovery {
@@ -1806,6 +1816,8 @@ mod tests {
 
 #[derive(Default)]
 struct Lower {
+    loop_variables: BTreeMap<String, ir::StateVarId>,
+    loop_context: Option<repetition::LoopContext>,
     performances: Vec<ir::Performance>,
     response_caps: BTreeMap<ir::CapabilityId, (Option<ast::Ident>, bool)>,
     scenario: Option<ir::ScenarioRecord>,
@@ -1872,6 +1884,7 @@ struct Lower {
 }
 
 mod degradation;
+mod repetition;
 mod work_profiles;
 
 #[cfg(test)]
@@ -2656,6 +2669,15 @@ impl Lower {
     }
 
     fn local_state(&mut self, actor: &ast::Ident, variable: &ast::Ident) -> Option<ir::StateVarId> {
+        if variable.value == "round"
+            && let Some(&id) = self.loop_variables.get(&actor.value)
+        {
+            if self.loop_round_in_scope(id) {
+                return Some(id);
+            }
+            self.unsupported("loop_round_out_of_scope", actor.span);
+            return None;
+        }
         let Some(&a) = self.actor_names.get(&actor.value) else {
             self.error(E_NAME_0, "undefined state Actor", actor.span);
             return None;
@@ -2956,6 +2978,10 @@ impl Lower {
 
     fn policy_block(&mut self, b: &ast::Block) {
         for s in b {
+            if let ast::Stmt::Repeat { body, on_limit, .. } = &s.value {
+                self.policy_block(body);
+                self.policy_block(on_limit);
+            }
             if let ast::Stmt::WaitUntil(c) = &s.value {
                 self.policy_condition(c);
             }
@@ -3332,7 +3358,17 @@ impl Lower {
                 }
                 id
             }
-            [a, v] => self.local_state(a, v),
+            [a, v] => {
+                // A kernel is declared globally; scope belongs to each actual
+                // consuming call, not to the declaration of its given rows.
+                if v.value == "round"
+                    && let Some(&id) = self.loop_variables.get(&a.value)
+                {
+                    Some(id)
+                } else {
+                    self.local_state(a, v)
+                }
+            }
             _ => {
                 self.error(diag::U_SYN_0, "unsupported state path", path.span);
                 None
@@ -3403,10 +3439,10 @@ impl Lower {
                 self.unsupported("Actor observed state in kernels is unsupported", p.span);
             }
         }
-        if given
-            .iter()
-            .any(|id| self.state_variables[id.0].integer_max.is_some())
-        {
+        if given.iter().any(|id| {
+            self.state_variables[id.0].integer_max.is_some()
+                && !self.loop_variables.values().any(|v| v == id)
+        }) {
             self.unsupported("integer kernel given is unsupported", k.span);
         }
         for b in k.rows.iter().flat_map(|r| &r.branches) {
@@ -3444,7 +3480,7 @@ impl Lower {
             && given.len() == k.given.len()
             && given.iter().all(|id| {
                 let v = &self.state_variables[id.0];
-                v.base.0 < self.types.len()
+                (v.is_loop_round() || v.base.0 < self.types.len())
                     && (v.kind == ir::StateKind::ObservedCase || !v.optional)
             });
         let mut rows = Vec::new();
@@ -3457,7 +3493,25 @@ impl Lower {
                     Some(names) if !given.is_empty() && names.len() == given.len() => {
                         for (&id, n) in given.iter().zip(names) {
                             let v = &self.state_variables[id.0];
-                            if let Some(value) = self.state_value(v.base, v.optional, n) {
+                            let value = if v.is_loop_round() {
+                                let max = v.integer_max.expect("loop round domain");
+                                n.value
+                                    .parse::<u64>()
+                                    .ok()
+                                    .filter(|x| (1..=max).contains(x))
+                                    .map(ir::StateValue::Integer)
+                                    .or_else(|| {
+                                        self.error(
+                                            diag::E_PROB_0,
+                                            "invalid loop round in kernel row",
+                                            n.span,
+                                        );
+                                        None
+                                    })
+                            } else {
+                                self.state_value(v.base, v.optional, n)
+                            };
+                            if let Some(value) = value {
                                 values.push(value);
                             }
                         }
@@ -3495,9 +3549,12 @@ impl Lower {
         }
         let count = given.iter().fold(num_bigint::BigUint::from(1u8), |n, id| {
             let v = &self.state_variables[id.0];
-            n * num_bigint::BigUint::from(
-                self.types.get(v.base.0).map_or(0, |t| t.members.len()) + usize::from(v.optional),
-            )
+            let size = if v.is_loop_round() {
+                v.integer_max.expect("loop round domain") as usize
+            } else {
+                self.types.get(v.base.0).map_or(0, |t| t.members.len()) + usize::from(v.optional)
+            };
+            n * num_bigint::BigUint::from(size)
         });
         if valid_given && count != num_bigint::BigUint::from(keys.len()) {
             self.error(
@@ -4208,6 +4265,7 @@ impl Lower {
         }) {
             return Err(self.errors);
         }
+        self.loop_declarations(model);
         for item in &model.items {
             if let ast::Item::Kernel(k) = item {
                 if self.kernel_declarations.contains_key(&k.name.value) {
@@ -4361,6 +4419,11 @@ impl Lower {
             fn names(block: &ast::Block, out: &mut BTreeSet<String>) {
                 for s in block {
                     match &s.value {
+                        ast::Stmt::Repeat { body, on_limit, .. } => {
+                            names(body, out);
+                            names(on_limit, out);
+                        }
+                        ast::Stmt::Again | ast::Stmt::Leave => {}
                         ast::Stmt::Call(c) => {
                             out.insert(c.binding.value.clone());
                             if let Some(body) = &c.recovery {
@@ -5192,7 +5255,11 @@ impl Lower {
             }
         }
         self.resolve_waivers(model, &mut contracts);
-        if self.state_variables.iter().any(|v| v.integer_max.is_some()) {
+        if self
+            .state_variables
+            .iter()
+            .any(|v| v.integer_max.is_some() && !v.name.starts_with("@loop:"))
+        {
             verify.push(ir::Verify {
                 property: ir::Property::StateInRange,
                 span: model.span,
@@ -5799,6 +5866,24 @@ impl Lower {
                 field: "resource_time.on_close".into(), value: "continue; resource-time-v1".into(),
                 affects: "休み・勤務終了でも実行者・資源・残時間を保持し通常終了又は取消ackまで壁時計で継続する。料金時間外と予定枠超過を別量にする。現実の勤務制度は認定しない。".into(),
             });
+        }
+        if lowered.has_loops()
+            && (!lowered.contests().is_empty()
+                || lowered
+                    .quality
+                    .as_ref()
+                    .is_some_and(|q| !q.quantiles.is_empty()))
+        {
+            let mut ds = lowered.diagnostics;
+            ds.push(Diagnostic {
+                code: U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message:
+                    "loop_feature_combination: repeat with contest or quantiles is not connected"
+                        .into(),
+                span: Some(model.span),
+            });
+            return Err(ds);
         }
         if !lowered.response_attempts().is_empty()
             && (!lowered.contests().is_empty()
@@ -7070,6 +7155,9 @@ impl Lower {
                         .unwrap_or_default();
                     if !matches!(event.kind, ir::EventKind::Start) {
                         before.insert(site.binding);
+                        if let Some(alias) = self.loop_result_alias(site.binding) {
+                            before.insert(alias);
+                        }
                     }
                     available = Some(match available {
                         None => before,
@@ -8714,6 +8802,7 @@ impl Lower {
             fn calls(b: &ir::Block, caps: &mut BTreeSet<usize>) {
                 for s in b {
                     match &s.kind {
+                        ir::Stmt::LoopControl(_) => {}
                         ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                             caps.insert(c.capability.0);
                         }
@@ -9592,6 +9681,14 @@ impl Lower {
     fn collect(&mut self, block: &ast::Block) {
         for stmt in block {
             match &stmt.value {
+                ast::Stmt::Repeat {
+                    name,
+                    at_most,
+                    body,
+                    on_limit,
+                    ..
+                } => self.collect_loop(name, at_most, body, on_limit),
+                ast::Stmt::Again | ast::Stmt::Leave => {}
                 ast::Stmt::Call(call) => {
                     self.collect_call(call);
                     if let Some(body) = &call.recovery {
@@ -9648,6 +9745,11 @@ impl Lower {
     fn collect_ends(&mut self, block: &ast::Block) {
         for stmt in block {
             match &stmt.value {
+                ast::Stmt::Repeat { body, on_limit, .. } => {
+                    self.collect_ends(body);
+                    self.collect_ends(on_limit);
+                }
+                ast::Stmt::Again | ast::Stmt::Leave => {}
                 ast::Stmt::End(name) => {
                     if !self.end_names.contains_key(&name.value) {
                         self.end_names
@@ -9748,6 +9850,7 @@ impl Lower {
         self.binding_names
             .insert(call.binding.value.clone(), binding);
         self.bindings.push(ir::Binding {
+            repetition: None,
             name: call.binding.value.clone(),
             ty: cap
                 .map(|c| self.capabilities[c.0].return_type)
@@ -9798,6 +9901,47 @@ impl Lower {
         let mut resolved = Vec::new();
         for stmt in block {
             let kind = match &stmt.value {
+                ast::Stmt::Repeat {
+                    name,
+                    at_most,
+                    gap,
+                    body,
+                    on_limit,
+                } => {
+                    resolved.extend(self.expand_loop(
+                        name,
+                        at_most,
+                        gap.as_ref(),
+                        body,
+                        on_limit,
+                        flow,
+                        stmt.span,
+                    ));
+                    None
+                }
+                ast::Stmt::Again | ast::Stmt::Leave => {
+                    let leave = matches!(stmt.value, ast::Stmt::Leave);
+                    if let Some(context) = &mut self.loop_context {
+                        if leave {
+                            context.leaves.push(flow.clone());
+                        } else {
+                            context.agains.push(flow.clone());
+                        }
+                        flow.histories.clear();
+                        let mut updates = vec![(context.continuing, ir::StateValue::Integer(0))];
+                        if leave {
+                            updates.push((context.active, ir::StateValue::Integer(0)));
+                        }
+                        let kind = ir::Stmt::LoopControl(updates.into());
+                        resolved.push(ir::Statement {
+                            kind,
+                            span: stmt.span,
+                        });
+                    } else {
+                        self.error(diag::E_CON_0, "loop control outside repeat", stmt.span);
+                    }
+                    break;
+                }
                 ast::Stmt::ResolveEffect { command, evidence } => {
                     match (
                         self.binding_names.get(&command.value).copied(),
@@ -9819,8 +9963,18 @@ impl Lower {
                 ast::Stmt::WaitUntil(c) => self.condition(c, flow).map(ir::Stmt::WaitUntil),
                 ast::Stmt::Wait(d) => self.ticks(d).map(ir::Stmt::Wait),
                 ast::Stmt::Call(ast_call) => {
-                    if let Some(call) = self.call_arguments(ast_call, flow) {
+                    let mut renamed = ast_call.clone();
+                    if self.loop_context.is_some()
+                        && let Some(&id) = self.binding_names.get(&ast_call.binding.value)
+                    {
+                        renamed.binding.value = self.bindings[id.0].name.clone();
+                    }
+                    if let Some(call) = self.call_arguments(&renamed, flow) {
+                        self.loop_call_scope(&call);
                         flow.available.insert(call.binding);
+                        if let Some(alias) = self.loop_result_alias(call.binding) {
+                            flow.available.insert(alias);
+                        }
                         if let Some(command) = &ast_call.query_command {
                             self.binding_names
                                 .get(&command.value)
@@ -9869,6 +10023,9 @@ impl Lower {
                         .iter()
                         .filter_map(|c| self.call_arguments(c, flow))
                         .collect();
+                    for call in &calls {
+                        self.loop_call_scope(call);
+                    }
                     for (i, a) in calls.iter().enumerate() {
                         for b in &calls[i + 1..] {
                             if self.capabilities[a.capability.0]
@@ -9958,10 +10115,26 @@ impl Lower {
                 }
             };
             if let Some(kind) = kind {
-                resolved.push(ir::Statement {
+                let statement = ir::Statement {
                     kind,
                     span: stmt.span,
-                });
+                };
+                if let Some(context) = &self.loop_context {
+                    resolved.push(ir::Statement {
+                        kind: ir::Stmt::If {
+                            condition: ir::Cond::IntCompare {
+                                variable: context.continuing,
+                                operator: ir::IntComparison::Eq,
+                                value: 1,
+                            },
+                            then_body: vec![statement],
+                            else_body: vec![],
+                        },
+                        span: stmt.span,
+                    });
+                } else {
+                    resolved.push(statement);
+                }
             }
         }
         resolved
@@ -10188,6 +10361,11 @@ impl Lower {
                 operator,
                 value,
             } => {
+                if variable.value == "round"
+                    && let Some(&id) = self.loop_variables.get(&actor.value)
+                {
+                    return self.resolved_comparison(id, operator, value, true);
+                }
                 if let Some(c) = self.record_comparison(
                     actor,
                     variable,
@@ -10255,6 +10433,26 @@ impl Lower {
     // ambiguity on syntactically present but impossible singleton-result paths.
     fn truth(&self, cond: &ir::Cond) -> (bool, bool) {
         match cond {
+            ir::Cond::IntCompare {
+                variable,
+                operator,
+                value,
+            } if self
+                .loop_context
+                .as_ref()
+                .is_some_and(|c| c.round_variable == *variable) =>
+            {
+                let k = i128::from(self.loop_context.as_ref().unwrap().round);
+                let yes = match operator {
+                    ir::IntComparison::Eq => k == *value,
+                    ir::IntComparison::Ne => k != *value,
+                    ir::IntComparison::Lt => k < *value,
+                    ir::IntComparison::Le => k <= *value,
+                    ir::IntComparison::Gt => k > *value,
+                    ir::IntComparison::Ge => k >= *value,
+                };
+                (yes, !yes)
+            }
             ir::Cond::Contains { .. } | ir::Cond::StateEq(_) | ir::Cond::IntCompare { .. } => {
                 (true, true)
             }

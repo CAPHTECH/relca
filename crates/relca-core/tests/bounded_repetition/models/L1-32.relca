@@ -1,0 +1,18 @@
+model L1 version "0.2" {
+  type V = enum { pass, fail }
+  actor Rev { capacity 1; capability review() -> V { duration fixed 1min; result nondet { pass, fail } } }
+  actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+  process P {
+    repeat rework at_most 32 {
+      r = Rev.review()
+      if r == pass { leave } else { f = Clerk.fix(); again }
+    } on_limit { end escalated }
+    end done
+  }
+  cut C { include [Rev, Clerk] }
+  bounds { cases 1; live_tasks 1; clock 200min }
+  metrics { window 200min; currency "JPY"; rate Rev per_minute 1; rate Clerk per_minute 1; rate Rev.review per_start 1; rate Clerk.fix per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+  verify reachable end.done
+  verify reachable end.escalated
+}

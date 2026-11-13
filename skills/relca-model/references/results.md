@@ -72,8 +72,28 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `ledger.execution.selection.effective.process` | 実際に選ばれた process | 複数 process のモデルで確かめる |
 | `unchecked`, `agency.unchecked`, `cut.unchecked` | relca が自分で未検査と申告した項目 | 報告の「確かめていない範囲」に写す |
 | `response_receipts`, `case_outcomes`, `response_analysis`, 性質 `receipt_resolution` | 再送を含むモデルで出る(試行の再送なしの版には無かった。他の Phase 2 の構文で `case_outcomes` が出るかは確かめていない [U]) | 下の「再送を含むモデルで出る欄」 |
+| `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+## 繰り返しを含むモデルで出る欄
+
+| 欄 | 読み方 |
+|---|---|
+| `repetition.coverage`, `unchecked` | complete / sampled / not_derived と算出しなかった理由。業務の成功とは別 |
+| `repetition.sites[].origin` | LoopSite。loop_nameと元のcall_site、bodyのround（1始まり）を対応付ける。phase=on_limitならround=null |
+| `repetition.cases[].rounds`, `distribution[]` | 案件・loopごとの開始回数のmin/maxと回数別分布。確率未宣言のprobabilityはnullで、一様にはしない |
+| `cases[].on_limit`, `on_limit_probability` | その案件で上限後の処理へ進む件数0〜1の範囲と確率境界。回数上限と計算切断を分ける |
+| `cases[].samples`, `excluded_samples`, `distribution[].observed_count`, `observed_on_limit` | simulateの完了・非切断標本の集計と除外数。網羅的な確率ではない |
+
+LoopSiteはmetricsのTask行とexplainのBusinessEventにも付く。元の呼出しの位置を使い、
+実行単位の識別子から回数を推測しない。[差し戻しの例](../../../docs/guide/dsl.md#差し戻しと再提出)では
+roundsは1〜3、on_limitは0〜1、on_limit_probabilityは[1/8,1/8]。
+再確認の例は2回・上限後0件で、doneは7分。
+
+clockや探索予算での切断は、影響する性質をinconclusiveにする。上限後の処理へ進んだことにはせず、
+未完了を成功・失敗にも数えない。not_derivedの空のcasesを0件と読まない。
+詳しい鍵と値は[利用ガイド](../../../docs/guide/results.md#繰り返しの出力)を参照。
 
 ## 再送を含むモデルで出る欄
 

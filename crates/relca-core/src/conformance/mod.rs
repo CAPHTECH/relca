@@ -478,6 +478,16 @@ fn conform_raw(
         json!({"cases":m.bounds.cases,"live_tasks":m.bounds.live_tasks,"clock":m.bounds.clock}),
     );
     r.ledger.execution["limits"]["state_budget"] = crate::ledger::na("no_analysis");
+    if m.has_loops() {
+        r.verdict = Verdict::Unsupported;
+        r.diagnostics.push(diagnostic(
+            diag::U_LOG_1,
+            "unsupported_loop_model_feature",
+            "loop_feature_combination: repeated Task log matching is not connected",
+            Some(m.process.span),
+        ));
+        return r;
+    }
     if m.uses_work_profiles() {
         r.verdict = crate::Verdict::Unsupported;
         r.diagnostics.push(diagnostic(

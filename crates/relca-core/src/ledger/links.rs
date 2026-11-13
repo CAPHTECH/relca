@@ -45,6 +45,7 @@ fn allowed(path: &str, v: &str) -> bool {
                 | "agency-p1-rule-1"
                 | "agency-p1-reads-1"
                 | "agency-p2-response-1"
+                | "agency-p2-loop-1"
         ),
         "/via_model_paths/rules" => {
             matches!(v, "via-model-read-paths-1" | "via-model-read-paths-reads-1")
@@ -54,6 +55,7 @@ fn allowed(path: &str, v: &str) -> bool {
         "/response_analysis/rules" => matches!(v, "response-p2-1" | "response-p3a-recovery-1"),
         "/response_recovery/rules" => v == crate::recovery::RULES,
         "/resource_time/rules" => v == "resource-time-v1",
+        "/repetition/rules" => v == "bounded-repetition-1",
         "/priority_policy/rules" => v == "priority-queues-v1",
         "/work_profiles/rules" => v == crate::report::work_profiles::RULES,
         "/uncertainty/rules" => v == "uncertainty-p2-1",
@@ -123,6 +125,7 @@ pub(super) fn components(host: &Value) -> Result<Value, String> {
             "/response_analysis/rules",
             "/response_recovery/rules",
             "/resource_time/rules",
+            "/repetition/rules",
             "/priority_policy/rules",
             "/work_profiles/rules",
             "/uncertainty/rules",

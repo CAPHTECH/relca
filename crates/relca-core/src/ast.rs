@@ -897,9 +897,38 @@ pub struct Degradation {
 /// Ordered statement tree, including statements syntactically following end.
 pub type Block = Vec<Spanned<Stmt>>;
 
+impl Model {
+    pub fn has_repetition(&self) -> bool {
+        fn block(b: &Block) -> bool {
+            b.iter().any(|s| match &s.value {
+                Stmt::Repeat { .. } => true,
+                Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => block(then_body) || block(else_body),
+                Stmt::Call(c) => c.recovery.as_deref().is_some_and(block),
+                _ => false,
+            })
+        }
+        self.items
+            .iter()
+            .any(|i| matches!(i, Item::Process(p) if block(&p.body)))
+    }
+}
+
 /// Fork owns its mandatory immediately following join; branches are only calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    Repeat {
+        name: Ident,
+        at_most: Integer,
+        gap: Option<Duration>,
+        body: Block,
+        on_limit: Block,
+    },
+    Again,
+    Leave,
     ResolveEffect {
         command: Ident,
         evidence: Ident,

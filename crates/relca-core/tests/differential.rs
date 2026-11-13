@@ -360,6 +360,7 @@ impl Builder {
             span: SPAN,
         });
         self.0.process.bindings.push(Binding {
+            repetition: None,
             name: format!("b{id}"),
             ty: TypeId(0),
             span: SPAN,
@@ -1091,6 +1092,7 @@ fn model_identity(mut m: Model) -> Model {
         for s in body {
             s.span = SPAN;
             match &mut s.kind {
+                Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
                 Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")
                 }
@@ -2433,6 +2435,7 @@ fn render(m: &Model) -> String {
     fn block(s: &mut String, m: &Model, body: &Block) {
         for statement in body {
             match &statement.kind {
+                Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
                 Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")
                 }

@@ -147,6 +147,7 @@ pub fn adapt(m: &ir::Model) -> Result<OwnModel, NotCovered> {
         b.iter()
             .map(|s| {
                 Ok(match &s.kind {
+                    ir::Stmt::LoopControl(_) => return Err(NotCovered("bounded repetition")),
                     ir::Stmt::Query(_, _)
                     | ir::Stmt::ResolveEffect { .. }
                     | ir::Stmt::StopReceiptUnknown => {

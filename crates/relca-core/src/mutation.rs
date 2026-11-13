@@ -580,6 +580,17 @@ fn mutate_using_raw(
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
+    if syntax::parse(src).is_ok_and(|ast| ast.has_repetition()) {
+        r.verdict = Verdict::Unsupported;
+        r.run.reason = Some("loop_feature_combination");
+        r.diagnostics.push(diag::Diagnostic {
+            code: diag::U_SEM_0.into(),
+            severity: diag::Severity::Error,
+            message: "loop_feature_combination: repeat mutation sites are not connected".into(),
+            span: None,
+        });
+        return r;
+    }
     if syntax::parse(src).is_ok_and(|ast| {
         let process = if scoped_process(options) {
             original.ledger.execution["selection"]["effective"]["process"]["value"].as_str()
@@ -826,6 +837,7 @@ fn has_time_wait(block: &ir::Block) -> bool {
         ir::Stmt::Response(_, attempt) => attempt.recovery.as_ref().is_some_and(has_time_wait),
         // Fork holds Calls, not nested Blocks; duration is checked above.
         ir::Stmt::Query(_, _)
+        | ir::Stmt::LoopControl(_)
         | ir::Stmt::ResolveEffect { .. }
         | ir::Stmt::StopReceiptUnknown
         | ir::Stmt::Call(_)
@@ -1349,6 +1361,7 @@ fn site(src: &str, span: diag::Span) -> Site {
 fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
     for stmt in block {
         match &stmt.value {
+            ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {}
             ast::Stmt::Call(c) => {
                 out.push(c);
                 if let Some(body) = &c.recovery {

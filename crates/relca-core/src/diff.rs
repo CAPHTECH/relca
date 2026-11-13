@@ -957,6 +957,15 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
         }
         return result;
     };
+    if from_model.model.has_loops() || to_model.model.has_loops() {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "loop_feature_combination: repeat diff projection is not connected".into(),
+            None,
+        );
+        result.finish();
+        return result;
+    }
     if from_model.model.response_attempts().is_empty()
         != to_model.model.response_attempts().is_empty()
     {

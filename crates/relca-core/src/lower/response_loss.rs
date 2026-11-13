@@ -215,6 +215,7 @@ impl Lower {
                 let mut internal = call.clone();
                 internal.binding = ir::BindingId(self.bindings.len());
                 self.bindings.push(ir::Binding {
+                    repetition: None,
                     name: format!("@response:{}:{attempt}", call.binding.0),
                     ty: self.bindings[call.binding.0].ty,
                     span: call.span,

@@ -40,7 +40,7 @@ pub use common_cause::{
     CommonCauseDerivation, CommonCauses, ModelUncertainties, SourceDescription,
 };
 pub(crate) use read_graph::{concurrent_read, lexical_has_capability};
-mod viewpoints;
+pub(crate) mod viewpoints;
 pub use viewpoints::Viewpoints;
 #[cfg(test)]
 pub(crate) use viewpoints::fixture as viewpoints_fixture;
@@ -1282,6 +1282,11 @@ fn collect<'a>(
             Ok(())
         };
         match &stmt.kind {
+            ir::Stmt::LoopControl(control) => {
+                for c in &control.aliases {
+                    register(c)?;
+                }
+            }
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
             ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => register(c)?,
             ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
@@ -1369,6 +1374,14 @@ fn paths<'a>(
         };
         budget.work()?;
         match &stmt.kind {
+            ir::Stmt::LoopControl(control) => {
+                for p in &mut incoming {
+                    budget.copy(control.updates.len())?;
+                    for (id, value) in &control.updates {
+                        p.store.insert(*id, Provenance::Constant(*value));
+                    }
+                }
+            }
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
             ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                 if let Some(r) = recorder.as_deref_mut()
@@ -1775,6 +1788,7 @@ struct Group {
     actors: BTreeSet<ir::ActorId>,
     independent: BTreeSet<ir::ActorId>,
     judgements: usize,
+    sites: BTreeSet<ir::BindingId>,
 }
 
 fn derive_with_limits(
@@ -2301,6 +2315,57 @@ fn derive_strategy(
     }
     let mut groups: Vec<Group> = Vec::new();
     budget.location = Location::model(model, "lineage");
+    let has_loops = model.has_loops();
+    if has_loops {
+        // Loop control is deliberately outside F/U derivation. Retain actual
+        // judgement sites and their set-valued evidence lineage nonetheless.
+        fn reads(c: &ir::Cond, out: &mut BTreeSet<ir::BindingId>) {
+            match c {
+                ir::Cond::Eq(r) => {
+                    out.insert(r.binding);
+                }
+                ir::Cond::And(cs) | ir::Cond::Or(cs) => {
+                    for c in cs {
+                        reads(c, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        fn walk(b: &ir::Block, out: &mut BTreeSet<ir::BindingId>) {
+            for s in b {
+                if let ir::Stmt::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } = &s.kind
+                {
+                    reads(condition, out);
+                    walk(then_body, out);
+                    walk(else_body, out);
+                }
+            }
+        }
+        let mut used = BTreeSet::new();
+        walk(&model.process.body, &mut used);
+        let aliases: BTreeSet<_> = (0..n)
+            .filter_map(|i| model.loop_alias(ir::BindingId(i)))
+            .collect();
+        all_j.extend(
+            calls
+                .iter()
+                .filter(|c| {
+                    !aliases.contains(&c.binding)
+                        && (used.contains(&c.binding)
+                            || model
+                                .loop_alias(c.binding)
+                                .is_some_and(|id| used.contains(&id)))
+                        && c.args.iter().any(|id| *id != ir::CURRENT_CASE)
+                })
+                .map(|c| c.binding),
+        );
+        all_j.retain(|id| !aliases.contains(id));
+    }
     for j in all_j {
         let cap = &model.capabilities[calls[j.0].capability.0];
         let mut independent = BTreeSet::new();
@@ -2331,15 +2396,28 @@ fn derive_strategy(
             for s in independent {
                 budget.insert(&mut group.independent, s)?;
             }
-            group.judgements += 1;
+            let site = model.loop_alias(j).unwrap_or(j);
+            if !has_loops {
+                group.judgements += 1;
+            } else if !group.sites.contains(&site) {
+                budget.insert(&mut group.sites, site)?;
+                group.judgements += 1;
+            }
         } else {
             budget.copy(subjects[j.0].len())?;
             budget.copy(1)?;
+            let sites = if has_loops {
+                budget.copy(1)?;
+                BTreeSet::from([model.loop_alias(j).unwrap_or(j)])
+            } else {
+                BTreeSet::new()
+            };
             groups.push(Group {
                 subject: subjects[j.0].clone(),
                 actors: BTreeSet::from([cap.actor]),
                 independent,
                 judgements: 1,
+                sites,
             });
         }
     }
@@ -2401,6 +2479,9 @@ fn derive_strategy(
         }
     }
     agency.viewpoints = Some(viewpoints);
+    if model.has_loops() {
+        agency.rules = "agency-p2-loop-1".into();
+    }
     Ok((agency, warnings))
 }
 

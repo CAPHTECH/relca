@@ -379,7 +379,10 @@ impl Observed {
             None
         }
         if let Some(path) = find(&m.process.body, target, &[]) {
-            self.branch(target.span, &path, yes);
+            if !matches!(&target.kind, ir::Stmt::If { condition, .. } if m.is_loop_guard(condition))
+            {
+                self.branch(target.span, &path, yes);
+            }
             true
         } else {
             false
@@ -396,6 +399,7 @@ impl Observed {
         let mut arms = Vec::new();
         let mut ends = Vec::new();
         fn lexical(
+            m: &ir::Model,
             b: &ir::Block,
             prefix: &[usize],
             calls: &mut BTreeSet<ir::CapabilityId>,
@@ -406,6 +410,7 @@ impl Observed {
                 let mut path = prefix.to_vec();
                 path.push(i);
                 match &s.kind {
+                    ir::Stmt::LoopControl(_) => {}
                     ir::Stmt::Wait(_)
                     | ir::Stmt::WaitUntil(_)
                     | ir::Stmt::ResolveEffect { .. }
@@ -420,23 +425,25 @@ impl Observed {
                         }
                     }
                     ir::Stmt::If {
+                        condition,
                         then_body,
                         else_body,
-                        ..
                     } => {
-                        arms.push((path.clone(), s.span));
+                        if !m.is_loop_guard(condition) {
+                            arms.push((path.clone(), s.span));
+                        }
                         let mut child = path.clone();
                         child.push(0);
-                        lexical(then_body, &child, calls, arms, ends);
+                        lexical(m, then_body, &child, calls, arms, ends);
                         let mut child = path;
                         child.push(1);
-                        lexical(else_body, &child, calls, arms, ends);
+                        lexical(m, else_body, &child, calls, arms, ends);
                     }
                     ir::Stmt::End(e) => ends.push((*e, s.span)),
                 }
             }
         }
-        lexical(&m.process.body, &[], &mut calls, &mut arms, &mut ends);
+        lexical(m, &m.process.body, &[], &mut calls, &mut arms, &mut ends);
         calls.extend(m.contests().iter().map(|c| c.route));
         let included = |a: ir::ActorId| m.cut.as_ref().is_none_or(|c| c.include.contains(&a));
         let mut out = Vec::new();
@@ -467,9 +474,20 @@ impl Observed {
                 );
             }
         }
+        let mut seen_arms = BTreeSet::new();
         for (path, s) in arms {
+            if m.has_loops() && !seen_arms.insert((s.start, s.end)) {
+                continue;
+            }
             for yes in [true, false] {
-                if !self.arms.contains(&(s.start, s.end, path.clone(), yes)) {
+                let observed = if m.has_loops() {
+                    self.arms
+                        .iter()
+                        .any(|(lo, hi, _, side)| *lo == s.start && *hi == s.end && *side == yes)
+                } else {
+                    self.arms.contains(&(s.start, s.end, path.clone(), yes))
+                };
+                if !observed {
                     warn(
                         diag::W_UNREACH_1,
                         s,

@@ -897,7 +897,7 @@ pub(super) fn validate(m: &ir::Model) -> EngineResult<()> {
                 | ir::Stmt::ResolveEffect { .. }
                 | ir::Stmt::StopReceiptUnknown => return Err(INVALID.into()),
                 ir::Stmt::End(_) => alive = false,
-                ir::Stmt::Wait(_) => {}
+                ir::Stmt::LoopControl(_) | ir::Stmt::Wait(_) => {}
             }
         }
         Ok(alive.then_some(visible))

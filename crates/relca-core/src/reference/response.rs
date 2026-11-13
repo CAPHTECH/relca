@@ -1,7 +1,7 @@
 //! Independent history interpretation for ADR 0056; no engine transition helpers.
 use super::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Receipt {
     #[cfg(test)]
     pub weight: Option<Rational>,
@@ -187,6 +187,13 @@ pub(super) fn visible_values(
             _ => {}
         }
     }
+    for t in &f.tasks {
+        if let Some(alias) = m.loop_alias(t.call.binding)
+            && let Phase::Finished(v) | Phase::Refused(v) = t.phase
+        {
+            values[alias.0] = Some(v);
+        }
+    }
     values
 }
 
@@ -365,26 +372,29 @@ impl<'a> Interpreter<'a> {
         let probabilistic = choices.iter().all(|(p, _)| p.is_some());
         let weights: Vec<_> = choices.iter().filter_map(|(p, _)| p.clone()).collect();
         self.probability_stack.push(ReferenceChoices::default());
+        let binding = task.call.binding;
+        let person = task.person;
         for (_weight, observation) in choices {
-            let mut next = self.successor(&f, depth)?;
+            self.defer_successor(&f,depth,move |this,_,mut next| {
             let was_unknown = next.trace.iter().any(|o| matches!(&o.event, Occurrence::Channel(p) if p.command == r.command && p.attempt < r.attempt && !p.resolved));
             let receipt = Receipt {
                 #[cfg(test)]
                 weight: _weight,
                 command: r.command,
-                binding: task.call.binding,
+                binding,
                 attempt: r.attempt,
                 actual,
                 observation,
                 resolved: observation == Delivered && (r.idempotent || !was_unknown),
             };
-            self.record_site(
+            this.record_site(
                 &mut next,
                 Occurrence::Channel(receipt),
-                task.person,
-                task.call.binding,
+                person,
+                binding,
             )?;
-            self.run(next, depth)?;
+            this.run(next,depth)
+            })?;
         }
         self.probability_finish(probabilistic.then_some(weights.as_slice()));
         Ok(())

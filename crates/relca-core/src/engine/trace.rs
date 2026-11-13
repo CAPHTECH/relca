@@ -30,6 +30,7 @@ pub(crate) struct Capture {
     line_starts: Vec<usize>,
     recorded_edges: usize,
     pub(super) spans: Vec<diag::Span>,
+    loop_controls: BTreeSet<usize>,
     calls: BTreeMap<ir::BindingId, ir::Call>,
     pub current: usize,
     pub initial: Option<Stage>,
@@ -53,16 +54,20 @@ impl Capture {
             block: &ir::Block,
             spans: &mut Vec<diag::Span>,
             calls: &mut BTreeMap<ir::BindingId, ir::Call>,
+            loop_controls: &mut BTreeSet<usize>,
         ) {
             for stmt in block.iter().rev() {
                 match &stmt.kind {
+                    ir::Stmt::LoopControl(_) => {
+                        loop_controls.insert(spans.len());
+                    }
                     ir::Stmt::If {
                         then_body,
                         else_body,
                         ..
                     } => {
-                        walk(then_body, spans, calls);
-                        walk(else_body, spans, calls);
+                        walk(then_body, spans, calls, loop_controls);
+                        walk(else_body, spans, calls, loop_controls);
                     }
                     ir::Stmt::Response(call, r) => {
                         calls.insert(call.binding, call.clone());
@@ -73,7 +78,7 @@ impl Capture {
                             spans.push(r.retry_span.unwrap_or(stmt.span));
                         }
                         if let Some(body) = &r.recovery {
-                            walk(body, spans, calls);
+                            walk(body, spans, calls, loop_controls);
                         }
                         spans.push(stmt.span);
                     }
@@ -96,7 +101,13 @@ impl Capture {
         }
         let mut spans = vec![model.process.span];
         let mut calls = BTreeMap::new();
-        walk(&model.process.body, &mut spans, &mut calls);
+        let mut loop_controls = BTreeSet::new();
+        walk(
+            &model.process.body,
+            &mut spans,
+            &mut calls,
+            &mut loop_controls,
+        );
         let arrival_span = crate::syntax::parse(src).ok().and_then(|ast| {
             ast.items.into_iter().find_map(|item| match item {
                 crate::ast::Item::ArrivalsFixed(a) => Some(a.span),
@@ -108,6 +119,7 @@ impl Capture {
             line_starts: Location::line_starts(src),
             recorded_edges: 0,
             spans,
+            loop_controls,
             calls,
             current: 0,
             initial: None,
@@ -208,7 +220,7 @@ impl Capture {
                 if s.initialized {
                     stage
                         .events
-                        .push(Event::Business(Self::event(&stage, Kind::Received)));
+                        .push(Event::Business(Self::event(&stage, Kind::Received, m)));
                 }
                 self.initial = Some(stage);
             }
@@ -338,8 +350,13 @@ impl Capture {
             });
         }
     }
-    pub(super) fn event(stage: &Stage, kind: Kind) -> BusinessEvent {
+    pub(super) fn event(stage: &Stage, kind: Kind, m: &ir::Model) -> BusinessEvent {
         BusinessEvent {
+            repetition: stage
+                .binding
+                .as_deref()
+                .and_then(|name| m.loop_site_named(name))
+                .cloned(),
             kind,
             case_id: stage.case_id,
             binding: stage.binding.clone(),
@@ -542,7 +559,7 @@ impl Capture {
         }
         stage
             .events
-            .push(Event::Business(Self::event(&stage, kind)));
+            .push(Event::Business(Self::event(&stage, kind, m)));
         if kind == Kind::Finish
             && stage
                 .actual_result
@@ -558,7 +575,7 @@ impl Capture {
         {
             stage
                 .events
-                .push(Event::Business(Self::event(&stage, Kind::Commit)));
+                .push(Event::Business(Self::event(&stage, Kind::Commit, m)));
         }
         Ok(stage)
     }
@@ -581,7 +598,7 @@ impl Capture {
             );
             stage
                 .events
-                .push(Event::Business(Self::event(&stage, Kind::Received)));
+                .push(Event::Business(Self::event(&stage, Kind::Received, m)));
             return Ok(stage);
         }
         if a.time != b.time {
@@ -658,7 +675,7 @@ impl Capture {
                 stage.location = self.location(self.spans[a.pc])?;
                 stage
                     .events
-                    .push(Event::Business(Self::event(&stage, Kind::End)));
+                    .push(Event::Business(Self::event(&stage, Kind::End, m)));
                 return Ok(stage);
             }
             for (id, (old, new)) in old.routes.iter().zip(&new.routes).enumerate() {
@@ -755,6 +772,8 @@ impl Capture {
             Kind::Adopt
         } else if a.waiting && !b.waiting {
             Kind::Join
+        } else if a.pc != b.pc && self.loop_controls.contains(&a.pc) {
+            Kind::LoopControl
         } else if a.pc != b.pc {
             Kind::Branch
         } else {
@@ -790,7 +809,7 @@ impl Capture {
                 let task = self.task_stage(b, winner, m, Kind::Adopt)?;
                 stage
                     .events
-                    .push(Event::Business(Self::event(&task, Kind::Adopt)));
+                    .push(Event::Business(Self::event(&task, Kind::Adopt, m)));
             }
             let mut requested = Vec::new();
             for (old, new) in b.tasks.iter().filter_map(|new| {
@@ -818,7 +837,7 @@ impl Capture {
                     });
                 if ack(old).is_none() && ack(new).is_some() || refused_request {
                     let task = self.task_stage(b, new, m, Kind::CancelRequest)?;
-                    let mut event = Self::event(&task, Kind::CancelRequest);
+                    let mut event = Self::event(&task, Kind::CancelRequest, m);
                     event.ack_at = ack(new);
                     stage.events.push(Event::Business(event));
                     // Adoption and cancellation requests are one semantic edge.
@@ -875,6 +894,7 @@ impl Capture {
                         } else {
                             Kind::DurationGate
                         },
+                        m,
                     )));
                 }
             }

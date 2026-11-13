@@ -100,6 +100,7 @@ impl Shape {
     fn walk(&mut self, block: &ir::Block) {
         for s in block {
             match &s.kind {
+                ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => self.call(c, CallMode::Sequential),
                 ir::Stmt::ResolveEffect { evidence, .. } => {
                     self.result_reads.insert(*evidence);

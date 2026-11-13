@@ -35,6 +35,7 @@ mutate の元の検査と変異体、explain の反例と再生は同じ選択�
 | `assumptions[]` | 既定値や分析で置いた前提 |
 | `actors[]` | 宣言値と省略時に補った欄 |
 | `metrics`, `quality` | 要求した量と、算出できない理由 |
+| `repetition` | 繰り返しの回数、上限後の処理への到達、元の呼出し位置との対応 |
 | `ledger`, `uncertainty` | 入力選択、結論の根拠、未検査事項の記録 |
 | `unchecked` | 今回は検査していない項目 |
 
@@ -42,6 +43,50 @@ mutate の元の検査と変異体、explain の反例と再生は同じ選択�
 null は 0 ではありません。`not_configured`、`undetermined`、`truncated` などの理由を
 値と一緒に扱ってください。`per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
 simulate の `basis` は性質や中断の有無で異なり、`properties[].cases[]` の `basis: statistical` は網羅探索の確率ではなく標本推定を表します。
+
+## 繰り返しの出力
+
+`repeat` を含むモデルには `repetition` が付きます。
+[構文と2つの例](dsl.md#繰り返し)と合わせて読んでください。
+回数は body を開始した回数で、初回を含みます。
+`on_limit` は最後の回の `again` でだけ到達する処理であり、計算の切断ではありません。
+
+| 欄 | 読み方 |
+|---|---|
+| `repetition.rules`, `basis` | 回数表の規則と算出根拠 |
+| `repetition.coverage` | `complete` は回数の解析が完了、`sampled` は完了した標本での集計、`not_derived` は算出できなかった状態。業務の成功とは別 |
+| `repetition.sites[]` | 呼出しの実行単位と元の位置。`origin` が LoopSite、`source_span` が元の呼出しのバイト位置。識別子から回数を推測せず、対応欄を使う |
+| `repetition.cases[]` | `case_id` と `loop_name` ごとの回数表 |
+| `cases[].rounds` | 開始した body の回数の `min` / `max`。到達しない繰り返しは0回になりうる |
+| `cases[].distribution[]` | body の開始回数が `rounds` になる場合の分布。`probability.min/max` は宣言された確率による境界。確率未宣言なら null で、一様分布ではない |
+| `cases[].on_limit` | その案件で上限後の処理に到達する件数の `min` / `max`。1つの繰り返しにつき0または1件 |
+| `cases[].on_limit_probability` | 上限後の処理に進む確率の境界。確率を算出しない場合は null |
+| `cases[].samples`, `excluded_samples` | 標本集計に含めた件数と除外した件数。切断や未完了を完了標本に混ぜない |
+| `cases[].distribution[].observed_count`, `observed_on_limit` | simulate での回数別の観測件数と上限後の処理への観測到達数。網羅探索の確率ではない |
+| `repetition.unchecked` | 回数表を算出できなかった理由など |
+
+LoopSite は `loop_name`、`call_site`、`round`、`phase` を持ちます。
+`phase: body` の `round` は1始まりの回、`phase: on_limit` の `round` は null です。
+上限後の処理を最後の body の一部として数えないための区別です。
+この対応は `sites[].origin` に加え、metrics を要求した場合の
+`metrics.cases[].tasks[].repetition` と、explain の反例内の
+`steps[].events[].repetition` にも付きます。
+
+差し戻しの例では、`repetition.cases[0].rounds` は `{"min":1,"max":3}`、
+`on_limit` は `{"min":0,"max":1}`、`on_limit_probability` は `{"min":"1/8","max":"1/8"}` です。
+回数1、2、3の確率はそれぞれ1/2、1/4、1/4です。3回には、3回目で通る場合と
+上限後の処理へ進む場合の両方が入ります。
+`escalate()` の元位置は `call_site: e`、`phase: on_limit`、`round: null` で読めます。
+再確認の例は `rounds: {"min":2,"max":2}`、`on_limit: {"min":0,"max":0}` です。
+
+clock、同時 Task 数、探索予算などで計算を切った場合、影響を受ける性質は
+`inconclusive` となります。未完了を `on_limit` の到達や成功・失敗に置き換えません。
+再確認の例の clock を6分にすると、7分の終了を確認する前に切れ、
+`inconclusive`、exit 2、`repetition.coverage: not_derived` となり、回数表の `cases` は空です。
+`coverage` と `unchecked` を読み、未導出の分布を0件と解釈しないでください。
+
+繰り返しを含む Agency の F/U などには、未導出の項目が残ります。
+警告が出ないことを統制の成立とはせず、`agency.unchecked` も確認してください。
 
 ## 構造の出力
 

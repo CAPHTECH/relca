@@ -1,0 +1,145 @@
+model P1 version "0.2" {
+  type Stock = enum { arrived, not_yet }
+  type Ready = enum { r1, r2, r3, never }
+  latent case { ready: Ready ~ { r1: 0.5, r2: 0.125, r3: 0.125, never: 0.25 } }
+  kernel Seen given [ready, poll.round] {
+    r1, 1 -> { 1: arrived }; r1, 2 -> { 1: arrived }; r1, 3 -> { 1: arrived }
+    r2, 1 -> { 1: not_yet }; r2, 2 -> { 1: arrived }; r2, 3 -> { 1: arrived }
+    r3, 1 -> { 1: not_yet }; r3, 2 -> { 1: not_yet }; r3, 3 -> { 1: arrived }
+    never, 1 -> { 1: not_yet }; never, 2 -> { 1: not_yet }; never, 3 -> { 1: not_yet };
+r1, 4 -> { 1: arrived };
+r1, 5 -> { 1: arrived };
+r1, 6 -> { 1: arrived };
+r1, 7 -> { 1: arrived };
+r1, 8 -> { 1: arrived };
+r1, 9 -> { 1: arrived };
+r1, 10 -> { 1: arrived };
+r1, 11 -> { 1: arrived };
+r1, 12 -> { 1: arrived };
+r1, 13 -> { 1: arrived };
+r1, 14 -> { 1: arrived };
+r1, 15 -> { 1: arrived };
+r1, 16 -> { 1: arrived };
+r1, 17 -> { 1: arrived };
+r1, 18 -> { 1: arrived };
+r1, 19 -> { 1: arrived };
+r1, 20 -> { 1: arrived };
+r1, 21 -> { 1: arrived };
+r1, 22 -> { 1: arrived };
+r1, 23 -> { 1: arrived };
+r1, 24 -> { 1: arrived };
+r1, 25 -> { 1: arrived };
+r1, 26 -> { 1: arrived };
+r1, 27 -> { 1: arrived };
+r1, 28 -> { 1: arrived };
+r1, 29 -> { 1: arrived };
+r1, 30 -> { 1: arrived };
+r1, 31 -> { 1: arrived };
+r1, 32 -> { 1: arrived };
+r2, 4 -> { 1: arrived };
+r2, 5 -> { 1: arrived };
+r2, 6 -> { 1: arrived };
+r2, 7 -> { 1: arrived };
+r2, 8 -> { 1: arrived };
+r2, 9 -> { 1: arrived };
+r2, 10 -> { 1: arrived };
+r2, 11 -> { 1: arrived };
+r2, 12 -> { 1: arrived };
+r2, 13 -> { 1: arrived };
+r2, 14 -> { 1: arrived };
+r2, 15 -> { 1: arrived };
+r2, 16 -> { 1: arrived };
+r2, 17 -> { 1: arrived };
+r2, 18 -> { 1: arrived };
+r2, 19 -> { 1: arrived };
+r2, 20 -> { 1: arrived };
+r2, 21 -> { 1: arrived };
+r2, 22 -> { 1: arrived };
+r2, 23 -> { 1: arrived };
+r2, 24 -> { 1: arrived };
+r2, 25 -> { 1: arrived };
+r2, 26 -> { 1: arrived };
+r2, 27 -> { 1: arrived };
+r2, 28 -> { 1: arrived };
+r2, 29 -> { 1: arrived };
+r2, 30 -> { 1: arrived };
+r2, 31 -> { 1: arrived };
+r2, 32 -> { 1: arrived };
+r3, 4 -> { 1: arrived };
+r3, 5 -> { 1: arrived };
+r3, 6 -> { 1: arrived };
+r3, 7 -> { 1: arrived };
+r3, 8 -> { 1: arrived };
+r3, 9 -> { 1: arrived };
+r3, 10 -> { 1: arrived };
+r3, 11 -> { 1: arrived };
+r3, 12 -> { 1: arrived };
+r3, 13 -> { 1: arrived };
+r3, 14 -> { 1: arrived };
+r3, 15 -> { 1: arrived };
+r3, 16 -> { 1: arrived };
+r3, 17 -> { 1: arrived };
+r3, 18 -> { 1: arrived };
+r3, 19 -> { 1: arrived };
+r3, 20 -> { 1: arrived };
+r3, 21 -> { 1: arrived };
+r3, 22 -> { 1: arrived };
+r3, 23 -> { 1: arrived };
+r3, 24 -> { 1: arrived };
+r3, 25 -> { 1: arrived };
+r3, 26 -> { 1: arrived };
+r3, 27 -> { 1: arrived };
+r3, 28 -> { 1: arrived };
+r3, 29 -> { 1: arrived };
+r3, 30 -> { 1: arrived };
+r3, 31 -> { 1: arrived };
+r3, 32 -> { 1: arrived };
+never, 4 -> { 1: not_yet };
+never, 5 -> { 1: not_yet };
+never, 6 -> { 1: not_yet };
+never, 7 -> { 1: not_yet };
+never, 8 -> { 1: not_yet };
+never, 9 -> { 1: not_yet };
+never, 10 -> { 1: not_yet };
+never, 11 -> { 1: not_yet };
+never, 12 -> { 1: not_yet };
+never, 13 -> { 1: not_yet };
+never, 14 -> { 1: not_yet };
+never, 15 -> { 1: not_yet };
+never, 16 -> { 1: not_yet };
+never, 17 -> { 1: not_yet };
+never, 18 -> { 1: not_yet };
+never, 19 -> { 1: not_yet };
+never, 20 -> { 1: not_yet };
+never, 21 -> { 1: not_yet };
+never, 22 -> { 1: not_yet };
+never, 23 -> { 1: not_yet };
+never, 24 -> { 1: not_yet };
+never, 25 -> { 1: not_yet };
+never, 26 -> { 1: not_yet };
+never, 27 -> { 1: not_yet };
+never, 28 -> { 1: not_yet };
+never, 29 -> { 1: not_yet };
+never, 30 -> { 1: not_yet };
+never, 31 -> { 1: not_yet };
+never, 32 -> { 1: not_yet }
+  }
+  actor Wh { capacity 1; capability check() -> Stock { duration fixed 1min; outcomes kernel Seen; kernel_reads latent [ready] } }
+  actor Ship { capacity 1; capability send() -> Stock { duration fixed 5min; result nondet { arrived } } }
+  process P {
+    repeat poll at_most 32 gap fixed 30min {
+      c = Wh.check()
+      if c == arrived { leave } else { again }
+    } on_limit { end gave_up }
+    s = Ship.send()
+    end shipped
+  }
+  cut C { include [Wh, Ship] }
+  bounds { cases 1; live_tasks 1; clock 2000min }
+  metrics { window 2000min; currency "JPY"; rate Wh per_minute 1; rate Ship per_minute 1; rate Wh.check per_start 1; rate Ship.send per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.shipped within 6min >= 0.5
+  verify probability reached end.shipped within 37min >= 0.625
+  verify probability reached end.shipped within 68min >= 0.75
+  verify probability reached end.gave_up within 962min >= 0.25
+}

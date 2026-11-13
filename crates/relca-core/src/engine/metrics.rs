@@ -22,6 +22,7 @@ pub(super) fn validate(m: &ir::Model) -> Result<(), &'static str> {
     fn visit(b: &ir::Block, caps: &mut std::collections::BTreeSet<usize>) {
         for s in b {
             match &s.kind {
+                ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     caps.insert(c.capability.0);
                 }
@@ -253,7 +254,7 @@ impl History {
     pub fn new(m: &ir::Model) -> Self {
         Self {
             conditions: m.has_condition_wait().then(Vec::new),
-            waits: m.has_wait().then(Vec::new),
+            waits: m.has_metric_wait().then(Vec::new),
             tasks: vec![
                 TaskHistory {
                     status: Status::NeverCreated,
@@ -550,7 +551,7 @@ pub(super) fn snapshot_with_horizon(
     fn inventory<'a>(b: &'a ir::Block, calls: &mut Vec<&'a ir::Call>, ends: &mut Vec<ir::EndId>) {
         for s in b {
             match &s.kind {
-                ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
+                ir::Stmt::LoopControl(_) | ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
                 ir::Stmt::Response(c, r) => {
                     calls.push(c);
@@ -674,6 +675,10 @@ pub(super) fn snapshot_with_horizon(
                 "never_created_count":count(u64::from(status==Status::NeverCreated)),
                 "cancelled_before_start_count":count(u64::from(status==Status::CancelledBeforeStart)),
                 "not_started_count":count(u64::from(status==Status::Queued))}));
+            if let Some(origin) = m.loop_site(call.binding) {
+                tasks.last_mut().unwrap()["repetition"] =
+                    serde_json::to_value(origin).expect("loop source mapping");
+            }
             if m.has_requires() {
                 let row = tasks.last_mut().unwrap();
                 row["refused_count"] = integer(u64::from(status == Status::Refused));
@@ -776,7 +781,7 @@ pub(super) fn snapshot_with_horizon(
                 t["excluded"]["cut_off"] = count(u64::from(is_cut_off));
             }
         }
-        if m.has_wait() {
+        if m.has_metric_wait() {
             let wait: u64 = history
                 .and_then(|h| h.waits.as_ref())
                 .into_iter()
@@ -886,7 +891,7 @@ pub(super) fn snapshot_with_horizon(
             value["checked"].as_array_mut().unwrap().push(word.into());
         }
     }
-    if m.has_wait() {
+    if m.has_metric_wait() {
         let sum: BigInt = value["cases"]
             .as_array()
             .unwrap()

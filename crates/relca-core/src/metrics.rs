@@ -252,6 +252,8 @@ pub struct CaseTerminal {
 #[serde(deny_unknown_fields)]
 pub struct Task {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repetition: Option<crate::ir::LoopSite>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tariff_regular_work: Option<Scalar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tariff_overtime_work: Option<Scalar>,

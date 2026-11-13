@@ -315,6 +315,7 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
         let mut alive = true;
         for s in b {
             match &s.kind {
+                ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {} // Condition releases are tracked separately below.
                 ir::Stmt::ResolveEffect { evidence, .. } => {
                     if let Some(c) = cs.get(evidence) {
@@ -407,6 +408,7 @@ pub(crate) fn control_dependencies(m: &ir::Model) -> ControlDependencies {
     ) -> Option<ConditionGuards> {
         for statement in body {
             match &statement.kind {
+                ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::WaitUntil(condition) => {
                     guards.waiting = true;
                     resp::decision_support(condition, m, cs, &mut guards.capabilities);

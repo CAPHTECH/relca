@@ -8,6 +8,7 @@ fn model(src: &str) -> Model {
 fn tree(m: &Model, n: usize) -> Tree<'_> {
     let limits = Limits::default();
     Tree {
+        walk_work: None,
         recovery_paths: Vec::new(),
         response_exercise: BTreeMap::new(),
         response_receipts: Vec::new(),

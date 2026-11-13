@@ -186,6 +186,7 @@ fn before_start(
                 };
             }
             ir::Stmt::ResolveEffect { .. } => {}
+            ir::Stmt::LoopControl(_) => {}
             ir::Stmt::End(_) | ir::Stmt::StopReceiptUnknown => finished = None,
         }
     }
@@ -1084,6 +1085,7 @@ mod tests {
                 vec![ir::BindingId(i - 1)]
             };
             m.process.bindings.push(ir::Binding {
+                repetition: None,
                 name: format!("v{i}"),
                 ty: m.capabilities[cid.0].return_type,
                 span: c.span,

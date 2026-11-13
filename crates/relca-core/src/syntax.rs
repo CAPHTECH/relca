@@ -38,6 +38,7 @@ fn parse_with_priority_context(src: &str) -> (Result<Model, Vec<Diagnostic>>, bo
         degradations: Vec::new(),
         degradation_depth: 0,
         recovery_depth: 0,
+        repeat_depth: 0,
     };
     let result = parser.model().map_err(|diagnostic| vec![diagnostic]);
     (result, parser.priority_declaration)
@@ -52,6 +53,7 @@ struct Parser<'s> {
     degradations: Vec<Degradation>,
     degradation_depth: usize,
     recovery_depth: usize,
+    repeat_depth: usize,
 }
 
 impl<'s> Parser<'s> {
@@ -2992,6 +2994,35 @@ impl<'s> Parser<'s> {
     }
 
     fn stmt(&mut self) -> Parsed<Spanned<Stmt>> {
+        if self.at("repeat") {
+            let mut ts = self.tokens[self.pos + 1..]
+                .iter()
+                .filter(|t| t.text != "\n");
+            if ts
+                .next()
+                .is_some_and(|t| t.kind == Kind::Word && t.text != "=")
+                && ts
+                    .next()
+                    .is_some_and(|t| matches!(t.text, "at_most" | "{" | "gap" | "over"))
+            {
+                return self.repeat_statement();
+            }
+        }
+        if self.repeat_depth > 0 {
+            for (word, value) in [("again", Stmt::Again), ("leave", Stmt::Leave)] {
+                if self.position_word(word) {
+                    let start = self.start();
+                    self.expect(word)?;
+                    return Ok(Spanned {
+                        value,
+                        span: self.span(start),
+                    });
+                }
+            }
+            if ["fork", "degrade"].iter().any(|w| self.position_word(w)) {
+                return Err(self.loop_combination());
+            }
+        }
         if self.at("if") {
             return self.if_statement();
         }
@@ -3005,6 +3036,72 @@ impl<'s> Parser<'s> {
             return self.recovery_statement();
         }
         self.ordinary_statement()
+    }
+
+    fn loop_combination(&self) -> Diagnostic {
+        let mut d = self.unsupported("loop_feature_combination");
+        d.code = diag::U_SEM_0.into();
+        d
+    }
+
+    fn repeat_statement(&mut self) -> Parsed<Spanned<Stmt>> {
+        if self.repeat_depth > 0 || self.recovery_depth > 0 || self.degradation_depth > 0 {
+            // Inspect the header only, excluding the contextual loop name.
+            // Preserve the former combination diagnostic for every non-over
+            // nested shape, including a malformed/missing mandatory header.
+            let over = self.tokens[self.pos..]
+                .iter()
+                .filter(|t| t.text != "\n")
+                .skip(2)
+                .take_while(|t| !matches!(t.text, "{" | ";" | "}"))
+                .any(|t| t.kind == Kind::Word && t.text == "over");
+            let mut d = self.loop_combination();
+            if over {
+                d.message = "loop_stage_unsupported".into();
+            }
+            return Err(d);
+        }
+        let start = self.expect("repeat")?.span.start;
+        let name = self.ident()?;
+        if self.at("over") {
+            let mut d = self.loop_combination();
+            d.message = "loop_stage_unsupported".into();
+            return Err(d);
+        }
+        self.expect("at_most")?;
+        let at_most = self.integer()?;
+        if self.at("over") {
+            let mut d = self.loop_combination();
+            d.message = "loop_stage_unsupported".into();
+            return Err(d);
+        }
+        let gap = if self.take("gap") {
+            self.expect("fixed")?;
+            Some(self.duration()?)
+        } else {
+            None
+        };
+        if self.at("over") {
+            let mut d = self.loop_combination();
+            d.message = "loop_stage_unsupported".into();
+            return Err(d);
+        }
+        self.repeat_depth += 1;
+        let body = self.block()?;
+        self.separators();
+        self.expect("on_limit")?;
+        let on_limit = self.block()?;
+        self.repeat_depth -= 1;
+        Ok(Spanned {
+            value: Stmt::Repeat {
+                name,
+                at_most,
+                gap,
+                body,
+                on_limit,
+            },
+            span: self.span(start),
+        })
     }
 
     // Separate recursive If and recovery-only frames preserve the existing
@@ -3101,6 +3198,9 @@ impl<'s> Parser<'s> {
             self.take("wait");
             self.lines();
             if self.take("until") {
+                if self.repeat_depth > 0 {
+                    return Err(self.loop_combination());
+                }
                 if self.recovery_depth > 0 {
                     return Err(self.unsupported("condition wait in recovery"));
                 }
@@ -3211,6 +3311,13 @@ impl<'s> Parser<'s> {
         self.expect(".")?;
         let capability = self.ident()?;
         let args = self.arguments()?;
+        if self.repeat_depth > 0
+            && ["response_loss", "retry", "on"]
+                .iter()
+                .any(|w| self.position_word(w))
+        {
+            return Err(self.loop_combination());
+        }
         let after_args = self.pos;
         let response_loss = if self.take("response_loss") {
             let loss_start = self.tokens[self.pos - 1].span.start;

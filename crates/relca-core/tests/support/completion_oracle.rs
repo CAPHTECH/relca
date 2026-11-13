@@ -224,6 +224,7 @@ fn inventory(
 ) {
     for (i, s) in block.iter().enumerate() {
         match &s.kind {
+            Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
             Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
                 panic!("receipt recovery is outside this oracle")
             }

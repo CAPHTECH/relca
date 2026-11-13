@@ -1,0 +1,13 @@
+model OldWitness version "0.2" {
+type V = enum { pass, fail }
+actor Rev { capacity 1; capability review() -> V { duration fixed 1min; result nondet { fail } } }
+actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+
+process P { r1 = Rev.review(); if r1 == pass { end done } else { f1 = Clerk.fix(); r2 = Rev.review(); if r2 == pass { end done } else { f2 = Clerk.fix(); r3 = Rev.review(); if r3 == pass { end done } else { f3 = Clerk.fix(); end escalated } } } }
+cut C { include [Rev, Clerk] }
+bounds { cases 1; live_tasks 1; clock 20min }
+metrics { window 20min; currency "JPY"; rate Rev per_minute 1; rate Clerk per_minute 1; rate Rev.review per_start 1; rate Clerk.fix per_start 1; breakdown waits }
+verify safety no_resource_overcommit
+verify reachable end.escalated
+contract Deadline { response case.received -> one_of(end.escalated) by 8min after case.received otherwise unresolved }
+}

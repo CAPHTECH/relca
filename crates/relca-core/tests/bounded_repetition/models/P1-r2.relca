@@ -1,0 +1,25 @@
+model P1 version "0.2" {
+  type Stock = enum { arrived, not_yet }
+  type Ready = enum { r1, r2, r3, never }
+  latent case { ready: Ready = r2 }
+  kernel Seen given [ready, poll.round] {
+    r1, 1 -> { 1: arrived }; r1, 2 -> { 1: arrived }; r1, 3 -> { 1: arrived }
+    r2, 1 -> { 1: not_yet }; r2, 2 -> { 1: arrived }; r2, 3 -> { 1: arrived }
+    r3, 1 -> { 1: not_yet }; r3, 2 -> { 1: not_yet }; r3, 3 -> { 1: arrived }
+    never, 1 -> { 1: not_yet }; never, 2 -> { 1: not_yet }; never, 3 -> { 1: not_yet }
+  }
+  actor Wh { capacity 1; capability check() -> Stock { duration fixed 1min; outcomes kernel Seen; kernel_reads latent [ready] } }
+  actor Ship { capacity 1; capability send() -> Stock { duration fixed 5min; result nondet { arrived } } }
+  process P {
+    repeat poll at_most 3 gap fixed 30min {
+      c = Wh.check()
+      if c == arrived { leave } else { again }
+    } on_limit { end gave_up }
+    s = Ship.send()
+    end shipped
+  }
+  cut C { include [Wh, Ship] }
+  bounds { cases 1; live_tasks 1; clock 200min }
+  metrics { window 200min; currency "JPY"; rate Wh per_minute 1; rate Ship per_minute 1; rate Wh.check per_start 1; rate Ship.send per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+}

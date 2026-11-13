@@ -6,6 +6,8 @@ use super::*;
 pub(crate) mod q6_private;
 #[path = "response_arrivals.rs"]
 mod response_arrivals;
+mod walk_stack;
+use walk_stack::{Branch, SeriesStep};
 #[path = "simulation.rs"]
 pub(super) mod simulation;
 use crate::outcome::CaseTerminalKind as Kind;
@@ -15,7 +17,7 @@ type FinishCoin = (usize, usize, Rational);
 #[path = "arrivals_policy_tests.rs"]
 mod fixed_policy_tests;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Boundary {
     Coins,
     Admit,
@@ -25,12 +27,12 @@ enum Boundary {
     Activate,
     Run,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct QueueEntry {
     task: usize,
     at: Tick,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct CaseFrame<'a> {
     frame: Frame<'a>,
     queue: Vec<QueueEntry>,
@@ -67,7 +69,7 @@ impl CaseFrame<'_> {
                 })
     }
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 // A world is already one charged frame; inline case payloads avoid allocating
 // an extra box per case at every branch of the unmerged reference tree.
 #[allow(clippy::large_enum_variant)]
@@ -92,7 +94,7 @@ impl<'a> CaseSlot<'a> {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct World<'a> {
     external_peak: u64,
     now: Tick,
@@ -243,6 +245,7 @@ impl Bound {
     }
 }
 struct Tree<'a> {
+    walk_work: Option<walk_stack::Work<'a>>,
     recovery_paths: Vec<crate::recovery::Path>,
     response_exercise: BTreeMap<CapabilityId, (usize, usize)>,
     response_receipts: Vec<crate::outcome::ResponseReceipt>,
@@ -282,6 +285,7 @@ fn interpreter(m: &Model, limits: Limits) -> Interpreter<'_> {
     Interpreter {
         case_index: 0,
         probability_stack: Vec::new(),
+        run_work: None,
         probability_result: None,
         probability_scheduler: false,
         probability_chance: false,
@@ -987,7 +991,10 @@ impl<'a> Tree<'a> {
             _ => None,
         }
     }
-    fn leaf(&mut self, w: &World<'a>, cut: ReferenceCut) -> Result<Vec<Bound>, StopReason> {
+    fn leaf(&mut self, w: &World<'a>, cut: ReferenceCut) -> Result<Branch, StopReason> {
+        self.defer_world(w, move |this, w| this.leaf_ready(w, cut))
+    }
+    fn leaf_ready(&mut self, w: &World<'a>, cut: ReferenceCut) -> Result<Branch, StopReason> {
         if self.m.recovery().is_some() && self.stats.projection == Projection::Full {
             use crate::recovery::Stop;
             let rows: Vec<_> = w
@@ -1390,9 +1397,18 @@ impl<'a> Tree<'a> {
                 }
             }
         }
-        Ok(out)
+        Ok(Branch::ready(out))
     }
-    fn reduce(&mut self, children: Vec<(Rational, Vec<Bound>)>, random: bool) -> Vec<Bound> {
+    fn reduce(&mut self, children: Vec<(Rational, Branch)>, random: bool) -> Branch {
+        if let Some(work) = &mut self.walk_work {
+            return work.choice(children, random);
+        }
+        Branch::ready(self.reduce_ready(
+            children.into_iter().map(|(p, b)| (p, b.values())).collect(),
+            random,
+        ))
+    }
+    fn reduce_ready(&mut self, children: Vec<(Rational, Vec<Bound>)>, random: bool) -> Vec<Bound> {
         if children.is_empty() {
             return Vec::new();
         }
@@ -1478,19 +1494,24 @@ impl<'a> Tree<'a> {
     fn priority_readmission_children(
         &mut self,
         w: &World<'a>,
-        admissions: &mut Vec<(Rational, Vec<Bound>)>,
+        admissions: &mut Vec<(Rational, Branch)>,
     ) -> Execution {
         let candidates = self.priority_admissions(w);
         self.policy_unresolved |= candidates.len() > 1;
-        for k in candidates {
+        if candidates.is_empty() {
+            return Ok(());
+        }
+        let child = self.branch_series(w, candidates.len(), None, move |this, w, index| {
+            let k = candidates[index];
             let mut next = w.clone();
             let CaseSlot::Held(c) = std::mem::replace(&mut next.cases[k], CaseSlot::NotHere) else {
                 unreachable!()
             };
             next.cases[k] = CaseSlot::Here(c);
-            self.record(&mut next, k, Occurrence::Admission, None, false)?;
-            admissions.push((Rational::one(), self.walk(next)?));
-        }
+            this.record(&mut next, k, Occurrence::Admission, None, false)?;
+            Ok(SeriesStep::Child(Rational::one(), this.walk(next)?))
+        })?;
+        admissions.push((Rational::one(), child));
         Ok(())
     }
 
@@ -1759,7 +1780,7 @@ impl<'a> Tree<'a> {
         &mut self,
         w: &World<'a>,
         coins: &[(usize, usize, Rational)],
-    ) -> Result<Vec<Bound>, StopReason> {
+    ) -> Result<Branch, StopReason> {
         let size = coins
             .iter()
             .try_fold(1usize, |n, (_, _, p)| {
@@ -1767,12 +1788,12 @@ impl<'a> Tree<'a> {
             })
             .ok_or(StopReason::EnumerationLimit)?;
         self.reserve(size)?;
-        let mut children = Vec::new();
-        for choice in 0..size {
+        let coins = coins.to_vec();
+        self.branch_series(w, size, Some(true), move |this, w, choice| {
             let mut digit = choice;
             let mut weight = Rational::one();
             let mut decisions = Vec::new();
-            for (k, j, p) in coins {
+            for (k, j, p) in &coins {
                 let finishes = *p == Rational::one() || digit % 2 == 0;
                 if *p != Rational::one() {
                     digit /= 2;
@@ -1783,42 +1804,46 @@ impl<'a> Tree<'a> {
                     Rational::one().0 - &p.0
                 };
                 if !weight.within_bits(4096) {
-                    return self.leaf(w, ReferenceCut::Numeric);
+                    return Ok(SeriesStep::Replace(this.leaf(w, ReferenceCut::Numeric)?));
                 }
                 decisions.push((*k, *j, finishes));
             }
             if !weight.within_bits(4096) {
-                return self.leaf(w, ReferenceCut::Numeric);
-            }
-            let mut next = w.clone();
-            next.boundary = Boundary::Admit;
-            for (k, j, finishes) in decisions {
-                if let CaseSlot::Here(c) = &mut next.cases[k] {
-                    let t = &mut c.frame.tasks[j];
-                    t.checked_through = Some(w.now - t.start.unwrap());
-                    if finishes {
-                        t.finish = Some(w.now)
-                    }
-                }
+                return Ok(SeriesStep::Replace(this.leaf(w, ReferenceCut::Numeric)?));
             }
             #[cfg(test)]
-            self.duration_leaves.push((
-                weight.clone(),
-                next.cases
-                    .iter()
-                    .flat_map(|s| match s {
-                        CaseSlot::Here(c) => {
-                            c.frame.tasks.iter().map(|t| t.finish).collect::<Vec<_>>()
+            let observation_weight = weight.clone();
+            let child = this.defer_world(w, move |this, w| {
+                let mut next = w.clone();
+                next.boundary = Boundary::Admit;
+                for (k, j, finishes) in decisions {
+                    if let CaseSlot::Here(c) = &mut next.cases[k] {
+                        let t = &mut c.frame.tasks[j];
+                        t.checked_through = Some(w.now - t.start.unwrap());
+                        if finishes {
+                            t.finish = Some(w.now)
                         }
-                        _ => Vec::new(),
-                    })
-                    .collect(),
-            ));
-            children.push((weight, self.walk(next)?));
-        }
-        Ok(self.reduce(children, true))
+                    }
+                }
+                #[cfg(test)]
+                this.duration_leaves.push((
+                    observation_weight,
+                    next.cases
+                        .iter()
+                        .flat_map(|s| match s {
+                            CaseSlot::Here(c) => {
+                                c.frame.tasks.iter().map(|t| t.finish).collect::<Vec<_>>()
+                            }
+                            _ => Vec::new(),
+                        })
+                        .collect(),
+                ));
+                this.walk(next)
+            })?;
+            Ok(SeriesStep::Child(weight, child))
+        })
     }
-    fn initials(&mut self, w: &World<'a>, random: bool) -> Result<Vec<Bound>, StopReason> {
+    fn initials(&mut self, w: &World<'a>, random: bool) -> Result<Branch, StopReason> {
         let mut variables = Vec::new();
         for (k, slot) in w.cases.iter().enumerate() {
             if slot.payload().is_some_and(|c| !c.receipt) {
@@ -1863,8 +1888,8 @@ impl<'a> Tree<'a> {
                 self.scheduler |= size > 1;
             }
         }
-        let mut children = Vec::new();
-        for tuple in 0..size {
+        let chance = random && !variables.is_empty();
+        self.branch_series(w, size, Some(chance), move |this, w, tuple| {
             let mut value = tuple;
             let mut weight = Rational::one();
             let mut assignments = Vec::new();
@@ -1873,51 +1898,55 @@ impl<'a> Tree<'a> {
                 value /= options.len();
                 weight.0 *= &p.0;
                 if !weight.within_bits(4096) {
-                    return self.leaf(w, ReferenceCut::Numeric);
+                    return Ok(SeriesStep::Replace(this.leaf(w, ReferenceCut::Numeric)?));
                 }
                 assignments.push((*k, *i, *x));
             }
             if !weight.within_bits(4096) {
-                return self.leaf(w, ReferenceCut::Numeric);
-            }
-            let mut next = w.clone();
-            next.boundary = if random {
-                Boundary::Choose
-            } else {
-                Boundary::Receive
-            };
-            for (k, i, x) in assignments {
-                if shared_state(self.m, self.m.state_variables[i].kind) {
-                    next.shared[i] = x
-                } else if let Some(c) = next.cases[k].payload_mut() {
-                    c.frame.state_values[i] = x;
-                }
+                return Ok(SeriesStep::Replace(this.leaf(w, ReferenceCut::Numeric)?));
             }
             #[cfg(test)]
-            if random || self.m.has_integers() {
-                self.initial_leaves.push((
-                    w.now,
-                    next.cases
-                        .iter()
-                        .filter_map(|s| {
-                            s.payload()
-                                .filter(|c| !c.receipt)
-                                .map(|c| c.frame.state_values.clone())
-                        })
-                        .collect(),
-                    weight.clone(),
-                ));
-            }
-            children.push((weight, self.walk(next)?));
-        }
-        Ok(self.reduce(children, random && !variables.is_empty()))
+            let observation_weight = weight.clone();
+            let child = this.defer_world(w, move |this, w| {
+                let mut next = w.clone();
+                next.boundary = if random {
+                    Boundary::Choose
+                } else {
+                    Boundary::Receive
+                };
+                for (k, i, x) in assignments {
+                    if shared_state(this.m, this.m.state_variables[i].kind) {
+                        next.shared[i] = x
+                    } else if let Some(c) = next.cases[k].payload_mut() {
+                        c.frame.state_values[i] = x;
+                    }
+                }
+                #[cfg(test)]
+                if random || this.m.has_integers() {
+                    this.initial_leaves.push((
+                        w.now,
+                        next.cases
+                            .iter()
+                            .filter_map(|s| {
+                                s.payload()
+                                    .filter(|c| !c.receipt)
+                                    .map(|c| c.frame.state_values.clone())
+                            })
+                            .collect(),
+                        observation_weight,
+                    ));
+                }
+                this.walk(next)
+            })?;
+            Ok(SeriesStep::Child(weight, child))
+        })
     }
     fn cancel_choices(
         &mut self,
         w: &World<'a>,
         k: usize,
         winner: BindingId,
-    ) -> Result<Vec<Bound>, StopReason> {
+    ) -> Result<Branch, StopReason> {
         let CaseSlot::Here(c) = &w.cases[k] else {
             unreachable!()
         };
@@ -1977,8 +2006,8 @@ impl<'a> Tree<'a> {
             })
             .ok_or(StopReason::EnumerationLimit)?;
         self.reserve(count)?;
-        let mut children = Vec::new();
-        for choice in 0..count {
+        let domains = std::rc::Rc::new(domains);
+        self.branch_series(w, count, Some(false), move |this, w, choice| {
             let mut digit = choice;
             let mut next = w.clone();
             let CaseSlot::Here(c) = &mut next.cases[k] else {
@@ -1986,7 +2015,7 @@ impl<'a> Tree<'a> {
             };
             require(c.frame.adoption.replace(w.now).is_none())?;
             c.frame.waiting.as_mut().unwrap().winner = Some(winner);
-            for (i, last) in &domains {
+            for (i, last) in &*domains {
                 if let Some(last) = last {
                     if *last == 0 {
                         c.frame.tasks[*i].ack = Some(w.now);
@@ -2004,9 +2033,8 @@ impl<'a> Tree<'a> {
                     c.frame.tasks[*i].stop = Some(w.now);
                 }
             }
-            children.push((Rational::one(), self.walk(next)?));
-        }
-        Ok(self.reduce(children, false))
+            Ok(SeriesStep::Child(Rational::one(), this.walk(next)?))
+        })
     }
     fn contest_management(
         &mut self,
@@ -2162,6 +2190,11 @@ impl<'a> Tree<'a> {
         let statement = &block[0];
         *block = &block[1..];
         match &statement.kind {
+            Stmt::LoopControl(control) => {
+                for (id, x) in &control.updates {
+                    c.frame.state_values[id.0] = *x;
+                }
+            }
             Stmt::ResolveEffect { command, evidence } => {
                 let event =
                     recovery::resolve(&c.frame, self.m, *command, *evidence, statement.span, k)?;
@@ -2247,24 +2280,25 @@ impl<'a> Tree<'a> {
         Ok(vec![next])
     }
 
-    fn walk(&mut self, w: World<'a>) -> Result<Vec<Bound>, StopReason> {
+    fn walk(&mut self, w: World<'a>) -> Result<Branch, StopReason> {
         if self.depth >= self.limits.branch_depth {
             return Err(StopReason::EnumerationLimit);
         }
-        self.depth += 1;
-        let saved = self.first_hits.clone();
-        let saved_closed = self.first_closed.clone();
-        let result = self.walk_inner(w);
-        self.first_hits = saved;
-        self.first_closed = saved_closed;
-        self.depth -= 1;
-        result
+        if let Some(work) = &mut self.walk_work {
+            return Ok(work.enqueue(
+                w,
+                self.depth + 1,
+                self.first_hits.clone(),
+                self.first_closed.clone(),
+            ));
+        }
+        self.walk_iterative(w)
     }
 
     // Keep management's probability layer out of the recursive walk's frame.
     // Legacy choices remain nondeterministic; only a pending rates clause gets
     // a weighted reduction. No scheduler choices are assigned probabilities.
-    fn contest_branches(&mut self, w: &World<'a>) -> Result<Option<Vec<Bound>>, StopReason> {
+    fn contest_branches(&mut self, w: &World<'a>) -> Result<Option<Branch>, StopReason> {
         for k in 0..w.cases.len() {
             let probability = match &w.cases[k] {
                 CaseSlot::Here(c) => c
@@ -2295,7 +2329,7 @@ impl<'a> Tree<'a> {
         Ok(None)
     }
 
-    fn walk_inner(&mut self, mut w: World<'a>) -> Result<Vec<Bound>, StopReason> {
+    fn walk_inner(&mut self, mut w: World<'a>) -> Result<Branch, StopReason> {
         loop {
             self.observe_first(&w)?;
             if w.steps >= self.limits.steps_per_path {
@@ -2550,6 +2584,11 @@ impl<'a> Tree<'a> {
                 }
                 *block = &block[1..];
                 match &statement.kind {
+                    Stmt::LoopControl(control) => {
+                        for (id, x) in &control.updates {
+                            c.frame.state_values[id.0] = *x;
+                        }
+                    }
                     Stmt::ResolveEffect { command, evidence } => {
                         let frame = &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame;
                         let event = recovery::resolve(
@@ -2651,11 +2690,14 @@ impl<'a> Tree<'a> {
                 && shared_guard(self.m, condition)
                 && self.condition(&w, k, condition)?
             {
-                let mut next = self.copy(&w)?;
-                if let CaseSlot::Here(c) = &mut next.cases[k] {
-                    c.frame.condition_pass()?;
-                }
-                children.push((Rational::one(), self.walk(next)?));
+                let child = self.defer_world(&w, move |this, base| {
+                    let mut next = this.copy(base)?;
+                    if let CaseSlot::Here(c) = &mut next.cases[k] {
+                        c.frame.condition_pass()?;
+                    }
+                    this.walk(next)
+                })?;
+                children.push((Rational::one(), child));
             }
             if c.end.is_none()
                 && c.frame.waiting.is_none()
@@ -2669,31 +2711,34 @@ impl<'a> Tree<'a> {
                 && shared_guard(self.m, condition)
             {
                 let yes = self.condition(&w, k, condition)?;
-                require(
-                    self.cases[k]
-                        .statistics
-                        .observed
-                        .branch_statement(self.m, statement, yes),
-                )?;
-                let mut next = self.copy(&w)?;
-                if let CaseSlot::Here(c) = &mut next.cases[k] {
-                    while c.frame.control.last().is_some_and(|b| b.is_empty()) {
-                        c.frame.control.pop();
+                let child = self.defer_world(&w, move |this, base| {
+                    require(
+                        this.cases[k]
+                            .statistics
+                            .observed
+                            .branch_statement(this.m, statement, yes),
+                    )?;
+                    let mut next = this.copy(base)?;
+                    if let CaseSlot::Here(c) = &mut next.cases[k] {
+                        while c.frame.control.last().is_some_and(|b| b.is_empty()) {
+                            c.frame.control.pop();
+                        }
+                        let block = c
+                            .frame
+                            .control
+                            .last_mut()
+                            .ok_or(StopReason::SemanticAbort)?;
+                        *block = &block[1..];
+                        if c.frame.control.len() >= this.limits.control_depth {
+                            return Err(StopReason::EnumerationLimit);
+                        }
+                        c.frame
+                            .control
+                            .push(if yes { then_body } else { else_body });
                     }
-                    let block = c
-                        .frame
-                        .control
-                        .last_mut()
-                        .ok_or(StopReason::SemanticAbort)?;
-                    *block = &block[1..];
-                    if c.frame.control.len() >= self.limits.control_depth {
-                        return Err(StopReason::EnumerationLimit);
-                    }
-                    c.frame
-                        .control
-                        .push(if yes { then_body } else { else_body });
-                }
-                children.push((Rational::one(), self.walk(next)?));
+                    this.walk(next)
+                })?;
+                children.push((Rational::one(), child));
             }
             let due: Vec<_> = c
                 .frame
@@ -2710,122 +2755,136 @@ impl<'a> Tree<'a> {
                     unreachable!()
                 };
                 let t = &c.frame.tasks[j];
-                let cap_id = t.call.capability;
-                let cap = &self.m.capabilities[cap_id.0];
-                let person = t.person;
                 let kernel = work_profiles::kernel(self.m, t)?;
+                let person = t.person;
                 if t.finish == Some(w.now) && self.priority_finish(&w, k, j) {
-                    let mut frame = c.frame.clone();
-                    frame.state_values = self.values(&w, k);
-                    if self.cases[k].range_attempt(&frame, j, false, Some(k as u64 + 1))? {
-                        children.push((Rational::one(), self.leaf(&w, ReferenceCut::Range)?));
-                    } else {
-                        let options = if reference_stale(t, cap) {
-                            vec![(
-                                Rational::one(),
-                                cap.version_check.as_ref().unwrap().reject,
-                                Vec::new(),
-                            )]
-                        } else if let Some(kernel) = kernel {
-                            let vals = self.values(&w, k);
-                            let row = kernel
-                                .rows
-                                .iter()
-                                .find(|r| {
-                                    r.values
-                                        .iter()
-                                        .zip(&kernel.given)
-                                        .all(|(x, id)| *x == vals[id.0])
-                                })
-                                .ok_or(StopReason::SemanticAbort)?;
-                            row.branches
-                                .iter()
-                                .filter(|b| !b.probability.is_zero())
-                                .map(|b| (b.probability.clone(), b.result, b.overrides.clone()))
-                                .collect::<Vec<_>>()
-                        } else if cap.receipt_query.is_some() {
-                            recovery::project(self.m, t.call.capability, &self.values(&w, k), k)?
-                                .into_iter()
-                                .map(|x| (Rational::one(), x, Vec::new()))
-                                .collect()
-                        } else if let Some(a) = &cap.atomic {
-                            let x = if self.condition(&w, k, &a.condition)? == a.commit_when {
-                                a.commit
-                            } else {
-                                a.reject
-                            };
-                            vec![(Rational::one(), x, Vec::new())]
+                    let child = self.defer_world(&w, move |this, w| {
+                        let c = w.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
+                        let t = &c.frame.tasks[j];
+                        let cap_id = t.call.capability;
+                        let cap = &this.m.capabilities[cap_id.0];
+                        let mut frame = c.frame.clone();
+                        frame.state_values = this.values(w, k);
+                        if this.cases[k].range_attempt(&frame, j, false, Some(k as u64 + 1))? {
+                            this.leaf(w, ReferenceCut::Range)
                         } else {
-                            cap.results
-                                .iter()
-                                .map(|x| (Rational::one(), *x, Vec::new()))
-                                .collect()
-                        };
-                        self.reserve(options.len())?;
-                        let mut finishes = Vec::new();
-                        for (p, x, overrides) in options {
-                            let mut next = w.clone();
-                            let values = self.values(&next, k);
-                            let CaseSlot::Here(c) = &mut next.cases[k] else {
-                                unreachable!()
-                            };
-                            c.frame.state_values = values;
-                            c.frame.tasks[j].phase = Phase::Finished(x);
-                            c.frame.tasks[j].stop = Some(w.now);
-                            self.cases[k].finish_state(&mut c.frame, j, x);
-                            for (i, value) in overrides {
-                                c.frame.state_values[i.0] = value;
-                            }
-                            for (i, v) in self.m.state_variables.iter().enumerate() {
-                                if shared_state(self.m, v.kind) {
-                                    next.shared[i] = c.frame.state_values[i];
-                                    c.frame.state_values[i] = StateValue::None;
-                                }
-                            }
-                            let writes = if reference_stale(t, cap) {
-                                &[][..]
+                            let options = if reference_stale(t, cap) {
+                                vec![(
+                                    Rational::one(),
+                                    cap.version_check.as_ref().unwrap().reject,
+                                    Vec::new(),
+                                )]
+                            } else if let Some(kernel) = kernel {
+                                let vals = this.values(w, k);
+                                let row = kernel
+                                    .rows
+                                    .iter()
+                                    .find(|r| {
+                                        r.values
+                                            .iter()
+                                            .zip(&kernel.given)
+                                            .all(|(x, id)| *x == vals[id.0])
+                                    })
+                                    .ok_or(StopReason::SemanticAbort)?;
+                                row.branches
+                                    .iter()
+                                    .filter(|b| !b.probability.is_zero())
+                                    .map(|b| (b.probability.clone(), b.result, b.overrides.clone()))
+                                    .collect::<Vec<_>>()
+                            } else if cap.receipt_query.is_some() {
+                                recovery::project(this.m, t.call.capability, &this.values(w, k), k)?
+                                    .into_iter()
+                                    .map(|x| (Rational::one(), x, Vec::new()))
+                                    .collect()
+                            } else if let Some(a) = &cap.atomic {
+                                let x = if this.condition(w, k, &a.condition)? == a.commit_when {
+                                    a.commit
+                                } else {
+                                    a.reject
+                                };
+                                vec![(Rational::one(), x, Vec::new())]
                             } else {
-                                cap.atomic.as_ref().map_or(cap.writes.as_slice(), |a| {
-                                    if x == a.commit { &a.writes } else { &[] }
-                                })
+                                cap.results
+                                    .iter()
+                                    .map(|x| (Rational::one(), *x, Vec::new()))
+                                    .collect()
                             };
-                            self.notify(&mut next, k, j, writes);
-                            self.record_context(
-                                &mut next,
-                                k,
-                                Occurrence::Completion(cap_id, x),
-                                person,
-                                (false, Some(t.call.binding)),
-                            )?;
-                            self.stats.normal_completions += 1;
-                            finishes.push((p, self.response_finish(next, k, t.call.binding, x)?));
+                            this.reserve(options.len())?;
+                            let binding = t.call.binding;
+                            let stale = reference_stale(t, cap);
+                            let grouping = kernel.is_some().then_some(true);
+                            this.branch_series(
+                                w,
+                                options.len(),
+                                grouping,
+                                move |this, base, index| {
+                                    let (p, x, overrides) = options[index].clone();
+                                    let mut next = base.clone();
+                                    let values = this.values(&next, k);
+                                    let CaseSlot::Here(c) = &mut next.cases[k] else {
+                                        unreachable!()
+                                    };
+                                    c.frame.state_values = values;
+                                    c.frame.tasks[j].phase = Phase::Finished(x);
+                                    c.frame.tasks[j].stop = Some(base.now);
+                                    this.cases[k].finish_state(&mut c.frame, j, x);
+                                    for (i, value) in overrides {
+                                        c.frame.state_values[i.0] = value;
+                                    }
+                                    for (i, v) in this.m.state_variables.iter().enumerate() {
+                                        if shared_state(this.m, v.kind) {
+                                            next.shared[i] = c.frame.state_values[i];
+                                            c.frame.state_values[i] = StateValue::None;
+                                        }
+                                    }
+                                    let writes = if stale {
+                                        &[][..]
+                                    } else {
+                                        cap.atomic.as_ref().map_or(cap.writes.as_slice(), |a| {
+                                            if x == a.commit { &a.writes } else { &[] }
+                                        })
+                                    };
+                                    this.notify(&mut next, k, j, writes);
+                                    this.record_context(
+                                        &mut next,
+                                        k,
+                                        Occurrence::Completion(cap_id, x),
+                                        person,
+                                        (false, Some(binding)),
+                                    )?;
+                                    this.stats.normal_completions += 1;
+                                    Ok(SeriesStep::Child(
+                                        p,
+                                        this.response_finish(next, k, binding, x)?,
+                                    ))
+                                },
+                            )
                         }
-                        if kernel.is_some() {
-                            let x = self.reduce(finishes, true);
-                            children.push((Rational::one(), x));
-                        } else {
-                            children.extend(finishes);
-                        }
-                    }
+                    })?;
+                    children.push((Rational::one(), child));
                 }
                 if t.ack == Some(w.now) {
-                    let mut next = self.copy(&w)?;
-                    let CaseSlot::Here(c) = &mut next.cases[k] else {
-                        unreachable!()
-                    };
-                    c.frame.tasks[j].phase = Phase::Cancelled;
-                    c.frame.tasks[j].stop = Some(w.now);
-                    if self.m.tracks_obligations() {
-                        self.record(
-                            &mut next,
-                            k,
-                            Occurrence::CancelAck(t.call.capability),
-                            t.person,
-                            false,
-                        )?;
-                    }
-                    self.stats.cancellation_completions += 1;
-                    children.push((Rational::one(), self.walk(next)?));
+                    let cap_id = t.call.capability;
+                    let child = self.defer_world(&w, move |this, base| {
+                        let mut next = this.copy(base)?;
+                        let CaseSlot::Here(c) = &mut next.cases[k] else {
+                            unreachable!()
+                        };
+                        c.frame.tasks[j].phase = Phase::Cancelled;
+                        c.frame.tasks[j].stop = Some(base.now);
+                        if this.m.tracks_obligations() {
+                            this.record(
+                                &mut next,
+                                k,
+                                Occurrence::CancelAck(cap_id),
+                                person,
+                                false,
+                            )?;
+                        }
+                        this.stats.cancellation_completions += 1;
+                        this.walk(next)
+                    })?;
+                    children.push((Rational::one(), child));
                 }
             }
             let CaseSlot::Here(c) = &w.cases[k] else {
@@ -2838,7 +2897,8 @@ impl<'a> Tree<'a> {
                 let winners = self.cases[k].winners(&c.frame, wait);
                 self.policy_unresolved |= winners.len() > 1;
                 for winner in winners {
-                    let child = self.cancel_choices(&w, k, winner)?;
+                    let child = self
+                        .defer_world(&w, move |this, base| this.cancel_choices(base, k, winner))?;
                     children.push((Rational::one(), child));
                 }
             }
@@ -2872,77 +2932,85 @@ impl<'a> Tree<'a> {
                         && !self.condition(&w, k, &req.condition)?
                     {
                         let binding = task.call.binding;
-                        let mut refused = self.copy(&w)?;
-                        if let CaseSlot::Here(c) = &mut refused.cases[k] {
-                            c.frame.tasks[j].phase = Phase::Refused(req.otherwise);
-                            c.frame.tasks[j].stop = Some(w.now);
-                        }
-                        self.record_context(
-                            &mut refused,
-                            k,
-                            Occurrence::Refusal(id, req.otherwise),
-                            None,
-                            (false, Some(binding)),
-                        )?;
-                        children.push((Rational::one(), self.walk(refused)?));
+                        let otherwise = req.otherwise;
+                        let child = self.defer_world(&w, move |this, base| {
+                            let mut refused = this.copy(base)?;
+                            if let CaseSlot::Here(c) = &mut refused.cases[k] {
+                                c.frame.tasks[j].phase = Phase::Refused(otherwise);
+                                c.frame.tasks[j].stop = Some(base.now);
+                            }
+                            this.record_context(
+                                &mut refused,
+                                k,
+                                Occurrence::Refusal(id, otherwise),
+                                None,
+                                (false, Some(binding)),
+                            )?;
+                            this.walk(refused)
+                        })?;
+                        children.push((Rational::one(), child));
                         break;
                     }
-                    let mut frame = old.frame.clone();
-                    frame.state_values = self.values(&w, k);
-                    if self.cases[k].range_attempt(&frame, j, true, Some(k as u64 + 1))? {
-                        children.push((Rational::one(), self.leaf(&w, ReferenceCut::Range)?));
-                        continue;
-                    }
-                    let before = frame.state_values;
-                    let frozen = work_profiles::select(self.m, id, person, self.backlog(&w, k, j))?;
-                    let mut next = self.copy(&w)?;
-                    let CaseSlot::Here(c) = &mut next.cases[k] else {
-                        unreachable!()
-                    };
-                    let task = &mut c.frame.tasks[j];
-                    let id = task.call.capability;
-                    let cap = &self.m.capabilities[id.0];
-                    task.frozen_performance = frozen;
-                    task.phase = Phase::Running;
-                    task.stale.clear();
-                    task.person = person;
-                    task.start = Some(w.now);
-                    if let Some(d) = &cap.duration_distribution {
-                        for (t, p) in &d.entries {
-                            if !p.is_zero() {
-                                w.now.checked_add(*t).ok_or(StopReason::SemanticAbort)?;
+                    let child = self.defer_world(&w, move |this, base| {
+                        let old = base.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
+                        let mut frame = old.frame.clone();
+                        frame.state_values = this.values(base, k);
+                        if this.cases[k].range_attempt(&frame, j, true, Some(k as u64 + 1))? {
+                            return this.leaf(base, ReferenceCut::Range);
+                        }
+                        let before = frame.state_values;
+                        let frozen =
+                            work_profiles::select(this.m, id, person, this.backlog(base, k, j))?;
+                        let mut next = this.copy(base)?;
+                        let CaseSlot::Here(c) = &mut next.cases[k] else {
+                            unreachable!()
+                        };
+                        let task = &mut c.frame.tasks[j];
+                        let id = task.call.capability;
+                        let cap = &this.m.capabilities[id.0];
+                        task.frozen_performance = frozen;
+                        task.phase = Phase::Running;
+                        task.stale.clear();
+                        task.person = person;
+                        task.start = Some(base.now);
+                        if let Some(d) = &cap.duration_distribution {
+                            for (t, p) in &d.entries {
+                                if !p.is_zero() {
+                                    base.now.checked_add(*t).ok_or(StopReason::SemanticAbort)?;
+                                }
+                            }
+                        } else {
+                            task.finish = Some(
+                                base.now
+                                    .checked_add(cap.duration)
+                                    .ok_or(StopReason::SemanticAbort)?,
+                            );
+                        }
+                        let binding = task.call.binding;
+                        c.frame.state_values = before.clone();
+                        for w in &cap.start_writes {
+                            c.frame.state_values[w.variable.0] =
+                                reference_effect_at(w, &before, None, k, person)?;
+                        }
+                        for (i, v) in this.m.state_variables.iter().enumerate() {
+                            if shared_state(this.m, v.kind) {
+                                next.shared[i] = c.frame.state_values[i];
+                                c.frame.state_values[i] = StateValue::None;
                             }
                         }
-                    } else {
-                        task.finish = Some(
-                            w.now
-                                .checked_add(cap.duration)
-                                .ok_or(StopReason::SemanticAbort)?,
-                        );
-                    }
-                    let binding = task.call.binding;
-                    c.frame.state_values = before.clone();
-                    for w in &cap.start_writes {
-                        c.frame.state_values[w.variable.0] =
-                            reference_effect_at(w, &before, None, k, person)?;
-                    }
-                    for (i, v) in self.m.state_variables.iter().enumerate() {
-                        if shared_state(self.m, v.kind) {
-                            next.shared[i] = c.frame.state_values[i];
-                            c.frame.state_values[i] = StateValue::None;
-                        }
-                    }
-                    self.notify(&mut next, k, j, &cap.start_writes);
-                    self.record_context(
-                        &mut next,
-                        k,
-                        Occurrence::Dispatch(id),
-                        person,
-                        (false, Some(binding)),
-                    )?;
-                    #[cfg(test)]
-                    q6_private::started(self.m, &w, &next, k, j);
-                    children.push((Rational::one(), self.walk(next)?));
+                        this.notify(&mut next, k, j, &cap.start_writes);
+                        this.record_context(
+                            &mut next,
+                            k,
+                            Occurrence::Dispatch(id),
+                            person,
+                            (false, Some(binding)),
+                        )?;
+                        #[cfg(test)]
+                        q6_private::started(this.m, base, &next, k, j);
+                        this.walk(next)
+                    })?;
+                    children.push((Rational::one(), child));
                 }
             }
         }
@@ -3074,6 +3142,7 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
     });
     let n = times.len();
     let mut tree = Tree {
+        walk_work: None,
         recovery_paths: Vec::new(),
         response_exercise: BTreeMap::new(),
         response_receipts: Vec::new(),
@@ -4186,7 +4255,7 @@ mod arrivals_tests {
         assert_eq!(r.stop, StopReason::Complete);
         assert_eq!(query(&r.outcome, 0, 1).min.to_string(), "1/4");
     }
-    fn tree(m: &Model, limits: Limits, times: Vec<Tick>) -> Tree<'_> {
+    pub(super) fn tree(m: &Model, limits: Limits, times: Vec<Tick>) -> Tree<'_> {
         let n = times.len();
         Tree {
             recovery_paths: Vec::new(),
@@ -4194,6 +4263,7 @@ mod arrivals_tests {
             response_receipts: Vec::new(),
             first_hits: Vec::new(),
             first_closed: Vec::new(),
+            walk_work: None,
             first_trees: Vec::new(),
             overflows: None,
             external_peaks: None,
@@ -4249,7 +4319,7 @@ mod arrivals_tests {
             end: None,
         }
     }
-    fn world(m: &Model, n: usize) -> World<'_> {
+    pub(super) fn world(m: &Model, n: usize) -> World<'_> {
         World {
             external_peak: 0,
             now: 0,

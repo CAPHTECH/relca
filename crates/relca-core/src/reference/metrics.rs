@@ -157,6 +157,7 @@ fn inventory<'a>(block: &'a ir::Block, calls: &mut Vec<&'a ir::Call>, ends: &mut
     for statement in block {
         let mut end = None;
         match &statement.kind {
+            ir::Stmt::LoopControl(_) => {}
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
             ir::Stmt::End(e) => end = Some(*e),
             ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
@@ -352,6 +353,7 @@ pub(super) fn project_with_horizon(
                 }),
             };
             tasks.push(w::Task {
+                repetition: m.loop_site(call.binding).cloned(),
                 tariff_regular_work: None,
                 tariff_overtime_work: None,
                 tariff_regular_cost: None,
@@ -491,7 +493,7 @@ pub(super) fn project_with_horizon(
             dwell: None,
             joins: None,
             external_wait: m.external_wait().then(|| absent(w::Reason::Unfinished)),
-            intentional_wait: m.has_wait().then(|| amount(o.intentional_wait)),
+            intentional_wait: m.has_metric_wait().then(|| amount(o.intentional_wait)),
             case_id: i as u64 + 1,
             arrival: Some(o.arrival),
             counts: w::CaseCounts {
@@ -771,7 +773,7 @@ pub(super) fn project_with_horizon(
         overall: w::Overall {
             queue_wait_observed: None,
             intentional_wait: m
-                .has_wait()
+                .has_metric_wait()
                 .then(|| amount(observations.iter().map(|o| o.intentional_wait).sum::<u64>())),
             counts: w::OverallCounts {
                 receipt_unknown_count: None,

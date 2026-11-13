@@ -1,0 +1,22 @@
+model OldWitness version "0.2" {
+type V = enum { pass, fail }
+type R = enum { v1,v2,v3 }
+observed case { round: R = v1 }
+kernel K given [round] {
+v1 -> { 0.5: fail with round = v2; 0.5: pass with round = v2 };
+v2 -> { 0.2: fail with round = v3; 0.8: pass with round = v3 };
+v3 -> { 0.1: fail with round = v3; 0.9: pass with round = v3 };
+}
+actor Rev { capacity 1; capability review() -> V { duration fixed 1min; outcomes kernel K; reads [round]; writes round } }
+actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+
+process P { r1 = Rev.review(); if r1 == pass { end done } else { f1 = Clerk.fix(); r2 = Rev.review(); if r2 == pass { end done } else { f2 = Clerk.fix(); r3 = Rev.review(); if r3 == pass { end done } else { f3 = Clerk.fix(); end escalated } } } }
+cut C { include [Rev, Clerk] }
+bounds { cases 1; live_tasks 1; clock 200min }
+metrics { window 200min; currency "JPY"; rate Rev per_minute 1; rate Clerk per_minute 1; rate Rev.review per_start 1; rate Clerk.fix per_start 1; breakdown waits }
+verify safety no_resource_overcommit
+verify probability reached end.done within 1min >= 0.5
+verify probability reached end.done within 4min >= 0.9
+verify probability reached end.done within 7min >= 0.99
+verify probability reached end.escalated >= 0.01
+}

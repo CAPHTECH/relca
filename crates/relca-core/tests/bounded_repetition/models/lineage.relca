@@ -1,0 +1,22 @@
+model RepeatedEvidence version "0.2" {
+  type Entry = enum { entry }
+  type V = enum { pass, fail }
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Rev { capacity 1; capability review(e: Entry) -> V { reads [e]; duration fixed 1min; result nondet { pass, fail } } }
+  actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+  actor Ledger { capacity 1; capability post(e: Entry) -> V { commits; duration fixed 1min; result nondet { pass } } }
+  process P {
+    entry = Reader.enter()
+    repeat rework at_most 3 {
+      r = Rev.review(entry)
+      if r == pass { leave } else { f = Clerk.fix(); again }
+    } on_limit { end escalated }
+    p = Ledger.post(entry)
+    end done
+  }
+  cut C { include [Invoice, Reader, Rev, Clerk, Ledger] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  verify safety no_resource_overcommit
+  verify reachable end.escalated
+}

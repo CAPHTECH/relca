@@ -400,6 +400,7 @@ fn diff_args(args: &[String]) -> Option<(&str, &str, &str, Option<&str>)> {
 
 fn input_failure(message: String) -> report::Report {
     report::seal(report::Report {
+        repetition: None,
         response_recovery: None,
         priority_policy: None,
         work_profiles: None,

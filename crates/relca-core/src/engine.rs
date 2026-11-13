@@ -3128,6 +3128,10 @@ mod executor_tests {
 
 #[derive(Debug)]
 enum Instruction {
+    LoopControl {
+        updates: Vec<(ir::StateVarId, ir::StateValue)>,
+        next: usize,
+    },
     Await {
         condition: ir::Cond,
         next: usize,
@@ -3183,6 +3187,10 @@ fn compile_at(
         let mut path = prefix.to_vec();
         path.push(i);
         let instruction = match &statement.kind {
+            ir::Stmt::LoopControl(control) => Instruction::LoopControl {
+                updates: control.updates.clone(),
+                next,
+            },
             ir::Stmt::WaitUntil(condition) => Instruction::Await {
                 condition: condition.clone(),
                 next,
@@ -6056,6 +6064,21 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
     while let Some(block) = blocks.pop() {
         for statement in block {
             match &statement.kind {
+                ir::Stmt::LoopControl(control) => {
+                    for c in &control.aliases {
+                        call(c)?;
+                    }
+                    for (id, value) in &control.updates {
+                        ok(
+                            model.state_variables.get(id.0).is_some_and(|v| {
+                                v.name.starts_with("@loop:")
+                                    && v.kind == ir::StateKind::ObservedCase
+                                    && v.contains(&model.types, *value)
+                            }),
+                            "invalid loop control",
+                        )?;
+                    }
+                }
                 ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => call(c)?,
                 ir::Stmt::ResolveEffect { .. } | ir::Stmt::StopReceiptUnknown => {}
@@ -6609,7 +6632,7 @@ fn validate_kernel(k: &ir::Kernel, model: &ir::Model) -> EngineResult<()> {
                 .types
                 .get(v.base.0)
                 .is_some_and(|t| t.name == "PersonId")
-            || v.integer_max.is_some()
+            || (v.integer_max.is_some() && !v.is_loop_round())
             || matches!(v.kind, ir::StateKind::ActorObserved(_))
         {
             return Err("integer kernel given unsupported".into());
@@ -6617,13 +6640,17 @@ fn validate_kernel(k: &ir::Kernel, model: &ir::Model) -> EngineResult<()> {
         if !given.insert(*id) {
             return Err("duplicate kernel given".into());
         }
-        let n = model
-            .types
-            .get(v.base.0)
-            .ok_or("kernel given type")?
-            .members
-            .len()
-            + usize::from(v.optional);
+        let n = if v.is_loop_round() {
+            v.integer_max.unwrap() as usize
+        } else {
+            model
+                .types
+                .get(v.base.0)
+                .ok_or("kernel given type")?
+                .members
+                .len()
+                + usize::from(v.optional)
+        };
         count *= num_bigint::BigUint::from(n);
     }
     let mut rows = HashSet::new();
@@ -7016,6 +7043,9 @@ fn finish_site(
         }
     } else {
         state.results[site.0] = result;
+        if let Some(alias) = model.loop_alias(site) {
+            state.results[alias.0] = result;
+        }
     }
 }
 
@@ -7300,6 +7330,14 @@ fn step_observed_inner(
         (&[], &post_join, &post_next)
     } else {
         match &program[state.pc] {
+            Instruction::LoopControl { updates, next } => {
+                for (id, value) in updates {
+                    state.state_values[id.0] = *value;
+                }
+                state.pc = *next;
+                room.take(1)?;
+                return Ok(Step::Next(vec![state]));
+            }
             Instruction::Await { .. } => {
                 return Err("condition wait requires global execution".into());
             }
@@ -7367,7 +7405,9 @@ fn step_observed_inner(
                 site,
             } => {
                 let selected = condition_at(cond, &state.results, &state.state_values, 0)?;
-                exploration.observed.branch(*span, site, selected);
+                if !model.is_loop_guard(cond) {
+                    exploration.observed.branch(*span, site, selected);
+                }
                 state.pc = if selected { *yes } else { *no };
                 room.take(1)?;
                 return Ok(Step::Next(vec![state]));
@@ -7626,6 +7666,9 @@ fn step_observed_inner(
                             .results
                             .resize(refused.results.len().max(task.binding.0 + 1), None);
                         refused.results[task.binding.0] = Some(req.otherwise);
+                        if let Some(alias) = model.loop_alias(task.binding) {
+                            refused.results[alias.0] = Some(req.otherwise);
+                        }
                     }
                     record_refusal(
                         &mut refused,
@@ -10401,6 +10444,7 @@ mod tests {
                 bindings: ["a", "b"]
                     .into_iter()
                     .map(|name| ir::Binding {
+                        repetition: None,
                         name: name.into(),
                         ty: ir::TypeId(0),
                         span: SPAN,
@@ -11074,6 +11118,7 @@ mod tests {
         third.cancel = ir::Cancel::Cooperative { ack_within: 1 };
         model.capabilities.push(third);
         model.process.bindings.push(ir::Binding {
+            repetition: None,
             name: "c".into(),
             ty: ir::TypeId(0),
             span: SPAN,
@@ -11218,6 +11263,7 @@ mod tests {
             clock: 6,
         };
         model.process.bindings.push(ir::Binding {
+            repetition: None,
             name: "c".into(),
             ty: ir::TypeId(0),
             span: SPAN,

@@ -975,7 +975,7 @@ impl trace::Capture {
                 stage.kind = K::Admission;
                 stage.location = self.location(self.arrival_span.unwrap_or(m.process.span))?;
                 for k in a.cursor..b.cursor {
-                    let mut event = Self::event(&stage, K::Admission);
+                    let mut event = Self::event(&stage, K::Admission, m);
                     event.case_id = Some(k as u64 + 1);
                     stage.events.push(E::Business(event));
                 }
@@ -989,7 +989,7 @@ impl trace::Capture {
                         .zip(new.payload())
                         .is_some_and(|(old, new)| !old.received && new.received)
                     {
-                        let mut event = Self::event(&stage, K::Received);
+                        let mut event = Self::event(&stage, K::Received, m);
                         event.case_id = Some(k as u64 + 1);
                         stage.events.push(E::Business(event));
                     }
@@ -1027,7 +1027,7 @@ impl trace::Capture {
                         let initialized = self.stage(&after, m, K::Initialize)?;
                         stage
                             .events
-                            .push(E::Business(Self::event(&initialized, K::Initialize)));
+                            .push(E::Business(Self::event(&initialized, K::Initialize, m)));
                         stage.events.extend(
                             initialized
                                 .values
@@ -1047,12 +1047,12 @@ impl trace::Capture {
                         .zip(b.cases[k].payload())
                         .is_some_and(|(old, new)| old.admitted_at != new.admitted_at)
                     {
-                        let mut event = Self::event(&stage, K::Admitted);
+                        let mut event = Self::event(&stage, K::Admitted, m);
                         event.case_id = Some(k as u64 + 1);
                         stage.events.push(E::Business(event));
                     } else if matches!((&a.cases[k], &b.cases[k]), (Slot::Overflow(old), Slot::Overflow(new)) if old.terminal.is_none() && new.terminal.is_some())
                     {
-                        let mut event = Self::event(&stage, K::End);
+                        let mut event = Self::event(&stage, K::End, m);
                         event.case_id = Some(k as u64 + 1);
                         stage.events.push(E::Business(event));
                     }
@@ -1067,7 +1067,7 @@ impl trace::Capture {
                     stage.kind = K::Admitted;
                     for (k, (old, new)) in a.cases.iter().zip(&b.cases).enumerate() {
                         if matches!((old, new), (Slot::Held(_), Slot::Admitted(_))) {
-                            let mut event = Self::event(&stage, K::Admitted);
+                            let mut event = Self::event(&stage, K::Admitted, m);
                             event.case_id = Some(k as u64 + 1);
                             stage.events.push(E::Business(event));
                         }
@@ -2143,6 +2143,12 @@ fn transition_inner(
         let mut v = s.view(k, m)?;
         let mut terminal = None;
         match &program[v.pc] {
+            Instruction::LoopControl { updates, next } => {
+                for (id, value) in updates {
+                    v.state_values[id.0] = *value;
+                }
+                v.pc = *next;
+            }
             Instruction::Receipt {
                 binding,
                 rule,
@@ -2219,7 +2225,9 @@ fn transition_inner(
                     continue;
                 }
                 let selected = condition_at(c, &v.results, &v.state_values, k)?;
-                f.per[k].observed.branch(*span, site, selected);
+                if !m.is_loop_guard(c) {
+                    f.per[k].observed.branch(*span, site, selected);
+                }
                 v.pc = if selected { *yes } else { *no }
             }
             Instruction::End(e) => {
@@ -2676,6 +2684,9 @@ fn transition_inner(
                                 .results
                                 .resize(local.results.len().max(t.binding.0 + 1), None);
                             local.results[t.binding.0] = Some(req.otherwise);
+                            if let Some(alias) = m.loop_alias(t.binding) {
+                                local.results[alias.0] = Some(req.otherwise);
+                            }
                         }
                         f.local_using(k, |e| {
                             record_refusal(

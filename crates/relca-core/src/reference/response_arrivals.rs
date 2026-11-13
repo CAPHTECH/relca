@@ -92,7 +92,7 @@ impl<'a> Tree<'a> {
         k: usize,
         binding: BindingId,
         actual: ValueId,
-    ) -> Result<Vec<Bound>, StopReason> {
+    ) -> Result<Branch, StopReason> {
         let Some(r) = self.m.response_attempt(binding) else {
             let frame = &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame;
             let cap = frame
@@ -152,16 +152,19 @@ impl<'a> Tree<'a> {
                 None,
                 (false, Some(binding)),
             )?;
-            return self.walk_inner(next);
+            return self.walk_same_depth(next);
         }
         let mut children = Vec::new();
         for (p, observation) in choices {
-            let mut next = self.copy(&w)?;
+            #[cfg(test)]
+            let weight = p.clone();
+            let child=self.defer_world(&w,move |this,base| {
+            let mut next = this.copy(base)?;
             let c = next.cases[k].payload().ok_or(StopReason::SemanticAbort)?;
             let was_unknown = c.frame.trace.iter().any(|o| matches!(&o.event, Occurrence::Channel(old) if old.command == r.command && old.attempt < r.attempt && !old.resolved));
             let receipt = response::Receipt {
                 #[cfg(test)]
-                weight: p.clone(),
+                weight,
                 command: r.command,
                 binding,
                 attempt: r.attempt,
@@ -169,14 +172,16 @@ impl<'a> Tree<'a> {
                 observation,
                 resolved: observation == Delivered && (r.idempotent || !was_unknown),
             };
-            self.record_context(
+            this.record_context(
                 &mut next,
                 k,
                 Occurrence::Channel(receipt),
                 None,
                 (false, Some(binding)),
             )?;
-            children.push((p.unwrap_or_else(Rational::one), self.walk(next)?));
+            this.walk(next)
+            })?;
+            children.push((p.unwrap_or_else(Rational::one), child));
         }
         Ok(self.reduce(children, chance))
     }

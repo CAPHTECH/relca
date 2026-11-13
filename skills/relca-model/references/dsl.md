@@ -101,7 +101,39 @@ process Flow {
 | `if <条件> { … } else { … }`。`&&` と `||` の混在は括弧が要る | [実] / [コ] |
 | `end NAME` | [実] |
 | `wait 5min` | [実](../../../fixtures/) |
+| `repeat NAME at_most N [gap fixed DURATION] { ... } on_limit { ... }`。角括弧は省略可能部分で、入力には書かない | [試]。実行した全文は[繰り返しの例](../../../docs/guide/dsl.md#繰り返し) |
 | 条件に潜在変数(`Invoice.difficulty` 等)を書く | **E-POL-LATENT で invalid** [実](../../../examples/invoice/to-be-c.relca) |
+
+## 上限つきの繰り返し [試]
+
+差し戻しと再提出、状態を待つ再確認を記述できる。`N` は初回を含む1〜32回、
+`on_limit` は必須。body の全経路を `again`（次の回、最後なら上限後へ）、
+`leave`（repeat の後へ）、`end NAME`（案件を終了）で閉じる。
+`on_limit` は `leave` か `end` で閉じ、`again` は書けない。
+同じ block の `again` / `leave` の後ろに文を置かない。
+固定 gap は次の回の前だけで、初回と最後の `again` の後には待たない。
+正の最短操作時間、固定 wait、gap のいずれも無く0分で `again` に戻れる経路は拒否される。
+
+`NAME.round` は1始まりで、その body 内の `if`、呼び出す操作の `requires`、kernel の
+`given` にだけ使える。宣言が外でも、値を使う呼出しは body 内に置く。
+後続、別の繰り返し、`on_limit` からは読めない。観測と潜在は回をまたいで保持する。
+
+body の fork/join、条件待ち、縮退経路、response_loss/retry/recovery、
+入れ子、`over`、再到着、無限反復は未対応。繰り返しモデルの
+compare/diff/sensitivity/mutate/conform、およびcontest宣言・quantile指標との併用も閉じる。
+短い全入力と、code/reasonの一覧は[利用ガイド](../../../docs/guide/dsl.md#利用できる範囲と診断)を参照。
+主なreasonは次のとおり。messageに含まれる識別語で、独立のJSON欄とは限らない。
+
+| code | reason | 主な対象 |
+|---|---|---|
+| E-CON-0 | loop_fallthrough / zero_time_iteration | 閉じない経路 / 0分でのagain |
+| E-CON-0 | loop_again_in_limit / loop_unreachable_after_control | 上限後のagain / 制御文の後続 |
+| U-SEM-0 | loop_expansion_limit / loop_round_out_of_scope | 33回以上 / roundの範囲外参照 |
+| U-SEM-0 | loop_stage_unsupported / loop_feature_combination | over / 未対応の入れ子・組合せ・分析 |
+
+回数0はE-CON-0、必須部分の欠落はE-SYN-0、名前の衝突はE-NAME-0。
+conformの照合はU-LOG-1で拒否する。
+本文の2つの全文例はcheckとexplainで実行して確認した形であり、あらゆる組合せの対応を意味しない。
 
 ## 応答喪失・再送・idempotency・Receipt unknown
 

@@ -109,11 +109,14 @@ pub(crate) fn apply(
     {
         agency.model_uncertainties = None;
     }
-    let mut groups: BTreeMap<Vec<String>, (usize, BTreeSet<String>, BTreeSet<String>)> =
-        BTreeMap::new();
+    type GroupMembers = (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>);
+    let mut groups: BTreeMap<Vec<String>, GroupMembers> = BTreeMap::new();
     for row in &agency.lineage {
         let g = groups.entry(row.subject_sources.clone()).or_default();
-        g.0 += 1;
+        g.0.insert(
+            m.loop_site_named(&row.call)
+                .map_or_else(|| row.call.clone(), |s| s.call_site.clone()),
+        );
         g.1.insert(row.capability.split('.').next().unwrap_or("").into());
         g.2.extend(row.independent_sources.iter().cloned());
     }
@@ -122,7 +125,7 @@ pub(crate) fn apply(
         .map(
             |(subject_sources, (judgements, actors, sources))| LineageGroup {
                 subject_sources,
-                judgements,
+                judgements: judgements.len(),
                 actors: actors.len(),
                 independent_sources: sources.into_iter().collect(),
             },

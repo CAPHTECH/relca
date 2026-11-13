@@ -240,6 +240,7 @@ fn review_fix_replay_rejects_out_of_range_successful_start_and_finish() {
         }
         last.events = vec![crate::explain::Event::Business(
             crate::explain::BusinessEvent {
+                repetition: None,
                 kind,
                 case_id: last.case_id,
                 binding: last.binding.clone(),

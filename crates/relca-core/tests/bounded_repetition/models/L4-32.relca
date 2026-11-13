@@ -1,0 +1,21 @@
+model L4 version "0.2" {
+  type V = enum { pass, fail }
+  kernel K given [rework.round] { 1 -> { 0.5: fail; 0.5: pass }; 2 -> { 0.2: fail; 0.8: pass }; 3 -> { 0.1: fail; 0.9: pass }; 4 -> { 0.1: fail; 0.9: pass }; 5 -> { 0.1: fail; 0.9: pass }; 6 -> { 0.1: fail; 0.9: pass }; 7 -> { 0.1: fail; 0.9: pass }; 8 -> { 0.1: fail; 0.9: pass }; 9 -> { 0.1: fail; 0.9: pass }; 10 -> { 0.1: fail; 0.9: pass }; 11 -> { 0.1: fail; 0.9: pass }; 12 -> { 0.1: fail; 0.9: pass }; 13 -> { 0.1: fail; 0.9: pass }; 14 -> { 0.1: fail; 0.9: pass }; 15 -> { 0.1: fail; 0.9: pass }; 16 -> { 0.1: fail; 0.9: pass }; 17 -> { 0.1: fail; 0.9: pass }; 18 -> { 0.1: fail; 0.9: pass }; 19 -> { 0.1: fail; 0.9: pass }; 20 -> { 0.1: fail; 0.9: pass }; 21 -> { 0.1: fail; 0.9: pass }; 22 -> { 0.1: fail; 0.9: pass }; 23 -> { 0.1: fail; 0.9: pass }; 24 -> { 0.1: fail; 0.9: pass }; 25 -> { 0.1: fail; 0.9: pass }; 26 -> { 0.1: fail; 0.9: pass }; 27 -> { 0.1: fail; 0.9: pass }; 28 -> { 0.1: fail; 0.9: pass }; 29 -> { 0.1: fail; 0.9: pass }; 30 -> { 0.1: fail; 0.9: pass }; 31 -> { 0.1: fail; 0.9: pass }; 32 -> { 0.1: fail; 0.9: pass } }
+  actor Rev { capacity 1; capability review() -> V { duration fixed 1min; outcomes kernel K } }
+  actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+  process P {
+    repeat rework at_most 32 {
+      r = Rev.review()
+      if r == pass { leave } else { f = Clerk.fix(); again }
+    } on_limit { end escalated }
+    end done
+  }
+  cut C { include [Rev, Clerk] }
+  bounds { cases 1; live_tasks 1; clock 200min }
+  metrics { window 200min; currency "JPY"; rate Rev per_minute 1; rate Clerk per_minute 1; rate Rev.review per_start 1; rate Clerk.fix per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.done within 1min >= 0.5
+  verify probability reached end.done within 4min >= 0.9
+  verify probability reached end.done within 7min >= 0.99
+  verify probability reached end.escalated >= 0.0000000000000000000000000000001
+}

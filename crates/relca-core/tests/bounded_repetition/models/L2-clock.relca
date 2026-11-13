@@ -1,0 +1,20 @@
+model L2 version "0.2" {
+  type V = enum { pass, fail }
+  latent case { bad: bool ~ { true: 0.1, false: 0.9 } }
+  kernel K given [bad] { true -> { 1: fail }; false -> { 1: pass } }
+  actor Rev { capacity 1; capability review() -> V { duration fixed 1min; outcomes kernel K; kernel_reads latent [bad] } }
+  actor Clerk { capacity 1; capability fix() -> V { duration fixed 2min; result nondet { pass } } }
+  process P {
+    repeat rework at_most 3 {
+      r = Rev.review()
+      if r == pass { leave } else { f = Clerk.fix(); again }
+    } on_limit { end escalated }
+    end done
+  }
+  cut C { include [Rev, Clerk] }
+  bounds { cases 1; live_tasks 1; clock 6min }
+  metrics { window 20min; currency "JPY"; rate Rev per_minute 1; rate Clerk per_minute 1; rate Rev.review per_start 1; rate Clerk.fix per_start 1 }
+  verify safety no_resource_overcommit
+  verify probability reached end.escalated <= 0.1
+  verify probability reached end.escalated >= 0.1
+}

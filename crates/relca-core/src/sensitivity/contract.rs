@@ -210,6 +210,11 @@ impl Contract {
 }
 
 fn supported(m: &ir::Model) -> Result<()> {
+    if m.has_loops() {
+        return Err(unsupported(
+            "loop_feature_combination: repeat sensitivity is not connected",
+        ));
+    }
     if !m.process.degradations.is_empty() {
         return Err(unsupported(
             "q6_feature_combination: degradation sensitivity not connected",

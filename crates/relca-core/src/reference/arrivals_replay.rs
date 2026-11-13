@@ -1016,10 +1016,10 @@ fn global_start(
         .capacity
         .is_some_and(|capacity| occupied < capacity))
 }
-fn global_instant(
+fn global_instant<'a>(
     m: &Model,
-    frames: &[Option<Frame<'_>>],
-    interpreters: &[Interpreter<'_>],
+    frames: &[Option<Frame<'a>>],
+    interpreters: &[Interpreter<'a>],
     ended: &[bool],
     queued: &[BTreeMap<BindingId, Tick>],
     admitted: &[bool],

@@ -43,6 +43,7 @@ pub enum Scope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
+    LoopControl,
     ReceiptQuery,
     ResolveEffect,
     Horizon,
@@ -230,6 +231,8 @@ pub enum Event {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct BusinessEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repetition: Option<ir::LoopSite>,
     pub kind: Kind,
     pub case_id: Option<u64>,
     pub binding: Option<String>,

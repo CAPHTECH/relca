@@ -1542,6 +1542,7 @@ fn time_guard_edges(
                 // static Capability durations only (ADR 0028 裁定 U3).
                 ir::Stmt::Wait(_) => {}
                 ir::Stmt::WaitUntil(_) => return Err("condition_wait_control"),
+                ir::Stmt::LoopControl(_) => return Err("loop_control"),
             }
         }
         Ok((alive.then_some(guards), may_end))

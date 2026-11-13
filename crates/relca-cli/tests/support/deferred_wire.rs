@@ -642,6 +642,7 @@ pub fn validate_deferred_metrics_with_source(
         };
         for stmt in b {
             match &stmt.value {
+                ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => panic!("bounded repetition is outside this oracle"),
                 ast::Stmt::ResolveEffect { .. } | ast::Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")
                 }

@@ -30,6 +30,15 @@ pub(super) fn declarations(model: &ast::Model) -> Vec<Feature> {
     fn block(b: &ast::Block, p: &str, rows: &mut Vec<Feature>) {
         for s in b {
             match &s.value {
+                ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {
+                    rows.push(Feature {
+                        item: format!("loop:process:{p}:repeat"),
+                        actor: String::new(),
+                        capability: String::new(),
+                        process: Some(p.into()),
+                        span: s.span,
+                    })
+                }
                 ast::Stmt::Call(c) => call(c, p, rows),
                 ast::Stmt::Fork { branches, .. } => {
                     for c in branches {

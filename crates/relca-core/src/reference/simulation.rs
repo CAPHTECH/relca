@@ -482,9 +482,9 @@ fn keep<'a>(
     Ok(())
 }
 
-fn append(
-    tree: &Tree<'_>,
-    w: &mut World<'_>,
+fn append<'a>(
+    tree: &Tree<'a>,
+    w: &mut World<'a>,
     k: usize,
     event: Occurrence,
     person: Option<PersonId>,
@@ -748,9 +748,9 @@ fn create<'a>(
 
 type SampledLeaf<'a> = (World<'a>, Option<SimulationCut>, Vec<Option<Tick>>);
 
-fn sample_durations(
-    tree: &Tree<'_>,
-    w: &mut World<'_>,
+fn sample_durations<'a>(
+    tree: &Tree<'a>,
+    w: &mut World<'a>,
     random: &mut Random,
 ) -> Result<bool, StopReason> {
     let Some(coins) = tree.coins(w, 4096)? else {
@@ -1122,6 +1122,11 @@ fn run_rep<'a>(
                 }
                 *block = &block[1..];
                 match &stmt.kind {
+                    Stmt::LoopControl(control) => {
+                        for (id, x) in &control.updates {
+                            c.frame.state_values[id.0] = *x;
+                        }
+                    }
                     Stmt::ResolveEffect { command, evidence } => {
                         let event =
                             recovery::resolve(&c.frame, m, *command, *evidence, stmt.span, k)?;
@@ -1898,6 +1903,7 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
         }
         let m = &realized;
         let mut tree = Tree {
+            walk_work: None,
             recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
@@ -2411,6 +2417,7 @@ mod simulation_tests {
         let times = m.arrivals.clone().unwrap_or_else(|| vec![0]);
         let n = times.len();
         let tree = Tree {
+            walk_work: None,
             recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
@@ -2874,6 +2881,7 @@ mod simulation_tests {
     fn s_reference_hazard_task_order_revisit_occurrence_and_cancel() {
         let mut m = model("sim-hazard");
         m.process.bindings.push(Binding {
+            repetition: None,
             name: "b".into(),
             ty: m.process.bindings[0].ty,
             span: m.process.span,

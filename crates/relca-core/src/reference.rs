@@ -397,6 +397,7 @@ mod probability_tests {
                 denominator_bits: bits,
                 duration_numeric_cut: false,
                 probability_stack: Vec::new(),
+                run_work: None,
                 probability_result: None,
                 probability_scheduler: false,
                 probability_chance: false,
@@ -417,6 +418,8 @@ mod probability_tests {
                 ]
             };
             i.probability_stack.push(ReferenceChoices {
+                owner: Default::default(),
+                deferred_children: vec![],
                 leaf: None,
                 children: vec![bound(Rational::one()), bound(Rational::zero())],
             });
@@ -431,6 +434,8 @@ mod probability_tests {
             }
             // Reduction to one is exact; already witnessed targets need no tiny product.
             i.probability_stack.push(ReferenceChoices {
+                owner: Default::default(),
+                deferred_children: vec![],
                 leaf: None,
                 children: vec![bound(Rational::one())],
             });
@@ -556,6 +561,8 @@ pub struct Statistics {
     terminal_traces: Vec<Vec<Observation>>,
     pub frames: usize,
     pub terminal_paths: usize,
+    /// Peak live path-choice slots; output observation only, never a limit.
+    pub path_choice_peak: usize,
     pub deadlock_paths: usize,
     pub adoptions: BTreeMap<BindingId, usize>,
     pub normal_completions: usize,
@@ -786,6 +793,7 @@ fn explore_unprojected(model: &Model, limits: Limits, projection: Projection) ->
     let mut interpreter = Interpreter {
         case_index: 0,
         probability_stack: Vec::new(),
+        run_work: None,
         probability_result: None,
         probability_scheduler: false,
         probability_chance: !model.initial_distributions.is_empty(),
@@ -865,7 +873,7 @@ fn explore_unprojected(model: &Model, limits: Limits, projection: Projection) ->
                 && model.resources.is_empty()
                 && !model.completion_requested()
                 && !model.has_requires()
-                && !model.has_wait()
+                && !model.has_metric_wait()
             {
                 "reachable stopped nonterminal path"
             } else {
@@ -2025,7 +2033,8 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                             | Stmt::Wait(_)
                             | Stmt::WaitUntil(_)
                             | Stmt::ResolveEffect { .. }
-                            | Stmt::StopReceiptUnknown => false,
+                            | Stmt::StopReceiptUnknown
+                            | Stmt::LoopControl(_) => false,
                         })
                     }
                     require(!invokes(&m.process.body, e.capability))?;
@@ -2207,7 +2216,12 @@ impl Validator<'_> {
                         .is_some_and(|b| b.ty == p.ty)
             })?;
         }
-        require(b.ty == cap.return_type && self.calls.insert(c.binding))
+        require(b.ty == cap.return_type && self.calls.insert(c.binding))?;
+        if let Some(alias) = self.model.loop_alias(c.binding) {
+            require(self.model.process.bindings[alias.0].ty == b.ty)?;
+            self.calls.insert(alias);
+        }
+        Ok(())
     }
 
     fn condition(
@@ -2273,8 +2287,25 @@ impl Validator<'_> {
             return Err(StopReason::EnumerationLimit);
         }
         let mut flows = true;
+        if depth == 0 && self.model.has_loops() {
+            // Lexical alias inventory; actual presence is independently checked
+            // on every executed condition, like cancellation-sensitive joins.
+            known.extend((0..self.model.process.bindings.len()).map(BindingId));
+        }
         for s in block {
             match &s.kind {
+                Stmt::LoopControl(control) => {
+                    for c in &control.aliases {
+                        self.call(c)?;
+                    }
+                    for (id, x) in &control.updates {
+                        require(self.model.state_variables.get(id.0).is_some_and(|v| {
+                            v.name.starts_with("@loop:")
+                                && v.kind == StateKind::ObservedCase
+                                && reference_value_valid(self.model, v, *x)
+                        }))?;
+                    }
+                }
                 Stmt::Wait(_) | Stmt::WaitUntil(_) => {}
                 Stmt::End(e) => {
                     require(e.0 < self.model.ends.len())?;
@@ -2460,7 +2491,7 @@ fn reference_notify(frame: &mut Frame<'_>, own: Option<usize>, writes: &[StateWr
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Occurrence {
     RecoveryEnter(BindingId),
     ReceiptQuery(recovery::QueryEvidence),
@@ -2484,7 +2515,7 @@ enum Occurrence {
     Terminal(EndId),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Observation {
     binding: Option<BindingId>,
     state_values: Vec<StateValue>,
@@ -2704,6 +2735,15 @@ fn reference_kernel(k: &Kernel, m: &Model) -> Execution {
             .state_variables
             .get(id.0)
             .ok_or(StopReason::SemanticAbort)?;
+        if v.name.starts_with("@loop:") && v.name.ends_with(":round") {
+            require(
+                v.kind == StateKind::ObservedCase
+                    && !v.optional
+                    && v.integer_max.is_some_and(|n| (1..=32).contains(&n)),
+            )?;
+            size *= num_bigint::BigUint::from(v.integer_max.unwrap());
+            continue;
+        }
         let domain = m.types.get(v.base.0).ok_or(StopReason::SemanticAbort)?;
         require(
             v.case_set_size.is_none()
@@ -2806,7 +2846,7 @@ fn snapshot_condition_at(
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct Waiting<'a> {
     tasks: std::ops::Range<usize>,
     // None is the implicit all-join of a serial call.
@@ -2814,7 +2854,7 @@ struct Waiting<'a> {
     winner: Option<BindingId>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct Frame<'a> {
     condition_waits: Vec<(Tick, Option<Tick>)>,
     lost_updates: BTreeSet<StateVarId>,
@@ -2944,6 +2984,7 @@ impl Frame<'_> {
 struct Interpreter<'a> {
     case_index: usize,
     probability_stack: Vec<ReferenceChoices>,
+    run_work: Option<path_stack::Work<'a>>,
     probability_result: Option<Vec<ReferenceBound>>,
     probability_scheduler: bool,
     probability_chance: bool,
@@ -2980,9 +3021,19 @@ struct ReferenceBound {
 }
 #[derive(Default)]
 struct ReferenceChoices {
+    owner: std::rc::Rc<std::cell::Cell<Option<usize>>>,
     children: Vec<Vec<ReferenceBound>>,
+    deferred_children: Vec<usize>,
     leaf: Option<Vec<ReferenceBound>>,
 }
+
+mod path_stack;
+#[cfg(test)]
+#[path = "reference/round1_conditions.rs"]
+mod round1_conditions;
+#[cfg(test)]
+#[path = "reference/round2_conditions.rs"]
+mod round2_conditions;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ReferenceCut {
@@ -3378,6 +3429,18 @@ impl<'a> Interpreter<'a> {
         end: Option<EndId>,
         cut: ReferenceCut,
     ) -> Execution {
+        if self.run_work.is_some() {
+            return self.defer_in_place(f, move |this, f| this.probability_leaf_ready(f, end, cut));
+        }
+        self.probability_leaf_ready(f, end, cut)
+    }
+
+    fn probability_leaf_ready(
+        &mut self,
+        f: &Frame<'a>,
+        end: Option<EndId>,
+        cut: ReferenceCut,
+    ) -> Execution {
         self.collect_contests(f, cut, end.is_some())?;
         if end.is_none() {
             self.collect_obligations(
@@ -3434,6 +3497,20 @@ impl<'a> Interpreter<'a> {
         let mut result = Vec::new();
         for q in &self.model.probability_queries {
             let mut hit = matches!(q.condition,ProbabilityCondition::End(e) if end==Some(e) && q.within.is_none_or(|d|f.now<=d));
+            // A compiler control update can immediately precede End without
+            // creating a Task/event. Observe that final valid snapshot too;
+            // a clock cut beyond the bound is not an observation at that time.
+            if self.model.has_loops()
+                && f.now <= self.model.bounds.clock
+                && q.within.is_none_or(|d| f.now <= d)
+                && let ProbabilityCondition::State(c) = &q.condition
+            {
+                hit |= snapshot_condition(
+                    c,
+                    &response::visible_values(f, self.model, None),
+                    &f.state_values,
+                )?;
+            }
             for o in &f.trace {
                 hit |= observation_hit(q, o, 0)?;
             }
@@ -3494,7 +3571,26 @@ impl<'a> Interpreter<'a> {
     // Independent path-tree reduction. No graph, interned state, or engine DP.
     fn probability_finish(&mut self, weights: Option<&[Rational]>) {
         let choices = self.probability_stack.pop().unwrap();
-        let result = if let Some(leaf) = choices.leaf {
+        if let Some(work) = &mut self.run_work {
+            let id = work.choice(choices, weights.map(<[Rational]>::to_vec));
+            self.probability_stack
+                .last_mut()
+                .expect("path reduction parent")
+                .deferred_children
+                .push(id);
+            return;
+        }
+        let result = self.probability_reduce(choices, weights);
+        self.probability_publish(result);
+    }
+
+    fn probability_reduce(
+        &mut self,
+        choices: ReferenceChoices,
+        weights: Option<&[Rational]>,
+    ) -> Vec<ReferenceBound> {
+        debug_assert!(choices.deferred_children.is_empty());
+        if let Some(leaf) = choices.leaf {
             leaf
         } else {
             let count = self.model.probability_queries.len()
@@ -3543,7 +3639,10 @@ impl<'a> Interpreter<'a> {
                 });
             }
             result
-        };
+        }
+    }
+
+    fn probability_publish(&mut self, result: Vec<ReferenceBound>) {
         if let Some(parent) = self.probability_stack.last_mut() {
             parent.children.push(result);
         } else {
@@ -3788,7 +3887,7 @@ impl<'a> Interpreter<'a> {
         }
         if self.model.contracts.is_empty()
             && self.model.probability_queries.is_empty()
-            && !self.model.has_wait()
+            && !self.model.has_metric_wait()
             && !self.model.has_requires()
             && self.model.response_attempts().is_empty()
         {
@@ -4311,13 +4410,16 @@ impl<'a> Interpreter<'a> {
     }
 
     fn run(&mut self, f: Frame<'a>, depth: usize) -> Execution {
-        if !self.model.uses_probability() && !self.model.completion_requested() {
-            return self.run_inner(f, depth);
+        if let Some(work) = &mut self.run_work {
+            let id = work.enqueue(f, depth);
+            self.probability_stack
+                .last_mut()
+                .expect("path continuation parent")
+                .deferred_children
+                .push(id);
+            return Ok(());
         }
-        self.probability_stack.push(ReferenceChoices::default());
-        self.run_inner(f, depth)?;
-        self.probability_finish(None);
-        Ok(())
+        self.run_iterative(f, depth)
     }
 
     fn run_inner(&mut self, mut f: Frame<'a>, depth: usize) -> Execution {
@@ -4377,9 +4479,10 @@ impl<'a> Interpreter<'a> {
                     })
                 {
                     for filed in [false, true] {
-                        let mut next = self.successor(&f, depth + 1)?;
-                        self.record(&mut next, Occurrence::ContestChoice(id, filed), None)?;
-                        self.run(next, depth + 1)?;
+                        self.defer_successor(&f, depth + 1, move |this, _, mut next| {
+                            this.record(&mut next, Occurrence::ContestChoice(id, filed), None)?;
+                            this.run(next, depth + 1)
+                        })?;
                     }
                     return Ok(());
                 }
@@ -4454,6 +4557,11 @@ impl<'a> Interpreter<'a> {
                         let statement = &block[0];
                         *block = &block[1..];
                         match &statement.kind {
+                            Stmt::LoopControl(control) => {
+                                for (id, x) in &control.updates {
+                                    f.state_values[id.0] = *x;
+                                }
+                            }
                             Stmt::Query(call, _) => {
                                 self.create(&mut f, std::slice::from_ref(call), None)?
                             }
@@ -4522,118 +4630,135 @@ impl<'a> Interpreter<'a> {
                 .collect();
             for &i in &due {
                 if f.tasks[i].finish == Some(f.now) {
-                    if self.range_attempt(&f, i, false, None)? {
-                        self.probability_leaf(&f, None, ReferenceCut::Range)?;
-                    } else {
-                        let cap = &self.model.capabilities[f.tasks[i].call.capability.0];
-                        if let Some(kernel) = &cap.kernel {
-                            #[cfg(test)]
-                            {
-                                self.statistics.kernel_draws += 1;
-                            }
-                            let row = kernel
-                                .rows
-                                .iter()
-                                .find(|r| {
-                                    r.values
-                                        .iter()
-                                        .enumerate()
-                                        .all(|(j, x)| f.state_values[kernel.given[j].0] == *x)
-                                })
-                                .ok_or(StopReason::SemanticAbort)?;
-                            let mut weights = Vec::new();
-                            self.probability_chance = true;
-                            self.probability_stack.push(ReferenceChoices::default());
-                            for b in &row.branches {
-                                if b.probability.is_zero() {
-                                    continue;
-                                }
-                                let mut next = self.successor(&f, depth + 1)?;
-                                next.tasks[i].phase = Phase::Finished(b.result);
-                                next.tasks[i].stop = Some(f.now);
-                                let cap_id = next.tasks[i].call.capability;
-                                let person = next.tasks[i].person;
-                                self.finish_state(&mut next, i, b.result);
-                                for &(id, x) in &b.overrides {
-                                    next.state_values[id.0] = x;
-                                }
-                                self.record_site(
-                                    &mut next,
-                                    Occurrence::Completion(cap_id, b.result),
-                                    person,
-                                    f.tasks[i].call.binding,
-                                )?;
-                                self.statistics.normal_completions += 1;
-                                self.response_finish(next, i, depth + 1)?;
-                                weights.push(b.probability.clone());
-                            }
-                            self.probability_finish(Some(&weights));
+                    self.defer_in_place(&f, move |this, f| {
+                        if this.range_attempt(f, i, false, None)? {
+                            this.probability_leaf(f, None, ReferenceCut::Range)?;
                         } else {
-                            let selected = if reference_stale(&f.tasks[i], cap) {
-                                vec![cap.version_check.as_ref().unwrap().reject]
-                            } else if cap.receipt_query.is_some() {
-                                recovery::project(
-                                    self.model,
-                                    f.tasks[i].call.capability,
-                                    &f.state_values,
-                                    self.case_index,
-                                )?
-                            } else if let Some(a) = &cap.atomic {
-                                vec![if self.condition(&f, &a.condition, 0)? == a.commit_when {
-                                    a.commit
-                                } else {
-                                    a.reject
-                                }]
-                            } else {
-                                cap.results.clone()
-                            };
-                            for value in &selected {
-                                let mut next = self.successor(&f, depth + 1)?;
-                                next.tasks[i].phase = Phase::Finished(*value);
-                                next.tasks[i].stop = Some(f.now);
-                                let cap_id = next.tasks[i].call.capability;
-                                let person = next.tasks[i].person;
-                                self.finish_state(&mut next, i, *value);
-                                self.record_site(
-                                    &mut next,
-                                    Occurrence::Completion(cap_id, *value),
-                                    person,
-                                    f.tasks[i].call.binding,
-                                )?;
-                                self.statistics.normal_completions += 1;
-                                if f.tasks[i].ack == Some(f.now) {
-                                    self.statistics.simultaneous_normal_choices += 1;
+                            let cap = &this.model.capabilities[f.tasks[i].call.capability.0];
+                            if let Some(kernel) = &cap.kernel {
+                                #[cfg(test)]
+                                {
+                                    this.statistics.kernel_draws += 1;
                                 }
-                                self.response_finish(next, i, depth + 1)?;
+                                let row = kernel
+                                    .rows
+                                    .iter()
+                                    .find(|r| {
+                                        r.values
+                                            .iter()
+                                            .enumerate()
+                                            .all(|(j, x)| f.state_values[kernel.given[j].0] == *x)
+                                    })
+                                    .ok_or(StopReason::SemanticAbort)?;
+                                let mut weights = Vec::new();
+                                this.probability_chance = true;
+                                this.probability_stack.push(ReferenceChoices::default());
+                                for b in &row.branches {
+                                    if b.probability.is_zero() {
+                                        continue;
+                                    }
+                                    let weight = b.probability.clone();
+                                    let b = b.clone();
+                                    this.defer_successor(
+                                        f,
+                                        depth + 1,
+                                        move |this, base, mut next| {
+                                            next.tasks[i].phase = Phase::Finished(b.result);
+                                            next.tasks[i].stop = Some(base.now);
+                                            let cap_id = next.tasks[i].call.capability;
+                                            let person = next.tasks[i].person;
+                                            this.finish_state(&mut next, i, b.result);
+                                            for &(id, x) in &b.overrides {
+                                                next.state_values[id.0] = x;
+                                            }
+                                            this.record_site(
+                                                &mut next,
+                                                Occurrence::Completion(cap_id, b.result),
+                                                person,
+                                                base.tasks[i].call.binding,
+                                            )?;
+                                            this.statistics.normal_completions += 1;
+                                            this.response_finish(next, i, depth + 1)
+                                        },
+                                    )?;
+                                    weights.push(weight);
+                                }
+                                this.probability_finish(Some(&weights));
+                            } else {
+                                let selected = if reference_stale(&f.tasks[i], cap) {
+                                    vec![cap.version_check.as_ref().unwrap().reject]
+                                } else if cap.receipt_query.is_some() {
+                                    recovery::project(
+                                        this.model,
+                                        f.tasks[i].call.capability,
+                                        &f.state_values,
+                                        this.case_index,
+                                    )?
+                                } else if let Some(a) = &cap.atomic {
+                                    vec![if this.condition(f, &a.condition, 0)? == a.commit_when {
+                                        a.commit
+                                    } else {
+                                        a.reject
+                                    }]
+                                } else {
+                                    cap.results.clone()
+                                };
+                                for value in &selected {
+                                    let value = *value;
+                                    this.defer_successor(
+                                        f,
+                                        depth + 1,
+                                        move |this, base, mut next| {
+                                            next.tasks[i].phase = Phase::Finished(value);
+                                            next.tasks[i].stop = Some(base.now);
+                                            let cap_id = next.tasks[i].call.capability;
+                                            let person = next.tasks[i].person;
+                                            this.finish_state(&mut next, i, value);
+                                            this.record_site(
+                                                &mut next,
+                                                Occurrence::Completion(cap_id, value),
+                                                person,
+                                                base.tasks[i].call.binding,
+                                            )?;
+                                            this.statistics.normal_completions += 1;
+                                            if base.tasks[i].ack == Some(base.now) {
+                                                this.statistics.simultaneous_normal_choices += 1;
+                                            }
+                                            this.response_finish(next, i, depth + 1)
+                                        },
+                                    )?;
+                                }
                             }
                         }
-                    }
+                        Ok(())
+                    })?;
                 }
                 if f.tasks[i].ack == Some(f.now) {
-                    let mut next = self.successor(&f, depth + 1)?;
-                    next.tasks[i].phase = Phase::Cancelled;
-                    next.tasks[i].stop = Some(f.now);
-                    if self.model.tracks_obligations() {
-                        self.record_site(
-                            &mut next,
-                            Occurrence::CancelAck(f.tasks[i].call.capability),
-                            f.tasks[i].person,
-                            f.tasks[i].call.binding,
-                        )?;
-                    }
-                    #[cfg(test)]
-                    if !self.model.state_variables.is_empty() {
-                        self.statistics.state_seams.push((
-                            "ack",
-                            next.tasks[i].call.capability,
-                            next.state_values.clone(),
-                        ));
-                    }
-                    self.statistics.cancellation_completions += 1;
-                    if f.tasks[i].finish == Some(f.now) {
-                        self.statistics.simultaneous_ack_choices += 1;
-                    }
-                    self.run(next, depth + 1)?;
+                    self.defer_successor(&f, depth + 1, move |this, base, mut next| {
+                        next.tasks[i].phase = Phase::Cancelled;
+                        next.tasks[i].stop = Some(base.now);
+                        if this.model.tracks_obligations() {
+                            this.record_site(
+                                &mut next,
+                                Occurrence::CancelAck(base.tasks[i].call.capability),
+                                base.tasks[i].person,
+                                base.tasks[i].call.binding,
+                            )?;
+                        }
+                        #[cfg(test)]
+                        if !this.model.state_variables.is_empty() {
+                            this.statistics.state_seams.push((
+                                "ack",
+                                next.tasks[i].call.capability,
+                                next.state_values.clone(),
+                            ));
+                        }
+                        this.statistics.cancellation_completions += 1;
+                        if base.tasks[i].finish == Some(base.now) {
+                            this.statistics.simultaneous_ack_choices += 1;
+                        }
+                        this.run(next, depth + 1)
+                    })?;
                 }
             }
 
@@ -4655,23 +4780,26 @@ impl<'a> Interpreter<'a> {
                 let mut instant = !due.is_empty();
                 for winner in candidates {
                     instant = true;
-                    let mut next = self.successor(&f, depth + 1)?;
-                    if next.adoption.replace(f.now).is_some() {
-                        return Err(StopReason::SemanticAbort);
-                    }
-                    next.waiting.as_mut().unwrap().winner = Some(winner);
-                    *self.statistics.adoptions.entry(winner).or_default() += 1;
-                    if matches!(
+                    let cancel = matches!(
                         wait.join,
                         Some(Join::Any {
                             remaining: Remaining::CancelThenDrain,
                             ..
                         })
-                    ) {
-                        self.cancel(next, wait.tasks.start, wait.tasks.end, winner, depth + 1)?;
-                    } else {
-                        self.run(next, depth + 1)?;
-                    }
+                    );
+                    let tasks = wait.tasks.clone();
+                    self.defer_successor(&f, depth + 1, move |this, base, mut next| {
+                        if next.adoption.replace(base.now).is_some() {
+                            return Err(StopReason::SemanticAbort);
+                        }
+                        next.waiting.as_mut().unwrap().winner = Some(winner);
+                        *this.statistics.adoptions.entry(winner).or_default() += 1;
+                        if cancel {
+                            this.cancel(next, tasks.start, tasks.end, winner, depth + 1)
+                        } else {
+                            this.run(next, depth + 1)
+                        }
+                    })?;
                 }
                 for i in if crate::contest::has_effects(self.model) {
                     0..f.tasks.len()
@@ -4681,73 +4809,84 @@ impl<'a> Interpreter<'a> {
                     if self.can_start(&f, i)? {
                         let actor = self.model.capabilities[f.tasks[i].call.capability.0].actor;
                         let pool = self.model.actors[actor.0].executors.as_ref();
-                        let people = pool
+                        let mut people = pool
                             .into_iter()
                             .flatten()
                             .copied()
                             .filter(|p| Self::person_available(&f, *p))
                             .map(Some)
-                            .chain(pool.is_none().then_some(None));
-                        for person in people {
+                            .chain(pool.is_none().then_some(None))
+                            .peekable();
+                        let refuses = people.peek().is_some()
+                            && self.model.capabilities[f.tasks[i].call.capability.0]
+                                .requires
+                                .as_ref()
+                                .map(|r| self.condition(&f, &r.condition, 0))
+                                .transpose()?
+                                .is_some_and(|v| !v);
+                        for person in people.take(if refuses { 1 } else { usize::MAX }) {
                             instant = true;
-                            let mut next = self.successor(&f, depth + 1)?;
-                            let cap = &self.model.capabilities[next.tasks[i].call.capability.0];
-                            if let Some(req) = &cap.requires
-                                && !self.condition(&f, &req.condition, 0)?
-                            {
-                                next.tasks[i].phase = Phase::Refused(req.otherwise);
-                                next.tasks[i].stop = Some(f.now);
-                                self.record_site(
-                                    &mut next,
-                                    Occurrence::Refusal(f.tasks[i].call.capability, req.otherwise),
-                                    None,
-                                    f.tasks[i].call.binding,
-                                )?;
-                                self.run(next, depth + 1)?;
-                                break;
-                            }
-                            next.tasks[i].phase = Phase::Running;
-                            next.tasks[i].stale.clear();
-                            next.tasks[i].person = person;
-                            next.tasks[i].start = Some(f.now);
-                            if let Some(distribution) = &cap.duration_distribution {
-                                for (duration, weight) in &distribution.entries {
-                                    if !weight.is_zero() {
-                                        f.now
-                                            .checked_add(*duration)
-                                            .ok_or(StopReason::SemanticAbort)?;
-                                    }
+                            self.defer_in_place(&f, move |this, base| {
+                                let mut next = this.successor(base, depth + 1)?;
+                                let cap = &this.model.capabilities[next.tasks[i].call.capability.0];
+                                if let Some(req) = &cap.requires
+                                    && !this.condition(base, &req.condition, 0)?
+                                {
+                                    next.tasks[i].phase = Phase::Refused(req.otherwise);
+                                    next.tasks[i].stop = Some(base.now);
+                                    this.record_site(
+                                        &mut next,
+                                        Occurrence::Refusal(
+                                            base.tasks[i].call.capability,
+                                            req.otherwise,
+                                        ),
+                                        None,
+                                        base.tasks[i].call.binding,
+                                    )?;
+                                    return this.run(next, depth + 1);
                                 }
-                                next.tasks[i].finish = None;
-                            } else {
-                                next.tasks[i].finish = Some(
-                                    f.now
-                                        .checked_add(cap.duration)
-                                        .ok_or(StopReason::SemanticAbort)?,
-                                );
-                            }
-                            let cap_id = next.tasks[i].call.capability;
-                            if self.range_attempt(&f, i, true, None)? {
-                                self.probability_leaf(&f, None, ReferenceCut::Range)?;
-                                continue;
-                            }
-                            for w in &cap.start_writes {
-                                next.state_values[w.variable.0] = reference_effect_at(
-                                    w,
-                                    &f.state_values,
-                                    None,
-                                    self.case_index,
+                                next.tasks[i].phase = Phase::Running;
+                                next.tasks[i].stale.clear();
+                                next.tasks[i].person = person;
+                                next.tasks[i].start = Some(base.now);
+                                if let Some(distribution) = &cap.duration_distribution {
+                                    for (duration, weight) in &distribution.entries {
+                                        if !weight.is_zero() {
+                                            base.now
+                                                .checked_add(*duration)
+                                                .ok_or(StopReason::SemanticAbort)?;
+                                        }
+                                    }
+                                    next.tasks[i].finish = None;
+                                } else {
+                                    next.tasks[i].finish = Some(
+                                        base.now
+                                            .checked_add(cap.duration)
+                                            .ok_or(StopReason::SemanticAbort)?,
+                                    );
+                                }
+                                let cap_id = next.tasks[i].call.capability;
+                                if this.range_attempt(base, i, true, None)? {
+                                    return this.probability_leaf(base, None, ReferenceCut::Range);
+                                }
+                                for w in &cap.start_writes {
+                                    next.state_values[w.variable.0] = reference_effect_at(
+                                        w,
+                                        &base.state_values,
+                                        None,
+                                        this.case_index,
+                                        person,
+                                    )?;
+                                }
+                                reference_notify(&mut next, Some(i), &cap.start_writes, this.model);
+                                this.record_site(
+                                    &mut next,
+                                    Occurrence::Dispatch(cap_id),
                                     person,
+                                    base.tasks[i].call.binding,
                                 )?;
-                            }
-                            reference_notify(&mut next, Some(i), &cap.start_writes, self.model);
-                            self.record_site(
-                                &mut next,
-                                Occurrence::Dispatch(cap_id),
-                                person,
-                                f.tasks[i].call.binding,
-                            )?;
-                            self.run(next, depth + 1)?;
+                                this.run(next, depth + 1)
+                            })?;
                         }
                     }
                 }
@@ -4810,6 +4949,11 @@ impl<'a> Interpreter<'a> {
             let statement = &block[0];
             *block = &block[1..];
             match &statement.kind {
+                Stmt::LoopControl(control) => {
+                    for (id, x) in &control.updates {
+                        f.state_values[id.0] = *x;
+                    }
+                }
                 Stmt::Query(call, _) => self.create(&mut f, std::slice::from_ref(call), None)?,
                 Stmt::ResolveEffect { command, evidence } => {
                     let event = recovery::resolve(
@@ -5061,12 +5205,63 @@ impl<'a> Interpreter<'a> {
 
     fn cancel(
         &mut self,
+        f: Frame<'a>,
+        i: usize,
+        end: usize,
+        winner: BindingId,
+        depth: usize,
+    ) -> Execution {
+        if let Some(work) = &mut self.run_work {
+            let id = work.enqueue_cancel(f, i, end, winner, depth);
+            self.probability_stack
+                .last_mut()
+                .expect("cancellation parent")
+                .deferred_children
+                .push(id);
+            return Ok(());
+        }
+        match self.cancel_step(f, i, end, winner, depth)? {
+            path_stack::CancelStep::Run(f, depth) => self.run(f, depth),
+            path_stack::CancelStep::Acks {
+                frame,
+                index,
+                end,
+                winner,
+                depth,
+                max_delay,
+            } => {
+                for delay in 1..=max_delay {
+                    let mut next = self.successor(&frame, depth + 1)?;
+                    next.tasks[index].ack = Some(
+                        frame
+                            .now
+                            .checked_add(delay)
+                            .ok_or(StopReason::SemanticAbort)?,
+                    );
+                    #[cfg(test)]
+                    if self.model.capabilities[frame.tasks[index].call.capability.0]
+                        .duration_distribution
+                        .is_some()
+                    {
+                        self.statistics
+                            .duration_ack_candidates
+                            .push(next.tasks[index].ack.unwrap());
+                    }
+                    self.cancel(next, index + 1, end, winner, depth + 1)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn cancel_step(
+        &mut self,
         mut f: Frame<'a>,
         mut i: usize,
         end: usize,
         winner: BindingId,
         depth: usize,
-    ) -> Execution {
+    ) -> Result<path_stack::CancelStep<'a>, StopReason> {
         while i < end {
             let t = &f.tasks[i];
             if t.call.binding != winner && !t.terminal() {
@@ -5120,25 +5315,19 @@ impl<'a> Interpreter<'a> {
                     } else {
                         ack_within
                     };
-                    for delay in 1..=max_delay {
-                        let mut next = self.successor(&f, depth + 1)?;
-                        // Do not clamp to clock: normal finish may beat a far ack.
-                        next.tasks[i].ack =
-                            Some(f.now.checked_add(delay).ok_or(StopReason::SemanticAbort)?);
-                        #[cfg(test)]
-                        if cap.duration_distribution.is_some() {
-                            self.statistics
-                                .duration_ack_candidates
-                                .push(next.tasks[i].ack.unwrap());
-                        }
-                        self.cancel(next, i + 1, end, winner, depth + 1)?;
-                    }
-                    return Ok(());
+                    return Ok(path_stack::CancelStep::Acks {
+                        frame: f,
+                        index: i,
+                        end,
+                        winner,
+                        depth,
+                        max_delay,
+                    });
                 }
             }
             i += 1;
         }
-        self.run(f, depth)
+        Ok(path_stack::CancelStep::Run(f, depth))
     }
 
     fn condition(&self, f: &Frame<'a>, c: &Cond, depth: usize) -> Result<bool, StopReason> {
@@ -5176,6 +5365,12 @@ impl<'a> Interpreter<'a> {
                     .tasks
                     .iter()
                     .find(|t| t.call.binding == m.binding)
+                    .or_else(|| {
+                        f.tasks.iter().rev().find(|t| {
+                            self.model.loop_alias(t.call.binding) == Some(m.binding)
+                                && matches!(t.phase, Phase::Finished(_) | Phase::Refused(_))
+                        })
+                    })
                     .ok_or(StopReason::SemanticAbort)?;
                 let cap = &self.model.capabilities[task.call.capability.0];
                 if cap.return_type != self.model.process.bindings[m.binding.0].ty {
@@ -5348,6 +5543,7 @@ mod duration_tests {
             statistics: Statistics::default(),
             contract_facts: vec![(false, false); m.contracts.len()],
             probability_stack: vec![],
+            run_work: None,
             probability_result: None,
             probability_scheduler: false,
             probability_chance: false,
@@ -5533,6 +5729,8 @@ mod duration_tests {
             let mut i = interpreter(&m);
             i.denominator_bits = bits;
             i.probability_stack.push(ReferenceChoices {
+                owner: Default::default(),
+                deferred_children: vec![],
                 leaf: None,
                 children: vec![
                     vec![ReferenceBound {
@@ -5756,6 +5954,7 @@ mod state_tests {
         Interpreter {
             case_index: 0,
             probability_stack: Vec::new(),
+            run_work: None,
             probability_result: None,
             probability_scheduler: false,
             probability_chance: false,
@@ -6231,6 +6430,7 @@ mod executor_tests {
             let mut interpreter = Interpreter {
                 case_index: 0,
                 probability_stack: Vec::new(),
+                run_work: None,
                 probability_result: None,
                 probability_scheduler: false,
                 probability_chance: false,
@@ -6283,6 +6483,7 @@ mod executor_tests {
         let mut interpreter = Interpreter {
             case_index: 0,
             probability_stack: Vec::new(),
+            run_work: None,
             probability_result: None,
             probability_scheduler: false,
             probability_chance: false,
