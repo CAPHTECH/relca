@@ -85,8 +85,43 @@ clock、同時 Task 数、探索予算などで計算を切った場合、影響
 `inconclusive`、exit 2、`repetition.coverage: not_derived` となり、回数表の `cases` は空です。
 `coverage` と `unchecked` を読み、未導出の分布を0件と解釈しないでください。
 
+確認用ページは、回数の範囲と分布、上限後の件数と確率、site の round と phase を表にします。
+`coverage: not_derived` は、出所ごとの `repetition.coverage` として未確認の集計に1件加えます。
+端末の要約、ページ冒頭と結論、埋め込み JSON の `unverified_count` は同じ集計です。
+重複項目は除きますが、別の report の未導出を1件にまとめません。
+
 繰り返しを含む Agency の F/U などには、未導出の項目が残ります。
 警告が出ないことを統制の成立とはせず、`agency.unchecked` も確認してください。
+
+## 確認用ページと仮定の出所
+
+`skills/relca-model/scripts/review_page.py` は source と Relca の JSON から確認用ページを作ります。
+表と流れ図は source の表示であり、Relca に代わってモデルの妥当性を検証するものではありません。
+繰り返しの図には名前・回数上限・gap、body と `on_limit`、`again` の戻り先、`leave` の出口、
+`end` を出します。入れ子や `over` など拒否された形は「Relca が受け付けない形」として区別します。
+
+ページに渡す `--assumptions` は、数値や選択をどこから得たかの申告です。
+Relca 本体の `assumptions[]`（既定値や分析の前提）とは別です。たとえば次の JSON を渡します。
+
+```json
+{"assumptions": [
+  {"target": "poll.at_most", "value": 3, "basis": "説明用の仮定", "status": "placeholder"},
+  {"target": "poll.gap", "value": "5min", "basis": "説明用の仮定", "status": "placeholder"},
+  {"target": "Extract.via_model", "value": "doc@v3", "basis": "モデル宣言を転記。運用は未確認", "status": "placeholder"}
+]}
+```
+
+| target | 意味 |
+|---|---|
+| `NAME.at_most` | 繰り返しの上限回数（初回を含む） |
+| `NAME.gap` | 明記した繰り返しの間隔。省略時既定の0分には target を作らない |
+| `Actor.via_model` | `via model` に宣言した経由モデルの版 |
+| `Actor.capability.duration` / `kernel.NAME` | 操作の所要時間 / 確率表 |
+
+target の `NAME` や `Actor` は宣言名に置き換えます。宣言に対応しない target と重複は警告します。
+`confirmed`（`confirmed_by` が必要）や `measured`（`source` が必要）も AI の申告として表示し、
+人が確かめるまで確認済み・実測済みとは扱いません。
+ほかの target は[補助資料の一覧](../../skills/relca-model/references/results.md#確認用ページの-assumptions)を参照してください。
 
 ## 構造の出力
 

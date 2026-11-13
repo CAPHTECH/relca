@@ -46,7 +46,8 @@ EC 試行(再送を含む 2 案)では、compare も diff も最上位 unsupport
 
 review_page は、check・explain・simulate・各案・mutate の original を `fold_verdict` と同じ規則で畳み直す。compare の最上位は各案の verdict の最も重いものと照合する(`scripts/review_page.py` の `scan` の `kind == "compare"` の分岐)。どちらも全体の verdict が軽ければ「全体の verdict を信用しない」と警告する。上の拒否では、この警告が出るのが正しい。
 review_page の端末・ページ冒頭・結論の未確認件数は、性質や入力の保留に加えて、
-Agency の `not_derived` と根拠不明も同じ集計で数える。出所と場所を含む項目単位で重複を除く。
+Agency の `not_derived` と根拠不明、繰り返しの `coverage: not_derived` も同じ集計で数える。
+繰り返しは `repetition.coverage` の1項目として数え、出所と場所を含む項目単位で重複を除く。
 HTML内の `review-data.unverified_count` も同じ値。従来の項目別リストは残し、
 自己申告の未検査、未実施、警告、AIの申告はそれぞれの欄で読む。
 したがって **全体が violated でも、中に vacuous や unsupported の性質が残る**。to-be-a は全体 violated、separation は vacuous だった。
@@ -94,6 +95,38 @@ roundsは1〜3、on_limitは0〜1、on_limit_probabilityは[1/8,1/8]。
 clockや探索予算での切断は、影響する性質をinconclusiveにする。上限後の処理へ進んだことにはせず、
 未完了を成功・失敗にも数えない。not_derivedの空のcasesを0件と読まない。
 詳しい鍵と値は[利用ガイド](../../../docs/guide/results.md#繰り返しの出力)を参照。
+確認用ページでは、案件・loop ごとの回数範囲と分布、上限後の件数と確率、標本数と除外数、
+各 site の元の呼出し・round・phase・行と列を表にする。`not_derived` は未確認の件数に加え、
+空の `cases` を0件の結果として表示しない。`rules`・`basis`・`unchecked` も併記する。
+
+## 確認用ページの --assumptions
+
+`--assumptions` は Relca 本体の入力ではなく、`scripts/review_page.py` に渡す出所の申告。
+list または `{"assumptions": [...]}` の JSON とし、各要素に `target`、`value`、`basis`、
+`status`（`placeholder` / `confirmed` / `measured`）を書く。
+`confirmed` には `confirmed_by`、`measured` には `source` が必要で、欠ければ仮置きに戻す。
+どちらも AI の申告で、人が確認済み・実測済みと認定するものではない。
+
+target はページの「モデルの数値・選択の宣言と出所」にある名前を使う。
+存在しない宣言の target と、重複した target は警告になる。主な target は次のとおり。
+
+| target | 対応する宣言 |
+|---|---|
+| `<Actor>.<Capability>.duration` / `.uses` | 所要時間 / 資源の使用量 |
+| `<Actor>.capacity` / `<Actor>.<潜在変数>` | 容量 / 潜在の初期分布 |
+| `<Actor>.via_model` | 経由するモデルの版。`Extract.via_model` は `via model "doc@v3"` に対応 |
+| `<NAME>.at_most` | 繰り返しの上限回数。例: `rework.at_most`。初回を含む業務の回数で、計算の切断ではない |
+| `<NAME>.gap` | 明記した繰り返しの間隔。例: `poll.gap`。省略時既定の0分には宣言の target を作らない |
+| `kernel.<名前>` / `case.<変数>` | 確率表 / 案件の初期分布 |
+| `metrics.rate.<対象>` / `metrics.window` | 単価 / 分析窓 |
+| `resource.<名前>` / `policy` / `arrivals` | 資源の容量 / 方策 / 流入 |
+| `scenario.<名前>.arrivals` / `.queue` / `.concurrent` / `.horizon` | シナリオ内の宣言 |
+| `verify.probability#<k>` / `contract.<名前>#<k>` | 確率の上限 / 数値を持つ契約の期限 |
+| `retry.<結果の名前>` / `response_loss.<結果の名前>` | 再送 / 応答喪失。同名の結果が複数 process にあれば `retry.<process>.<結果の名前>` など |
+| `<Actor>.<Capability>.idempotency` / `.effect_scope` | 冪等キー / 効果の範囲の仮定 |
+
+たとえば `{"target":"poll.at_most","value":3,"basis":"説明用の仮定","status":"placeholder"}`。
+bounds と simulation は計算の設定なので、この宣言一覧ではなく上限などの欄で読む。
 
 ## 再送を含むモデルで出る欄
 

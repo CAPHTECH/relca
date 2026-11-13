@@ -75,6 +75,11 @@ body の各経路は `again`、`leave`、`end NAME` のいずれかで閉じま�
 正の固定 `wait`、正の gap のいずれかが必要です。操作が `requires` で即時拒否されうる場合、
 その操作の時間だけではこの条件を満たしません。
 
+確認用ページの `--assumptions` に出所を申告するときは、繰り返しの上限を
+`NAME.at_most`、明記した gap を `NAME.gap` とします（例: `rework.at_most`、`poll.gap`）。
+Actor の `via model` は `Actor.via_model` です。省略時既定の gap は宣言の target にしません。
+申告の扱いと入力例は[確認用ページと仮定の出所](results.md#確認用ページと仮定の出所)を参照してください。
+
 `NAME.round` は1から始まる現在の回です。読めるのは**その繰り返しの body 内だけ**で、
 `if`、呼び出す操作の `requires`、結果 kernel の `given` に使えます。
 `requires` や kernel の宣言は body の外に置けますが、値を使う呼出しは body 内に限ります。

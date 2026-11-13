@@ -1,0 +1,20 @@
+model Rework version "0.2" {
+  type Verdict = enum { pass, fail }
+  kernel Inspection { * -> { 0.5: pass; 0.5: fail } }
+  actor Office { capacity 1
+    capability inspect() -> Verdict { duration fixed 1min; outcomes kernel Inspection }
+    capability correct() -> Verdict { duration fixed 2min; result nondet { pass } }
+    capability escalate() -> Verdict { duration fixed 1min; result nondet { pass } }
+  }
+  process Main {
+    repeat rework at_most 3 {
+      r = Office.inspect()
+      if r == pass { leave } else { c = Office.correct(); again }
+    } on_limit { e = Office.escalate(); end escalated }
+    end done
+  }
+  cut Scope { include [Office] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  verify reachable end.done
+  contract Deadline { response case.received -> one_of(end.done,end.escalated) by 9min after case.received otherwise unresolved }
+}

@@ -478,6 +478,10 @@ def parse_block(src, toks):
             i += 1
             continue
         line = src.line_of_char(t.start)
+        if t.text == "repeat" and i + 1 < n and toks[i + 1].text != "=":
+            stmt, i = parse_repeat(src, toks, i)
+            stmts.append(stmt)
+            continue
         if t.text == "if":
             j = i + 1
             depth = 0
@@ -551,12 +555,90 @@ def parse_block(src, toks):
     return stmts
 
 
+def parse_repeat(src, toks, start):
+    """表示用の有限 repeat。未知の拡張を正常な loop に読み替えない。"""
+    j = start
+    while j < len(toks) and toks[j].text != "{":
+        j += 1
+    body, close = block_body(toks, j) if j < len(toks) else ([], len(toks))
+    k = close + 1
+    while k < len(toks) and (toks[k].kind == "nl" or toks[k].text == ";"):
+        k += 1
+    limit, end = [], close
+    has_limit = k < len(toks) and toks[k].text == "on_limit"
+    if has_limit:
+        k += 1
+        while k < len(toks) and toks[k].kind == "nl":
+            k += 1
+        has_limit = k < len(toks) and toks[k].text == "{"
+        if has_limit:
+            limit, end = block_body(toks, k)
+    head = [t for t in toks[start:j] if t.kind != "nl"]
+    w = [t.text for t in head]
+    st = {"kind": "repeat", "name": w[1] if len(w) > 1 else "?",
+          "line": src.line_of_toks(toks[start:]), "text": src.slice(toks[start:end + 1]),
+          "body": parse_block(src, body), "on_limit": parse_block(src, limit),
+          "at_most": None, "gap": None, "header": src.slice(head)}
+    reason = None
+    if "over" in w[2:]:
+        reason = "loop_stage_unsupported: over"
+    elif (len(head) not in (4, 8) or head[1].kind != "word" or w[2] != "at_most"
+          or head[3].kind != "int"):
+        reason = "repeat NAME at_most N [gap fixed DURATION] が必要"
+    else:
+        st["at_most"] = int(w[3])
+        if len(head) == 8:
+            if w[4:6] != ["gap", "fixed"] or head[6].kind != "int" or w[7] not in ("min", "h", "d"):
+                reason = "gap fixed DURATION が必要"
+            else:
+                st["gap"] = "gap fixed " + "".join(w[6:8])
+        if not 1 <= st["at_most"] <= 32:
+            reason = "at_most は初回を含む1〜32回"
+    if not has_limit or end >= len(toks) or close >= len(toks):
+        reason = reason or "body と on_limit の block が必要"
+
+    def control_paths(stmts, phase, fallthrough=True):
+        """lower/repetition.rs の構造上の閉じ方だけを読む。時間や型の検査は Relca に任せる。"""
+        for index, s in enumerate(stmts):
+            k = s["kind"]
+            if k in ("again", "leave") and index + 1 < len(stmts):
+                return False, False
+            if k in ("again", "leave", "end"):
+                if k == "again" and phase == "on_limit":
+                    return False, False
+                fallthrough = False
+            elif k == "if":
+                tf, tv = control_paths(s["then"], phase, fallthrough)
+                ef, ev = control_paths(s["else"], phase, fallthrough)
+                if not tv or not ev:
+                    return False, False
+                fallthrough = tf or ef
+        return fallthrough, True
+
+    for s in flatten_steps(st["body"] + st["on_limit"]):
+        if (s["kind"] not in ("call", "if", "wait", "again", "leave", "end")
+                or (s["kind"] == "call" and s.get("tail"))
+                or (s["kind"] == "wait" and s["text"].split()[1:2] == ["until"])):
+            reason = reason or "loop_feature_combination: 入れ子・未対応の文や呼出し suffix"
+    if control_paths(st["body"], "body") != (False, True) or control_paths(st["on_limit"], "on_limit") != (False, True):
+        reason = reason or "loop の経路が閉じない、on_limit の again、または制御文の後続"
+    if reason:
+        st["kind"], st["reason"] = "rejected_repeat", reason
+    return st, min(end + 1, len(toks))
+
+
+def repeat_label(stmt):
+    return "repeat %s at_most %s / %s" % (stmt["name"], stmt["at_most"], stmt["gap"] or "gap 0min(既定)")
+
+
 def classify_stmt(src, part, line):
     words = [t for t in part if t.kind != "nl"]
     text = src.slice(words)
     if not words:
         return {"kind": "unknown", "text": text, "line": line}
     w0 = words[0].text
+    if w0 in ("again", "leave") and len(words) == 1:
+        return {"kind": w0, "text": text, "line": line}
     if w0 == "end" and len(words) >= 2:
         return {"kind": "end", "name": words[1].text, "line": line, "text": text}
     if w0 == "join":
@@ -596,6 +678,10 @@ def flatten_steps(stmts, conds=None, out=None, branch=None):
         elif s["kind"] == "fork":
             out.append(dict(s, conds=list(conds), branch=branch))
             flatten_steps(s["body"], conds, out, "fork %s(並行)" % s["name"])
+        elif s["kind"] == "repeat":
+            out.append(dict(s, conds=list(conds), branch=branch))
+            flatten_steps(s["body"], conds + ["repeat %s body(初回を含む)" % s["name"]], out, branch)
+            flatten_steps(s["on_limit"], conds + ["repeat %s on_limit(最後の again の後だけ)" % s["name"]], out, branch)
         else:
             out.append(dict(s, conds=list(conds), branch=branch))
     return out
@@ -627,8 +713,10 @@ def mermaid_flow(stmts, executors_of):
             else:
                 lines.append("  %s --> %s" % (src_id, target))
 
-    def build(stmts, pend):
+    def build(stmts, pend, loop=None):
         for s in stmts:
+            if loop is not None and not pend:
+                break  # end の後の source は表に残すが、loop 内の到達可能な経路には戻さない。
             k = s["kind"]
             if k == "call":
                 who = executors_of(s["actor"])
@@ -650,7 +738,29 @@ def mermaid_flow(stmts, executors_of):
             elif k == "if":
                 d = node(s["cond"], "diamond")
                 connect(pend, d)
-                pend = build(s["then"], [(d, "はい")]) + build(s["else"], [(d, "いいえ")])
+                pend = build(s["then"], [(d, "はい")], loop) + build(s["else"], [(d, "いいえ")], loop)
+            elif k == "repeat":
+                entry = node(repeat_label(s), "stadium")
+                body = node("body %s(初回は1回目)" % s["name"], "stadium")
+                limit = node("on_limit %s" % s["name"], "stadium")
+                has_leave = any(x["kind"] == "leave" for x in flatten_steps(s["body"] + s["on_limit"]))
+                after = node("leave %s(繰り返しの後へ)" % s["name"], "stadium") if has_leave else None
+                connect(pend, entry)
+                connect([(entry, "初回(gap なし)")], body)
+                ctx = {"body": body, "on_limit": limit, "after": after, "gap": s["gap"] or "gap 0min"}
+                build(s["body"], [(body, None)], ctx)
+                build(s["on_limit"], [(limit, None)], ctx)
+                # Only a leave connects to the continuation; end/again never do.
+                pend = [(after, None)] if has_leave else []
+            elif k == "again" and loop:
+                a = node("again", "diamond")
+                connect(pend, a)
+                connect([(a, "次の回へ(%s、次の回があるときだけ)" % loop["gap"])], loop["body"])
+                connect([(a, "最後の回なら on_limit(gap なし)")], loop["on_limit"])
+                pend = []
+            elif k == "leave" and loop:
+                connect([(p, "leave(繰り返しを抜ける)" + (" / " + label if label else "")) for p, label in pend], loop["after"])
+                pend = []
             elif k == "end":
                 if s["name"] not in ends:
                     ends[s["name"]] = node("end %s" % s["name"], "stadium", "endnode")
@@ -660,6 +770,10 @@ def mermaid_flow(stmts, executors_of):
                 w = node(s["text"])
                 connect(pend, w)
                 pend = [(w, None)]
+            elif k == "rejected_repeat":
+                u = node("Relca が受け付けない形: %s\n%s" % (s["reason"], s["text"]), cls="unknown")
+                connect(pend, u)
+                pend = []
             else:
                 u = node("未解釈: %s" % s["text"], cls="unknown")
                 connect(pend, u)
@@ -736,7 +850,7 @@ class Run:
 
 # 走査で読む鍵。report の種類ごとに、これに加えて表示で読む鍵がある。
 # これ以外の最上位の鍵は「読まなかった鍵」としてページに出す。
-SCAN_KEYS = {"verdict", "cut", "bounds", "properties", "diagnostics", "unchecked", "agency",
+SCAN_KEYS = {"verdict", "cut", "bounds", "properties", "diagnostics", "unchecked", "agency", "repetition",
              "explanation", "mismatch", "model", "ledger", "mode"}
 SHOWN_KEYS = {
     "main": {"actors", "cut_context", "metrics", "responsibilities", "assumptions", "uncertainty", "terminals", "unit",
@@ -748,7 +862,7 @@ SHOWN_KEYS = {
     "mutate": {"set", "original", "original_verdict", "run", "mutations", "assumptions"},
 }
 UNCHECKED_PATHS = (("unchecked",), ("agency", "unchecked"), ("cut", "unchecked"), ("explanation", "unchecked"),
-                   ("response_analysis", "unchecked"))
+                   ("response_analysis", "unchecked"), ("repetition", "unchecked"))
 # --assumptions は AI が書くファイル。confirmed / measured も AI の申告であり、確認済みとして見せない。
 # 緑(ok)・decl のバッジは使わない。
 AI_STATUS = {
@@ -809,6 +923,7 @@ class Page:
         self.unreadable_rows = []  # (出所, 欄, 理由) 新しい欄の型違い・欠落・未知の語
         self.resp_steps = []      # 反例の command のある段の読み
         self.case_view = []       # case_outcomes の案件ごとの読み
+        self.repetitions = []     # (出所, repetition, Source)。全 report を同じ規則で読む。
         self.runs = []
         self.model_path = args.model
         self.model_sha = None
@@ -930,6 +1045,9 @@ class Page:
 
         for name, toks in src.items_of("actor"):
             info = parse_actor(src, toks)
+            for v in info["fields"].get("via", []):
+                if [t.text for t in lex(v)][:2] == ["via", "model"]:
+                    add("%s.via_model" % name, "経由するモデルの版", v, info["line"])
             for v in info["fields"].get("capacity", []):
                 add("%s.capacity" % name, "容量", v, info["line"])
             for v in info["fields"].get("latent", []):
@@ -993,6 +1111,10 @@ class Page:
                         src.slice(part), src.line_of_toks(part))
         for name, toks in src.items_of("process"):
             for st in flatten_steps(parse_process(src, toks)):
+                if st["kind"] == "repeat":
+                    add("%s.at_most" % st["name"], "繰り返しの上限回数", "at_most %s" % st["at_most"], st["line"])
+                    if st["gap"] is not None:
+                        add("%s.gap" % st["name"], "繰り返しの間隔", st["gap"], st["line"])
                 if st["kind"] == "wait":
                     add("%s.wait@%d" % (name, st["line"]), "待ち", st["text"], st["line"])
         for rd in self.response_decls():
@@ -1191,6 +1313,12 @@ class Page:
             for item in as_list(get(data, *path)):
                 self.self_unchecked.setdefault(str(item), []).append("%s %s" % (origin, "/".join(path)))
         self._walk_viewpoints(origin, get(data, "agency", "viewpoints"), "agency/viewpoints")
+        if "repetition" in data:
+            rep = data["repetition"]
+            self.repetitions.append((origin, rep, src))
+            if isinstance(rep, dict) and rep.get("coverage") == "not_derived":
+                self.unv(origin, "repetition.coverage", "not_derived",
+                         "; ".join(map(str, as_list(rep.get("unchecked")))) or "繰り返しの回数表を導出できていない")
         # 読まなかった鍵
         read = SCAN_KEYS | SHOWN_KEYS.get(kind, set())
         for k in data:
@@ -1314,6 +1442,25 @@ class Page:
 
     def flow_html(self, src, toks, title, report=None):
         stmts = parse_process(src, toks)
+        # 意味の検査は Relca に任せる。拒否された loop を正常な流れとして描かない。
+        data = report if report is not None else (self.main.data if self.main else None)
+        errors = [d for d in as_list(get(data, "diagnostics")) if get(d, "severity") == "error"]
+        loop_errors = [d for d in errors if any(w in str(get(d, "message")) for w in
+                      ("loop", "iteration", "expected on_limit", "expected at_most"))]
+
+        def mark_rejected(block):
+            for st in block:
+                if loop_errors and (st["kind"] == "repeat" or (st["kind"] == "unknown" and
+                        any(t.kind == "word" and t.text == "repeat" for t in lex(st["text"])))):
+                    st["kind"] = "rejected_repeat"
+                    st.setdefault("name", "?")
+                    st["reason"] = "; ".join(str(get(d, "message")) for d in loop_errors)
+                elif st["kind"] == "if":
+                    mark_rejected(st["then"])
+                    mark_rejected(st["else"])
+                elif st["kind"] == "fork":
+                    mark_rejected(st["body"])
+        mark_rejected(stmts)
         who = lambda actor: self.executors_of(actor, report, src)  # noqa: E731
         steps = flatten_steps(stmts)
         rows = []
@@ -1333,6 +1480,15 @@ class Page:
                 rows.append(["", "分岐", "", "<code>if %s</code>" % esc(s["cond"]), "", cond, str(s["line"])])
             elif k == "end":
                 rows.append(["", "終端", "", "<code>end %s</code>" % esc(s["name"]), "", cond, str(s["line"])])
+            elif k == "repeat":
+                rows.append(["", "繰り返し", "", "<code>%s</code>" % esc(repeat_label(s)), "", cond, str(s["line"])])
+            elif k in ("again", "leave"):
+                desc = ("次の回へ。最後の回なら on_limit(gap なし)" if k == "again" else "繰り返しの後へ")
+                rows.append(["", esc(k), "", "<code>%s</code>: %s" % (esc(k), esc(desc)), "", cond, str(s["line"])])
+            elif k == "rejected_repeat":
+                self.unv(title, "repeat %s" % s["name"], "unsupported", s["reason"])
+                rows.append(["", '<span class="badge warn">Relca が受け付けない形</span>', "",
+                             "<code>%s</code><br>%s" % (esc(s["text"]), esc(s["reason"])), "", cond, str(s["line"])])
             elif k in ("fork", "join", "wait"):
                 rows.append(["", esc(k), "", "<code>%s</code>" % esc(s.get("text") or "fork " + s.get("name", "")),
                              "", cond, str(s["line"])])
@@ -2083,7 +2239,121 @@ class Page:
                 out.append(self.guarded("結論 %s" % r.role, lambda r=r: self._run_conclusion(r)))
             elif r.role == "compare":
                 out.append(self.guarded("compare", lambda r=r: self._compare_html(r)))
+        if self.repetitions:
+            out.append(self.guarded("繰り返しの出力", self._repetition_html))
         out.append("</section>")
+        return "".join(out)
+
+    def _repetition_html(self):
+        out = ["<h3>繰り返しの出力(repetition、全 report)</h3>",
+               '<p class="note">回数は初回を含む body の開始回数。on_limit は最後の again の後だけで、計算切断ではない。'
+               'null は0ではなく算出なし。確率未宣言を一様分布にしない。sampled は完了・非切断標本の観測で、網羅的な確率ではない。'
+               'site は元位置の対応表であり、すべての回が実行されたことを意味しない。</p>']
+        for origin, rep, src in self.repetitions:
+            out.append("<h4>%s</h4>" % esc(origin))
+
+            def bad(path, why):
+                self.unreadable(origin, "repetition." + path, why)
+                self.unv(origin, "repetition." + path, "unsupported", why)
+                return '<span class="badge warn">読めない: %s</span>' % esc(why)
+
+            def scalar(obj, key, types, path, nullable=False):
+                if key not in obj:
+                    return bad(path + key, "欄なし")
+                value = obj[key]
+                if value is None and nullable:
+                    return "null(算出なし)"
+                if not isinstance(value, types) or isinstance(value, bool):
+                    return bad(path + key, "型が違う: %s" % short(value, 60))
+                if isinstance(value, int) and value < 0:
+                    return bad(path + key, "負の件数・回数")
+                return esc(value)
+
+            def interval(obj, key, types, path):
+                if key in obj and obj[key] is None:
+                    return "null(算出なし)"
+                value = obj.get(key)
+                if not isinstance(value, dict):
+                    return bad(path + key, "範囲の object が無い・型が違う")
+                return "%s 〜 %s" % (scalar(value, "min", types, path + key + "."),
+                                    scalar(value, "max", types, path + key + "."))
+
+            def records(obj, key, path):
+                value = obj.get(key)
+                if not isinstance(value, list):
+                    bad(path + key, "list が無い・型が違う")
+                    return []
+                rows = []
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        rows.append((item, "%s%s[%d]." % (path, key, i)))
+                    else:
+                        bad("%s%s[%d]" % (path, key, i), "object でない")
+                return rows
+
+            if not isinstance(rep, dict):
+                out.append(bad("", "object でない"))
+                continue
+            coverage = rep.get("coverage")
+            out.append(self.table(["項目", "値"], [[k, scalar(rep, k, (str,), "")]
+                                                   for k in ("rules", "coverage", "basis")]))
+            unchecked = rep.get("unchecked")
+            if not isinstance(unchecked, list) or any(not isinstance(v, str) for v in unchecked):
+                out.append(bad("unchecked", "文字列の list でない"))
+            else:
+                out.append('<p>unchecked: %s</p>' % esc("; ".join(unchecked) or "(なし)"))
+            if coverage not in ("complete", "sampled", "not_derived"):
+                out.append(bad("coverage", "未知の coverage %s" % short(coverage, 60)))
+            cases = records(rep, "cases", "")
+            if coverage not in ("complete", "sampled"):
+                out.append('<p class="alert warn">回数表は算出できていない。0回・0件ではない。'
+                           'この出力から回数や on_limit の到達を確定しない。</p>')
+            else:
+                rows, distributions = [], []
+                for case, path in cases:
+                    cid = scalar(case, "case_id", (int,), path)
+                    loop = scalar(case, "loop_name", (str,), path)
+                    rows.append([cid, loop, interval(case, "rounds", (int,), path),
+                                 interval(case, "on_limit", (int,), path),
+                                 interval(case, "on_limit_probability", (str,), path)]
+                                + [scalar(case, k, (int,), path, nullable=True)
+                                   for k in ("samples", "excluded_samples", "observed_on_limit")])
+                    for freq, fpath in records(case, "distribution", path):
+                        distributions.append([cid, loop, scalar(freq, "rounds", (int,), fpath),
+                                              interval(freq, "probability", (str,), fpath),
+                                              scalar(freq, "observed_count", (int,), fpath, nullable=True)])
+                out.append("<h5>繰り返しの回数と上限後の処理</h5>")
+                out.append(self.table(["case_id", "loop", "body 開始回数", "on_limit 件数", "on_limit 確率",
+                                       "samples", "excluded_samples", "observed_on_limit"], rows))
+                out.append("<h5>body 開始回数の分布</h5>")
+                out.append(self.table(["case_id", "loop", "rounds", "probability", "observed_count"], distributions))
+            sites = []
+            for site, path in records(rep, "sites", ""):
+                orig = site.get("origin")
+                if not isinstance(orig, dict):
+                    out.append(bad(path + "origin", "object が無い・型が違う"))
+                    continue
+                phase = orig.get("phase")
+                if phase not in ("body", "on_limit"):
+                    bad(path + "origin.phase", "未知の phase %s" % short(phase, 60))
+                rnd = orig.get("round", ABSENT)
+                if phase == "on_limit" and rnd is None:
+                    round_cell = "null"
+                elif phase == "body" and type(rnd) is int and rnd >= 1:
+                    round_cell = esc(rnd)
+                else:
+                    round_cell = bad(path + "origin.round", "body は1始まり、on_limit は null が必要")
+                span = site.get("source_span")
+                if not isinstance(span, dict) or any(type(span.get(k)) is not int or span[k] < 0 for k in ("start", "end")):
+                    where = bad(path + "source_span", "バイト位置の範囲が無い・型が違う")
+                else:
+                    where = esc(self.loc(span, src)[0]) if src is not None else "—(source なし)"
+                sites.append([scalar(site, "instance", (str,), path),
+                              scalar(orig, "loop_name", (str,), path + "origin."),
+                              scalar(orig, "call_site", (str,), path + "origin."), round_cell,
+                              scalar(orig, "phase", (str,), path + "origin."), where])
+            out.append("<h5>繰り返しの site と元位置</h5>")
+            out.append(self.table(["instance", "loop", "call_site", "round", "phase", "元の行:列"], sites))
         return "".join(out)
 
     def _run_conclusion(self, r):
@@ -2344,7 +2614,7 @@ class Page:
         if count:
             out.append('<div class="alert error"><b>確かめられていないもの %d 件。</b>'
                        'inconclusive・unsupported・invalid・vacuous・exit 未確認・Cut 未宣言・'
-                       'Agency の未導出・根拠不明は合格ではない。</div>' % count)
+                       '繰り返しの未導出・Agency の未導出・根拠不明は合格ではない。</div>' % count)
         if uniq:
             rows = [[esc(src), "<code>%s</code>" % esc(what), verdict_badge(v) if v in EXIT_OF else
                      '<span class="badge warn">%s</span>' % esc(v), esc(why)] for src, what, v, why in uniq]
@@ -2372,7 +2642,8 @@ class Page:
                 ["<code>%s</code>" % esc(t), esc(k), esc(l)] for t, k, x, l in self.unprovenanced]))
         if self.unreadable_rows:
             rows = [[esc(o), esc(w), esc(y)] for o, w, y in dict.fromkeys(self.unreadable_rows)]
-            out.append('<h3 id="unreadable">再送・応答の欄で読めなかった情報 %d 件</h3>' % len(rows))
+            label = "再送・応答・繰り返し" if self.repetitions else "再送・応答"
+            out.append('<h3 id="unreadable">%sの欄で読めなかった情報 %d 件</h3>' % (label, len(rows)))
             out.append(self.table(["出所", "欄", "理由"], rows, "unverified"))
         if self.self_unchecked:
             rows = [["<code>%s</code>" % esc(k), esc(", ".join(dict.fromkeys(v)))] for k, v in self.self_unchecked.items()]

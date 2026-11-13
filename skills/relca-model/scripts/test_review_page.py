@@ -871,5 +871,282 @@ class ResponseRetryPageTest(unittest.TestCase):
         self.assertIn(html.escape(evil, quote=True), text)
 
 
+@unittest.skipUnless(RELCA.exists(), "relca の binary が無い: %s" % RELCA)
+class RepetitionPageTest(unittest.TestCase):
+    """ガイドの全文と実際の check/explain 出力。期待値は testdata/repetition/README.md の手計算。"""
+
+    @classmethod
+    def setUpClass(cls):
+        (ROOT / ".tmp").mkdir(exist_ok=True)
+        cls._tmp = tempfile.TemporaryDirectory(prefix="relca-review-loops-", dir=ROOT / ".tmp")
+        cls.tmp = cls._tmp.name
+        cls.models = {n: HERE / "testdata" / "repetition" / (n + ".relca") for n in ("rework", "poll")}
+        cls.models["via"] = ROOT / "fixtures" / "act-via" / "model.relca"
+        cls.r = {}
+        for n, model in cls.models.items():
+            for cmd in ("check", "explain"):
+                cls.r[n, cmd] = relca(cls.tmp, n + "." + cmd, cmd, model)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def build(self, name, cmd="check", model=None, output=None, code=None, assumptions=None):
+        out, err, rc = self.r[name, cmd]
+        argv = ["--model", model or self.models[name], "--check", output or out,
+                "--check-exit", rc if code is None else code, "--check-stderr", err]
+        if assumptions:
+            argv += ["--assumptions", assumptions]
+        return page(self.tmp, name + "-page-" + cmd, *argv)
+
+    @staticmethod
+    def graph(text):
+        match = re.search(r'<pre class="mermaid">(.*?)</pre>', text, re.S)
+        assert match is not None
+        return html.unescape(match.group(1))
+
+    def test_inputs_are_exact_guide_examples(self):
+        guide = (ROOT / "docs" / "guide" / "dsl.md").read_text()
+        for n in ("rework", "poll"):
+            self.assertIn("```relca\n" + self.models[n].read_text() + "```", guide)
+
+    def test_rework_loop_graph_and_table_keep_controls_and_following_end(self):
+        text, _ = self.build("rework")
+        flow = section(text, "model")
+        for word in ("repeat rework", "at_most 3", "gap 0min(既定)", "body", "on_limit",
+                     "Office.inspect()", "Office.correct()", "Office.escalate()", "again", "leave",
+                     "end escalated", "end done"):
+            self.assertIn(word, html.unescape(flow))
+        self.assertNotIn("未解釈", flow)
+        graph = self.graph(text)
+        self.assertIn('"次の回へ', graph)
+        self.assertIn('"最後の回なら on_limit', graph)
+        self.assertIn('"leave', graph)
+        # A real backward edge, not just the word again on a disconnected node.
+        edges = re.findall(r'n(\d+) -->\|"次の回へ[^"\n]*"\| n(\d+)', graph)
+        self.assertTrue(edges, graph)
+        self.assertTrue(all(int(a) > int(b) for a, b in edges))
+
+    def test_poll_gap_is_only_on_next_round_edge(self):
+        text, _ = self.build("poll")
+        graph = self.graph(text)
+        self.assertIn("repeat poll", graph)
+        self.assertIn("gap fixed 5min", graph)
+        self.assertRegex(graph, r'-->\|"次の回へ[^"\n]*gap fixed 5min[^"\n]*"\|')
+        self.assertRegex(graph, r'-->\|"最後の回なら on_limit[^"\n]*gap なし[^"\n]*"\|')
+        self.assertIn("end done", graph)
+        self.assertNotIn("終端の宣言なし", graph)
+
+    def test_real_rework_repetition_tables(self):
+        for cmd in ("check", "explain"):
+            with self.subTest(cmd=cmd):
+                out, _, code = self.r["rework", cmd]
+                self.assertEqual(code, 1)
+                raw = json.loads(Path(out).read_text())["repetition"]
+                case = raw["cases"][0]
+                self.assertEqual(case["rounds"], {"min": 1, "max": 3})
+                self.assertEqual(case["on_limit"], {"min": 0, "max": 1})
+                self.assertEqual(case["on_limit_probability"], {"min": "1/8", "max": "1/8"})
+                self.assertEqual([(r["rounds"], r["probability"]) for r in case["distribution"]],
+                                 [(0, {"min": "0", "max": "0"}), (1, {"min": "1/2", "max": "1/2"}),
+                                  (2, {"min": "1/4", "max": "1/4"}),
+                                  (3, {"min": "1/4", "max": "1/4"})])
+                text, data = self.build("rework", cmd)
+                self.assertNotIn("repetition", data["unread_keys"])
+                rows = [[plain(c) for c in r] for r in table_after(text, "繰り返しの回数と上限後の処理")]
+                self.assertEqual(rows[0][1:5], ["rework", "1 〜 3", "0 〜 1", "1/8 〜 1/8"])
+                dist = [[plain(c) for c in r] for r in table_after(text, "body 開始回数の分布")]
+                self.assertEqual([r[1:4] for r in dist], [["rework", "0", "0 〜 0"], ["rework", "1", "1/2 〜 1/2"],
+                                 ["rework", "2", "1/4 〜 1/4"], ["rework", "3", "1/4 〜 1/4"]])
+                sites = [[plain(c) for c in r] for r in table_after(text, "繰り返しの site と元位置")]
+                self.assertEqual({tuple(r[1:5]) for r in sites},
+                                 {("rework", c, str(n), "body") for c in ("r", "c") for n in (1, 2, 3)}
+                                 | {("rework", "e", "null", "on_limit")})
+                self.assertTrue(all(re.fullmatch(r"\d+:\d+", r[5]) for r in sites))
+
+    def test_real_poll_repetition_tables(self):
+        for cmd in ("check", "explain"):
+            self.assertEqual(self.r["poll", cmd][2], 0)
+            text, _ = self.build("poll", cmd)
+            rows = [[plain(c) for c in r] for r in table_after(text, "繰り返しの回数と上限後の処理")]
+            self.assertEqual(rows[0][1:5], ["poll", "2 〜 2", "0 〜 0", "0 〜 0"])
+            self.assertIn("complete", section(text, "conclusion"))
+
+    def test_nondeterministic_repetition_does_not_invent_probabilities(self):
+        model = Path(self.tmp) / "rework-nondet.relca"
+        model.write_text(self.models["rework"].read_text().replace(
+            '  kernel Inspection { * -> { 0.5: pass; 0.5: fail } }\n', "").replace(
+            "outcomes kernel Inspection", "result nondet { pass, fail }"))
+        out, _, code = relca(self.tmp, "rework-nondet", "check", model)
+        self.assertEqual(code, 1)
+        raw = json.loads(Path(out).read_text())["repetition"]["cases"][0]
+        self.assertIsNone(raw["on_limit_probability"])
+        self.assertTrue(all(f["probability"] is None for f in raw["distribution"]))
+        text, _ = self.build("rework", model=model, output=out, code=code)
+        self.assertEqual(plain(table_after(text, "繰り返しの回数と上限後の処理")[0][4]), "null(算出なし)")
+        self.assertTrue(all(plain(r[3]) == "null(算出なし)" for r in table_after(text, "body 開始回数の分布")))
+
+    def test_actual_simulation_shows_observed_counts_not_exhaustive_probabilities(self):
+        model = Path(self.tmp) / "poll-sim.relca"
+        model.write_text(self.models["poll"].read_text().replace(
+            "  verify reachable", "  simulation replications 8 seed 0 confidence 0.95\n  verify reachable"))
+        out, _, code = relca(self.tmp, "poll-sim", "simulate", model)
+        self.assertEqual(code, 0)
+        raw = json.loads(Path(out).read_text())["repetition"]
+        self.assertEqual(raw["coverage"], "sampled")
+        case = raw["cases"][0]
+        self.assertEqual((case["samples"], case["excluded_samples"], case["observed_on_limit"]), (8, 0, 0))
+        check, _, rc = relca(self.tmp, "poll-sim-check", "check", model)
+        text, _ = page(self.tmp, "simulation", "--model", model, "--check", check, "--check-exit", rc,
+                       "--simulate", out, "--simulate-exit", code, "--no-mermaid")
+        tables = text[text.index("<h4>simulate</h4>"):]
+        row = [plain(c) for c in table_after(tables, "繰り返しの回数と上限後の処理")[0]]
+        self.assertEqual(row[1:], ["poll", "2 〜 2", "0 〜 0", "null(算出なし)", "8", "0", "0"])
+        dist = [[plain(c) for c in r] for r in table_after(tables, "body 開始回数の分布")]
+        self.assertIn(["1", "poll", "2", "null(算出なし)", "8"], dist)
+
+    def test_on_limit_leave_and_body_end_keep_their_distinct_edges(self):
+        model = Path(self.tmp) / "poll-controls.relca"
+        model.write_text(self.models["poll"].read_text().replace("{ leave }", "{ end ready }").replace(
+            "on_limit { end timed_out }", "on_limit { leave }"))
+        out, _, code = relca(self.tmp, "poll-controls", "check", model)
+        self.assertEqual(code, 1)  # end.done is unreachable; this is not the Poll contract.
+        text, _ = self.build("poll", model=model, output=out, code=code)
+        graph = self.graph(text)
+        ready = re.search(r'(n\d+)\(\["end ready"\]\)', graph)
+        limit = re.search(r'(n\d+)\(\["on_limit poll"\]\)', graph)
+        assert ready and limit
+        self.assertNotRegex(graph, re.escape(ready[1]) + r" -->")
+        self.assertRegex(graph, re.escape(limit[1]) + r' -->\|"leave')
+        self.assertNotIn("未解釈", section(text, "model"))
+
+    def test_accepted_unreachable_statement_after_end_is_not_called_rejected(self):
+        model = Path(self.tmp) / "poll-after-end.relca"
+        model.write_text(self.models["poll"].read_text().replace("{ leave }", "{ end done; wait 1min }"))
+        out, _, code = relca(self.tmp, "poll-after-end", "check", model)
+        self.assertEqual(code, 0)  # Relca rejects statements after again/leave, not after end.
+        text, _ = self.build("poll", model=model, output=out, code=code)
+        self.assertNotIn("Relca が受け付けない形", section(text, "model"))
+        self.assertNotIn('"wait 1min"', self.graph(text))
+
+    def test_repetition_type_errors_unknown_coverage_and_injection_fail_closed(self):
+        original, _, code = self.r["rework", "check"]
+        variants = {
+            "object": lambda d: d.__setitem__("repetition", []),
+            "cases": lambda d: d["repetition"].__setitem__("cases", {}),
+            "coverage": lambda d: d["repetition"].__setitem__("coverage", "future"),
+            "probability": lambda d: d["repetition"]["cases"][0].__setitem__("on_limit_probability", False),
+            "phase": lambda d: d["repetition"]["sites"][0]["origin"].__setitem__("phase", "future"),
+            "missing": lambda d: d["repetition"]["cases"][0].pop("rounds"),
+        }
+        for n, change in variants.items():
+            with self.subTest(shape=n):
+                output = rewrite(original, Path(self.tmp) / (n + "-output.json"), change)
+                text, data = self.build("rework", output=output, code=code)
+                self.assertTrue(any(u[1].startswith("repetition.") and u[2] == "unsupported"
+                                    for u in data["unverified"]))
+                self.assertTrue(data["unreadable"])
+                self.assertFalse(any("節「繰り返しの出力」を生成できなかった" in a[1] for a in data["alerts"]))
+        evil = '</td><script>alert(1)</script><img src=x onerror=alert(2)>'
+        output = rewrite(original, Path(self.tmp) / "loop-injection.json", lambda d: (
+            d["repetition"].__setitem__("basis", evil),
+            d["repetition"]["sites"][0]["origin"].__setitem__("call_site", evil)))
+        text, _ = page(self.tmp, "loop-injection", "--model", self.models["rework"],
+                       "--check", output, "--check-exit", code, "--no-mermaid")
+        self.assertEqual(text.count("<script"), 1)  # 埋め込み JSON だけ。
+        self.assertNotIn("<img", text)
+        self.assertIn(html.escape(evil, quote=True), text)
+
+    def test_loop_and_via_model_assumption_targets(self):
+        for n, expected in (("poll", {"poll.at_most": "繰り返しの上限回数", "poll.gap": "繰り返しの間隔"}),
+                            ("rework", {"rework.at_most": "繰り返しの上限回数"}),
+                            ("via", {"Extract.via_model": "経由するモデルの版"})):
+            with self.subTest(model=n):
+                spec = Path(self.tmp) / (n + "-assumptions.json")
+                spec.write_text(json.dumps([{"target": t, "status": "confirmed", "confirmed_by": "業務担当"}
+                                            for t in expected], ensure_ascii=False))
+                text, data = self.build(n, assumptions=spec)
+                decls = {d[0]: d for d in data["declarations"]}
+                for t, kind in expected.items():
+                    self.assertIn(t, decls)
+                    self.assertEqual(decls[t][1], kind)
+                    self.assertNotIn(t, data["unprovenanced"])
+                    self.assertIn(t, data["ai_claims"])
+                self.assertFalse([a for a in data["alerts"] if "対応しない" in a[1]])
+                self.assertIn("人が未確認", text)
+                if n == "rework":
+                    self.assertNotIn("rework.gap", decls)  # 省略時既定を宣言にしない。
+                if n == "via":
+                    self.assertEqual(decls["Extract.via_model"][2], 'via model "doc@v3"')
+
+    def test_not_derived_is_counted_once_per_report_in_terminal_and_page(self):
+        model = Path(self.tmp) / "poll-cut.relca"
+        model.write_text(self.models["poll"].read_text().replace("clock 20min", "clock 6min"))
+        out, err, code = relca(self.tmp, "poll-cut", "check", model)
+        self.assertEqual(code, 2)
+        raw = json.loads(Path(out).read_text())
+        self.assertEqual((raw["repetition"]["coverage"], raw["repetition"]["cases"]), ("not_derived", []))
+        terminal = io.StringIO()
+        with redirect_stdout(terminal):
+            text, data = self.build("poll", model=model, output=out, code=code)
+        rows = [u for u in data["unverified"] if u[1] == "repetition.coverage"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][2], "not_derived")
+        self.assertIn("repetition.coverage", section(text, "unverified"))
+        count = data["unverified_count"]
+        self.assertIn("確かめられていないもの %d 件" % count, terminal.getvalue())
+        self.assertIn("確かめられていないもの %d 件" % count, section(text, "unverified"))
+        self.assertIn("(%d 件)" % count, section(text, "conclusion"))
+        self.assertIn("算出できていない。0回・0件ではない", section(text, "conclusion"))
+        self.assertTrue(any("repetition/unchecked" in x for v in data["self_unchecked"].values() for x in v))
+
+    def test_rejected_repeat_forms_are_explicit_not_uninterpreted(self):
+        base = self.models["poll"].read_text()
+        variants = {
+            "over": base.replace("poll at_most 3", "poll over items at_most 3"),
+            "nested": base.replace("s = Registry.read()", "repeat inner at_most 1 { wait 1min; again } on_limit { leave }\n s = Registry.read()"),
+            "limit-again": base.replace("on_limit { end timed_out }", "on_limit { again }"),
+            "fallthrough": base.replace("if s == ready { leave } else { again }", "if s == ready { leave } else {}"),
+            "too-many": base.replace("at_most 3", "at_most 33"),
+            "zero-limit": base.replace("at_most 3", "at_most 0"),
+            "no-limit": base.replace("on_limit { end timed_out }", ""),
+            "fork": base.replace("s = Registry.read()", "fork f { s = Registry.read() }; join all f"),
+            "zero-time": base.replace("gap fixed 5min", "gap fixed 0min").replace("duration fixed 1min", "duration fixed 0min"),
+            "after-control": base.replace("{ again }", "{ again; wait 1min }"),
+            "response-loss": base.replace("s = Registry.read()", "s = Registry.read() response_loss none"),
+        }
+        for n, source in variants.items():
+            with self.subTest(shape=n):
+                model = Path(self.tmp) / (n + ".relca")
+                model.write_text(source)
+                out, _, code = relca(self.tmp, n, "check", model)
+                self.assertIn(code, (3, 4))
+                text, _ = self.build("poll", model=model, output=out, code=code)
+                self.assertIn("Relca が受け付けない形", section(text, "model"))
+                self.assertNotIn("未解釈", section(text, "model"))
+
+    def test_not_derived_in_plan_and_mutate_original_keeps_each_origin(self):
+        original = json.loads(Path(self.r["poll", "check"][0]).read_text())
+        # Transport-only controls: repeat compare/mutate is unsupported by Relca.
+        # These envelopes exercise the page's existing all-report scanner, not new CLI support.
+        original["repetition"]["coverage"] = "not_derived"
+        original["repetition"]["cases"] = []
+        original["repetition"]["unchecked"] = ["iteration_distribution(analysis_incomplete)"]
+        compare = Path(self.tmp) / "loop-compare.json"
+        compare.write_text(json.dumps({"verdict": "satisfied", "plans": [
+            {"configuration": n, "report": original} for n in ("A", "B")]}))
+        mutate = Path(self.tmp) / "loop-mutate.json"
+        mutate.write_text(json.dumps({"verdict": "satisfied", "original": original}))
+        out, _, code = self.r["poll", "check"]
+        text, data = page(self.tmp, "nested-reports", "--model", self.models["poll"], "--check", out,
+                         "--check-exit", code, "--compare", compare, "--compare-exit", 0,
+                         "--compare-model", self.models["poll"], "--mutate", mutate, "--mutate-exit", 0,
+                         "--no-mermaid")
+        self.assertEqual({u[0] for u in data["unverified"] if u[1] == "repetition.coverage"},
+                         {"compare 案 A", "compare 案 B", "mutate original"})
+        for origin in ("compare 案 A", "compare 案 B", "mutate original"):
+            self.assertIn("<h4>%s</h4>" % origin, text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

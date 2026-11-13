@@ -67,7 +67,7 @@ actor Ledger { capacity 1
 | 原本 | `source document` / `source record` / `source tacit` | [実] | 無し |
 | 制御 | `control party` / `control policy` | [実] | 呼ばれ方から既定(policy / environment)。JSON の actors で `status: default` |
 | 粒度 | `grain team` 等 | [実] | **意味を持たない。**入れ替えても結論は変わらない(`fixtures/act-grain/` と `.broken-swapped`)。種別名に意味を込めない |
-| AI 等の経路 | `via model "doc-extract@v3"` | [実](../../../examples/invoice/phase1.relca) | 無し |
+| AI 等の経路 | `via model "doc-extract@v3"`。確認用ページの `--assumptions` target は `<Actor>.via_model` | [実](../../../examples/invoice/phase1.relca) | 無し |
 | 局所状態 | `state keys: set<CaseId>` | [実](../../../examples/invoice/phase1.relca) | 無し |
 
 Capability の中 [実]:
@@ -134,6 +134,14 @@ compare/diff/sensitivity/mutate/conform、およびcontest宣言・quantile指�
 回数0はE-CON-0、必須部分の欠落はE-SYN-0、名前の衝突はE-NAME-0。
 conformの照合はU-LOG-1で拒否する。
 本文の2つの全文例はcheckとexplainで実行して確認した形であり、あらゆる組合せの対応を意味しない。
+
+確認用ページは、名前・`at_most`・gap、body と `on_limit`、`again` の戻り矢印、
+`leave` の出口、`end` を表と流れ図に出す。入れ子や `over` などの拒否された形は
+「Relca が受け付けない形」と表示し、正常な loop として描かない。
+`--assumptions` の target は `<NAME>.at_most`（繰り返しの上限回数）、
+`<NAME>.gap`（明記した繰り返しの間隔）。例は `rework.at_most`、`poll.gap`。
+省略した gap の0分は既定として表示し、宣言の target にはしない。
+経由モデルを含む target の一覧は[結果の読み方](results.md#確認用ページの-assumptions)を参照。
 
 ## 応答喪失・再送・idempotency・Receipt unknown
 
