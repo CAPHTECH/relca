@@ -100,11 +100,11 @@ cargo build --release
 | コマンド | 対象と限界 |
 |---|---|
 | `check <path>` | 有限モデルの網羅探索。切断に関わる性質は判定を保留する |
-| `explain <path>` | check と同じ解析に、契約・安全性・デッドロックの反例と位置を加える。再生できない反例は採用しない |
+| `explain <path> [--configuration NAME] [--scenario NAME]` | check と同じ解析に、契約・安全性・デッドロックの反例と位置を加える。再生できない反例は採用しない |
 | `simulate <path>` | 宣言した反復数と seed による標本推定。解決されていない非決定に出会ったら拒否する |
 | `compare <path> --plans A,B[,C...] --mode exhaustive\|simulation` | 同じ条件の構成を並べる。宣言した必須条件と目的は、性質の検査と分けて評価する |
 | `diff <path> --from A --to B` | 構成、契約、Agency(判断の主体)の差分。計算していない種類は `unchecked` に残す |
-| `mutate <path> [--set bpr-default]` | 既定の変更を生成し、検査が差を捕まえるかを調べる。未対応の変更を含む run は exit 4 |
+| `mutate <path> [--set bpr-default] [--configuration NAME] [--scenario NAME] [--mutant-limit N] [--kinds k1,k2] [--sites ID1,ID2]` | 変更を生成し、検査が差を捕まえるかを調べる。受理した計算上限は既定128、最大4096。選外は明示。未対応種があれば実行0件でもexit4。未対応が無く実行0件ならvacuous/exit5 |
 | `sensitivity <manifest.json> --mode exhaustive\|simulation` | 指定した有限の点だけを分析する。連続した範囲や評価していない点は保証しない |
 | `conform <spec> --log <events.jsonl> --scope event-contracts\|approval-burden` | 観測ログの照合。欠けた記録を成功に置き換えない |
 | `verify <path>` | 外部の検証エンジンにはまだ接続していない。`unsupported`、exit 4 |
@@ -125,12 +125,17 @@ cargo build --release
 |---|---|
 | `crates/relca-core` | Parser、型検査、状態展開、参照実行、確率、品質、構成比較 |
 | `crates/relca-cli` | CLI と、JSON 出力の照合試験 |
+| `crates/relca-test-support` | 試験専用の共有比較器。通常の build の依存には含めない |
 | `fixtures/` | モデル、手計算、期待する JSON、呼出し条件 |
 | `examples/invoice/` | 請求書のモデルと検算 |
 | `docs/guide/` | 利用ガイドと受入対応表 |
 | `scripts/` | 検査と snapshot の更新 |
 
-変更したら `./scripts/check.sh` を通してください。fmt、clippy(警告をエラーとして扱う)、workspace の試験、参照と受入表の検査を順に実行します。
+変更したら `./scripts/check.sh` を通してください。fmt、clippy(警告をエラーとして扱う)、workspace の試験、節参照、Phase 1 の39行対応表、公開準備の検査を順に実行します(公開版では公開準備の検査を除きます)。
+`cargo-nextest` が PATH にあれば、`cargo nextest run --workspace` で unit/integration test を並列実行し、続けて `cargo test --doc --workspace` で doctest を実行します。
+設定は `.config/nextest.toml` にあり、通常の試験は1枠、job を並列実行する大きな試験は4枠を使い、全体を16枠に収めます。試験内の job worker は最大4です。失敗時の再試行や時間切れによる打切りはせず、最適化しない標準の test build を使います。
+nextest が無ければ、従来どおり `cargo test --workspace` で doctest も含めて実行します。選んだ実行方法はログに表示し、nextest 自体のエラーを fallback で隠すことはしません。
+共通比較器の self-test は、既存の `fixture_match` と `wire` の名前を保ち、`fixtures` と `conflicts` の各試験 binary に1写しずつ置きます。他の試験は同じ比較器を共有するため、その self-test を重複して取り込みません。
 同じソースで一度合格すると記録され、`--force` を付けると回し直します。
 一時ファイルはソース木の `.tmp` に置きます。TMPDIR が木の外を指していても、その場所は使いません。
 オフラインで回すときは、Cargo の依存ライブラリを先にキャッシュしてください。

@@ -29,13 +29,7 @@ fn run_command(src: &str, name: &str, command: &str) -> Value {
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(
         o.status.code(),
-        Some(if name == "if_none" && command == "explain" {
-            3
-        } else if h::scenario(name).is_some() {
-            2
-        } else {
-            0
-        }),
+        Some(if h::scenario(name).is_some() { 2 } else { 0 }),
         "{v}"
     );
     v
@@ -145,16 +139,23 @@ fn raw_second_inputs_are_accepted_by_both_matchers() {
                 fixture_match::validate_deferred_metrics_wire(&v).unwrap();
                 fixture_match::validate_deferred_metrics_with_source(&v, &src, selection).unwrap();
                 if name == "if_none" && command == "explain" {
-                    // explain has no --configuration option. Preserve this
-                    // invocation as a closed rejection, not a numeric report.
-                    assert_eq!(v["verdict"], "invalid");
-                    assert_eq!(v["diagnostics"][0]["code"], "E-SYN-0");
+                    // ADR 0068: this is now an accepted selected report, not
+                    // an argument refusal. Both source-aware matchers above
+                    // still check it, and its metrics must agree with check.
+                    let check = serde_json::to_value(relca_core::report::check_with_selection(
+                        &src,
+                        Some("Left"),
+                        None,
+                    ))
+                    .unwrap();
+                    assert_eq!(v["verdict"], "satisfied");
+                    assert_eq!(v["metrics"], check["metrics"]);
                     assert_eq!(
-                        v["diagnostics"][0]["message"],
-                        "usage: relca explain <path> [--scenario NAME]"
+                        v["ledger"]["execution"]["selection"]["requested"]["configuration"],
+                        "Left"
                     );
-                    assert!(v.get("metrics").is_none());
-                } else if deferred {
+                }
+                if deferred {
                     h::assert_all_quantities(&v["metrics"]);
                 } else if name != "if_none" {
                     h::assert_control(&v["metrics"], name);

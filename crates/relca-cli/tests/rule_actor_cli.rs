@@ -126,8 +126,8 @@ fn check_explain_diff_and_mutation_keep_derived_rule_items() {
         check["agency"]["refusal"][0]["judgements"][0]["kind"],
         "rule"
     );
-    // Existing mutation contract remains unsupported overall; A6 does not own
-    // mutation generation. Its original Report must nevertheless retain Rule.
+    // Unsupported Rule editing retains precedence even when no mutant executes.
+    // The original Report must retain Rule derivation.
     let path = h::root().join("fixtures/rule-agency/model.relca");
     let out = Command::new(env!("CARGO_BIN_EXE_relca"))
         .arg("mutate")
@@ -136,6 +136,8 @@ fn check_explain_diff_and_mutation_keep_derived_rule_items() {
         .unwrap();
     assert_eq!(out.status.code(), Some(4));
     let mutation: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(mutation["run"]["candidates_total"], 0);
+    assert!(mutation["run"]["reason"].is_null());
     assert_eq!(mutation["original"]["agency"], check["agency"]);
     assert!(
         mutation["mutations"]

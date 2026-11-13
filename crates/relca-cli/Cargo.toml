@@ -14,3 +14,6 @@ path = "src/main.rs"
 [dependencies]
 relca-core = { path = "../relca-core" }
 serde_json = "1.0.154"
+
+[dev-dependencies]
+relca-test-support = { path = "../relca-test-support" }

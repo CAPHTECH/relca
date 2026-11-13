@@ -1,5 +1,13 @@
 //! Closed C6 population for historical census exclusions and later linkage.
 #![allow(dead_code)]
+// Round 1's independent positive-time pair is tested by mutation_review_round1
+// and the canonical CLI population, not fed to the frozen historical invocations.
+pub fn review_fixture(name: &str) -> bool {
+    matches!(
+        name,
+        "mut3-expiry-window" | "mut3-expiry-window.broken-late-arrival"
+    )
+}
 pub fn fixture(name: &str) -> bool {
     static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     let known = NAMES

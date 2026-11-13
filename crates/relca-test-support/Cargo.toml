@@ -1,0 +1,16 @@
+[package]
+name = "relca-test-support"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+# Self-tests keep their names in the fixtures and conflicts integration binaries.
+test = false
+doctest = false
+
+[dependencies]
+relca-core = { path = "../relca-core" }
+serde_json = "1.0.154"

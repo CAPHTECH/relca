@@ -213,7 +213,10 @@ fn all_structured_argument_failure_factories_add_ledger() {
     let compare = h::cli(&["compare"]);
     h::record(&compare.value, &Spec::aggregate("compare"), &mut errors);
     let mutation = h::cli(&["mutate"]);
-    h::record(&mutation.value, &Spec::aggregate("mutation"), &mut errors);
+    let mut rejected = Spec::aggregate("mutation");
+    rejected.limits["mutant_limit"] =
+        serde_json::json!({"status":"not_applicable","value":null,"reason":"no_analysis"});
+    h::record(&mutation.value, &rejected, &mut errors);
     h::finish(errors);
 }
 #[test]

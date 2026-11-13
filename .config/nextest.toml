@@ -1,0 +1,13 @@
+# Keep the normal, unoptimized Cargo test profile. Only scheduling changes.
+[profile.default]
+test-threads = 16
+fail-fast = false
+retries = 0
+# Report slow tests without terminating them or imposing a new time limit.
+slow-timeout = { period = "60s" }
+
+# Each of these tests already uses, or now uses, up to four job workers.
+# Reserve four of the sixteen runner slots rather than multiplying the pools.
+[[profile.default.overrides]]
+filter = 'test(current_population_requires_exact_independent_registered_surfaces) | test(all_existing_snapshot_jobs_allow_only_ledger_insertions_or_current_exact_bytes) | test(invoice_live_new_rows_and_hand_times_are_not_learned_from_snapshots) | test(real_cli_all_new_sites_held_boundaries_exit_and_closed_wire) | test(current_cli_golden_bytes)'
+threads-required = 4

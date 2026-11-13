@@ -792,6 +792,7 @@ fn all_old_models_migration_148dirs_179inputs_160lower_80complete_80nondet_19sta
                 || effect_population::fixture(name)
                 || record_population::fixture(name)
                 || mutation_default_population::fixture(name)
+                || mutation_default_population::review_fixture(name)
                 || include!("support/quality_names.rs").contains(&name)
                 || serde_json::from_str::<Vec<String>>(include_str!("support/rule_names.json"))
                     .unwrap()

@@ -2,6 +2,7 @@
 """ADR0058 one-transition raw delta audit, not a snapshot normalizer."""
 import argparse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import gzip
 import json
 from pathlib import Path
@@ -254,20 +255,24 @@ def main():
         return
     require(args.binary is not None, "binary required")
     counts = Counter()
-    for job in json.loads((SAVED / "jobs.json").read_bytes()):
-        paths = [SAVED / (job["id"] + suffix) for suffix in (".snap", ".snap.gz")]
-        paths = [p for p in paths if p.is_file()]
-        require(len(paths) == 1, "missing/duplicate saved job")
-        out = subprocess.run([str(args.binary), *job["args"]], cwd=ROOT,
-                             capture_output=True, check=False)
-        require(out.returncode in range(6), "abnormal termination")
-        try:
-            category, owners_count = classify(unpack(paths[0]),
-                                              (out.stdout, out.stderr, f"{out.returncode}\n".encode()))
-        except ValueError as error:
-            raise ValueError(f"job={job['id']} argv={job['args']}: {error}") from error
-        counts[category] += 1
-        counts["owners"] += owners_count
+    jobs = json.loads((SAVED / "jobs.json").read_bytes())
+    def capture(job):
+        return subprocess.run([str(args.binary), *job["args"]], cwd=ROOT,
+                              capture_output=True, check=False)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        # map yields in manifest order: comparisons and counters remain serial.
+        for job, out in zip(jobs, pool.map(capture, jobs)):
+            paths = [SAVED / (job["id"] + suffix) for suffix in (".snap", ".snap.gz")]
+            paths = [p for p in paths if p.is_file()]
+            require(len(paths) == 1, "missing/duplicate saved job")
+            require(out.returncode in range(6), "abnormal termination")
+            try:
+                category, owners_count = classify(unpack(paths[0]),
+                                                  (out.stdout, out.stderr, f"{out.returncode}\n".encode()))
+            except ValueError as error:
+                raise ValueError(f"job={job['id']} argv={job['args']}: {error}") from error
+            counts[category] += 1
+            counts["owners"] += owners_count
     print(dict(counts))
 
 

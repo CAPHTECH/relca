@@ -434,7 +434,7 @@ fn c6int_version_check_alone_is_a_defensive_summary_exclusion() {
 fn c6int_expiry_editor_clones_rule_change_grants_and_not_by_exactly() {
     let src = integration_inputs::rule(true, false);
     let ast = crate::syntax::parse(&src).unwrap();
-    let candidates = super::authority_sites(&src, &ast);
+    let candidates = super::authority_sites(&src, &ast, None);
     assert_eq!(candidates.len(), 1);
     let got = candidates[0].apply(&ast);
     let want = integration_inputs::replace(&src, "not_by [a1] }", "not_by [a1]; expires 0min }");

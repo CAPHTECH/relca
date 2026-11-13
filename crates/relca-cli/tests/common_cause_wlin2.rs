@@ -364,8 +364,11 @@ fn all_commands_keep_exact_tables_at_canonical_reports_and_mutate_keeps_wrapper_
                 assert_eq!(
                     out.status.code(),
                     Some(4),
-                    "unavailable mutation kinds stay unsupported"
+                    "unsupported mutation kinds retain priority even with zero executed sites"
                 );
+                if name == "lin-shared-kernel" {
+                    assert!(v["run"]["reason"].is_null());
+                }
                 assert!(
                     v["unchecked"]
                         .as_array()

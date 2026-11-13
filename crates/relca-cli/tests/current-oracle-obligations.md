@@ -41,16 +41,16 @@ regenerating snapshots is not a reason to update these constants.
 
 | enumerated surface | count | basis, independent of golden payload values |
 |---|---:|---|
-| jobs | 2521 | 2440 current invocation entries plus the unchanged 81 extra mutate inputs selected by `excluded_if_requires_mutation(IR)`; the latter remain semantic-only |
-| canonical Report slots | 4271 | prior 4268 plus the three single-Report check inputs g-unknown, g-probability, max-thirty-two; command-specific original/side/plan/mutant routing, including static refusal slots |
+| jobs | 2537 | 2481 current invocations + unchanged 81 semantic-only mutate jobs - 25 separately counted hand jobs (14 recovery, 2 sensitivity, 6 conformance, 3 time) |
+| canonical Report slots | 4273 | prior 4269 plus two advancing-time fixtures with one original and one expiry Report each; command-specific original/side/plan/mutant routing includes static refusal slots |
 | excluded-pair disclosure Reports | 436 | prior 434 plus the g-unknown/g-probability single-case Ledger.keys atomic read/write pair; `review::excluded_counts(IR)` and `review::disclosure`, not observed row cardinality |
 | nonempty K5 change blocks | 64 | independent before/after IR rows and `assumption_changes`; payload, ordering and positions are checked separately |
 | producer rows | 20 | lexical producer read inventories of both selected IRs and intent/warning rules |
 | K5 fault pairs | 8 | one eligible input per fixed worker and the four inline pins |
-| M1 / completion Report contexts | 3549 / 3549 | lowered original/read/guard-edit IR contexts, with specific missing-simulation null refusal checked separately |
+| M1 / completion Report contexts | 3551 / 3551 | prior 3549 plus the two new fixture originals; the two expiry edits belong only to the modern-edit domain |
 | completion warning sites | 3151 | counterfactual IR queries sharing engine exploration, not observed warning count |
 | inline / delta / M1 / completion fault controls | 4 / 4 / 4 / 4 | four inline pins and one eligible context per fixed worker |
-| modern edits outside pre-C6 graph oracle | 77 | successfully lowered relation-model contexts for expiry/summary/denominator edits; K5/transport still checked, graph oracle intentionally not claimed |
+| modern edits outside pre-C6 graph oracle | 77 | prior 75 plus the two advancing-time expiry edits; K5/transport still checks them without claiming the old graph oracle derives them |
 | Response hand-oracle contexts | 3 | exactly the new three source-bound ADR 0056 positive inputs; counted separately, not claimed as old M1/completion graph derivations |
 
 The ADR 0056 snapshot addition first made the all-population test fail because
@@ -92,8 +92,10 @@ both comparison children, replay and explicit unsupported mutation/conformance.
 Typed decoding supplements these values; it is not their semantic oracle.
 
 These jobs must not enter the legacy graph walkers that deliberately reject
-recovery IR. All fourteen legacy CENSUS values, including the 4271 Report slots,
-3549 graph contexts and 77 modern-edit contexts, remain unchanged. The new lane
+recovery IR. At R2 adoption all fourteen legacy CENSUS values, including 4271 Report slots,
+3549 graph contexts and 77 modern-edit contexts, remained unchanged. ADR 0068 later
+removes exactly two expiry mutants (current totals 4269 and 75); the graph count
+and all other census categories remain unchanged. The new lane
 counts and records all fourteen R2 jobs before removing just that new job count
 from the legacy census comparison. The old six conform jobs retain their exact
 set and checks; the new recovery conform refusal is checked in the R2 lane.

@@ -14,6 +14,10 @@ stdout は JSON が 1 つ、stderr は診断が 1 行に 1 つ(`CODE: message`)�
 | `unsupported` | 4 | 対応外の構文・意味・バックエンド・非決定 | 「確かめられていない」。合格扱いにしない |
 | `vacuous` | 5 | 前提が一度も起きず、空虚に成り立つ | 「検査が働いていない」。満たすとは言わない |
 
+引数の誤り・読込み失敗などで模型が未読の report は hash が null、Cut は unresolved。
+Cut の有無は分からないので W-CUT-0 は出さない。読んだ模型の Cut 未宣言とは区別する。
+explain の構成指定が不足したときは、stderr の --configuration の案内に従う。
+
 ### 全体の verdict
 
 check・explain・simulate の report(compare の各案の report も同じ)の全体の verdict は、次を `invalid > violated > unsupported > inconclusive > vacuous > satisfied` で畳む(`crates/relca-core/src/report.rs` の `fold_verdict`):
@@ -41,6 +45,10 @@ EC 試行(再送を含む 2 案)では、compare も diff も最上位 unsupport
 - exit は最上位の verdict に対応する(上の例は 4)。exit だけ見て案の違反を見落とさない。
 
 review_page は、check・explain・simulate・各案・mutate の original を `fold_verdict` と同じ規則で畳み直す。compare の最上位は各案の verdict の最も重いものと照合する(`scripts/review_page.py` の `scan` の `kind == "compare"` の分岐)。どちらも全体の verdict が軽ければ「全体の verdict を信用しない」と警告する。上の拒否では、この警告が出るのが正しい。
+review_page の端末・ページ冒頭・結論の未確認件数は、性質や入力の保留に加えて、
+Agency の `not_derived` と根拠不明も同じ集計で数える。出所と場所を含む項目単位で重複を除く。
+HTML内の `review-data.unverified_count` も同じ値。従来の項目別リストは残し、
+自己申告の未検査、未実施、警告、AIの申告はそれぞれの欄で読む。
 したがって **全体が violated でも、中に vacuous や unsupported の性質が残る**。to-be-a は全体 violated、separation は vacuous だった。
 
 ## 必ず見る欄(check / explain / simulate)
@@ -92,8 +100,8 @@ explain では、再送した呼出しの `steps[]` に `attempt` と `observed_
 `explanation.omitted[]` は反例を出さなかった性質と理由。確率の性質は `probabilistic_property` で、一本の経路は出ない。
 explain は「一つの例で原因ではない」「最短性・現実妥当性の証明ではない」と assumptions に書いている。
 
-explain には `--configuration` が無い。configuration が複数あるモデル(configurations.relca)は E-CONF-0 で invalid(exit 3)だった。
-案ごとの単一 process のモデル(as-is.relca 等)を explain する。
+explain は `--configuration NAME` と `--scenario NAME` で check と同じ対象を選べる。
+必要な構成の指定が無い場合は check と同じく invalid(exit 3)。選択した構成で反例を再生する。
 
 ## simulate
 
@@ -116,8 +124,37 @@ exhaustive の invoice 3 案は全体 violated(ToBeA が violated)で exit 1、s
 
 ## mutate
 
-`original_verdict`、`run{completion, reason, mutant_limit}`、`mutations[]` に種類ごと `status`(generated / not_applicable / unsupported)と `mutants[]`(`result`: detected / undetected / invalid_mutant …)。
+`original_verdict`、`run{completion, reason, mutant_limit, candidates_total}`、`mutations[]` に種類ごと `status`(generated / not_applicable / unsupported / blocked / not_selected)、`candidates` と `mutants[]`(`result`: detected / undetected / invalid_mutant …)。
 invoice では元が satisfied でも生成 run 全体は unsupported(exit 4)。**検出数を検出率・網羅率・モデルの強さと呼ばない。**未完了の変異体は数えない。
+
+`relca mutate <path> [--set bpr-default] [--configuration NAME] [--scenario NAME] [--mutant-limit N] [--kinds k1,k2] [--sites ID1,ID2]`。
+構成の選択は check と同じ。元の検査と変異体に同じ構成を使い、共通模型へフォールバックしない。
+実行上限は既定128、指定は1〜4096の整数。0、負数、非整数、空値、上限超過は invalid(exit 3)。
+受理した計算上限は `ledger.execution.limits.mutant_limit` にも入る。切断後は `not_run` / `mutant_limit`、
+run は `inconclusive` / `mutant_limit`。選択した未対応種があれば最上位は unsupported のまま。
+`--kinds` は出力の kind 名をカンマ区切りで選ぶ。未知名、空リスト、空要素、重複、余白は invalid。
+省略なら全種。選外は `not_selected`、`mutants: []`、`unchecked` に `mutation.kind.<kind>`。
+検出・未検出・成功の数に混ぜず、verdict と completion は選択範囲のみで決める。
+宣言した除外は計算の切断ではないため、それだけで inconclusive にしない。
+`candidates` は選外と上限後も含む候補数で、run の合計も選外を含む。列挙できない種類は null、
+該当なしは0。列挙自体を始められなければ合計も null。必要予算は選択行の候補数を足して読む。
+詳しい種類名と例は[利用ガイド](../../../docs/guide/results.md)を参照する。
+`--sites ID1,ID2` では既存の `mutants[].id` をコピーして場所を選べる。
+種類選択との積集合だけを実行し、未知ID・空指定・空要素・重複は invalid。
+選外の場所は mutant の `result` / `reason: not_selected`、report は null、
+`unchecked` に `mutation.site.<id>`。予算・検出・未検出・成功に数えず、切断にもしない。
+候補数は選外も含む。ソースの編集でIDが変わり得る。
+全操作0分で、切断なくすべて絶対時刻0に完了する模型の授権失効は
+not_applicable / no_time_elapse (候補0)。遅い到着や待ちで時刻が進めば除外しない。
+全応答のbackoff=0も直接検査する。正のWaitとWaitUntilも静的に検査し、到達しない枝やEnd後も含む。
+カレンダーも別の時間源なので、resource_timeがある場合は実時刻0でもこの除外をしない。
+実行した変異体0件でfoldがsatisfiedの場合だけvacuous/exit5、reason=no_selected_mutant。
+未対応種があればunsupported/exit4の優先順を維持する。
+構成の数を問わず、明示選択した構成の候補とaffected_bindingsは実効process内に絞る。
+sitesで1箇所でも外した種類の段と全体の生成/比較はcheckedに載せずuncheckedに残す。
+外したkindsがある場合も全体の生成/比較をcheckedにせず、比較0件の段もuncheckedに残す。
+無指定の従来の列挙は保持する。不正な上限やsite IDのmutant_limitは
+run/ledgerともnot_applicable/value:null/reason:no_analysisで、128とは記録しない。
 
 ## verify
 

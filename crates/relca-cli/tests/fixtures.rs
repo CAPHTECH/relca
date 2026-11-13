@@ -3,7 +3,7 @@
 #[path = "support/current_expectations.rs"]
 mod current_expectations;
 
-#[path = "../src/fixture_match.rs"]
+#[path = "../src/fixture_match_impl.rs"]
 mod fixture_match;
 
 use serde_json::Value;
@@ -251,6 +251,15 @@ fn acceptance_gap_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(45);
 }
 
+const REVIEW_MUTATION_FIXTURES: [&str; 2] = [
+    "mut3-expiry-window",
+    "mut3-expiry-window.broken-late-arrival",
+];
+#[test]
+fn mutation_review_time_fixtures_match_binary_and_strict_hand_expectations() {
+    run_fixtures(46);
+}
+
 fn run_fixtures(group: usize) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
     let mut directories = Vec::new();
@@ -293,7 +302,7 @@ fn run_fixtures(group: usize) {
         }
     }
     assert!(layout.is_empty(), "fixture layout:\n{}", layout.join("\n"));
-    let mut populations = [0; 46];
+    let mut populations = [0; 47];
     for name in &names {
         let groups = [
             fixture_match::LEGACY_FIXTURES.contains(&name.as_str()),
@@ -342,6 +351,7 @@ fn run_fixtures(group: usize) {
             fixture_match::EVALUATION_FIXTURES.contains(&name.as_str()),
             fixture_match::QUANTILE_FIXTURES.contains(&name.as_str()),
             ACCEPTANCE_GAP_FIXTURES.contains(&name.as_str()),
+            REVIEW_MUTATION_FIXTURES.contains(&name.as_str()),
         ];
         assert_eq!(
             groups.iter().filter(|&&yes| yes).count(),
@@ -435,6 +445,7 @@ fn run_fixtures(group: usize) {
     assert_eq!(populations[44], quantiles);
     assert_eq!(quantiles, 67);
     assert_eq!(populations[45], 9);
+    assert_eq!(populations[46], 2);
     assert_eq!(
         names.len(),
         355 + 32
@@ -461,8 +472,9 @@ fn run_fixtures(group: usize) {
             + waits
             + evaluation
             + quantiles
-            + 9,
-        "46 disjoint exhaustive groups; all 45 historical groups unchanged"
+            + 9
+            + 2,
+        "47 disjoint exhaustive groups; all 46 historical groups unchanged"
     );
     let mut failures = Vec::new();
     let mut undetected = Vec::new();
@@ -553,6 +565,8 @@ fn run_fixtures(group: usize) {
             44
         } else if ACCEPTANCE_GAP_FIXTURES.contains(&name.as_ref()) {
             45
+        } else if REVIEW_MUTATION_FIXTURES.contains(&name.as_ref()) {
+            46
         } else if name.starts_with("explain-") {
             assert!(
                 fixture_match::EXPLAIN_FIXTURES.contains(&name.as_ref()),

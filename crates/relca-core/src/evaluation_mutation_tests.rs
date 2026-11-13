@@ -52,7 +52,9 @@ fn t26_kind7_generation_and_comparison_never_enter_any_execution_api() {
     assert_eq!(baseline.verdict, Verdict::Satisfied);
     let mut r = uncomputed("original_not_decidable", 128);
     r.original = Some(baseline);
-    let (_, counts) = crate::evaluation_spy::observe(|| kind7(SOURCE, &ast, &mut r, &mut 0, 128));
+    let (_, counts) = crate::evaluation_spy::observe(|| {
+        kind7(SOURCE, &ast, &mut r, &mut 0, &Options::default(), None)
+    });
     assert_eq!(counts, [0; 7], "all seven execution entries");
     assert_eq!(r.mutations[7].mutants.len(), 4);
     assert!(

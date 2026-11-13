@@ -1888,6 +1888,7 @@ mod legacy_census {
                     && !crate::scenario_population::fixture(name)
                     && !crate::quality_population::fixture(name)
                     && !crate::mutation::extension_fixture(name)
+                    && !crate::mutation::review_fixture(name)
                     && !crate::evaluation_population::fixture(name)
                     && !crate::quantile_population::fixture(name)
                     && !include!("../tests/support/acceptance_gap_names.rs").contains(&name)

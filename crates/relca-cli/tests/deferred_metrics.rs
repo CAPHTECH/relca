@@ -100,7 +100,9 @@ fn real_compare_objectives_and_quality_hard_keep_missing_cells() {
 #[test]
 fn real_mutation_original_is_subject_to_the_same_cut() {
     let (v, code) = run("actor", "mutate");
-    assert_eq!(code, 4);
+    assert_eq!(code, 4); // Unsupported kinds retain priority over empty-scope vacuity.
+    assert_eq!(v["run"]["candidates_total"], 0);
+    assert!(v["run"]["reason"].is_null());
     h::assert_report(&v["original"], "actor", false);
 }
 #[test]

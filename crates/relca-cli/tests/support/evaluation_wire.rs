@@ -997,6 +997,18 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
         {
             return Err("kind7 process location".into());
         }
+        if mutant["result"] == "not_selected" {
+            if mutant["reason"] != "not_selected"
+                || mutant["assigned_changes"] != json!([])
+                || !v["unchecked"].as_array().unwrap().contains(&json!(format!(
+                    "mutation.site.{}",
+                    mutant["id"].as_str().unwrap()
+                )))
+            {
+                return Err("kind7 excluded site".into());
+            }
+            continue;
+        }
         if mutant["result"] == "not_run" {
             not_run += 1;
             if mutant["reason"] != "mutant_limit" || mutant["assigned_changes"] != json!([]) {
@@ -1045,7 +1057,8 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
             }
         }
     }
-    let complete = !ms.is_empty() && not_run == 0;
+    let excluded = ms.iter().filter(|m| m["result"] == "not_selected").count();
+    let complete = !ms.is_empty() && not_run == 0 && excluded == 0;
     let checked = v["checked"].as_array().unwrap();
     let unchecked = v["unchecked"].as_array().unwrap();
     if checked
@@ -1066,8 +1079,13 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
     {
         return Err("kind7 checked completion/unchecked subset boundary".into());
     }
+    let boundaries: Vec<_> = unchecked
+        .iter()
+        .filter(|w| !w.as_str().unwrap_or("").starts_with("mutation.site."))
+        .cloned()
+        .collect();
     if complete && checked.last() != Some(&json!("quality_denominator"))
-        || !ms.is_empty() && unchecked.last() != Some(&json!("numerator_subset_of_denominator"))
+        || !ms.is_empty() && boundaries.last() != Some(&json!("numerator_subset_of_denominator"))
     {
         return Err("kind7 boundary words append only".into());
     }
@@ -1086,13 +1104,14 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
         .enumerate()
         .filter(|(i, _)| *i != 7)
         .flat_map(|(_, r)| r["mutants"].as_array().unwrap())
+        .filter(|m| m["result"] != "not_selected")
         .collect();
     let old_not_run = old_mutants
         .iter()
         .filter(|m| m["result"] == "not_run")
         .count();
     let old_tried = old_mutants.len() - old_not_run;
-    if old_tried + finished > 128
+    if (old_tried + finished) as u64 > v["run"]["mutant_limit"].as_u64().unwrap()
         || (old_not_run > 0 && finished > 0)
         || v["run"]["limit_reached"] != (not_run + old_not_run > 0)
     {
@@ -1111,7 +1130,12 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
             "complete"
         }
         || v["run"]["reason"]
-            != if not_run + old_not_run > 0 {
+            != if old_tried + finished == 0
+                && not_run + old_not_run == 0
+                && !rows.iter().any(|r| r["status"] == "unsupported")
+            {
+                json!("no_selected_mutant")
+            } else if not_run + old_not_run > 0 {
                 json!("mutant_limit")
             } else if incomplete {
                 json!("mutant_incomplete")
@@ -1122,9 +1146,47 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
         return Err("kind7 run fold".into());
     }
     let mut old = v.clone();
+    let attempted = rows
+        .iter()
+        .flat_map(|r| r["mutants"].as_array().unwrap())
+        .filter(|m| !matches!(m["result"].as_str(), Some("not_selected" | "not_run")))
+        .count();
+    let expected = if rows.iter().any(|r| r["status"] == "unsupported") {
+        "unsupported"
+    } else if incomplete {
+        "inconclusive"
+    } else if rows
+        .iter()
+        .flat_map(|r| r["mutants"].as_array().unwrap())
+        .any(|m| m["result"] == "undetected")
+    {
+        "violated"
+    } else if attempted == 0 && old_not_run + not_run == 0 {
+        "vacuous"
+    } else {
+        "satisfied"
+    };
+    if v["verdict"] != expected {
+        return Err("kind7 selected-scope verdict".into());
+    }
+    old["verdict"] = json!("unsupported"); // the inverse inserts an unsupported kind7
     old["mutations"][7]["status"] = json!("unsupported");
     old["mutations"][7]["reason"] = json!("quality_denominator_unavailable");
     old["mutations"][7]["mutants"] = json!([]);
+    let removed_prefix = "mutation.site.old_promise_denominator_removed:";
+    old["unchecked"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|w| !w.as_str().unwrap_or("").starts_with(removed_prefix));
+    old["mutations"][7]["candidates"] = Value::Null;
+    old["run"]["candidates_total"] = json!(
+        old["mutations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|r| r["candidates"].as_u64())
+            .sum::<u64>()
+    );
     old["mutations"][7]
         .as_object_mut()
         .unwrap()
@@ -1168,6 +1230,48 @@ pub(super) fn mutation_inverse(v: &Value) -> Result<Value, String> {
         Value::Null
     };
     old["run"]["limit_reached"] = json!(old_not_run > 0);
+    for stage in ["single_fault_generation", "assigned_check_comparison"] {
+        let old_excluded = rows
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != 7)
+            .flat_map(|(_, r)| r["mutants"].as_array().unwrap())
+            .filter(|m| m["result"] == "not_selected")
+            .count();
+        let done = attempted > 0
+            && old_not_run + not_run + old_excluded + excluded == 0
+            && rows.iter().all(|r| r["status"] != "not_selected");
+        if checked.iter().filter(|w| **w == stage).count() != usize::from(done)
+            || unchecked.iter().filter(|w| **w == stage).count() != usize::from(!done)
+        {
+            return Err("kind7 whole-run stage mismatch".into());
+        }
+        // Removing kind7's not_run rows also removes their computational cut.
+        // Restore the legacy stage state rather than weakening its validator.
+        let projected_done = old_tried > 0
+            && old_not_run + old_excluded == 0
+            && old["mutations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["status"] != "not_selected");
+        if projected_done && !done {
+            old["checked"].as_array_mut().unwrap().push(json!(stage));
+            old["unchecked"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|w| w != stage);
+        } else if !projected_done && done {
+            old["checked"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|w| w != stage);
+            old["unchecked"]
+                .as_array_mut()
+                .unwrap()
+                .insert(0, json!(stage));
+        }
+    }
     Ok(old)
 }
 

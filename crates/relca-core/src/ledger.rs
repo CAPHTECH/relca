@@ -428,6 +428,17 @@ fn validate_execution(e: &Value, host: &Value) -> Result<(), String> {
             return Err("settings_unavailable: limit type".into());
         }
     }
+    if e["mode"] == "mutation"
+        && host["run"].is_object()
+        && e["limits"]["mutant_limit"]
+            != if host["run"]["mutant_limit"] == na("no_analysis") {
+                na("no_analysis")
+            } else {
+                known(host["run"]["mutant_limit"].clone())
+            }
+    {
+        return Err("context_mismatch: mutation limit".into());
+    }
     if e["bounds"]["status"] == "known"
         && e["bounds"]["value"].is_string()
         && (e["bounds"]["value"] != "/bounds"

@@ -396,7 +396,7 @@ def build():
          {'command':'explain','scenario':'Day'},fault='later-deadline')
     pair('scn-mutate','P25',ONE,{'verdict':'unsupported','original':oracle()},ONE,
          {'verdict':'invalid','original':failure('E-CONF-0')},
-         'No reads/guards to mutate; unsupported default mutation kinds keep root exit4, original S. Removing selector yields original E-CONF-0/root invalid, zero executed mutants.',
+         'No reads, terminal guards, named authority_basis, shared producer, declared response fault sites or cohort denominators: candidates_total=0.\nRound 2: unsupported retains precedence with zero executed mutants (exit4, reason null), original S. Removing the required scenario selector still gives original E-CONF-0/root invalid.',
          {'command':'mutate','scenario':'Light'},{'command':'mutate'},kind='mutation',fault='no-selector')
     nd = edit(S,QUERY,edit(QUERY,'>= 1','>= 0.5')+'\n'+SIM)
     pair('scn-simulation-fifo','P26',nd,oracle(arrivals=(0,1,2),every=1,until=3,selected='Busy',sampled=True),
@@ -563,8 +563,11 @@ def static_pairs(comp):
         if command=='mutate': refusal['original']=failure('E-CONF-0')
         if command=='compare': refusal['plans']=[{'configuration':n,'report':failure('E-CONF-0')} for n in ['Slow','Fast']]
         if command=='diff': refusal.update(**{'from':{'report':failure('E-CONF-0')},'to':{'report':failure('E-CONF-0')}})
+        selection_calc = f'Only invocation selector is removed. {command} must require a selector even with just one scenario; simulate may not return E-SIM-0 first.'
+        if command == 'mutate':
+            selection_calc += '\nRound 2: the selected model has no executable mutation sites. Unsupported retains precedence (exit4, reason null). The selector-missing broken counterpart is still blocked/invalid.'
         pair('scn-select-required-'+command,'P13/U7',good,base,good,refusal,
-             f'Only invocation selector is removed. {command} must require a selector even with just one scenario; simulate may not return E-SIM-0 first.',
+             selection_calc,
              entry_args,{k:v for k,v in entry_args.items() if k!='scenario'},kind='invocation',fault='missing')
     pair('scn-unknown','P13',ONE,oracle(),ONE,failure('E-NAME-0'),
          'Declared Light exists; selecting Nope is E-NAME-0, not declaration absence.',ib={'command':'check','scenario':'Nope'},fault='name')

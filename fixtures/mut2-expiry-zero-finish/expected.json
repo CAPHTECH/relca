@@ -5,6 +5,7 @@
     "completion": "complete",
     "reason": null,
     "mutant_limit": 128,
-    "limit_reached": false
+    "limit_reached": false,
+    "candidates_total": 0
   }
 }

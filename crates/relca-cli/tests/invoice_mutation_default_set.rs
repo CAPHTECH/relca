@@ -3,6 +3,8 @@
 mod deferred_invoice;
 #[path = "../src/fixture_match.rs"]
 mod fixture_match;
+#[path = "support/ordered_jobs.rs"]
+mod ordered_jobs;
 #[path = "../../relca-core/tests/support/response_boundary_oracle.rs"]
 mod response_boundary;
 use serde_json::{Value, json};
@@ -179,23 +181,27 @@ fn hand(name: &str, v: &Value, deferred: bool) {
 
 #[test]
 fn invoice_live_new_rows_and_hand_times_are_not_learned_from_snapshots() {
-    for name in ["as-is", "to-be-p", "to-be-a"] {
-        let o = Command::new(env!("CARGO_BIN_EXE_relca"))
-            .args(["mutate", &format!("examples/invoice/{name}.relca")])
-            .current_dir(root())
-            .output()
-            .unwrap();
+    let jobs = ["as-is", "to-be-p", "to-be-a"]
+        .into_iter()
+        .flat_map(|name| [(name, true), (name, false)])
+        .collect::<Vec<_>>();
+    let outputs = ordered_jobs::map(&jobs, |&(name, deferred)| {
+        if deferred {
+            Command::new(env!("CARGO_BIN_EXE_relca"))
+                .args(["mutate", &format!("examples/invoice/{name}.relca")])
+                .current_dir(root())
+                .output()
+                .unwrap()
+        } else {
+            let source =
+                std::fs::read_to_string(root().join(format!("examples/invoice/{name}.relca")))
+                    .unwrap();
+            deferred_invoice::numeric_control(&source, "mutate", &[])
+        }
+    });
+    for ((name, deferred), o) in jobs.into_iter().zip(outputs) {
         assert_eq!(o.status.code(), Some(4));
-        hand(name, &serde_json::from_slice(&o.stdout).unwrap(), true);
-        let source =
-            std::fs::read_to_string(root().join(format!("examples/invoice/{name}.relca"))).unwrap();
-        let control = deferred_invoice::numeric_control(&source, "mutate", &[]);
-        assert_eq!(control.status.code(), Some(4));
-        hand(
-            name,
-            &serde_json::from_slice(&control.stdout).unwrap(),
-            false,
-        );
+        hand(name, &serde_json::from_slice(&o.stdout).unwrap(), deferred);
     }
 }
 

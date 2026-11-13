@@ -267,6 +267,9 @@ fn hand_kind7_wire() -> Value {
         }
     }
     v["mutations"][7]["status"] = json!("generated");
+    // Two removable ends in each of two terminal-denominator cohorts.
+    v["mutations"][7]["candidates"] = json!(4);
+    v["run"]["candidates_total"] = json!(v["run"]["candidates_total"].as_u64().unwrap() + 4);
     v["mutations"][7]["reason"] = Value::Null;
     v["mutations"][7]["mutants"] = json!(mutants);
     v["mutations"][7]["skipped_sites"] = json!([{"cohort":"WrongPerRegistered","status":"not_applicable","reason":"state_condition"}]);

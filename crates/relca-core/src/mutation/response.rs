@@ -181,13 +181,18 @@ pub(super) fn run(
     context: &ir::Model,
     original: &report::Report,
     r: &mut MutationReport,
-    budget: (&mut usize, usize),
+    budget: (&mut usize, &Options),
     execute: &mut impl FnMut(&str, &ast::Model) -> report::Report,
 ) {
-    let (attempts, limit) = budget;
+    let (attempts, options) = budget;
+    let limit = options.limit;
     let (candidates, skipped) = enumerate(src, ast, context);
     for index in [3, 6] {
         let row = &mut r.mutations[index];
+        row.candidates = Some(candidates.len());
+        if row.status == "not_selected" {
+            continue;
+        }
         row.skipped_sites = Some(skipped.clone());
         let mut counts = BTreeMap::new();
         for s in &skipped {
@@ -224,6 +229,10 @@ pub(super) fn run(
                 assigned_changes: vec![],
                 other_changes: vec![],
             };
+            if !select_site(&mut mutant, options) {
+                row.mutants.push(mutant);
+                continue;
+            }
             if *attempts < limit {
                 *attempts += 1;
                 let edited = c.apply(ast, index == 3);
@@ -241,8 +250,12 @@ pub(super) fn run(
         }
     }
     if !r.run.limit_reached {
-        stage(r, "command_resend");
-        stage(r, "receipt_unknown");
+        if r.mutations[3].status != "not_selected" && all_sites_ran(&r.mutations[3]) {
+            stage(r, "command_resend");
+        }
+        if r.mutations[6].status != "not_selected" && all_sites_ran(&r.mutations[6]) {
+            stage(r, "receipt_unknown");
+        }
     }
 }
 

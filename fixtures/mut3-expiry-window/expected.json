@@ -1,0 +1,6 @@
+{
+  "verdict": "unsupported",
+  "original_verdict": "satisfied",
+  "run": {"completion":"complete","reason":null,"mutant_limit":128,"limit_reached":false,"candidates_total":1},
+  "mutations": [{},{"kind":"authority_expired","status":"generated","candidates":1,"mutants":[{"id":"authority_expired:G:expires","result":"detected","reason":null}]},{},{},{},{},{},{},{},{}]
+}

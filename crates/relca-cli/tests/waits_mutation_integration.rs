@@ -50,8 +50,11 @@ fn mutate(s: &str) -> Value {
 #[test]
 fn hq_horizon12_cli_keeps_selected_metadata_and_waiting_metrics() {
     let s = i::hq();
-    let v = mutate(&s);
-    i::envelope_with_ends(&v, &mutate(&i::masked(&s)), &["done"]);
+    let v = invoke(&s, "mutate", &["--scenario", "Day"], 4);
+    let control = invoke(&i::masked(&s), "mutate", &["--scenario", "Day"], 4);
+    fixture_match::validate_mutation_wire(&v).unwrap();
+    fixture_match::validate_mutation_wire(&control).unwrap();
+    i::envelope_with_ends(&v, &control, &["done"]);
     assert_eq!(v["original"]["scenario"]["horizon"], 12);
     i::cases(
         &v["original"],

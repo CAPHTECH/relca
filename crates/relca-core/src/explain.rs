@@ -429,17 +429,30 @@ pub fn explain(src: &str) -> ExplainReport {
 const DEFAULT_CAPTURE_LIMIT: usize = 200_000;
 
 pub fn explain_with_scenario(src: &str, scenario: Option<&str>) -> ExplainReport {
-    explain_selected(src, scenario, DEFAULT_CAPTURE_LIMIT)
+    explain_with_selection(src, None, scenario)
+}
+
+pub fn explain_with_selection(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+) -> ExplainReport {
+    explain_selected(src, configuration, scenario, DEFAULT_CAPTURE_LIMIT)
 }
 
 fn explain_with_limit(src: &str, limit: usize) -> ExplainReport {
-    explain_selected(src, None, limit)
+    explain_selected(src, None, None, limit)
 }
 
-fn explain_selected(src: &str, scenario: Option<&str>, limit: usize) -> ExplainReport {
+fn explain_selected(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    limit: usize,
+) -> ExplainReport {
     let mut captured = None;
     let mut actual_capture_limit = limit;
-    let report = report::check_selection_using(src, None, scenario, |model| {
+    let report = report::check_selection_using(src, configuration, scenario, |model| {
         let (outcome, trace) = if limit == DEFAULT_CAPTURE_LIMIT {
             crate::engine::trace::explore(src, model)
         } else {
@@ -602,24 +615,24 @@ pub fn input_failure(message: &str) -> ExplainReport {
     input_failure_with_scenario(message, None)
 }
 pub fn input_failure_with_scenario(message: &str, scenario: Option<&str>) -> ExplainReport {
+    input_failure_with_selection(message, None, scenario)
+}
+pub fn input_failure_with_selection(
+    message: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+) -> ExplainReport {
     let mut report = report::check("");
     report.model.sha256 = None;
+    report.cut = report::Cut::Status(report::CutStatus::Unresolved);
     report.ledger = crate::ledger::Ledger::input_failure("exhaustive");
-    report.ledger.requested(None, scenario);
-    report.diagnostics = vec![
-        diag::Diagnostic {
-            code: diag::E_SYN_0.into(),
-            severity: diag::Severity::Error,
-            message: message.into(),
-            span: None,
-        },
-        diag::Diagnostic {
-            code: diag::W_CUT_0.into(),
-            severity: diag::Severity::Warning,
-            message: "Cut is undeclared; exclusions are unknown".into(),
-            span: None,
-        },
-    ];
+    report.ledger.requested(configuration, scenario);
+    report.diagnostics = vec![diag::Diagnostic {
+        code: diag::E_SYN_0.into(),
+        severity: diag::Severity::Error,
+        message: message.into(),
+        span: None,
+    }];
     seal(
         ExplainReport {
             report,

@@ -1,4 +1,4 @@
-//! Single-process explain inputs only: explain has no configuration selector.
+//! Single-process inputs preserve the original no-selector explanation coverage.
 #[path = "authority_scope.rs"]
 mod acceptance;
 use serde_json::{Value, json};

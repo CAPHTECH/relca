@@ -11,6 +11,71 @@ mod response_boundary_oracle {
 }
 
 pub const DEFAULT_MUTANT_LIMIT: usize = 128;
+pub const MAX_MUTANT_LIMIT: usize = 4096;
+
+/// Validated request scope. Omitted kinds retain the complete default set.
+#[derive(Debug, Clone)]
+pub struct Options {
+    limit: usize,
+    selected: [bool; 10],
+    sites: Option<BTreeSet<String>>,
+    configuration: Option<String>,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            limit: DEFAULT_MUTANT_LIMIT,
+            selected: [true; 10],
+            sites: None,
+            configuration: None,
+        }
+    }
+}
+impl Options {
+    pub fn with_configuration(mut self, configuration: Option<&str>) -> Self {
+        self.configuration = configuration.map(str::to_owned);
+        self
+    }
+    pub fn with_sites(mut self, sites: Option<&str>) -> Result<Self, &'static str> {
+        if let Some(sites) = sites {
+            let mut chosen = BTreeSet::new();
+            for id in sites.split(',') {
+                if id.is_empty() || id.trim() != id || !chosen.insert(id.to_owned()) {
+                    return Err("sites must be a nonempty list of distinct mutant IDs");
+                }
+            }
+            self.sites = Some(chosen);
+        }
+        Ok(self)
+    }
+    pub fn parse(limit: Option<&str>, kinds: Option<&str>) -> Result<Self, &'static str> {
+        let mut options = Self::default();
+        if let Some(value) = limit {
+            if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+                return Err("mutant-limit must be an integer in 1..=4096");
+            }
+            options.limit = value
+                .parse()
+                .map_err(|_| "mutant-limit must be in 1..=4096")?;
+            if !(1..=MAX_MUTANT_LIMIT).contains(&options.limit) {
+                return Err("mutant-limit must be in 1..=4096");
+            }
+        }
+        if let Some(value) = kinds {
+            options.selected = [false; 10];
+            for kind in value.split(',') {
+                let i = KINDS.iter().position(|k| k.0 == kind).ok_or(
+                    "kinds must be a nonempty comma-separated list of mutation kind names",
+                )?;
+                if options.selected[i] {
+                    return Err("duplicate mutation kind");
+                }
+                options.selected[i] = true;
+            }
+        }
+        Ok(options)
+    }
+}
 
 #[cfg(test)]
 #[path = "../tests/support/mutation_default_population.rs"]
@@ -19,6 +84,11 @@ mod extension_population;
 #[cfg(test)]
 pub(crate) fn extension_fixture(name: &str) -> bool {
     extension_population::fixture(name)
+}
+
+#[cfg(test)]
+pub(crate) fn review_fixture(name: &str) -> bool {
+    extension_population::review_fixture(name)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -42,11 +112,32 @@ pub struct MutationReport {
 pub struct Run {
     pub completion: &'static str,
     pub reason: Option<&'static str>,
-    pub mutant_limit: usize,
+    pub mutant_limit: MutantLimit,
     pub limit_reached: bool,
+    pub candidates_total: Option<usize>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum MutantLimit {
+    Used(usize),
+    Unused {
+        status: &'static str,
+        value: (),
+        reason: &'static str,
+    },
+}
+impl MutantLimit {
+    fn unused() -> Self {
+        Self::Unused {
+            status: "not_applicable",
+            value: (),
+            reason: "no_analysis",
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct KindRow {
+    pub candidates: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skipped_counts: Option<BTreeMap<String, usize>>,
     pub kind: &'static str,
@@ -222,13 +313,15 @@ fn uncomputed(reason: &'static str, limit: usize) -> MutationReport {
         run: Run {
             completion: "blocked",
             reason: Some(reason),
-            mutant_limit: limit,
+            mutant_limit: MutantLimit::Used(limit),
             limit_reached: false,
+            candidates_total: None,
         },
         mutations: KINDS
             .iter()
             .enumerate()
             .map(|(i, &(kind, name, unsupported))| KindRow {
+                candidates: None,
                 skipped_counts: None,
                 kind,
                 name,
@@ -287,8 +380,43 @@ pub fn input_failure_with_scenario(message: &str, scenario: Option<&str>) -> Mut
     r.ledger.requested(None, scenario);
     seal(r)
 }
+pub fn input_failure_with_options(
+    message: &str,
+    scenario: Option<&str>,
+    options: &Options,
+) -> MutationReport {
+    let mut r = input_failure(message);
+    r.run.mutant_limit = MutantLimit::Used(options.limit);
+    apply_options(&mut r, options);
+    r.ledger
+        .requested(options.configuration.as_deref(), scenario);
+    seal(r)
+}
+
+fn apply_options(r: &mut MutationReport, options: &Options) {
+    r.assumptions
+        .iter_mut()
+        .find(|a| a.field == "mutation.limit")
+        .unwrap()
+        .value = format!("computational_{}", options.limit);
+    for (i, row) in r.mutations.iter_mut().enumerate() {
+        if !options.selected[i] {
+            row.status = "not_selected";
+            row.reason = Some("not_selected");
+            r.unchecked.push(format!("mutation.kind.{}", row.kind));
+        }
+    }
+}
 fn failure(reason: &'static str, message: &str) -> MutationReport {
     let mut r = uncomputed(reason, DEFAULT_MUTANT_LIMIT);
+    if reason == "invalid_arguments" {
+        r.run.mutant_limit = MutantLimit::unused();
+        r.assumptions
+            .iter_mut()
+            .find(|a| a.field == "mutation.limit")
+            .unwrap()
+            .value = "not_applicable".into();
+    }
     r.diagnostics.push(diag::Diagnostic {
         code: diag::E_SYN_0.into(),
         severity: diag::Severity::Error,
@@ -305,27 +433,104 @@ pub fn mutate_set(src: &str, set: &str) -> MutationReport {
 }
 
 pub fn mutate_set_with_scenario(src: &str, set: &str, scenario: Option<&str>) -> MutationReport {
+    mutate_with_options(src, set, scenario, &Options::default())
+}
+
+pub fn mutate_with_options(
+    src: &str,
+    set: &str,
+    scenario: Option<&str>,
+    options: &Options,
+) -> MutationReport {
     if set != "bpr-default" {
         return argument_failure("Unknown mutation set; expected bpr-default");
     }
-    mutate_using(
+    let configuration = options.configuration.as_deref();
+    let original = if let Some(sites) = &options.sites {
+        // Census all kinds without edits/checks, then validate identifiers before
+        // executing any mutant. Reuse the original check for the selected run.
+        let census = mutate_using_raw(
+            src,
+            &Options {
+                limit: 0,
+                configuration: options.configuration.clone(),
+                ..Options::default()
+            },
+            scenario,
+            |s| report::check_with_selection(s, configuration, scenario),
+            |_, _| unreachable!(),
+        );
+        if census.run.candidates_total.is_none() {
+            let mut blocked = census;
+            blocked.run.mutant_limit = MutantLimit::Used(options.limit);
+            apply_options(&mut blocked, options);
+            return seal(blocked);
+        }
+        let known: BTreeSet<_> = census
+            .mutations
+            .iter()
+            .flat_map(|r| &r.mutants)
+            .map(|m| m.id.as_str())
+            .collect();
+        if sites.iter().any(|s| !known.contains(s.as_str())) {
+            return argument_failure("Unknown mutation site ID");
+        }
+        census.original
+    } else {
+        None
+    };
+    seal(mutate_using_raw(
         src,
-        DEFAULT_MUTANT_LIMIT,
+        options,
         scenario,
-        |s| report::check_with_selection(s, None, scenario),
+        |s| original.unwrap_or_else(|| report::check_with_selection(s, configuration, scenario)),
         |src, ast| {
             report::finite_driver(
-                report::check_ast_with_scenario_using(src, ast, scenario, engine::explore),
+                report::check_ast_with_selection_using(
+                    src,
+                    ast,
+                    configuration,
+                    scenario,
+                    engine::explore,
+                ),
                 engine::DEFAULT_STATE_BUDGET,
             )
         },
-    )
+    ))
 }
 
 fn stage(r: &mut MutationReport, name: &str) {
     r.unchecked.retain(|x| x != name);
     r.checked.push(name.into());
 }
+
+// Any explicit configuration selects its effective process, even a sole configuration.
+fn scoped_process(options: &Options) -> bool {
+    options.configuration.is_some()
+}
+
+fn select_site(m: &mut MutantRow, options: &Options) -> bool {
+    if options
+        .sites
+        .as_ref()
+        .is_some_and(|sites| !sites.contains(&m.id))
+    {
+        m.result = "not_selected";
+        m.reason = Some("not_selected");
+        false
+    } else {
+        true
+    }
+}
+
+fn all_sites_ran(row: &KindRow) -> bool {
+    !row.mutants.is_empty()
+        && row
+            .mutants
+            .iter()
+            .all(|m| !matches!(m.result, "not_run" | "not_selected"))
+}
+#[cfg(test)]
 fn mutate_using(
     src: &str,
     limit: usize,
@@ -333,10 +538,22 @@ fn mutate_using(
     baseline: impl FnOnce(&str) -> report::Report,
     execute: impl FnMut(&str, &ast::Model) -> report::Report,
 ) -> MutationReport {
-    seal(mutate_using_raw(src, limit, scenario, baseline, execute))
+    seal(mutate_using_raw(
+        src,
+        &Options {
+            limit,
+            ..Options::default()
+        },
+        scenario,
+        baseline,
+        execute,
+    ))
 }
 fn seal(mut r: MutationReport) -> MutationReport {
-    r.ledger.execution["limits"]["mutant_limit"] = crate::ledger::known(r.run.mutant_limit);
+    r.ledger.execution["limits"]["mutant_limit"] = match r.run.mutant_limit {
+        MutantLimit::Used(n) => crate::ledger::known(n),
+        MutantLimit::Unused { .. } => crate::ledger::na("no_analysis"),
+    };
     let host = serde_json::to_value(&r).expect("mutation uncertainty context");
     r.uncertainty = crate::uncertainty::Uncertainty::aggregate(&host, "mutation");
     let host = serde_json::to_value(&r).expect("mutation wire");
@@ -345,23 +562,37 @@ fn seal(mut r: MutationReport) -> MutationReport {
 }
 fn mutate_using_raw(
     src: &str,
-    limit: usize,
+    options: &Options,
     scenario: Option<&str>,
     baseline: impl FnOnce(&str) -> report::Report,
     mut execute: impl FnMut(&str, &ast::Model) -> report::Report,
 ) -> MutationReport {
-    let original = report::work_profiles::refusal(src, None, scenario)
+    let limit = options.limit;
+    let configuration = options.configuration.as_deref();
+    let original = report::work_profiles::refusal(src, configuration, scenario)
         .map_or_else(|| baseline(src), |(r, _)| r);
     let mut r = uncomputed("original_not_decidable", limit);
+    apply_options(&mut r, options);
+    if configuration.is_some() {
+        r.ledger.requested(configuration, scenario);
+    }
     stage(&mut r, "original_check");
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
     if syntax::parse(src).is_ok_and(|ast| {
+        let process = if scoped_process(options) {
+            original.ledger.execution["selection"]["effective"]["process"]["value"].as_str()
+        } else {
+            None
+        };
         ast.items.iter().any(|i| {
             let ast::Item::Process(p) = i else {
                 return false;
             };
+            if process.is_some_and(|name| p.name.value != name) {
+                return false;
+            }
             let mut sites = Vec::new();
             calls(&p.body, &mut sites);
             sites.iter().any(|c| c.recovery.is_some())
@@ -380,14 +611,15 @@ fn mutate_using_raw(
         return r;
     }
     let ast = syntax::parse(src).expect("a decidable check already parsed this source");
-    let reads = read_sites(src, &ast);
-    let guards = guard_sites(src, &ast);
-    let authorities = authority_sites(src, &ast);
     // Use the same selection as both checks. In particular, a scenario must
     // never fall back to the common model; an unselected configuration stays
     // blocked by the original check, just as it does for mutant execution.
-    let context = lower::lower_with_selection(&ast, None, scenario)
+    let context = lower::lower_with_selection(&ast, configuration, scenario)
         .expect("a decidable check already lowered this selection");
+    let process = scoped_process(options).then_some(context.process.name.as_str());
+    let reads = read_sites(src, &ast, process);
+    let guards = guard_sites(src, &ast, process);
+    let authorities = authority_sites(src, &ast, process);
     if !context.process.degradations.is_empty() {
         r.verdict = Verdict::Unsupported;
         r.diagnostics.push(diag::Diagnostic {
@@ -399,6 +631,7 @@ fn mutate_using_raw(
         return r;
     }
     let summaries = summary_sites(src, &ast, &context);
+    let no_expiry_time = !authorities.is_empty() && no_time_elapse(&context, &original);
     stage(&mut r, "site_enumeration");
     let mut attempts = 0;
     // Budget order is deliberately not display order: never steal an old trial.
@@ -410,6 +643,19 @@ fn mutate_using_raw(
             4 => &summaries,
             _ => &guards,
         };
+        row.candidates = Some(if i == 1 && no_expiry_time {
+            0
+        } else {
+            candidates.len()
+        });
+        if row.status == "not_selected" {
+            continue;
+        }
+        if i == 1 && no_expiry_time {
+            row.status = "not_applicable";
+            row.reason = Some("no_time_elapse");
+            continue;
+        }
         row.status = if candidates.is_empty() {
             "not_applicable"
         } else {
@@ -427,6 +673,10 @@ fn mutate_using_raw(
                 assigned_changes: vec![],
                 other_changes: vec![],
             };
+            if !select_site(&mut m, options) {
+                row.mutants.push(m);
+                continue;
+            }
             if let Some(edited) = budgeted_edit(c, &ast, &mut attempts, limit) {
                 let report = execute(src, &edited);
                 let comparison = match &c.edit {
@@ -452,28 +702,44 @@ fn mutate_using_raw(
             row.mutants.push(m);
         }
     }
-    kind7(src, &ast, &mut r, &mut attempts, limit);
+    kind7(src, &ast, &mut r, &mut attempts, options, process);
     response::run(
         src,
         &ast,
         &context,
         &original,
         &mut r,
-        (&mut attempts, limit),
+        (&mut attempts, options),
         &mut execute,
     );
+    r.run.candidates_total = Some(r.mutations.iter().filter_map(|row| row.candidates).sum());
+    for m in r
+        .mutations
+        .iter()
+        .flat_map(|row| &row.mutants)
+        .filter(|m| m.result == "not_selected")
+    {
+        r.unchecked.push(format!("mutation.site.{}", m.id));
+    }
     // A run cut by the mutant limit did not generate or compare every site,
     // so those stages stay unchecked.
-    if !r.run.limit_reached {
+    if attempts > 0
+        && !r.run.limit_reached
+        && r.mutations.iter().all(|row| {
+            row.status != "not_selected"
+                && row
+                    .mutants
+                    .iter()
+                    .all(|m| !matches!(m.result, "not_run" | "not_selected"))
+        })
+    {
         stage(&mut r, "single_fault_generation");
         stage(&mut r, "assigned_check_comparison");
     }
-    if !r.mutations[1].mutants.iter().any(|m| m.result == "not_run") {
+    if r.mutations[1].status != "not_selected" && all_sites_ran(&r.mutations[1]) {
         stage(&mut r, "authority_expiry");
     }
-    if !r.mutations[7].mutants.is_empty()
-        && r.mutations[7].mutants.iter().all(|m| m.result != "not_run")
-    {
+    if !r.mutations[7].mutants.is_empty() && all_sites_ran(&r.mutations[7]) {
         stage(&mut r, "quality_denominator");
     }
     r.verdict = fold(&r.mutations);
@@ -493,6 +759,12 @@ fn mutate_using_raw(
     } else {
         incomplete.then_some("mutant_incomplete")
     };
+    // A declared scope containing no executed mutant is not a successful test.
+    // Preserve actual computational cuts (including the private zero-budget census).
+    if attempts == 0 && !r.run.limit_reached && r.verdict == Verdict::Satisfied {
+        r.verdict = Verdict::Vacuous;
+        r.run.reason = Some("no_selected_mutant");
+    }
     r
 }
 fn budgeted_edit(
@@ -506,6 +778,60 @@ fn budgeted_edit(
     }
     *attempts += 1;
     Some(c.apply(ast))
+}
+
+/// Conservative applicability proof: zero declared service times alone are
+/// insufficient (late arrivals, waiting and backoff can advance absolute time).
+fn no_time_elapse(context: &ir::Model, original: &report::Report) -> bool {
+    if original.bounds.truncated != Some(false)
+        // Start-slot calendar boundaries can advance time independently of
+        // service durations, including on paths missing from terminal extrema.
+        || context.resource_time.is_some()
+        || has_time_wait(&context.process.body)
+        || context
+            .response_attempts()
+            .iter()
+            .any(|(_, attempt)| attempt.backoff != 0)
+        || context.capabilities.iter().any(|c| {
+            c.duration != 0
+                || c.duration_distribution
+                    .as_ref()
+                    .is_some_and(|d| d.entries.iter().any(|(tick, _)| *tick != 0))
+        })
+    {
+        return false;
+    }
+    if let Some(cases) = &original.case_outcomes {
+        return !cases.is_empty()
+            && cases.iter().all(|c| {
+                c.arrival == 0
+                    && !c.terminals.is_empty()
+                    && c.terminals
+                        .iter()
+                        .all(|t| t.completed_at.is_some_and(|time| time.max == 0))
+            });
+    }
+    !original.terminals.is_empty() && original.terminals.iter().all(|t| t.elapsed.max == 0)
+}
+
+fn has_time_wait(block: &ir::Block) -> bool {
+    block.iter().any(|s| match &s.kind {
+        ir::Stmt::Wait(tick) => *tick > 0,
+        ir::Stmt::WaitUntil(_) => true,
+        ir::Stmt::If {
+            then_body,
+            else_body,
+            ..
+        } => has_time_wait(then_body) || has_time_wait(else_body),
+        ir::Stmt::Response(_, attempt) => attempt.recovery.as_ref().is_some_and(has_time_wait),
+        // Fork holds Calls, not nested Blocks; duration is checked above.
+        ir::Stmt::Query(_, _)
+        | ir::Stmt::ResolveEffect { .. }
+        | ir::Stmt::StopReceiptUnknown
+        | ir::Stmt::Call(_)
+        | ir::Stmt::Fork { .. }
+        | ir::Stmt::End(_) => false,
+    })
 }
 
 /// A structural definition record, deliberately not executable IR. The only
@@ -601,7 +927,15 @@ fn lexical_ends(block: &ast::Block, out: &mut Vec<String>) {
         }
     }
 }
-fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usize, limit: usize) {
+fn kind7(
+    src: &str,
+    ast: &ast::Model,
+    r: &mut MutationReport,
+    attempts: &mut usize,
+    options: &Options,
+    process_scope: Option<&str>,
+) {
+    let limit = options.limit;
     let metrics: Vec<_> = ast
         .items
         .iter()
@@ -631,7 +965,9 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
         .items
         .iter()
         .find_map(|i| {
-            if let ast::Item::Process(p) = i {
+            if let ast::Item::Process(p) = i
+                && process_scope.is_none_or(|name| p.name.value == name)
+            {
                 Some(p)
             } else {
                 None
@@ -641,7 +977,10 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
     let mut process_ends = Vec::new();
     lexical_ends(&process.body, &mut process_ends);
     let row = &mut r.mutations[7];
-    row.skipped_sites = Some(Vec::new());
+    row.candidates = Some(0);
+    let selected = row.status != "not_selected";
+    // Enumerate even an excluded kind, without executing or claiming its checks.
+    let mut skipped_sites = Vec::new();
     for c in metrics {
         let denominator = c.denominator.as_ref().map(|n| {
             *properties
@@ -653,7 +992,7 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
             None => process_ends.clone(),
             Some(p) => match &p.target {
                 ast::QualityTarget::State(_) => {
-                    row.skipped_sites.as_mut().unwrap().push(SkippedSite {
+                    skipped_sites.push(SkippedSite {
                         site: None,
                         cohort: Some(c.name.value.clone()),
                         status: "not_applicable",
@@ -673,12 +1012,29 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
             },
         };
         if terminals.len() < 2 {
-            row.skipped_sites.as_mut().unwrap().push(SkippedSite {
+            skipped_sites.push(SkippedSite {
                 site: None,
                 cohort: Some(c.name.value.clone()),
                 status: "not_applicable",
                 reason: "no_matching_site",
             });
+            continue;
+        }
+        let eligible = terminals
+            .iter()
+            .filter(|end| process_scope.is_none() || process_ends.contains(end))
+            .count();
+        if eligible == 0 {
+            skipped_sites.push(SkippedSite {
+                site: None,
+                cohort: Some(c.name.value.clone()),
+                status: "not_applicable",
+                reason: "no_matching_site",
+            });
+            continue;
+        }
+        *row.candidates.as_mut().unwrap() += eligible;
+        if !selected {
             continue;
         }
         let numerator = r
@@ -713,6 +1069,9 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
             terminals,
         };
         for removed in &before.terminals {
+            if process_scope.is_some() && !process_ends.contains(removed) {
+                continue;
+            }
             let mut s = site(src, c.denominator_span);
             s.cohort = Some(c.name.value.clone());
             s.removed_end = Some(removed.clone());
@@ -732,6 +1091,10 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
                 assigned_changes: vec![],
                 other_changes: vec![],
             };
+            if !select_site(&mut m, options) {
+                row.mutants.push(m);
+                continue;
+            }
             if *attempts < limit {
                 *attempts += 1;
                 let mut after = before.clone();
@@ -747,6 +1110,10 @@ fn kind7(src: &str, ast: &ast::Model, r: &mut MutationReport, attempts: &mut usi
             row.mutants.push(m);
         }
     }
+    if !selected {
+        return;
+    }
+    row.skipped_sites = Some(skipped_sites);
     row.status = if row.mutants.is_empty() {
         "not_applicable"
     } else {
@@ -1005,10 +1372,12 @@ fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
         }
     }
 }
-fn read_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
+fn read_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
     let mut all_calls = vec![];
     for item in &model.items {
-        if let ast::Item::Process(p) = item {
+        if let ast::Item::Process(p) = item
+            && process.is_none_or(|name| p.name.value == name)
+        {
             calls(&p.body, &mut all_calls);
         }
     }
@@ -1017,6 +1386,14 @@ fn read_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
         if let ast::Item::Actor(a) = item {
             for (ci, item) in a.items.iter().enumerate() {
                 if let ast::ActorItem::Capability(c) = item {
+                    if process.is_some()
+                        && !all_calls.iter().any(|call| {
+                            call.actor.value == a.name.value
+                                && call.capability.value == c.name.value
+                        })
+                    {
+                        continue;
+                    }
                     for (ri, item) in c.items.iter().enumerate() {
                         if let ast::CapItem::Reads(reads) = &item.value {
                             for (si, source) in reads.iter().enumerate() {
@@ -1069,7 +1446,7 @@ fn block_at<'a>(mut block: &'a mut ast::Block, path: &[(usize, bool)]) -> &'a mu
     block
 }
 
-fn authority_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
+fn authority_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
     let mut named: BTreeMap<&str, BTreeSet<(&str, &str)>> = BTreeMap::new();
     let mut all_calls = vec![];
     for item in &model.items {
@@ -1085,7 +1462,9 @@ fn authority_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
                     }
                 }
             }
-            ast::Item::Process(p) => calls(&p.body, &mut all_calls),
+            ast::Item::Process(p) if process.is_none_or(|name| p.name.value == name) => {
+                calls(&p.body, &mut all_calls)
+            }
             _ => {}
         }
     }
@@ -1097,6 +1476,13 @@ fn authority_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
         let Some(targets) = named.get(a.name.value.as_str()) else {
             continue;
         };
+        if process.is_some()
+            && !all_calls
+                .iter()
+                .any(|c| targets.contains(&(c.actor.value.as_str(), c.capability.value.as_str())))
+        {
+            continue;
+        }
         let existing = a
             .items
             .iter()
@@ -1471,7 +1857,7 @@ fn bindings(c: &ast::Cond, out: &mut Vec<String>) {
         ast::Cond::Contains { .. } | ast::Cond::LocalEq { .. } | ast::Cond::Compare { .. } => {}
     }
 }
-fn guard_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
+fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
     struct Walker<'a> {
         src: &'a str,
         process: usize,
@@ -1532,7 +1918,9 @@ fn guard_sites(src: &str, model: &ast::Model) -> Vec<Candidate> {
     }
     let mut out = vec![];
     for (i, item) in model.items.iter().enumerate() {
-        if let ast::Item::Process(p) = item {
+        if let ast::Item::Process(p) = item
+            && process.is_none_or(|name| p.name.value == name)
+        {
             let mut process_calls = vec![];
             calls(&p.body, &mut process_calls);
             let mut w = Walker {
@@ -2485,7 +2873,7 @@ mod tests {
             .cloned()
             .collect();
         assert_eq!(policy.len(), 1);
-        let candidates = guard_sites(&src, &ast);
+        let candidates = guard_sites(&src, &ast, None);
         assert!(!candidates.is_empty(), "actually generate guard mutants");
         for candidate in candidates {
             let changed = candidate.apply(&ast);
@@ -2554,8 +2942,8 @@ mod tests {
             let src = source(name);
             let ast = syntax::parse(&src).unwrap();
             let original = ast.clone();
-            let reads = read_sites(&src, &ast);
-            let guards = guard_sites(&src, &ast);
+            let reads = read_sites(&src, &ast, None);
+            let guards = guard_sites(&src, &ast, None);
             for c in reads
                 .iter()
                 .chain(&guards)
@@ -2591,7 +2979,7 @@ mod tests {
             "if po == pass { if po == fail { } else { } } else { end returned }",
         );
         let ast = syntax::parse(&src).unwrap();
-        let cs = guard_sites(&src, &ast);
+        let cs = guard_sites(&src, &ast, None);
         let edited = cs[0].apply(&ast);
         let expected = syntax::parse(&src.replace(
             "if po == pass { if po == fail { } else { } } else { end returned }",
@@ -2603,7 +2991,7 @@ mod tests {
             "if po == pass { if po == fail { } else { } } else { end returned }",
             "if po == pass { end returned } else { end returned }; end returned",
         );
-        let cs = guard_sites(&dead, &syntax::parse(&dead).unwrap());
+        let cs = guard_sites(&dead, &syntax::parse(&dead).unwrap(), None);
         assert!(cs.iter().any(|c| c.identity.ends_with("body/2:keep_then")));
         assert!(cs.iter().any(|c| c.identity.ends_with("body/2:keep_else")));
     }
@@ -2622,7 +3010,7 @@ mod tests {
             let src =
                 source("mut-guard").replace("if po == pass { } else { end returned }", inserted);
             let ast = syntax::parse(&src).unwrap();
-            let sites = guard_sites(&src, &ast);
+            let sites = guard_sites(&src, &ast, None);
             let last = if dead_suffix {
                 "Flow:body/5:keep_then"
             } else {
@@ -2790,7 +3178,7 @@ mod tests {
     fn m_limit_exact_candidate_matrix() {
         let src = source("mut-evidence");
         let ast = syntax::parse(&src).unwrap();
-        let c = read_sites(&src, &ast).remove(0);
+        let c = read_sites(&src, &ast, None).remove(0);
         for limit in [0, 1, 2, 128] {
             for n in [0_usize, 1, 2, 3, 128, 129] {
                 let mut attempts = 0;

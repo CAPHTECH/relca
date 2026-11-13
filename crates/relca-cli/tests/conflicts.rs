@@ -1,5 +1,5 @@
 //! Actual CLI seams and independent wire-negative controls for ADR0041.
-#[path = "../src/fixture_match.rs"]
+#[path = "../src/fixture_match_impl.rs"]
 mod wire;
 use serde_json::{Value, json};
 use std::{path::PathBuf, process::Command};

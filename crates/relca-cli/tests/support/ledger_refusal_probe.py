@@ -29,7 +29,7 @@ def insert_once(path, needle, addition):
 for name in ["Cargo.toml", "Cargo.lock"]:
     shutil.copyfile(ROOT / name, SANDBOX / name)
 hashes = {}
-for crate in ["relca-core", "relca-cli"]:
+for crate in ["relca-core", "relca-cli", "relca-test-support"]:
     source = ROOT / "crates" / crate
     target = SANDBOX / "crates" / crate
     target.mkdir(parents=True)

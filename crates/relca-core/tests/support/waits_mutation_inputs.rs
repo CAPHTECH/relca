@@ -143,6 +143,8 @@ pub fn envelope_with_ends(v: &Value, control: &Value, ends: &[&str]) {
     let row = &v["mutations"][7];
     assert_eq!(row, &control["mutations"][7]);
     if ends.len() < 2 {
+        assert_eq!(v["run"]["candidates_total"], 0);
+        assert!(v["run"]["reason"].is_null());
         assert_eq!(row["status"], "not_applicable");
         assert_eq!(row["reason"], "no_matching_site");
         assert_eq!(row["mutants"], json!([]));

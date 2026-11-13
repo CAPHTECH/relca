@@ -1,0 +1,12 @@
+model MutationLimits version "0.2" {
+  type T = enum { ok }
+  actor A { source document }
+  actor B { source record }
+  actor Probe { capacity 1; capability read() -> T {
+    reads [A,B]; duration fixed 1min; result nondet { ok }
+  } }
+  process Flow { end done }
+  cut Scope { include [A,B,Probe] }
+  bounds { cases 1; live_tasks 1; clock 2min }
+  verify safety no_resource_overcommit
+}

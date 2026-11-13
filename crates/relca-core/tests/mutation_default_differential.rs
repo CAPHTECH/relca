@@ -98,9 +98,11 @@ fn hand_originals_and_source_edits_compare_full_outcome_with_reference() {
             runtime += 1;
         }
     }
-    // Closed materializer population: 79 original inputs + 61 manual edits.
-    assert_eq!(runtime + static_refusals + zero_time, 140);
-    assert_eq!(zero_time, 5);
+    // ADR 0068 removes the two zero-time expiry mutants, not their originals:
+    // 79 original inputs + 59 applicable manual edits. The 129 reference
+    // comparisons and six static refusals are unchanged.
+    assert_eq!(runtime + static_refusals + zero_time, 138);
+    assert_eq!(zero_time, 3);
     assert_eq!(static_refusals, 6);
     assert_eq!(runtime, 129);
 }

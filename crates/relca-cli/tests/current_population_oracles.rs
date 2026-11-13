@@ -46,7 +46,70 @@ fn evidence_dir(root: &Path) -> std::path::PathBuf {
 // state-IR graph oracle; its other thirteen census categories remain unchanged.
 // R2's fourteen closed hand jobs are checked separately, never fed to or
 // subtracted from an existing legacy Report category. CENSUS is unchanged.
-const CENSUS: [usize; 14] = [2535, 4271, 436, 64, 20, 8, 3549, 3549, 3151, 4, 4, 4, 4, 77];
+// ADR 0068: two zero-time expiry mutants are now not_applicable. Their two
+// Report slots and modern-edit contexts disappear; originals and all twelve
+// other categories remain. This is not an oracle exclusion or weaker check.
+// Round 1 adds two advancing-time fixtures: one original and one expiry
+// Report each; only the two originals enter the old graph/completion oracle.
+const CENSUS: [usize; 14] = [2537, 4273, 436, 64, 20, 8, 3551, 3551, 3151, 4, 4, 4, 4, 77];
+
+#[test]
+fn advancing_time_expiry_pair_adds_exactly_four_report_slots_and_two_graph_contexts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in [
+        "mut3-expiry-window",
+        "mut3-expiry-window.broken-late-arrival",
+    ] {
+        let path = format!("fixtures/{name}/model.relca");
+        let source = std::fs::read_to_string(root.join(&path)).unwrap();
+        let args = vec!["mutate".to_owned(), path];
+        let out = Command::new(env!("CARGO_BIN_EXE_relca"))
+            .args(&args)
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let proof = oracle::expected(&doc, Some(&source), &args).unwrap();
+        assert_eq!((proof.reports, proof.excluded, proof.changes), (2, 0, 0));
+        assert_eq!(proof.models.len(), 2);
+        let model = relca_core::lower::lower(&relca_core::syntax::parse(&source).unwrap()).unwrap();
+        common::check(&doc["original"], &model).unwrap();
+        assert!(
+            completion::check(&doc["original"], &model, false)
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn zero_time_expiry_removes_only_two_mutant_slots_not_their_originals() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in [
+        "mut2-expiry.broken-zero-duration",
+        "mut2-expiry-zero-finish",
+    ] {
+        let args = vec!["mutate".to_owned(), format!("fixtures/{name}/model.relca")];
+        let out = Command::new(env!("CARGO_BIN_EXE_relca"))
+            .args(&args)
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(4));
+        let doc: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(doc["run"]["reason"].is_null());
+        assert_eq!(doc["original"]["verdict"], "satisfied");
+        assert_eq!(doc["mutations"][1]["status"], "not_applicable");
+        assert_eq!(doc["mutations"][1]["reason"], "no_time_elapse");
+        let routes = oracle::canonical_reports(&doc, &args);
+        assert_eq!(
+            routes.len(),
+            1,
+            "{name}: keep the original, generate no mutant"
+        );
+        assert_eq!(routes[0].0, "/original");
+    }
+}
 
 fn census_check(actual: &[usize; 14]) -> Result<(), String> {
     let names = [
@@ -483,6 +546,9 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                             counts[4] += oracle::producer_check(&doc, source, &args)
                                 .unwrap_or_else(|e| panic!("{}: {e}", job["id"]));
                             let ast = relca_core::syntax::parse(source).ok();
+                            // doc and argv are immutable here. Reuse this lookup
+                            // instead of cloning every mutant Report per model.
+                            let canonical = oracle::canonical_reports(&doc, &args);
                             for (path, _, mutant) in &proof.models {
                                 // These are the edit families present in the
                                 // original independent common/completion gates.
@@ -498,8 +564,8 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                                     counts[13] += 1;
                                     continue;
                                 }
-                                let selected = oracle::canonical_reports(&doc, &args)
-                                    .into_iter()
+                                let selected = &canonical
+                                    .iter()
                                     .find(|(p, _, _)| p == path)
                                     .unwrap()
                                     .1;

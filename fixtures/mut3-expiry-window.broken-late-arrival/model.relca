@@ -1,0 +1,12 @@
+model ExpiryWindow version "0.2" {
+ type T = enum { ok }
+ people [a1,cfo]
+ actor A { executors [a1]; capability approve() -> T { duration fixed 1min; result nondet { ok } } }
+ authority G { basis "window"; grants a1 to A.approve; issued_by cfo; expires 5min }
+ process Flow { v = A.approve(); end done }
+ cut C { include [A] }
+ arrivals fixed [10min]
+ bounds { cases 1; live_tasks 1; clock 20min }
+ verify safety no_resource_overcommit
+ contract C { authority_basis A.approve G }
+}

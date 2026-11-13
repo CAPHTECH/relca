@@ -79,7 +79,6 @@ fn m_bad_arguments_and_input_failure_are_invalid_before_kind_fold() {
         vec!["mutate", p, "--set=bpr-default"],
         vec!["mutate", p, "--unknown"],
         vec!["mutate", p, "--mode", "exhaustive"],
-        vec!["mutate", p, "--configuration", "Flow"],
         vec!["mutate", p, "--limit", "1"],
         vec!["mutate", "--set", "bpr-default"],
         vec!["mutate", "no-such-mutation-input.relca"],

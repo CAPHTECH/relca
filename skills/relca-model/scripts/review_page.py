@@ -2326,16 +2326,28 @@ class Page:
                     or self.not_derived or self.basis_unknown or self.unread or self.mechanism
                     or self.ai_assumptions or self.unprovenanced)
 
+    def agency_unverified_rows(self):
+        rows = [(o, p, "not_derived: %s" % (r or "")) for o, p, r in self.not_derived]
+        rows += [(o, p, "basis unknown") for o, p in self.basis_unknown]
+        return list(dict.fromkeys(rows))
+
+    def unverified_count(self):
+        """One count for the page and terminal; retain the category data separately."""
+        return len(dict.fromkeys(self.unverified)) + len(self.agency_unverified_rows())
+
     def alerts_html(self):
         out = ['<section id="unverified"><h2>確かめられていないもの・警告</h2>']
         if self.top_empty():
             out.append('<p class="ok-line">この入力の範囲で検出されたものは無い。</p>')
         uniq = list(dict.fromkeys(self.unverified))
+        count = self.unverified_count()
+        if count:
+            out.append('<div class="alert error"><b>確かめられていないもの %d 件。</b>'
+                       'inconclusive・unsupported・invalid・vacuous・exit 未確認・Cut 未宣言・'
+                       'Agency の未導出・根拠不明は合格ではない。</div>' % count)
         if uniq:
             rows = [[esc(src), "<code>%s</code>" % esc(what), verdict_badge(v) if v in EXIT_OF else
                      '<span class="badge warn">%s</span>' % esc(v), esc(why)] for src, what, v, why in uniq]
-            out.append('<div class="alert error"><b>確かめられていないもの %d 件。</b>'
-                       'inconclusive・unsupported・invalid・vacuous・exit 未確認・Cut 未宣言は合格ではない。</div>' % len(rows))
             out.append(self.table(["出所", "対象", "扱い", "理由"], rows, "unverified"))
         if self.not_run:
             out.append('<h3>回していない・渡されていないもの</h3><ul id="not-run">%s</ul>'
@@ -2383,8 +2395,7 @@ class Page:
             out.append("<h3>仕組みをモデル化していない性質(mechanism_unmodeled)</h3><p>%s。満たしていても現実の機構(二重登録防止など)を認定しない(ADR 0056)。</p>"
                        % esc(", ".join("%s %s" % x for x in dict.fromkeys(self.mechanism))))
         if self.not_derived or self.basis_unknown:
-            rows = [[esc(o), esc(p), esc("not_derived: %s" % (r or ""))] for o, p, r in self.not_derived]
-            rows += [[esc(o), esc(p), "basis unknown"] for o, p in self.basis_unknown]
+            rows = [[esc(x) for x in row] for row in self.agency_unverified_rows()]
             out.append("<h3>Agency の観点で導出されなかったもの・根拠が不明なもの %d 件</h3>" % len(rows))
             out.append(self.table(["出所", "場所", "状態"], rows))
         if self.unread:
@@ -2399,10 +2410,11 @@ class Page:
         if self.main is None:
             self.alert("error", "check か explain の JSON が無い。モデルの照合は source だけから作る")
         body = self.section_model() + self.section_conclusion() + self.section_mutation()
-        body = body.replace("<!--UNVERIFIED-COUNT-->", str(len(dict.fromkeys(self.unverified))))
         head = self.header(now) + self.alerts_html()
+        body = body.replace("<!--UNVERIFIED-COUNT-->", str(self.unverified_count()))
         summary = {
             "unverified": [list(x) for x in dict.fromkeys(self.unverified)],
+            "unverified_count": self.unverified_count(),
             "alerts": [list(x) for x in dict.fromkeys(self.alerts)],
             "not_run": self.not_run,
             "self_unchecked": self.self_unchecked,
@@ -2494,7 +2506,7 @@ def main(argv=None):
     text = page.render()
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(text)
-    n_unv = len(dict.fromkeys(page.unverified))
+    n_unv = page.unverified_count()
     n_alert = len(dict.fromkeys(page.alerts))
     print("wrote %s: 確かめられていないもの %d 件、警告 %d 件" % (args.output, n_unv, n_alert))
     return 0

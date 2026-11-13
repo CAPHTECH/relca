@@ -1491,6 +1491,7 @@ fn run_corpus(reference_limits: Limits, fixtures: bool) {
             || effect_population::fixture(id)
             || record_population::fixture(id)
             || mutation_default_population::fixture(id)
+            || mutation_default_population::review_fixture(id)
             || include!("support/quality_names.rs").contains(&id)
             || serde_json::from_str::<Vec<String>>(include_str!("support/rule_names.json"))
                 .unwrap()

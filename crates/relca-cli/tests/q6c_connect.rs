@@ -295,6 +295,8 @@ fn strict_mode(kind: &str) {
     );
     if kind == "mutate" {
         assert_eq!(v["original_verdict"], "satisfied");
+        assert_eq!(v["run"]["candidates_total"], 0);
+        assert!(v["run"]["reason"].is_null());
     }
     assert_eq!(
         exit,

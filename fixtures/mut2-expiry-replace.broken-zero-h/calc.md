@@ -1,5 +1,7 @@
 # mut2-expiry-replace.broken-zero-h — ADR 0046
 
+Round 2: expires0h already equals0, so expiry has0 candidates; other supported operators have no sites. Total/attempts=0 retains unsupported/exit4 (reason null), without changing the original check.
+
 T03/T23: explicit amount0 is an identity edit in every unit; no candidate. Original finish1>0 is violated.
 
 Expected values were derived before running the implementation. Time/work unit: minute.

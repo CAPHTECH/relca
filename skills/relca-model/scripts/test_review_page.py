@@ -13,6 +13,7 @@ relca の binary は環境変数 RELCA_BIN、無ければ <repo>/target/debug/re
 """
 
 import html
+import io
 import json
 import os
 import re
@@ -20,6 +21,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -85,6 +88,39 @@ class ReviewPageTest(unittest.TestCase):
         cls._tmp.cleanup()
 
     # ---------------------------------------------------------- 実出力
+
+    def test_terminal_and_page_count_fifteen_not_derived_items(self):
+        out, err, code = self.r["as-is-check"]
+        target = Path(self.tmp) / "not-derived-count.html"
+        argv = ["--model", str(INV / "as-is.relca"), "--check", str(out),
+                "--check-exit", str(code), "--check-stderr", str(err),
+                "--no-mermaid", "-o", str(target)]
+        p = review_page.Page(review_page.parse_args(argv))
+        p.unverified = []
+        p.not_derived = [("check", "agency/viewpoints/observation/%d" % i, "derivation_limit")
+                         for i in range(15)]
+        p.basis_unknown = []
+        terminal = io.StringIO()
+        with patch.object(review_page, "Page", return_value=p), redirect_stdout(terminal):
+            self.assertEqual(review_page.main(argv), 0)
+        self.assertIn("確かめられていないもの 15 件", terminal.getvalue())
+        text = target.read_text(encoding="utf-8")
+        self.assertIn("確かめられていないもの 15 件", section(text, "unverified"))
+        self.assertIn("導出されなかったもの・根拠が不明なもの 15 件", text)
+        self.assertIn("(15 件)", section(text, "conclusion"))
+        embedded = re.search(r'id="review-data">(.*?)</script>', text, re.S)
+        assert embedded is not None
+        data = json.loads(embedded.group(1))
+        self.assertEqual(data["unverified_count"], 15)
+        self.assertEqual(data["unverified"], [])  # Existing category data is preserved.
+
+    def test_unverified_count_deduplicates_items_but_keeps_distinct_origins(self):
+        p = object.__new__(review_page.Page)
+        p.unverified = [("check", "P", "unsupported", "reason")] * 2
+        p.not_derived = [("check", "agency/foo", "derivation_limit")] * 2 + [
+            ("compare First", "agency/foo", "derivation_limit")]
+        p.basis_unknown = [("check", "agency/bar")] * 2
+        self.assertEqual(p.unverified_count(), 4)
 
     def test_exit_codes_match_commands_json(self):
         expected = {c["id"]: c["expected_exit"] for c in json.loads((INV / "commands.json").read_text())}

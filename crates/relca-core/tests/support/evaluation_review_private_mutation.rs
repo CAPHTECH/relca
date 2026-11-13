@@ -9,7 +9,9 @@ fn kind7_forbids_all_seven_separately_calibrated_entry_points() {
     assert_eq!(original.verdict, Verdict::Satisfied);
     let mut out = uncomputed("original_not_decidable", 128);
     out.original = Some(original);
-    let (_, counts) = crate::evaluation_spy::observe(|| kind7(source, &ast, &mut out, &mut 0, 128));
+    let (_, counts) = crate::evaluation_spy::observe(|| {
+        kind7(source, &ast, &mut out, &mut 0, &Options::default(), None)
+    });
     assert_eq!(out.mutations[7].mutants.len(), 4);
     assert!(
         out.mutations[7]

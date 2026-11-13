@@ -14,3 +14,6 @@ num-traits.workspace = true
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
+
+[dev-dependencies]
+relca-test-support = { path = "../relca-test-support" }

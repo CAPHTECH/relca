@@ -16,7 +16,14 @@ python3 -B -c 'from pathlib import Path; Path("target/.check-ok").unlink(missing
 step() { echo "== $*"; "$@"; }
 step cargo fmt --all --check
 step cargo clippy --workspace --all-targets --quiet -- -D warnings
-step cargo test --workspace --quiet
+if command -v cargo-nextest >/dev/null 2>&1; then
+  echo "check: test runner = nextest + cargo test --doc"
+  step cargo nextest run --workspace
+  step cargo test --doc --workspace --quiet
+else
+  echo "check: test runner = cargo test (cargo-nextest not found)"
+  step cargo test --workspace --quiet
+fi
 step python3 -B scripts/check-refs.py
 step python3 -B scripts/test-phase1-acceptance.py
 mkdir -p target

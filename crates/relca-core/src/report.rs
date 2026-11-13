@@ -1018,6 +1018,7 @@ fn simulation_base(mut base: Report) -> SimulationReport {
 pub fn simulation_input_failure(message: &str) -> SimulationReport {
     let mut base = empty_report("");
     base.model.sha256 = None;
+    base.cut = Cut::Status(CutStatus::Unresolved);
     seal_simulation(simulation_empty(finish(
         base,
         vec![diag::Diagnostic {
@@ -1032,6 +1033,7 @@ pub fn simulation_input_failure(message: &str) -> SimulationReport {
 pub(crate) fn comparison_input_failure(message: &str) -> Report {
     let mut report = empty_report("");
     report.model.sha256 = None;
+    report.cut = Cut::Status(CutStatus::Unresolved);
     report.ledger = crate::ledger::Ledger::input_failure("exhaustive");
     finish(
         report,
@@ -2020,6 +2022,31 @@ pub(crate) fn check_ast_with_scenario_using(
         execute,
     );
     report.ledger.requested(None, scenario);
+    seal(report)
+}
+
+// Mutated ASTs use the same requested/effective configuration as ordinary check.
+pub(crate) fn check_ast_with_selection_using(
+    src: &str,
+    model: &ast::Model,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    execute: impl FnOnce(&ir::Model) -> outcome::Outcome,
+) -> Report {
+    if configuration.is_none() {
+        return check_ast_with_scenario_using(src, model, scenario, execute);
+    }
+    let mut report = check_with(
+        src,
+        |_| Ok(model.clone()),
+        |a| lower::lower_with_selection(a, configuration, scenario),
+        execute,
+    );
+    report.ledger.requested(configuration, scenario);
+    if report.ledger.actor_versions["status"] == "known" {
+        report.ledger.execution["selection"]["effective"]["configuration"] =
+            configuration.map_or_else(crate::ledger::undeclared, crate::ledger::known);
+    }
     seal(report)
 }
 

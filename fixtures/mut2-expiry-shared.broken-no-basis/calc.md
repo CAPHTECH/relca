@@ -1,5 +1,7 @@
 # mut2-expiry-shared.broken-no-basis — ADR 0046
 
+Round 2: removing both authority_basis clauses leaves0 named expiry sites. No other supported site remains. Total/attempts=0 retains unsupported/exit4 (reason null), not success.
+
 T02: one Authority, two clauses, finish times1 and2 >0. One candidate, affected [v,w].
 
 Expected values were derived before running the implementation. Time/work unit: minute.

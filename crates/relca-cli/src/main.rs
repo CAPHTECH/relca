@@ -20,20 +20,34 @@ fn main() {
         Some("sensitivity") => std::process::exit(sensitivity::run(&args).exit_code()),
         Some("conform") => conform::run(&args),
         Some("explain") => {
-            let result = match flags(&args, &["--scenario"], EXPLAIN) {
+            let result = match flags(&args, &["--configuration", "--scenario"], EXPLAIN) {
                 Some((path, options)) => match std::fs::read_to_string(path) {
-                    Ok(src) => {
-                        explain::explain_with_scenario(&src, options.get("--scenario").copied())
-                    }
-                    Err(error) => explain::input_failure_with_scenario(
+                    Ok(src) => explain::explain_with_selection(
+                        &src,
+                        options.get("--configuration").copied(),
+                        options.get("--scenario").copied(),
+                    ),
+                    Err(error) => explain::input_failure_with_selection(
                         &format!("Cannot read {path}: {error}"),
+                        options.get("--configuration").copied(),
                         options.get("--scenario").copied(),
                     ),
                 },
-                _ => explain::argument_failure("usage: relca explain <path> [--scenario NAME]"),
+                _ => explain::argument_failure(
+                    "usage: relca explain <path> [--configuration NAME] [--scenario NAME]",
+                ),
             };
             for diagnostic in &result.report.diagnostics {
                 eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+            }
+            if !args.iter().any(|a| a == "--configuration")
+                && result
+                    .report
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.code == "E-CONF-0" && d.message.contains("configuration"))
+            {
+                eprintln!("hint: relca explain <path> --configuration NAME [--scenario NAME]");
             }
             for diagnostic in &result.explanation.diagnostics {
                 eprintln!("explain: {}: {}", diagnostic.code, diagnostic.message);
@@ -45,19 +59,54 @@ fn main() {
             std::process::exit(result.report.verdict.exit_code());
         }
         Some("mutate") => {
-            let usage = "usage: relca mutate <path> [--set bpr-default] [--scenario NAME]";
-            let parsed = flags(&args, &["--set", "--scenario"], MUTATE)
-                .filter(|(_, o)| o.get("--set").is_none_or(|s| *s == "bpr-default"));
+            // Keep pre-existing refusal diagnostics byte-identical for old argv.
+            let usage = if args.iter().any(|s| {
+                matches!(
+                    s.as_str(),
+                    "--mutant-limit" | "--kinds" | "--sites" | "--configuration"
+                )
+            }) {
+                "usage: relca mutate <path> [--set bpr-default] [--configuration NAME] [--scenario NAME] [--mutant-limit N] [--kinds k1,k2] [--sites ID1,ID2]"
+            } else {
+                "usage: relca mutate <path> [--set bpr-default] [--scenario NAME]"
+            };
+            let parsed = flags(
+                &args,
+                &[
+                    "--set",
+                    "--configuration",
+                    "--scenario",
+                    "--mutant-limit",
+                    "--kinds",
+                    "--sites",
+                ],
+                MUTATE,
+            )
+            .filter(|(_, o)| o.get("--set").is_none_or(|s| *s == "bpr-default"))
+            .filter(|(_, o)| o.get("--configuration").is_none_or(|v| (CHECK.value)(v)))
+            .and_then(|(path, options)| {
+                let mutation_options = mutation::Options::parse(
+                    options.get("--mutant-limit").copied(),
+                    options.get("--kinds").copied(),
+                )
+                .ok()?
+                .with_sites(options.get("--sites").copied())
+                .ok()?
+                .with_configuration(options.get("--configuration").copied());
+                Some((path, options, mutation_options))
+            });
             let result = match parsed {
-                Some((path, options)) => match std::fs::read_to_string(path) {
-                    Ok(src) => mutation::mutate_set_with_scenario(
+                Some((path, options, mutation_options)) => match std::fs::read_to_string(path) {
+                    Ok(src) => mutation::mutate_with_options(
                         &src,
                         "bpr-default",
                         options.get("--scenario").copied(),
+                        &mutation_options,
                     ),
-                    Err(error) => mutation::input_failure_with_scenario(
+                    Err(error) => mutation::input_failure_with_options(
                         &format!("Cannot read {path}: {error}"),
                         options.get("--scenario").copied(),
+                        &mutation_options,
                     ),
                 },
                 None => mutation::argument_failure(usage),
@@ -276,7 +325,7 @@ struct Shape {
 }
 const EXPLAIN: Shape = Shape {
     path: |p| !p.is_empty() && !p.starts_with('-'),
-    value: |_| false,
+    value: |v| !v.is_empty() && !v.starts_with("--"),
 };
 const MUTATE: Shape = Shape {
     path: |p| !p.is_empty() && !p.starts_with('-'),
@@ -383,22 +432,14 @@ fn input_failure(message: String) -> report::Report {
             name: None,
             sha256: None,
         },
-        cut: report::Cut::UNDECLARED,
+        cut: report::Cut::Status(report::CutStatus::Unresolved),
         assumptions: Vec::new(),
-        diagnostics: vec![
-            diag::Diagnostic {
-                code: diag::E_SYN_0.into(),
-                severity: diag::Severity::Error,
-                message,
-                span: None,
-            },
-            diag::Diagnostic {
-                code: diag::W_CUT_0.into(),
-                severity: diag::Severity::Warning,
-                message: "Cut is undeclared; exclusions are unknown".into(),
-                span: None,
-            },
-        ],
+        diagnostics: vec![diag::Diagnostic {
+            code: diag::E_SYN_0.into(),
+            severity: diag::Severity::Error,
+            message,
+            span: None,
+        }],
         bounds: report::Bounds {
             range_violation_stops: None,
             cases: None,
@@ -434,7 +475,7 @@ mod tests {
             report.verdict
         );
         let json = serde_json::to_value(report).unwrap();
-        assert_eq!(json["cut"], "undeclared");
+        assert_eq!(json["cut"], "unresolved");
         assert!(json["model"]["sha256"].is_null());
         assert!(json["bounds"]["clock"].is_null());
         assert!(json["bounds"]["truncated"].is_null());

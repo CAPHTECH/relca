@@ -151,7 +151,10 @@ fn mutation_blocked_missing_original_and_no_candidate_run_do_not_fabricate_child
     let v = h::cli(&["mutate"]);
     assert_eq!(v.exit, 3);
     assert!(v.value["original"].is_null());
-    h::ledger(&v.value, &Spec::aggregate("mutation"));
+    let mut rejected = Spec::aggregate("mutation");
+    rejected.limits["mutant_limit"] =
+        json!({"status":"not_applicable","value":null,"reason":"no_analysis"});
+    h::ledger(&v.value, &rejected);
     let source = include_str!("../../../fixtures/mut-empty/model.relca");
     let v = h::invoke("mutate", source, &[]);
     assert_eq!(v.exit, 4);

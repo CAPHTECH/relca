@@ -9027,6 +9027,20 @@
     ]
   },
   {
+    "id": "fixture-mut3-expiry-window",
+    "args": [
+      "mutate",
+      "fixtures/mut3-expiry-window/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mut3-expiry-window.broken-late-arrival",
+    "args": [
+      "mutate",
+      "fixtures/mut3-expiry-window.broken-late-arrival/model.relca"
+    ]
+  },
+  {
     "id": "fixture-nondet-race",
     "args": [
       "check",

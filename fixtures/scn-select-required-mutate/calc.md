@@ -3,6 +3,7 @@
 Hand oracle, fixed before implementation (ADR0042; plan section 3). Time unit: min.
 
 Only invocation selector is removed. mutate must require a selector even with just one scenario; simulate may not return E-SIM-0 first.
+Round 2: the selected model has no executable mutation sites. Unsupported retains precedence (exit4, reason null). The selector-missing broken counterpart is still blocked/invalid.
 Selector-error span follows the archived PRE-B5 configuration-required check/simulate diagnostics for crates/relca-cli/tests/support/scenario_legacy.relca (whole model [0,425)); see tests/support/scenario-selector/calc.md. The original executable is recorded separately.
 
 

@@ -153,8 +153,8 @@ fn refusal_reaches_every_nested_report_and_bad_rows_cannot_hide_in_wrappers() {
     let source=hand::source("req-start.broken-false").replace("  bounds","  cut C { include [A] }\n  configuration X { cut C; process Flow }\n  configuration Y { cut C; process Flow }\n  bounds");
     for (command, args, paths) in [
         ("check", vec!["--configuration", "X"], vec![""]),
-        // explain has no configuration selection (ADR 0021 追記): it reads
-        // the single-process source.
+        // Preserve the original no-selector explain coverage using the
+        // single-process source; selected explain is covered separately.
         ("explain", vec![], vec![""]),
         (
             "diff",

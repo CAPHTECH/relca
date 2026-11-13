@@ -77,29 +77,9 @@
     "rows": [
       {
         "kind": "authority_expired",
-        "status": "generated",
-        "reason": null,
-        "mutants": [
-          {
-            "id": "authority_expired:ApprovalGrant:expires",
-            "operator": "expire_authority",
-            "site": {
-              "authority": "ApprovalGrant",
-              "process": null,
-              "actor": null,
-              "capability": null,
-              "source": null,
-              "statement_path": null,
-              "retained_branch": null,
-              "affected_bindings": [
-                "v"
-              ]
-            },
-            "result": "undetected",
-            "reason": "no_worsening",
-            "assigned_changes": []
-          }
-        ]
+        "status": "not_applicable",
+        "reason": "no_time_elapse",
+        "mutants": []
       },
       {
         "kind": "summary_reused",
@@ -110,13 +90,8 @@
     ],
     "terminals": {},
     "old_sites": null,
-    "calculation": "T01: finish1 > expiry0 gives satisfied→violated. Control finish0 ≤ expiry0 stays satisfied.",
-    "hand_edits": [
-      {
-        "id": "authority_expired:ApprovalGrant:expires",
-        "source": "model Expiry version \"0.2\" {\n  type Verdict = enum { pass, fail }\n  people [a1,cfo]\n  actor Approver { executors [a1]; capability approve() -> Verdict { duration fixed 0min; result nondet { pass } } }\n  authority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo ; expires 0min }\n  process Flow { v = Approver.approve(); end done }\n  cut Scope { include [Approver] }\n  bounds { cases 1; live_tasks 1; clock 10min }\n  verify safety no_resource_overcommit\n  contract Controls { authority_basis Approver.approve ApprovalGrant }\n}\n"
-      }
-    ]
+    "calculation": "ADR0068: every service time and completed time is 0. Expiry at 0 is inclusive, so expiry mutation is not_applicable/no_time_elapse; no candidate is generated.",
+    "hand_edits": []
   },
   "mut2-expiry-shared": {
     "expected": {
@@ -5026,29 +5001,9 @@
     "rows": [
       {
         "kind": "authority_expired",
-        "status": "generated",
-        "reason": null,
-        "mutants": [
-          {
-            "id": "authority_expired:ApprovalGrant:expires",
-            "operator": "expire_authority",
-            "site": {
-              "authority": "ApprovalGrant",
-              "process": null,
-              "actor": null,
-              "capability": null,
-              "source": null,
-              "statement_path": null,
-              "retained_branch": null,
-              "affected_bindings": [
-                "v"
-              ]
-            },
-            "result": "undetected",
-            "reason": "no_worsening",
-            "assigned_changes": []
-          }
-        ]
+        "status": "not_applicable",
+        "reason": "no_time_elapse",
+        "mutants": []
       },
       {
         "kind": "summary_reused",
@@ -5059,13 +5014,8 @@
     ],
     "terminals": {},
     "old_sites": null,
-    "calculation": "T23: explicit30→0 is a real AST edit but finish0 remains within expiry0, no_worsening. Already explicit0 is no site. Both original models satisfied at0.",
-    "hand_edits": [
-      {
-        "id": "authority_expired:ApprovalGrant:expires",
-        "source": "model Expiry version \"0.2\" {\n  type Verdict = enum { pass, fail }\n  people [a1,cfo]\n  actor Approver { executors [a1]; capability approve() -> Verdict { duration fixed 0min; result nondet { pass } } }\n  authority ApprovalGrant { basis \"approval table\"; grants a1 to Approver.approve; issued_by cfo; expires 0min }\n  process Flow { v = Approver.approve(); end done }\n  cut Scope { include [Approver] }\n  bounds { cases 1; live_tasks 1; clock 10min }\n  verify safety no_resource_overcommit\n  contract Controls { authority_basis Approver.approve ApprovalGrant }\n}\n"
-      }
-    ]
+    "calculation": "ADR0068: explicit30→0 would leave finish0 within expiry0, but with no elapsed time the operator is not_applicable/no_time_elapse. Already explicit0 remains no_matching_site.",
+    "hand_edits": []
   },
   "mut2-expiry-zero-finish.broken-explicit-zero": {
     "expected": {

@@ -16,6 +16,12 @@ CLI は標準出力に JSON を出し、診断は標準エラーにも書きま�
 
 最初に `mode` と `verdict` を確認し、次に以下を読みます。
 explain は check と同じ最上位の欄に `explanation` を加えます。反例はその欄にあります。
+explain と mutate も `--configuration NAME` と `--scenario NAME` で check と同じ対象を選べます。
+構成の指定が必要なモデルで省略した場合や、未知の構成名は invalid です。
+mutate の元の検査と変異体、explain の反例と再生は同じ選択を使います。
+引数の誤りなどで模型を読む前に止まった report は、hash が null、Cut は `unresolved` です。
+この場合は未宣言とは判断できないため W-CUT-0 を出しません。
+読んだ模型の Cut が未宣言なら、従来どおり警告します。
 欄は宣言や分析モードによって省略されることがあります。欄の省略だけから、対応済み・検査済みとは判断しないでください。
 
 | 欄 | 確認する内容 |
@@ -71,3 +77,64 @@ O/F/P/J/U/E/L は次のような集合・件数・状態を読む記号として
   子の結論、理由、対象を最上位の表示と一緒に読みます。
 
 [保証の範囲](guarantees.md) と [手計算](../../fixtures/README.md) も参照してください。
+
+## mutate の範囲と実行上限
+
+```sh
+relca mutate model.relca --mutant-limit 512 --kinds evidence_missing,original_access_removed
+```
+
+`--mutant-limit N` は変異体全体の実行数の上限です。既定は128、指定できるのは
+1〜4096の整数です。0、負数、非整数、空値、上限超過は `invalid` (exit 3)。
+受理した計算上限は `run.mutant_limit` と `ledger.execution.limits.mutant_limit` に入ります。
+上限後の候補は `not_run` / `mutant_limit` として残り、run は
+`completion: inconclusive` / `reason: mutant_limit` になります。
+未対応種が選択されていれば、最上位の verdict は優先順により `unsupported` です。
+
+`--kinds` は `mutations[].kind` の名前をカンマで区切って指定します。
+名前は `evidence_missing`、`authority_expired`、`hold_delayed`、`command_resent`、
+`summary_reused`、`stale_definition_write`、`receipt_unknown`、
+`old_promise_denominator_removed`、`refusal_path_cut`、`original_access_removed` です。
+未知名、空リスト、空要素、重複、余白は `invalid`。省略時は全種です。
+選外の行も残り、`status: not_selected`、`reason: not_selected`、`mutants: []` と表示します。
+`unchecked` の `mutation.kind.<kind>` も併読してください。
+選外は成功にも検出漏れにも数えず、verdict と completion は選択範囲だけで決めます。
+明示した範囲の除外であって計算の切断ではないため、選外だけでは `inconclusive` にしません。
+実行した変異体が0件でfoldがsatisfiedになる場合だけ `vacuous` (exit5)、reasonは `no_selected_mutant` です。
+未対応種が選択されてfoldがunsupportedなら、0件でもunsupported/exit4を維持します。
+該当箇所なしやkinds/sitesの積集合が空でも、成功とはしません。元の検査の拒否や計算の切断は別扱いです。
+
+| 欄 | 意味 |
+|---|---|
+| `mutations[].candidates` | 既存の列挙規則で見つかった候補数。選外や `not_run` の分も含む。該当なしは0。未対応・元の検査で停止など、列挙できない場合は null |
+| `run.candidates_total` | 列挙できた種類の候補数の合計。選外も含む。列挙に進めなければ null |
+
+全種を回すには合計、種類を絞るなら選択した行の合計を実行上限の目安にします。
+合計が4096超なら種類を分けられますが、1種類だけで4096超なら全候補を実行できません。
+上限を増やしても、個々の検査の切断や未対応は解消するとは限りません。
+候補数は実行数でも網羅率でもなく、null を0と読んではいけません。
+
+場所を絞るには `--sites ID1,ID2` を指定します。ID は出力の `mutations[].mutants[].id`
+をそのまま使います。kind と既存の site の区別を含むため、同じ reads でも種類が違えば
+別IDです。ソースを編集するとIDが変わることがあります。未知ID、空指定・空要素、重複は invalid。
+`--kinds` と両方指定すると積集合を実行します。
+選外の場所も mutant 行に残り、`result: not_selected`、`reason: not_selected`、report は null。
+`unchecked` の `mutation.site.<id>` と併読します。選外の場所は予算・検出・未検出・成功に
+数えず、それだけでは inconclusive にしません。候補数は選外の場所も含みます。
+
+授権失効の変異は、全操作が0分で、切断の無い完了時刻もすべて絶対時刻0の場合、
+`not_applicable` / `no_time_elapse`、候補数0です。期限0は時刻0を含むためです。
+0分の操作でも、到着や待ちで時刻が進む場合はこの除外をしません。
+全応答のbackoffが0であることも直接検査します。正のbackoffが到達しない箇所にあっても除外しません。
+静的な正のWaitまたはWaitUntilがあれば、End後や到達しない枝も含めて同じく除外しません。
+カレンダーも別の時間源なので、Actor・資源・人のカレンダーを含むresource_timeがある場合は、この除外をしません。
+この保守的な判定では実際の時刻が進まなくても変異体がundetectedとなり得ますが、その場合はviolated/exit1でありexit0にはなりません。
+
+構成を明示選択したときは、構成の数を問わず実効process内のcall・reads・guard・終端に候補を絞ります。
+共有Capabilityのaffected_bindingsにも、そのprocessの呼出しだけを記録します。
+種類の候補箇所を1つでもsitesで外すと、その種類の段はcheckedに入れずuncheckedへ残します。
+全体の生成/比較の段も同様です。kindsで1種類でも外した場合も全体の段はuncheckedです。
+比較を0件しか行っていない段もcheckedには載せません。
+構成の数を問わず、明示した構成の実効processで列挙します。無指定の宣言ベースの列挙は保持します。
+不正な上限やsite IDでは上限は未使用なので、run/ledgerのmutant_limitは
+not_applicable / value:null / reason:no_analysis と表示し、128とは表示しません。

@@ -1,7 +1,7 @@
 """ADR0046 hand materializer. Never invokes Relca or harvests implementation output.
 
 Each edit is checked for a witness. The oracle describes only the new two rows;
-the old four rows are protected separately by the pre-change byte manifest.
+the old four rows are protected separately by current goldens and semantic tests.
 """
 import json
 import re
@@ -98,13 +98,31 @@ def row(kind, ms, blocked=False):
 
 
 def put(name, source, calc, authorities=(), summaries=(), original='satisfied',
-        completion='complete', reason=None, terminals=None, old_sites=None):
+         completion='complete', reason=None, terminals=None, old_sites=None):
+    no_expiry_time = name in ('mut2-expiry.broken-zero-duration', 'mut2-expiry-zero-finish')
+    if no_expiry_time:
+        # Hand cases: one zero-minute operation, arrival/finish at absolute 0.
+        # This is the declared applicability decision, not a call to the producer.
+        authorities = ()
+        calc += ' ADR0068: no elapsed time; authority_expired is not_applicable/no_time_elapse, candidates 0.'
+    no_selected = name in (
+        'mut2-expiry.broken-zero-duration', 'mut2-expiry-shared.broken-no-basis',
+        'mut2-expiry-replace.broken-zero-min', 'mut2-expiry-replace.broken-zero-h',
+        'mut2-expiry-replace.broken-zero-d', 'mut2-expiry-waive.broken-waive-only',
+        'mut2-expiry-inherited.broken-explicit-zero', 'mut2-expiry-zero-finish',
+        'mut2-expiry-zero-finish.broken-explicit-zero',
+    )
     blocked = original not in ('satisfied', 'violated')
     expected = {'verdict': original if blocked else 'unsupported',
                 'original_verdict': original,
                 'run': {'completion': 'blocked' if blocked else completion,
                         'reason': 'original_not_decidable' if blocked else reason,
-                        'mutant_limit': 128, 'limit_reached': reason == 'mutant_limit'}}
+                         'mutant_limit': 128, 'limit_reached': reason == 'mutant_limit'}}
+    if no_expiry_time:
+        expected['run']['candidates_total'] = 0
+    if no_selected:
+        assert not authorities and not summaries
+        calc += ' Round2: all supported candidate counts are 0, but unsupported retains precedence (exit4); no success or no_selected_mutant is claimed.'
     diagnostic_codes={
         'mut2-gate':['E-NAME-0'],
         'mut2-gate.broken-unsupported':['U-SYN-0','W-CUT-0'],
@@ -116,6 +134,8 @@ def put(name, source, calc, authorities=(), summaries=(), original='satisfied',
         expected['original']={'diagnostics':[{'code':code} for code in diagnostic_codes[name]]}
     rows = [row('authority_expired', list(authorities), blocked),
             row('summary_reused', list(summaries), blocked)]
+    if no_expiry_time:
+        rows[0]['reason'] = 'no_time_elapse'
     record = {'expected': expected, 'rows': rows, 'terminals': terminals or {},
               'old_sites': old_sites, 'calculation': calc}
     manual = []
@@ -155,9 +175,9 @@ def put(name, source, calc, authorities=(), summaries=(), original='satisfied',
     (directory / 'invocation.json').write_text('{"command":"mutate"}\n')
     (directory / 'calc.md').write_text(f'# {name} — ADR 0046\n\n{calc}\n\n'
         'Expected values were derived before running the implementation. Time/work unit: minute.\n'
-        'Mutation is not a coverage or real-world quality score. Four unavailable kinds remain unsupported.\n'
+        'Mutation is not a coverage or real-world quality score. Rule-version mutation and the undeclared quality denominator remain unsupported here.\n'
         'The exact new-row oracle is mutation_default_oracle.json in core tests/support.\n'
-        'Unimplemented mutation acceptance stops RED; this is not semantic verification.\n')
+        'The hand values are acceptance oracles, not implementation snapshots.\n')
 
 
 def pair(name, source, broken, fault, calc, a=(), s=(), ba=(), bs=(), **kw):

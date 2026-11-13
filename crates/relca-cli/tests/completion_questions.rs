@@ -210,8 +210,8 @@ fn check_explain_compare_diff_mutate_and_simulation_keep_completion_boundaries()
     std::fs::write(&file, &src).unwrap();
     for (command, flags) in [
         ("check", vec!["--configuration", "A"]),
-        // explain has no configuration selection (ADR 0021 追記): it reads
-        // the single-process source below.
+        // Preserve the original no-selector explain coverage using the
+        // single-process source below; selected explain is tested separately.
         ("explain", vec![]),
         ("compare", vec!["--plans", "A,B", "--mode", "exhaustive"]),
         ("diff", vec!["--from", "A", "--to", "B"]),

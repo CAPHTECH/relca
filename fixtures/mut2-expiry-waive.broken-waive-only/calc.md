@@ -1,5 +1,7 @@
 # mut2-expiry-waive.broken-waive-only — ADR 0046
 
+Round 2: an authority named only by waive is not an expiry site. All other supported operators also have0 candidates; total/attempts=0 retains unsupported/exit4 (reason null). The original check is unchanged.
+
 T13f: authorized_by alone is not a named basis site. No expiry candidate, done5/work5.
 
 Expected values were derived before running the implementation. Time/work unit: minute.

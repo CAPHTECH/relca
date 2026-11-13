@@ -375,7 +375,12 @@ fn check_unreadable_file_is_invalid() {
     assert_eq!(report.bounds.truncated, None);
     assert!(report.properties.is_empty());
     assert!(report.terminals.is_empty());
-    assert!(report.diagnostics.iter().any(|d| d.code == "W-CUT-0"));
+    assert_eq!(
+        report.cut,
+        relca_core::report::Cut::Status(relca_core::report::CutStatus::Unresolved)
+    );
+    assert!(report.diagnostics.iter().any(|d| d.code == "E-SYN-0"));
+    assert!(!report.diagnostics.iter().any(|d| d.code == "W-CUT-0"));
 }
 
 #[test]

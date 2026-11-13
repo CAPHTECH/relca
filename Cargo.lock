@@ -147,6 +147,7 @@ name = "relca-cli"
 version = "0.0.0"
 dependencies = [
  "relca-core",
+ "relca-test-support",
  "serde_json",
 ]
 
@@ -157,9 +158,18 @@ dependencies = [
  "num-bigint",
  "num-rational",
  "num-traits",
+ "relca-test-support",
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "relca-test-support"
+version = "0.0.0"
+dependencies = [
+ "relca-core",
+ "serde_json",
 ]
 
 [[package]]

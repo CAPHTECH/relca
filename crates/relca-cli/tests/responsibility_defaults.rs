@@ -140,6 +140,10 @@ fn raw_cli_modes_keep_warning_transport_prefix_and_exit_separate() {
     ] {
         let (v, err, code) = run(source, command, &flags);
         assert_eq!(code, exit, "{command}: {v}");
+        if command == "mutate" {
+            assert_eq!(v["run"]["candidates_total"], 0);
+            assert!(v["run"]["reason"].is_null());
+        }
         for pointer in pointers {
             let r = v.pointer(pointer).unwrap();
             assert_eq!(rows(r).len(), 1, "{command} {pointer}: {v}");
@@ -195,6 +199,10 @@ fn legacy_substrate_accepts_every_transport_before_default_warning_implementatio
     ] {
         let (value, _, code) = run(body, command, &flags);
         assert_eq!(code, exit, "{command} substrate: {value}");
+        if command == "mutate" {
+            assert_eq!(value["run"]["candidates_total"], 0);
+            assert!(value["run"]["reason"].is_null());
+        }
     }
 }
 #[test]

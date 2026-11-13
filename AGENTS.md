@@ -20,7 +20,14 @@
 ## 検査
 
 - 変更ごとに `./scripts/check.sh`。fmt、clippy、test、版つき節番号と受入表の照合を
-  実行する。同じ内容での合格は記録される。
+  この順で実行する。同じ内容での合格は記録され、`--force` で再実行する。
+- PATH 上に `cargo-nextest` があれば test は `cargo nextest run --workspace` の後に
+  `cargo test --doc --workspace`。無ければ従来の `cargo test --workspace` で doctest も含めて実行する。
+  選択はログに出す。`.config/nextest.toml` で同時16試験、再試行なし、時間切れによる打切りなしとし、
+  標準の非最適化 build を使う。nextest の失敗を fallback で隠さない。
+- job を並列に実行する大きな試験は16枠中4枠を予約し、試験内の worker も最大4。
+  共通比較器の self-test は `fixtures` の `fixture_match` と `conflicts` の `wire` に各1写しを残し、
+  異なる試験名と照合内容を保つ。
 - 版つき節参照の照合は、既存の来歴番号に限る。番号の実在は `docs/design-sections.txt` で照合する。
   新しい説明は `docs/guide/` や実在する fixture を参照する。
   この索引は本文や機能の実装済み範囲を示すものではない。

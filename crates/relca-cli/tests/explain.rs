@@ -74,7 +74,6 @@ fn x_cli_arguments_and_input_failures_have_complete_blocked_explain_reports() {
         vec!["explain", "--bad"],
         vec!["explain", &path, "extra"],
         vec!["explain", &path, "--mode", "simulation"],
-        vec!["explain", &path, "--configuration", "Flow"],
         vec!["explain", &path, "--limit", "1"],
         vec!["explain", "/no/such/relca-explain-input"],
         vec!["explain", &path, "--seed", "0"],

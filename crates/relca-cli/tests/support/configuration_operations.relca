@@ -1,0 +1,17 @@
+model ConfigurationOperations version "0.2" {
+  type T = enum { ok }
+  people [a1,cfo]
+  actor Approver { executors [a1]; capability approve() -> T {
+    duration fixed 1min; result nondet { ok }
+  } }
+  authority G { basis "acceptance table"; grants a1 to Approver.approve; issued_by cfo }
+  process One { a = Approver.approve(); end done }
+  process Two { a = Approver.approve(); b = Approver.approve(); end done }
+  cut Scope { include [Approver] }
+  configuration First { cut Scope; process One }
+  configuration Second { cut Scope; process Two }
+  scenario Late { arrivals fixed [3min] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify safety no_resource_overcommit
+  contract C { authority_basis Approver.approve G }
+}
