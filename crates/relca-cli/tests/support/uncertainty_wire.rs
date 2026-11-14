@@ -317,12 +317,15 @@ pub fn project(host: &Value) -> Value {
     let mut items = vec![
         json!({"kind":"model_assumption","name":"analyst_assumptions_not_exhaustive","subjects":[]}),
     ];
-    for (i, _) in host["assumptions"]
+    for (i, row) in host["assumptions"]
         .as_array()
         .into_iter()
         .flatten()
         .enumerate()
     {
+        if row["field"] == "agency.limit" {
+            continue;
+        }
         items.push(json!({"kind":"assumption","at":format!("/assumptions/{i}")}));
     }
     for key in [

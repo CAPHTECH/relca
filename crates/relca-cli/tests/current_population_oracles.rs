@@ -1,10 +1,14 @@
 //! All current snapshot jobs, raw CLI output, independently recomputed IR values.
+#[path = "support/agency_vp_snapshot_oracle.rs"]
+mod agency_limit_oracle;
 #[path = "support/common_cause_oracle.rs"]
 mod common;
 #[path = "support/completion_population_oracle.rs"]
 mod completion;
 #[path = "support/contract_scope_snapshot_oracle.rs"]
 mod contract_scope_oracle;
+#[path = "support/intent_snapshot_oracle.rs"]
+mod intent_oracle;
 #[path = "support/population_oracles.rs"]
 mod oracle;
 #[path = "support/p2c_snapshot_oracle.rs"]
@@ -353,6 +357,8 @@ fn current_population_requires_exact_independent_registered_surfaces() {
     .unwrap();
     r2::validate_set(&jobs).unwrap();
     contract_scope_oracle::validate_set(&jobs).unwrap();
+    intent_oracle::validate_set(&jobs).unwrap();
+    agency_limit_oracle::validate_set(&jobs).unwrap();
     let legacy: Vec<_> = jobs
         .iter()
         .filter(|j| !r2::IDS.contains(&j["id"].as_str().unwrap()))
@@ -387,6 +393,8 @@ fn current_population_requires_exact_independent_registered_surfaces() {
             || p2c::IDS.contains(&job["id"].as_str().unwrap())
             || r2::IDS.contains(&job["id"].as_str().unwrap())
             || contract_scope_oracle::name(job["id"].as_str().unwrap()).is_some()
+            || intent_oracle::name(job["id"].as_str().unwrap()).is_some()
+            || agency_limit_oracle::name(job["id"].as_str().unwrap()).is_some()
         {
             continue;
         }
@@ -436,6 +444,8 @@ fn current_population_requires_exact_independent_registered_surfaces() {
     let q7_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let r2_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let scope_evidence = std::sync::Mutex::new(Vec::<String>::new());
+    let intent_evidence = std::sync::Mutex::new(Vec::<String>::new());
+    let agency_limit_evidence = std::sync::Mutex::new(Vec::<String>::new());
     let totals = std::thread::scope(|scope| {
         let workers: Vec<_> = (0..4)
             .map(|worker| {
@@ -448,7 +458,9 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                    let q4_evidence=&q4_evidence;
                     let q7_evidence=&q7_evidence;
                      let r2_evidence=&r2_evidence;
-                     let scope_evidence=&scope_evidence;
+                      let scope_evidence=&scope_evidence;
+                       let intent_evidence=&intent_evidence;
+                       let agency_limit_evidence=&agency_limit_evidence;
                 scope.spawn(move || {
                     let mut counts = [0usize; 14];
                     for job in jobs.iter().skip(worker).step_by(4) {
@@ -461,6 +473,20 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                             .unwrap();
                         assert!(output.status.code().is_some_and(|c| (0..=5).contains(&c)));
                            let mut doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+                           if agency_limit_oracle::name(job["id"].as_str().unwrap()).is_some() {
+                               assert!(fault.is_none(),"old graph faults are not Agency-limit hand jobs");
+                               agency_limit_oracle::check(job["id"].as_str().unwrap(),&args,&doc,output.status.code().unwrap()).unwrap_or_else(|e|panic!("{}: {e}",job["id"]));
+                               agency_limit_evidence.lock().unwrap().push(job["id"].as_str().unwrap().to_owned());
+                               counts[0]+=1;
+                               continue;
+                           }
+                           if intent_oracle::name(job["id"].as_str().unwrap()).is_some() {
+                               assert!(fault.is_none(), "old graph faults are not intent hand jobs");
+                               intent_oracle::check(job["id"].as_str().unwrap(), &args, &doc, output.status.code().unwrap()).unwrap_or_else(|e| panic!("{}: {e}", job["id"]));
+                               intent_evidence.lock().unwrap().push(job["id"].as_str().unwrap().to_owned());
+                               counts[0] += 1;
+                               continue;
+                           }
                            if contract_scope_oracle::name(job["id"].as_str().unwrap()).is_some() {
                                assert!(fault.is_none(), "old graph faults are not scope hand jobs");
                                contract_scope_oracle::check(job["id"].as_str().unwrap(), &args, &doc, output.status.code().unwrap()).unwrap_or_else(|e| panic!("{}: {e}", job["id"]));
@@ -735,6 +761,36 @@ fn current_population_requires_exact_independent_registered_surfaces() {
         totals[6], totals[7], totals[8], totals[9], totals[10], totals[11], totals[12], totals[13]
     );
     let mut state_ir_totals = totals;
+    let mut agency_limit_checked = agency_limit_evidence.into_inner().unwrap();
+    agency_limit_checked.sort();
+    let mut expected_agency_limit: Vec<_> = agency_limit_oracle::NAMES
+        .iter()
+        .map(|n| format!("fixture-{n}"))
+        .collect();
+    expected_agency_limit.sort();
+    assert_eq!(agency_limit_checked, expected_agency_limit);
+    std::fs::write(
+        evidence.join("agency-limit-oracle-jobs.json"),
+        serde_json::to_vec_pretty(&agency_limit_checked).unwrap(),
+    )
+    .unwrap();
+    state_ir_totals[0] -= agency_limit_oracle::NAMES.len();
+    eprintln!("separate Agency-limit hand jobs=10; all 14 legacy census categories unchanged");
+    let mut intent_checked = intent_evidence.into_inner().unwrap();
+    intent_checked.sort();
+    let mut expected_intent: Vec<_> = intent_oracle::NAMES
+        .iter()
+        .map(|n| format!("fixture-{n}"))
+        .collect();
+    expected_intent.sort();
+    assert_eq!(intent_checked, expected_intent);
+    std::fs::write(
+        evidence.join("intent-oracle-jobs.json"),
+        serde_json::to_vec_pretty(&intent_checked).unwrap(),
+    )
+    .unwrap();
+    state_ir_totals[0] -= intent_oracle::NAMES.len();
+    eprintln!("separate intent hand jobs=16; all 14 legacy census categories unchanged");
     let mut scope_checked = scope_evidence.into_inner().unwrap();
     scope_checked.sort();
     let mut expected_scope: Vec<_> = contract_scope_oracle::NAMES

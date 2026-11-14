@@ -77,6 +77,14 @@ pub fn verify(mut run: impl FnMut(&str, &str, usize) -> Value) {
                     }
                     _ => unreachable!(),
                 }
+                // Accounting is intentionally recalibrated; semantic rows above
+                // remain the hand oracle. The new record is not a semantic row.
+                let record = &failed["agency"]["viewpoints"][block]["limit"];
+                assert_eq!(record["counter"], dimension);
+                assert_eq!(record["limit"], limit);
+                assert!(record["requested"].as_u64().unwrap() > limit as u64);
+                assert!(!record["phase"].as_str().unwrap().is_empty());
+                b["limit"] = record.clone();
                 want["agency"]["viewpoints"][block] = b;
                 assert_eq!(
                     failed, want,

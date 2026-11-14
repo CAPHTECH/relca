@@ -29,6 +29,24 @@ model Small version "0.2" {
 複数の値を列挙した場合、それぞれが可能な選択であり、等確率という意味ではありません。
 計算例は [serial-time](../../fixtures/serial-time/) から読めます。
 
+## Agency の計算量を調整する
+
+判断の所在や行使回数の導出が計算上限に達したときは、CLI の `--agency-limit-scale N` で
+導出に使う手数と累計確保量の上限を増やせます。DSL や `bounds` に書く項目ではありません。
+
+```sh
+relca check examples/evidence-basis.relca --agency-limit-scale 20
+```
+
+この例は `satisfied`、exit 0 で、台帳に倍率20を記録します。モデルの2操作は各1分のままです。
+受け付けるのは `check`、`simulate`、`explain`。倍率はASCII数字の1〜1000で、省略は1、先頭の0は使えます。
+0、負数、符号つき、小数、空値、範囲外、整数に収まらない値、重複した指定は `invalid`、exit 3 です。
+`compare`、`diff`、`mutate`、`sensitivity`、`conform`、`verify` では受け付けません。
+
+性質の状態探索予算、時刻、案件数、業務上の打切りは変わりません。
+導出できるかはモデルの形にも依存し、倍率を上げても解消しない上限があります。
+警告と実際に使った倍率は[結果の読み方](results.md#agency-の導出の上限)で確認してください。
+
 ## 宣言と順序
 
 - `type` は有限の enum、bool、有界整数、限定した record や集合を扱います。
@@ -263,6 +281,79 @@ body と `on_limit` で使えるのは、操作の呼出し、`if`、固定 `wai
 `cut` では問い、`include`、`exclude`、`defer`、除外で扱えなくなる事項などを記述します。
 未宣言の Cut は警告とともに出力されます。`configuration` は Cut と process を選び、
 `intent` で構成変更の理由を添えます。複数の構成がある check には `--configuration NAME` が必要です。
+
+### 構成変更の理由を書く
+
+`diff --from A --to B` の理由は、行き先 B の構成内に書けます。
+構成内の順序は `cut`、`process`、規則の `amend`（あれば）、`intent` です。
+既存の `intent` は相手を問わない既定の理由になります。
+
+```relca
+configuration B { cut K; process PB; intent {
+  replace Clerk.check with Bot.check reason "照合を自動化" loses "人の目視"
+} }
+```
+
+`replace` は能力（Actor.Capability）の差し替えです。差し替えだけで説明できる差分にも、
+同じ宣言が対応します。対象は呼ぶ Actor と能力、権限、容量・実行者、原本を読む Actor、
+後段が読む値の生産者です。たとえば無関係な監査の追加や、監査による原本の読取りまで
+自動で説明済みにはしません。説明しきれない差分には個別の理由を書きます。
+契約の適用範囲、終端の意味、時間、異議経路、規則、資格・性能・縮退の差分は対象外です。
+
+3案以上では、相手ごとの理由を最上位に並べられます。
+
+```relca
+intent from A to B {
+  replace Clerk.check with Bot.check reason "照合を自動化" loses "人の目視"
+}
+intent from C to B {
+  replace Robot.check with Bot.check reason "別製品へ移行" loses "Robot の保守契約"
+}
+```
+
+A→B は1つ目、C→B は2つ目だけを使います。対応する宣言があれば、構成内の既定とは
+混ぜません。空の `intent from A to B { }` でも既定を使わなくなります。
+対応する宣言が無い対だけが既定を使い、逆向きには流用しません。
+
+[全文例](../../examples/capability-replacement.relca)は、A が3分、B が2分、C が4分で完了します。
+
+```sh
+relca check examples/capability-replacement.relca --configuration B
+relca diff examples/capability-replacement.relca --from A --to B
+relca diff examples/capability-replacement.relca --from C --to B
+relca compare examples/capability-replacement.relca --plans A,B,C --mode exhaustive
+```
+
+この例の2つの diff はそれぞれ10行を説明し、W-DIFF-1/2/3 は出ず、exit 0 です。
+compare も exit 0 ですが、理由の照合はしておらず、`unchecked` に `intent` を残します。
+
+| 個別の書き方 | 対象と役割 |
+|---|---|
+| `add Actor reason "..."` / `add Actor.capability reason "..."` | 追加の理由 |
+| `retire Actor reason "..." loses "..."` / `retire Actor.capability reason "..." loses "..."` | 削除の理由と失うもの |
+| `change KIND TARGET reason "..." loses "..."` | 指定した種類・対象の差分1行の説明。`loses` は省略可能 |
+| `preserve ContractName` / `preserve "性質のid"` | 保持したい性質。全差分へ注記するが、個々の変更理由の代わりにはならない |
+| `preserve ContractName on KIND TARGET` | 指定した差分への保持の注記 |
+| `override [KIND] TARGET by SUBJECT [reason "..."]` | 単一の Actor または人による上書きの注記。角括弧の部分は省略可能 |
+| `maintain [KIND] TARGET by PERSON [reason "..."]` | 単一の人による保守の注記。`by` の後ろに主体の並びや能力名は書けない |
+| `retire Actor.capability from normal_path keep fallback [reason "..."]` | 通常経路から退け、縮退のために保持する。構成内だけに書ける |
+
+`KIND` は `actor`、`relation`、`meaning`、`authority`、`resource`、`time`、`visibility`、
+`contest`、`rule`、`contract_scope` です。たとえば `change relation v reason "受け渡す値の生産者を変更"`
+は、行き先の手順で定義する値 v を対象にします。`add/retire contract_scope NAME reason "..."` は、
+契約の適用範囲の追加・削除を明示する形です。
+差し替えの導出と個別の注記が同じ行に当たれば、個別の注記を優先します。
+
+- 差し替え元の能力が削除され、差し替え先が追加される場合だけ `replace` を照合できます。
+  元を一部で呼び続ける場合や、先を変更前から呼んでいる場合は E-DIFF-0 になります。
+  元を呼ばなくなり、呼出し先が差し替え先と別の能力へ分かれる場合は照合できますが、別の能力に由来する残る差分には個別の理由が必要です。
+- 未宣言の構成・能力、同じ構成同士の対、同じ能力への差し替え、同じ対や対象の二度書きは拒否します。
+  複数の能力を1つへまとめる差し替えは書けます。
+- `loses` を省略した `replace` は W-DIFF-2 です。派生する差分の W-DIFF-3 も残ります。
+- すべての宣言は静的検査を受けますが、理由を実際の差分と照合するのは diff だけです。
+  check や simulate の成功を、変更理由の照合結果とは読まないでください。
+
+出力の印と警告は[差分の覆い方](results.md#差分の覆い方)を参照してください。
 
 ### 契約を適用する構成を選ぶ
 

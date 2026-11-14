@@ -1335,7 +1335,10 @@ mod simulation_tests {
             if super::super::legacy_census::responsibility_fixture(name) {
                 continue;
             }
-            if relca_test_support::fixture_match::contract_scope_fixture(name) {
+            if relca_test_support::fixture_match::intent_fixture(name)
+                || relca_test_support::fixture_match::agency_limit_fixture(name)
+                || relca_test_support::fixture_match::contract_scope_fixture(name)
+            {
                 continue;
             }
             old_dirs += 1;

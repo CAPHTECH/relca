@@ -1,0 +1,1 @@
+{"verdict":"satisfied","replacements":[{"from":"Clerk.check","to":"Bot.check","reason":"x","loses":null}],"diagnostics":[{"code":"W-DIFF-2"},{"code":"W-DIFF-3"}]}

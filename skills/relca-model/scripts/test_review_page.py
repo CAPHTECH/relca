@@ -89,6 +89,101 @@ class ReviewPageTest(unittest.TestCase):
 
     # ---------------------------------------------------------- 実出力
 
+    def test_main_agency_limit_is_not_a_viewpoint_limit(self):
+        model=Path(self.tmp)/"main-limit.relca"
+        calls=" ".join("j%d=Judge.check(s);" % i for i in range(1,13))
+        condition=" || ".join("j%d==pass" % i for i in range(1,13))
+        model.write_text('''model MainLimit version "0.2" {
+          type V=enum{pass,fail}
+          type Ack=enum{done}
+          actor Doc {source document}
+          actor Intake {capacity 1; capability start()->V {reads [Doc]; duration fixed 1min; result nondet{pass}}}
+          actor Judge {capacity 1; capability check(x:V)->V {duration fixed 1min; result nondet{pass,fail}}}
+          actor Ledger {capacity 1; capability post(x:V)->Ack {commits; duration fixed 1min; result nondet{done}}}
+          process Flow {s=Intake.start(); %s if %s {} else {end rejected}; p=Ledger.post(j12); end done}
+          cut C {include [Doc,Intake,Judge,Ledger]}
+          bounds{cases 1;live_tasks 2;clock 100min}
+          verify safety no_resource_overcommit
+        }''' % (calls,condition),encoding="utf-8")
+        out,err,code=relca(self.tmp,"main-limit","check",model)
+        value=json.loads(out.read_text())
+        self.assertEqual(value["agency"]["status"],"not_derived")
+        self.assertEqual(value["agency"]["limit"]["counter"],"work")
+        self.assertIn("W-AGY-4",err.read_text())
+        reader=review_page.Page(review_page.parse_args(["--model",str(model),"--check",str(out),
+            "--check-exit",str(code),"--check-stderr",str(err),"--no-mermaid","-o",str(Path(self.tmp)/"main-limit.html")]))
+        self.assertEqual(reader.viewpoint_limit_rows,[])
+        self.assertNotIn("Agency viewpoint の計算上限",reader.bounds_table())
+
+    def test_agency_scale_and_viewpoint_limits_are_displayed_without_changing_verdict(self):
+        model = Path(self.tmp) / "viewpoint-scale.relca"
+        calls = " ".join("j%d = Judge.check(s);" % i for i in range(1, 12))
+        condition = " && ".join("j%d == pass" % i for i in range(1, 12))
+        model.write_text('''model ViewpointScale version "0.2" {
+            type V = enum { pass, fail }
+            type Ack = enum { done }
+            actor Doc { source document }
+            actor Intake { capacity 1; capability start() -> V { reads [Doc]; duration fixed 1min; result nondet { pass } } }
+            actor Judge { capacity 1; capability check(x:V) -> V { duration fixed 1min; result nondet { pass, fail } } }
+            actor Ledger { capacity 1; capability post(x:V) -> Ack { commits; duration fixed 1min; result nondet { done } } }
+            process Flow { s = Intake.start(); %s if %s {} else { end rejected }; p = Ledger.post(j11); end done }
+            cut C { include [Doc, Intake, Judge, Ledger] }
+            bounds { cases 1; live_tasks 2; clock 30min }
+            verify safety no_resource_overcommit
+        }''' % (calls, condition), encoding="utf-8")
+        low, err, code = relca(self.tmp, "viewpoint-low", "check", model)
+        self.assertEqual(code, 0)
+        value = json.loads(low.read_text())
+        limited = value["agency"]["viewpoints"]["framing"]
+        self.assertEqual(limited["reason"], "derivation_limit")
+        self.assertIn("W-AGY-5", err.read_text())
+        args = ["--model", str(model), "--check", str(low), "--check-exit", str(code),
+                "--check-stderr", str(err), "--no-mermaid"]
+        reader = review_page.Page(review_page.parse_args(args + ["-o", str(Path(self.tmp) / "limit-reader.html")]))
+        bounds = reader.bounds_table()
+        self.assertIn("x1", bounds)
+        for token in ("framing", "work", "1000000", limited["limit"]["phase"]):
+            self.assertIn(token, bounds)
+        text, data = page(self.tmp, "viewpoint-low-page", *args)
+        self.assertEqual(data["runs"][0]["verdict"], "satisfied")
+        self.assertTrue(any(row[1].endswith("/framing") for row in data["not_derived"]))
+        self.assertIn("W-AGY-5", text)
+        high, err, code = relca(self.tmp, "viewpoint-high", "check", model, "--agency-limit-scale", "100")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(high.read_text())["agency"]["viewpoints"]["framing"]["status"], "derived")
+        high_reader = review_page.Page(review_page.parse_args(["--model", str(model), "--check", str(high),
+                                                              "--check-exit", "0", "--no-mermaid", "-o", str(Path(self.tmp) / "high-reader.html")]))
+        self.assertEqual(high_reader.agency_scale_rows, [("check", "x100")])
+        self.assertIn("x100", high_reader.bounds_table())
+        _, data = page(self.tmp, "viewpoint-high-page", "--model", model, "--check", high,
+                       "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+        self.assertFalse(any(row[1].endswith("/framing") for row in data["not_derived"]))
+        for name, change, target in [
+            ("bad-scale", lambda d: d["ledger"]["execution"]["limits"]["agency_limit_scale"].__setitem__("value", 0), "agency_limit_scale"),
+            ("bad-limit", lambda d: d["agency"]["viewpoints"]["framing"]["limit"].__setitem__("requested", 0), "/limit"),
+        ]:
+            bad = rewrite(low, Path(self.tmp) / (name + ".json"), change)
+            _, data = page(self.tmp, name + "-page", "--model", model, "--check", bad,
+                           "--check-exit", 0, "--no-mermaid")
+            self.assertTrue(any(target in row[1] and row[2] == "unsupported" for row in data["unverified"]))
+        legacy = rewrite(high, Path(self.tmp) / "scale-unrecorded.json",
+                         lambda d: d["ledger"]["execution"]["limits"].pop("agency_limit_scale"))
+        reader = review_page.Page(review_page.parse_args(["--model", str(model), "--check", str(legacy),
+                                                        "--check-exit", "0", "--no-mermaid", "-o", str(Path(self.tmp) / "legacy-reader.html")]))
+        self.assertEqual(reader.agency_scale_rows, [("check", "未記録")])
+        unknown = rewrite(low, Path(self.tmp) / "invalid-ir.json", lambda d: d["agency"]["viewpoints"].__setitem__(
+            "framing", {"status": "not_derived", "reason": "invalid_ir", "complete": False,
+                        "unchecked": ["type_domain_authority", "practical_framing"]}))
+        reader = review_page.Page(review_page.parse_args(["--model", str(model), "--check", str(unknown),
+                                                        "--check-exit", "0", "--no-mermaid", "-o", str(Path(self.tmp) / "invalid-reader.html")]))
+        self.assertIn(("check", "agency/viewpoints/framing", "invalid_ir"), reader.not_derived)
+        self.assertEqual(reader.viewpoint_limit_rows, [])
+        invalid, _, code = relca(self.tmp, "viewpoint-no-analysis", "check", model, "--agency-limit-scale", "0")
+        self.assertEqual(code, 3)
+        reader = review_page.Page(review_page.parse_args(["--model", str(model), "--check", str(invalid),
+                                                        "--check-exit", "3", "--no-mermaid", "-o", str(Path(self.tmp) / "no-analysis-reader.html")]))
+        self.assertEqual(reader.agency_scale_rows, [("check", "未解析(no_analysis)")])
+
     def test_terminal_and_page_count_fifteen_not_derived_items(self):
         out, err, code = self.r["as-is-check"]
         target = Path(self.tmp) / "not-derived-count.html"
@@ -1434,6 +1529,62 @@ class ContractScopePageTest(unittest.TestCase):
                 out = rewrite(self.out, Path(self.tmp) / (name + ".json"), lambda v: change(v["contract_scope"][0]))
                 _, data = self.build(name, out)
                 self.assertTrue(any(r[1] == "contract_scope" and r[2] == "unsupported" for r in data["unverified"]))
+
+
+@unittest.skipUnless(RELCA.exists(), "relca の binary が無い")
+class IntentPageTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="relca-intent-page-", dir=ROOT / ".tmp")
+        self.addCleanup(self.temp.cleanup)
+        self.tmp = self.temp.name
+        self.source = (ROOT / "examples/capability-replacement.relca").read_text()
+
+    def build(self, name, source):
+        model = Path(self.tmp) / (name + ".relca")
+        model.write_text(source)
+        out, err, code = relca(self.tmp, name + "-check", "check", model, "--configuration", "B")
+        self.assertEqual(code, 0)
+        compare, compare_err, compare_code = relca(self.tmp, name + "-compare", "compare", model,
+                                                  "--plans", "A,B,C", "--mode", "exhaustive")
+        self.assertEqual(compare_code, 0)
+        return page(self.tmp, name, "--model", model, "--check", out, "--check-exit", code,
+                    "--check-stderr", err, "--compare-model", model, "--compare", compare,
+                    "--compare-exit", compare_code, "--compare-stderr", compare_err, "--no-mermaid")
+
+    def test_pair_replace_source_and_compare_unchecked_are_not_a_diff_claim(self):
+        text, data = self.build("pairs", self.source)
+        self.assertIn('id="intent-declarations"', text)
+        self.assertEqual(text.count("intent from A to B {"), 1)
+        self.assertEqual(text.count("intent from C to B {"), 1)
+        self.assertIn("replace Clerk.check with Bot.check", text)
+        self.assertIn("Robot の保守契約", text)
+        self.assertIn("差分との照合ではない", text)
+        self.assertIn('id="intent-unchecked"', text)
+        self.assertIn("intent", data["self_unchecked"])
+        self.assertNotIn("intent", data["unread_keys"])
+
+    def test_empty_default_and_pair_declarations_are_displayed_without_merging(self):
+        bare = re.sub(r"  intent from [AC] to B \{[^}]*\}\n", "", self.source)
+        for name, source, declared in [
+            ("none", bare, False),
+            ("default", bare.replace("configuration B { cut K; process PB }",
+                                      "configuration B { cut K; process PB; intent { } }"), True),
+            ("empty-pair", bare.replace("  bounds", "  intent from A to B { }\n  bounds"), True),
+        ]:
+            with self.subTest(name=name):
+                text, data = self.build(name, source)
+                self.assertEqual('id="intent-declarations"' in text, declared)
+                self.assertEqual("intent" in data["self_unchecked"], declared)
+                if name == "default":
+                    self.assertIn("B の既定", text)
+                    self.assertIn("intent { }", text)
+                elif name == "empty-pair":
+                    self.assertIn("intent from A to B { }", text)
+
+    def test_intent_reason_is_escaped_as_source_not_html(self):
+        text, _ = self.build("escape", self.source.replace("照合を自動化", "<確認>&"))
+        self.assertIn("&lt;確認&gt;&amp;", text)
+        self.assertNotIn("<確認>", text)
 
 
 if __name__ == "__main__":

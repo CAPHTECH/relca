@@ -215,6 +215,7 @@ pub fn validate(v: &Value) -> Result<(), String> {
             "state_budget",
             "capture_limit",
             "mutant_limit",
+            "agency_limit_scale",
             "max_events",
             "max_line_bytes",
             "max_order_states",

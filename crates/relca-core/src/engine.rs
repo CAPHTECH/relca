@@ -1879,6 +1879,16 @@ mod legacy_census {
         let all_dirs: Vec<_> = all_dirs
             .into_iter()
             .filter(|p| {
+                !relca_test_support::fixture_match::agency_limit_fixture(
+                    p.file_name().unwrap().to_str().unwrap(),
+                )
+            })
+            .filter(|p| {
+                !relca_test_support::fixture_match::intent_fixture(
+                    p.file_name().unwrap().to_str().unwrap(),
+                )
+            })
+            .filter(|p| {
                 !relca_test_support::fixture_match::contract_scope_fixture(
                     p.file_name().unwrap().to_str().unwrap(),
                 )
@@ -10519,6 +10529,7 @@ mod tests {
             ]
         };
         ir::Model {
+            agency_limit_scale: 1,
             contract_selection: Default::default(),
             case_priority: None,
             performances: Vec::new(),

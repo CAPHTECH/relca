@@ -950,6 +950,8 @@ class Page:
         self.unread = {}          # 鍵 -> [出所]
         self.mechanism = []       # (出所, 性質)
         self.bounds_rows = []     # (出所, bounds, scenario)
+        self.agency_scale_rows = []  # (出所, 記録された倍率または未記録)
+        self.viewpoint_limit_rows = []
         self.not_run = []
         self.ai_assumptions = []
         self._decls = None
@@ -1252,6 +1254,7 @@ class Page:
             self.unv(origin, "結果全体", "unsupported", "report が object でない(%s)" % type(data).__name__)
             self.alert("error", "%s: report を読めない" % origin)
             return
+        self._scan_agency_scale(origin, data)
         v, note = canon_verdict(data.get("verdict"))
         if note:
             self.alert("error", "%s: %s" % (origin, note))
@@ -1414,6 +1417,8 @@ class Page:
         if isinstance(node, dict):
             if node.get("status") == "not_derived":
                 self.not_derived.append((origin, path, node.get("reason")))
+            if "status" in node and "limit" in node:
+                self._scan_viewpoint_limit(origin, path, node)
             if node.get("basis") == "unknown":
                 label = node.get("capability") or node.get("actor") or node.get("call") or ""
                 self.basis_unknown.append((origin, "%s %s" % (path, label)))
@@ -1422,6 +1427,47 @@ class Page:
         elif isinstance(node, list):
             for i, v in enumerate(node):
                 self._walk_viewpoints(origin, v, "%s/%d" % (path, i))
+
+    def _scan_agency_scale(self, origin, data):
+        limits = get(data, "ledger", "execution", "limits")
+        if not isinstance(limits, dict) or "agency_limit_scale" not in limits:
+            label = "未記録"
+        else:
+            record = limits["agency_limit_scale"]
+            if (isinstance(record, dict) and record.get("status") == "known"
+                    and record.get("reason") is None
+                    and type(record.get("value")) is int and 1 <= record["value"] <= 1000):
+                label = "x%d" % record["value"]
+            elif (isinstance(record, dict) and record.get("status") == "not_applicable"
+                  and record.get("value") is None and record.get("reason") == "no_analysis"):
+                label = "未解析(no_analysis)"
+            else:
+                label = "読めない"
+                self.unv(origin, "ledger/execution/limits/agency_limit_scale", "unsupported",
+                         "倍率の記録が読めない: %s" % short(record, 160))
+        self.agency_scale_rows.append((origin, label))
+
+    def _scan_viewpoint_limit(self, origin, path, node):
+        record = node.get("limit")
+        n = requested = None
+        valid = (node.get("status") == "not_derived" and node.get("reason") == "derivation_limit"
+                 and isinstance(record, dict))
+        if valid:
+            n, requested = record.get("limit"), record.get("requested")
+            valid = (record.get("counter") in ("work", "cells", "depth", "paths", "contexts")
+                     and type(n) is int and n >= 0
+                     and ((type(requested) is int and requested > n)
+                          or (requested is None and record.get("requested_overflow") is True))
+                     and isinstance(record.get("phase"), str) and bool(record["phase"]))
+        if not valid:
+            self.unv(origin, path + "/limit", "unsupported", "導出上限の記録が読めない: %s" % short(record, 160))
+            return
+        where = record["phase"]
+        for key in ("process", "effect", "capability", "judgement", "call"):
+            if record.get(key) is not None:
+                where += ", %s %s" % (key, short(record[key], 120))
+        self.viewpoint_limit_rows.append((origin, path, record["counter"], n,
+                                          "整数範囲外" if requested is None else requested, where))
 
     def _reason_of(self, data):
         msgs = [get(d, "message") for d in as_list(get(data, "diagnostics"))
@@ -1472,8 +1518,17 @@ class Page:
             else:
                 rows.append([esc(origin), "—", "—", "—", '<span class="badge warn">bounds 欄なし</span>', esc(scen or "—")])
         unit = get(self.main.data if self.main else None, "unit") or "?"
-        return (self.table(["出所", "cases", "live_tasks", "clock(%s)" % unit, "truncated", "scenario"], rows)
-                + '<p class="note">結論はこの上限の中だけのもの。業務上の上限ではなく計算の上限を含む。</p>')
+        out = (self.table(["出所", "cases", "live_tasks", "clock(%s)" % unit, "truncated", "scenario"], rows)
+               + '<p class="note">結論はこの上限の中だけのもの。業務上の上限ではなく計算の上限を含む。</p>')
+        if self.agency_scale_rows:
+            out += "<h4>Agency 導出の倍率</h4>" + self.table(
+                ["出所", "agency_limit_scale"], [[esc(c) for c in row] for row in self.agency_scale_rows])
+            out += '<p class="note">倍率は Agency の work/cells だけに使う。性質の探索予算は変えない。未記録を倍率1と推測しない。</p>'
+        if self.viewpoint_limit_rows:
+            out += "<h4>Agency viewpoint の計算上限</h4>" + self.table(
+                ["出所", "対象", "counter", "上限", "要求", "箇所"],
+                [[esc(c) for c in row] for row in self.viewpoint_limit_rows])
+        return out
 
     # ---- 1. モデル
     def actors_json(self, report=None):
@@ -1854,6 +1909,24 @@ class Page:
                            "not_applicable / verdict なし", esc(row["masks_call"])] for origin, row in self.contract_scopes]
             out.append(self.table(["結果の出所", "未検査の契約", "適用先", "理由", "扱い", "検査を隠す可能性(masks_call)"], scope_rows))
             out.append('<p class="note">範囲外は satisfied ではなく未検査。未確認の件数に数えるが、全体の判定には数えない。masks_call は手順や異議・復旧等の経路に呼出しがある場合と、Capability を参照しない節を外す場合に true。実際の到達性の判定ではない。</p>')
+        intent_rows = []
+        for origin, src in (("model", self.src), ("compare-model", self.compare_src)):
+            if not src or (origin == "compare-model" and self.compare_sha == self.model_sha):
+                continue
+            for _, toks in src.items_of("intent"):
+                opening = first_index(toks, "{")
+                intent_rows.append([esc(origin), esc(src.slice(toks[:opening]) if opening >= 0 else "相手別の宣言"),
+                                    "<code>%s</code>" % esc(src.item_text(toks)), str(src.line_of_toks(toks))])
+            for name, toks in src.items_of("configuration"):
+                opening = first_index(toks, "{")
+                for part in split_top(block_body(toks, opening)[0]) if opening >= 0 else []:
+                    if part and part[0].text == "intent":
+                        intent_rows.append([esc(origin), esc("%s の既定" % name),
+                                            "<code>%s</code>" % esc(src.slice(part)), str(src.line_of_toks(part))])
+        if intent_rows:
+            out.append('<h4 id="intent-declarations">構成変更の理由の宣言（差分との照合ではない）</h4>')
+            out.append(self.table(["source", "適用先の宣言", "intent（空の宣言も表示）", "行"], intent_rows))
+            out.append('<p class="note">相手別の intent があれば、その比較には既定を混ぜない。replace が説明できる範囲や保持する性質は、このページでは照合していない。必要な対ごとに relca diff --from NAME --to NAME を実行し、intent_block・replacements・covered_by と性質の判定を読んでください。</p>')
         # 既定値
         drows = []
         for a in self.actors_json():
@@ -2797,6 +2870,8 @@ class Page:
             rows = [["<code>%s</code>" % esc(k), esc(", ".join(dict.fromkeys(v)))] for k, v in self.self_unchecked.items()]
             out.append("<h3>relca が自分で未検査と申告した項目 %d 種</h3>" % len(rows))
             out.append(self.table(["項目", "出所"], rows))
+            if "intent" in self.self_unchecked:
+                out.append('<p class="note" id="intent-unchecked">intent: compare は変更理由を差分と照合していない。空の宣言もこの未照合の表示に含む。各案の check の成功を、理由の照合結果として扱わない。</p>')
             if "response_control" in self.self_unchecked:
                 codes = [get(a, "field") for a in as_list(get(self.main.data if self.main else None, "assumptions"))
                          if str(get(a, "field")).startswith("agency.diagnostics.")]

@@ -1,0 +1,9 @@
+# 応答不明の最終理由
+
+Intakeを1回(1分)、Judgeの初回を1回(1分)行った後、受信がunknownで止まる。
+j2以後とLedgerは実行しない。これは業務の成功/失敗の終端を観測したことではない。
+容量を超えて同時実行する状態は無いので、宣言したsafetyだけはsatisfied。
+unknownの案件は完了を確認できず、応答の照合規則によりreceipt_resolutionがinconclusiveとなる。
+全体はその重い方を取りinconclusive / exit2で、成功へ丸めない。
+Fの最終理由はresponse_control。途中の12項Andの静的解析のwork不足をW-AGY-5として残さない。
+broken対は受信をdeliveredに変える。実行されるJudgeが1回から12回へ変わるが、Fの未接続理由と警告の整合は同じ。

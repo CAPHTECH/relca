@@ -593,6 +593,84 @@
     ]
   },
   {
+    "id": "fixture-agy-vp-limit-control",
+    "args": [
+      "check",
+      "fixtures/agy-vp-limit-control/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-limit-control.broken-refusal",
+    "args": [
+      "check",
+      "fixtures/agy-vp-limit-control.broken-refusal/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-merge-scale",
+    "args": [
+      "check",
+      "fixtures/agy-vp-merge-scale/model.relca",
+      "--agency-limit-scale",
+      "1000"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-merge-scale.broken-default-budget",
+    "args": [
+      "check",
+      "fixtures/agy-vp-merge-scale.broken-default-budget/model.relca",
+      "--agency-limit-scale",
+      "1"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-repeat-control",
+    "args": [
+      "check",
+      "fixtures/agy-vp-repeat-control/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-repeat-control.broken-no-leave",
+    "args": [
+      "check",
+      "fixtures/agy-vp-repeat-control.broken-no-leave/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-response-control",
+    "args": [
+      "check",
+      "fixtures/agy-vp-response-control/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-response-control.broken-delivered",
+    "args": [
+      "check",
+      "fixtures/agy-vp-response-control.broken-delivered/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-scale",
+    "args": [
+      "check",
+      "fixtures/agy-vp-scale/model.relca",
+      "--agency-limit-scale",
+      "100"
+    ]
+  },
+  {
+    "id": "fixture-agy-vp-scale.broken-default-budget",
+    "args": [
+      "check",
+      "fixtures/agy-vp-scale.broken-default-budget/model.relca",
+      "--agency-limit-scale",
+      "1"
+    ]
+  },
+  {
     "id": "fixture-agy2-atomic-self-start",
     "args": [
       "check",
@@ -7391,6 +7469,182 @@
     "args": [
       "check",
       "fixtures/int-upper.broken-overflow/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-intent-a1",
+    "args": [
+      "diff",
+      "fixtures/intent-a1/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a1.broken-no-loses",
+    "args": [
+      "diff",
+      "fixtures/intent-a1.broken-no-loses/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a2",
+    "args": [
+      "diff",
+      "fixtures/intent-a2/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a2.broken-extra-reader",
+    "args": [
+      "diff",
+      "fixtures/intent-a2.broken-extra-reader/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a3",
+    "args": [
+      "diff",
+      "fixtures/intent-a3/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a3.broken-no-replace",
+    "args": [
+      "diff",
+      "fixtures/intent-a3.broken-no-replace/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a4",
+    "args": [
+      "diff",
+      "fixtures/intent-a4/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a4.broken-mismatch",
+    "args": [
+      "diff",
+      "fixtures/intent-a4.broken-mismatch/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a5",
+    "args": [
+      "diff",
+      "fixtures/intent-a5/model.relca",
+      "--from",
+      "C",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-a5.broken-wrong-partner",
+    "args": [
+      "diff",
+      "fixtures/intent-a5.broken-wrong-partner/model.relca",
+      "--from",
+      "C",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-gap",
+    "args": [
+      "diff",
+      "fixtures/intent-gap/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-gap.broken-missing-replace",
+    "args": [
+      "diff",
+      "fixtures/intent-gap.broken-missing-replace/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-legacy",
+    "args": [
+      "diff",
+      "fixtures/intent-legacy/model.relca",
+      "--from",
+      "C",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-legacy.broken-preserve-scope",
+    "args": [
+      "diff",
+      "fixtures/intent-legacy.broken-preserve-scope/model.relca",
+      "--from",
+      "C",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-split",
+    "args": [
+      "diff",
+      "fixtures/intent-split/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
+    ]
+  },
+  {
+    "id": "fixture-intent-split.broken-retained-source",
+    "args": [
+      "diff",
+      "fixtures/intent-split.broken-retained-source/model.relca",
+      "--from",
+      "A",
+      "--to",
+      "B"
     ]
   },
   {

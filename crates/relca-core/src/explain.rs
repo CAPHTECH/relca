@@ -459,11 +459,20 @@ pub fn explain_with_selection(
     configuration: Option<&str>,
     scenario: Option<&str>,
 ) -> ExplainReport {
-    explain_selected(src, configuration, scenario, DEFAULT_CAPTURE_LIMIT)
+    explain_selected(src, configuration, scenario, DEFAULT_CAPTURE_LIMIT, None)
+}
+
+pub fn explain_with_agency_limit(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    scale: Option<usize>,
+) -> ExplainReport {
+    explain_selected(src, configuration, scenario, DEFAULT_CAPTURE_LIMIT, scale)
 }
 
 fn explain_with_limit(src: &str, limit: usize) -> ExplainReport {
-    explain_selected(src, None, None, limit)
+    explain_selected(src, None, None, limit, None)
 }
 
 fn explain_selected(
@@ -471,25 +480,32 @@ fn explain_selected(
     configuration: Option<&str>,
     scenario: Option<&str>,
     limit: usize,
+    scale: Option<usize>,
 ) -> ExplainReport {
     let mut captured = None;
     let mut actual_capture_limit = limit;
-    let report = report::check_selection_using(src, configuration, scenario, |model| {
-        let (outcome, trace) = if limit == DEFAULT_CAPTURE_LIMIT {
-            crate::engine::trace::explore(src, model)
-        } else {
-            let mut capture = crate::engine::trace::Capture::new(src, model);
-            capture.capture_limit = limit;
-            crate::engine::trace::explore_captured(
-                model,
-                crate::engine::DEFAULT_STATE_BUDGET,
-                capture,
-            )
-        };
-        actual_capture_limit = trace.capture_limit;
-        captured = Some((model.clone(), trace));
-        outcome
-    });
+    let report = report::check_selection_with_agency_limit_using(
+        src,
+        configuration,
+        scenario,
+        scale,
+        |model| {
+            let (outcome, trace) = if limit == DEFAULT_CAPTURE_LIMIT {
+                crate::engine::trace::explore(src, model)
+            } else {
+                let mut capture = crate::engine::trace::Capture::new(src, model);
+                capture.capture_limit = limit;
+                crate::engine::trace::explore_captured(
+                    model,
+                    crate::engine::DEFAULT_STATE_BUDGET,
+                    capture,
+                )
+            };
+            actual_capture_limit = trace.capture_limit;
+            captured = Some((model.clone(), trace));
+            outcome
+        },
+    );
     let mut explanation = Explanation::blocked();
     if let Some((model, trace)) = captured {
         if model.recovery().is_some() {

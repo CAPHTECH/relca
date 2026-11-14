@@ -11,8 +11,11 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod extension_population;
 #[path = "diff/intent.rs"]
 mod intent;
+#[path = "diff/replacements.rs"]
+mod replacements;
 #[path = "diff/static_projection.rs"]
 mod static_projection;
+pub use replacements::{CoveredBy, Replacement, ReplacementCover, Via};
 mod work_profiles;
 pub use intent::{
     Annotation, DutyRef, EffectWitness, Link, Preservation, PreservationSummary, PreservedProperty,
@@ -65,6 +68,10 @@ declare_diff_report! {
     pub uncertainty: crate::uncertainty::Uncertainty,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preservation: Option<Preservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "present_intent_block")]
+    pub intent_block: Option<IntentBlockSelection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replacements: Option<Vec<Replacement>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metrics: Option<Vec<MetricComparison>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,6 +90,26 @@ declare_diff_report! {
     pub diagnostics: Vec<diag::Diagnostic>,
     pub checked: Vec<String>,
     pub unchecked: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IntentBlockSelection {
+    Block(IntentBlock),
+    None(()),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentBlock {
+    pub from: Option<String>,
+    pub to: String,
+}
+
+fn present_intent_block<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<IntentBlockSelection>, D::Error> {
+    IntentBlockSelection::deserialize(d).map(Some)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +201,8 @@ pub struct Difference {
     pub to: Option<DiffValue>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<Annotation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub covered_by: Vec<CoveredBy>,
 }
 
 /// Closed payload alternatives; null denotes inactive authority/resource only.
@@ -272,12 +301,14 @@ macro_rules! difference_wire {
             Relation {
                 target: String, change: Change, reason: Option<String>, loses: Option<String>,
                 #[serde(default)] annotations: Vec<Annotation>,
+                #[serde(default)] covered_by: Vec<CoveredBy>,
                 #[serde(default)] from: ProducerField,
                 #[serde(default)] to: ProducerField,
             },
             $($variant {
                 target: String, change: Change, reason: Option<String>, loses: Option<String>,
                 #[serde(default)] annotations: Vec<Annotation>,
+                #[serde(default)] covered_by: Vec<CoveredBy>,
                 $(from: $value, to: $value,)?
             }),*
         }
@@ -294,18 +325,20 @@ impl TryFrom<DifferenceWire> for Difference {
     type Error = &'static str;
     fn try_from(wire: DifferenceWire) -> Result<Self, Self::Error> {
         macro_rules! row {
-            ($kind:ident, $target:expr, $change:expr, $reason:expr, $loses:expr, $annotations:expr, $from:expr, $to:expr) => {
+            ($kind:ident, $target:expr, $change:expr, $reason:expr, $loses:expr, $annotations:expr, $from:expr, $to:expr) => {{
+                let (annotations, covered_by) = $annotations;
                 Self {
                     kind: Kind::$kind,
                     target: $target,
                     change: $change,
                     reason: $reason,
                     loses: $loses,
-                    annotations: $annotations,
+                    annotations,
+                    covered_by,
                     from: $from,
                     to: $to,
                 }
-            };
+            }};
         }
         let d = match wire {
             DifferenceWire::ContractScope {
@@ -314,13 +347,14 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
             } => row!(
                 ContractScope,
                 target,
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 None,
                 None
             ),
@@ -330,6 +364,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -338,7 +373,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Qualification)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Qualification))
             ),
@@ -348,6 +383,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -356,7 +392,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Performance)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Performance))
             ),
@@ -366,6 +402,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -374,7 +411,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Degradation)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Degradation))
             ),
@@ -384,6 +421,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => {
@@ -400,7 +438,7 @@ impl TryFrom<DifferenceWire> for Difference {
                     change,
                     reason,
                     loses,
-                    annotations,
+                    (annotations, covered_by),
                     Some(DiffValue::Rule(from)),
                     Some(DiffValue::Rule(to))
                 )
@@ -411,13 +449,14 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
             } => row!(
                 Actor,
                 target,
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 None,
                 None
             ),
@@ -427,6 +466,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => {
@@ -458,7 +498,7 @@ impl TryFrom<DifferenceWire> for Difference {
                     change,
                     reason,
                     loses,
-                    annotations,
+                    (annotations, covered_by),
                     from,
                     to
                 )
@@ -469,6 +509,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -477,7 +518,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.into()),
                 Some(to.into())
             ),
@@ -487,6 +528,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -495,7 +537,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Authority)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Authority))
             ),
@@ -505,6 +547,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -513,7 +556,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Resource)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Resource))
             ),
@@ -523,6 +566,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -531,7 +575,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(DiffValue::Time(from)),
                 Some(DiffValue::Time(to))
             ),
@@ -541,6 +585,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -549,7 +594,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(DiffValue::Readers(from)),
                 Some(DiffValue::Readers(to))
             ),
@@ -559,6 +604,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 reason,
                 loses,
                 annotations,
+                covered_by,
                 from,
                 to,
             } => row!(
@@ -567,7 +613,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 change,
                 reason,
                 loses,
-                annotations,
+                (annotations, covered_by),
                 Some(DiffValue::Contests(from)),
                 Some(DiffValue::Contests(to))
             ),
@@ -754,6 +800,8 @@ impl DiffReport {
             ledger: crate::ledger::Ledger::aggregate("diff"),
             uncertainty: crate::uncertainty::Uncertainty::not_lowered(),
             preservation: None,
+            intent_block: None,
+            replacements: None,
             metrics: None,
             quality: None,
             case_outcomes: None,
@@ -983,12 +1031,35 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
         result.verdict = Verdict::Unsupported;
         return result;
     }
-    let (Some(from_model), Some(to_model)) = (from_model, to_model) else {
+    let (Some(from_model), Some(mut to_model)) = (from_model, to_model) else {
         if crate::syntax::parse(src).is_ok_and(|m| m.items.iter().any(|i| matches!(i, ast::Item::Actor(a) if a.items.iter().any(|f| matches!(f, ast::ActorItem::Decides(_)))))) {
             result.unchecked.push("rule".into());
         }
         return result;
     };
+    let pair = to_model
+        .pair_intents
+        .iter()
+        .find(|p| p.from.value == from && p.to.value == to);
+    if !to_model.pair_intents.is_empty() {
+        result.intent_block = Some(if let Some(p) = pair {
+            IntentBlockSelection::Block(IntentBlock {
+                from: Some(p.from.value.clone()),
+                to: p.to.value.clone(),
+            })
+        } else if to_model.intent_declared {
+            IntentBlockSelection::Block(IntentBlock {
+                from: None,
+                to: to.into(),
+            })
+        } else {
+            IntentBlockSelection::None(())
+        });
+    }
+    let pair_selected = pair.is_some();
+    if let Some(p) = pair {
+        to_model.intent = p.items.clone();
+    }
     if crate::evidence_basis::present(&from_model.model)
         || crate::evidence_basis::present(&to_model.model)
     {
@@ -1135,7 +1206,8 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
             return result;
         }
     }
-    intent::apply(&mut result, &from_model, &to_model);
+    let guidance = !pair_selected && to_model.configuration_count >= 3;
+    intent::apply(&mut result, &from_model, &to_model, src, guidance);
     result
         .checked
         .extend(CHECKED[1..].iter().map(|s| String::from(*s)));
@@ -1320,6 +1392,7 @@ fn rule_differences(
             from: Some(DiffValue::Rule(a)),
             to: Some(DiffValue::Rule(b)),
             annotations: Vec::new(),
+            covered_by: Vec::new(),
         });
     }
     complete
@@ -1347,6 +1420,7 @@ fn static_differences(
                 from: None,
                 to: None,
                 annotations: Vec::new(),
+                covered_by: Vec::new(),
             }));
         }
     }
@@ -1553,6 +1627,7 @@ fn response_differences(from: &crate::ir::Model, to: &crate::ir::Model) -> Vec<D
                 from: Some(x.cloned().map_or(DiffValue::Inactive, DiffValue::Response)),
                 to: Some(y.cloned().map_or(DiffValue::Inactive, DiffValue::Response)),
                 annotations: vec![],
+                covered_by: vec![],
             })
         })
         .collect()
@@ -1583,6 +1658,7 @@ fn scope_differences(from: &crate::ir::Model, to: &crate::ir::Model) -> Vec<Diff
                 from: None,
                 to: None,
                 annotations: Vec::new(),
+                covered_by: Vec::new(),
             })
         })
         .collect()
@@ -1749,6 +1825,36 @@ fn project_case_reports(result: &mut DiffReport, from: &crate::ir::Model, to: &c
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn difference_wire_still_rejects_duplicate_fields_without_value_normalization() {
+        let legacy =
+            r#"{"kind":"actor","target":"Worker","change":"added","reason":null,"loses":null}"#;
+        assert!(serde_json::from_str::<Difference>(legacy).is_ok());
+        let duplicate = legacy.replace(
+            "\"reason\":null",
+            "\"reason\":null,\"reason\":\"duplicate\"",
+        );
+        assert!(serde_json::from_str::<Difference>(&duplicate).is_err());
+        let duplicate = legacy.replace(
+            "\"loses\":null",
+            "\"loses\":null,\"covered_by\":[],\"covered_by\":[]",
+        );
+        assert!(serde_json::from_str::<Difference>(&duplicate).is_err());
+    }
+
+    #[test]
+    fn unselected_pair_roundtrip_keeps_an_explicit_null_intent_block() {
+        let source = include_str!("../../../fixtures/diff2-visibility/model.relca");
+        let (body, _) = source.rsplit_once('}').unwrap();
+        let source = format!("{body} intent from From to To {{ }} }}");
+        let report = diff(&source, "To", "From");
+        assert_eq!(report.verdict, Verdict::Satisfied);
+        assert_eq!(report.intent_block, Some(IntentBlockSelection::None(())));
+        let wire = serde_json::to_value(&report).unwrap();
+        let decoded: DiffReport = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), wire);
+    }
 
     #[test]
     fn extended_payloads_roundtrip_by_kind_including_null_and_empty_arrays() {

@@ -49,6 +49,11 @@ fn contract_scope_fixtures_match_binary_reports_and_exit_codes() {
 }
 
 #[test]
+fn intent_fixtures_match_binary_reports_and_exit_codes() {
+    run_fixtures(48);
+}
+
+#[test]
 fn executor_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(5);
 }
@@ -307,7 +312,7 @@ fn run_fixtures(group: usize) {
         }
     }
     assert!(layout.is_empty(), "fixture layout:\n{}", layout.join("\n"));
-    let mut populations = [0; 48];
+    let mut populations = [0; 50];
     for name in &names {
         let groups = [
             fixture_match::LEGACY_FIXTURES.contains(&name.as_str()),
@@ -358,6 +363,8 @@ fn run_fixtures(group: usize) {
             ACCEPTANCE_GAP_FIXTURES.contains(&name.as_str()),
             REVIEW_MUTATION_FIXTURES.contains(&name.as_str()),
             fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_str()),
+            fixture_match::intent_fixture(name),
+            fixture_match::agency_limit_fixture(name),
         ];
         assert_eq!(
             groups.iter().filter(|&&yes| yes).count(),
@@ -453,6 +460,8 @@ fn run_fixtures(group: usize) {
     assert_eq!(populations[45], 9);
     assert_eq!(populations[46], 2);
     assert_eq!(populations[47], 10);
+    assert_eq!(populations[48], fixture_match::INTENT_FIXTURES.len());
+    assert_eq!(populations[49], fixture_match::AGENCY_LIMIT_FIXTURES.len());
     assert_eq!(
         names.len(),
         355 + 32
@@ -481,15 +490,21 @@ fn run_fixtures(group: usize) {
             + quantiles
             + 9
             + 2
-            + 10,
-        "48 disjoint exhaustive groups; all 47 historical groups unchanged"
+            + 10
+            + fixture_match::INTENT_FIXTURES.len()
+            + fixture_match::AGENCY_LIMIT_FIXTURES.len(),
+        "50 disjoint exhaustive groups; all 49 historical groups unchanged"
     );
     let mut failures = Vec::new();
     let mut undetected = Vec::new();
     for directory in directories {
         let name = directory.file_name().unwrap().to_string_lossy();
         let legacy = fixture_match::LEGACY_FIXTURES.contains(&name.as_ref());
-        let current = if fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_ref()) {
+        let current = if fixture_match::agency_limit_fixture(&name) {
+            49
+        } else if fixture_match::intent_fixture(&name) {
+            48
+        } else if fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_ref()) {
             47
         } else if legacy {
             0

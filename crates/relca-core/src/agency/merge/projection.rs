@@ -55,14 +55,14 @@ pub(crate) fn projection(m: &ir::Model) -> std::result::Result<Projection, &'sta
 pub(super) fn raw(m: &ir::Model) -> Result<Projection> {
     // Expansion is a static proof aid, not the executable model. Bound its
     // recursive frames independently of the parser and runtime depth limits.
-    let mut limits = DEFAULT;
+    let mut limits = budgets_for_model(m)?.main;
     limits.depth = 32;
     let mut b = viewpoints::budget(limits);
     b.location = Location::model(m, "merge independent projection");
     let mut indexed = vec![None; m.process.bindings.len()];
     collect(&m.process.body, &mut indexed, m, 0, &mut b)?;
     let calls: Vec<_> = indexed.iter().flatten().copied().collect();
-    let extra = read_graph::read_parents(m, &calls)?;
+    let extra = read_graph::with_limits(m, &calls, limits)?;
     let mut data: BTreeSet<_> = m
         .process
         .bindings
@@ -186,8 +186,16 @@ pub(super) fn raw(m: &ir::Model) -> Result<Projection> {
     model.process.bindings = builder.bindings;
     model.process.degradations.clear(); // Annotation output remains on the original model.
     model.agency = Agency::empty().into();
-    let (a, warnings) =
-        derive_strategy_shared(&model, DEFAULT, [DEFAULT; 3], DEFAULT, None, false, true)?;
+    let budgets = budgets_for_model(&model)?;
+    let (a, warnings) = derive_strategy_shared(
+        &model,
+        budgets.main,
+        [budgets.observation, budgets.framing, budgets.retention],
+        budgets.effects,
+        None,
+        false,
+        true,
+    )?;
     model.agency = a.into();
     let names = model
         .process
@@ -702,5 +710,112 @@ impl Builder<'_> {
             out.push(ir::Statement { kind, span: s.span });
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::duplicate_mod, dead_code)]
+#[path = "../../../tests/support/agency_limit_revision_inputs.rs"]
+mod revision_input;
+#[cfg(test)]
+mod tests {
+    use super::revision_input as input;
+    use super::*;
+
+    fn compare(m: &ir::Model) {
+        let p = raw(m).unwrap();
+        assert!(!p.model.has_merges());
+        let a = p.model.agency.as_derived().unwrap();
+        let b = budgets_for_model(&p.model).unwrap();
+        let limits = [b.observation, b.framing, b.retention];
+        let (new, _) =
+            viewpoints::with_limits_and_warnings_shared(&p.model, a, limits, b.effects, true);
+        let (old, _) = viewpoints::with_limits_and_warnings_reference_shared(
+            &p.model, a, limits, b.effects, true,
+        );
+        assert_eq!(
+            serde_json::to_vec(&new).unwrap(),
+            serde_json::to_vec(&old).unwrap()
+        );
+    }
+
+    #[test]
+    fn merge_projection_shared_viewpoints_match_the_frozen_enumerator() {
+        for (n, scale) in [(3, 1), (7, 1000)] {
+            let ast = crate::syntax::parse(&input::merge_or(n)).unwrap();
+            let m = crate::lower::lower_with_agency_limit(&ast, None, None, Some(scale)).unwrap();
+            compare(&m);
+        }
+        let source = include_str!("../../../../../examples/merge-if/model.relca");
+        let m = crate::lower::lower(&crate::syntax::parse(source).unwrap()).unwrap();
+        compare(&m);
+    }
+
+    #[test]
+    fn merge_fixture_projections_are_compared_with_shared_frozen_viewpoints() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+        let mut dirs = std::fs::read_dir(root)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.is_dir())
+            .collect::<Vec<_>>();
+        dirs.sort();
+        let mut checked = BTreeSet::new();
+        for dir in dirs {
+            let source = std::fs::read_to_string(dir.join("model.relca")).unwrap();
+            // A valid value-returning if needs at least one yield. This cheap
+            // prefilter only avoids lowering the unrelated old fixture groups.
+            if !source.contains("yield") {
+                continue;
+            }
+            let Ok(ast) = crate::syntax::parse(&source) else {
+                continue;
+            };
+            let inv: serde_json::Value = std::fs::read(dir.join("invocation.json"))
+                .ok()
+                .map(|b| serde_json::from_slice(&b).unwrap())
+                .unwrap_or_else(|| serde_json::json!({}));
+            let mut configs = Vec::new();
+            for key in ["configuration", "from", "to"] {
+                if let Some(c) = inv[key].as_str() {
+                    configs.push(Some(c.to_owned()));
+                }
+            }
+            if let Some(plans) = inv["plans"].as_array() {
+                configs.extend(plans.iter().map(|c| Some(c.as_str().unwrap().to_owned())));
+            }
+            if configs.is_empty() {
+                configs.push(None);
+            }
+            configs.sort();
+            configs.dedup();
+            for config in configs {
+                let Ok(m) = crate::lower::lower_with_agency_limit(
+                    &ast,
+                    config.as_deref(),
+                    inv["scenario"].as_str(),
+                    Some(1000),
+                ) else {
+                    continue;
+                };
+                if !m.has_merges() {
+                    continue;
+                }
+                compare(&m);
+                checked.insert((
+                    dir.file_name().unwrap().to_str().unwrap().to_owned(),
+                    config,
+                ));
+            }
+        }
+        for name in [
+            "agy-vp-merge-scale",
+            "agy-vp-merge-scale.broken-default-budget",
+        ] {
+            assert!(
+                checked.contains(&(name.to_owned(), None)),
+                "missing merge fixture projection {name}"
+            );
+        }
     }
 }

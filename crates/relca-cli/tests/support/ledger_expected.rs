@@ -53,6 +53,7 @@ pub fn limits() -> Value {
         "state_budget",
         "capture_limit",
         "mutant_limit",
+        "agency_limit_scale",
         "max_events",
         "max_line_bytes",
         "max_order_states",
@@ -65,6 +66,7 @@ impl Spec {
     pub fn finite(process: &str, names: &[&str]) -> Self {
         let mut cap = limits();
         cap["state_budget"] = known(1_000_000);
+        cap["agency_limit_scale"] = known(1);
         Self {
             mode: "exhaustive",
             builtin: "builtin_finite",
@@ -86,6 +88,8 @@ impl Spec {
         reps: u64,
         confidence: &str,
     ) -> Self {
+        let mut cap = limits();
+        cap["agency_limit_scale"] = known(1);
         Self {
             mode: "simulation",
             builtin: "builtin_simulation",
@@ -93,7 +97,7 @@ impl Spec {
             replications: known(reps),
             confidence: known(confidence),
             random: known("sha256-counter-v1"),
-            limits: limits(),
+            limits: cap,
             ..Self::finite(process, names)
         }
     }
@@ -116,6 +120,7 @@ impl Spec {
         s.selection["effective"] = json!({"configuration":unavailable(reason),
             "scenario":unavailable(reason),"process":unavailable(reason)});
         s.limits["state_budget"] = unavailable("not_lowered");
+        s.limits["agency_limit_scale"] = na("no_analysis");
         if mode == "simulation" {
             s.seed = unavailable(reason);
             s.replications = unavailable(reason);
@@ -167,6 +172,7 @@ impl Spec {
         s.bounds = known(json!({"cases":2,"live_tasks":2,"clock":20000}));
         s.limits = limits();
         for (key, n) in [
+            ("agency_limit_scale", 1),
             ("max_events", 10000),
             ("max_line_bytes", 65536),
             ("max_order_states", 100000),
@@ -193,6 +199,14 @@ fn references(report: &Value, paths: &[&str]) -> Value {
     )
 }
 pub fn expected(report: &Value, s: &Spec) -> Result<Value, String> {
+    // Old invocations have scale x1 exactly when their independently specified
+    // actor table establishes successful lowering. Aggregates/refusals have none.
+    let mut limits = s.limits.clone();
+    limits["agency_limit_scale"] = if s.actors["status"] == "known" {
+        known(1)
+    } else {
+        na("no_analysis")
+    };
     Ok(json!({"schema":"relca-conclusion-ledger/v1",
         "producer":{"name":"relca","version":env!("CARGO_PKG_VERSION"),"version_source":"cargo_package",
             "build_identity":state("not_recorded",Value::Null,Some("package_version_only"))},
@@ -202,7 +216,7 @@ pub fn expected(report: &Value, s: &Spec) -> Result<Value, String> {
         "derivation":{"bundle":"relca-conclusions-p2-uncertainty-2","components":links::components(report)?},
         "execution":{"mode":s.mode,"status":s.status,"selection":s.selection,
             "seed":s.seed,"replications":s.replications,"confidence":s.confidence,
-            "random_method":s.random,"bounds":s.bounds,"limits":s.limits},
+            "random_method":s.random,"bounds":s.bounds,"limits":limits},
         "actor_versions":s.actors,
         "context":{"model":reference(report,"/model"),"mode":reference(report,"/mode"),
             "cut":reference(report,"/cut"),"log":reference(report,"/log"),

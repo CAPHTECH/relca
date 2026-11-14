@@ -11,6 +11,8 @@ pub enum Effects {
     NotDerived {
         reason: viewpoints::LimitReason,
         unchecked: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<Box<DerivationLimit>>,
     },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -490,18 +492,27 @@ pub(super) fn derive_shared(
         unchecked.push("state_write_effects".into());
     }
     match if shared {
-        rows_shared(m, a, &mut viewpoints::budget(limits), true)
+        rows_shared(
+            m,
+            a,
+            &mut viewpoints::block_budget(m, limits, "effects"),
+            true,
+        )
     } else {
-        rows(m, a, &mut viewpoints::budget(limits))
+        rows(m, a, &mut viewpoints::block_budget(m, limits, "effects"))
     } {
         Ok((rows, warnings)) => (Effects::Derived { rows, unchecked }, warnings),
-        Err(_) => (
-            Effects::NotDerived {
-                reason: viewpoints::LimitReason::DerivationLimit,
-                unchecked,
-            },
-            Vec::new(),
-        ),
+        Err(error) => {
+            let (reason, limit) = viewpoints::failure(error);
+            (
+                Effects::NotDerived {
+                    reason,
+                    limit,
+                    unchecked,
+                },
+                Vec::new(),
+            )
+        }
     }
 }
 fn rows(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<(Vec<Effect>, Vec<diag::Diagnostic>)> {
@@ -580,7 +591,7 @@ fn rows_shared(
             m.state_variables.get(id.0).ok_or_else(invalid)?;
         }
     }
-    let extra = read_graph::read_parents(m, &calls)?;
+    let extra = read_graph::with_limits(m, &calls, b.limits)?;
     b.copy(calls.len().checked_mul(2).ok_or_else(invalid)?)?;
     let mut ancestors = vec![BTreeSet::new(); calls.len()];
     let mut sources = vec![BTreeSet::new(); calls.len()];

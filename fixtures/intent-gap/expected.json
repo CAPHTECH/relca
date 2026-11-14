@@ -1,0 +1,1 @@
+{"verdict":"satisfied","intent_block":{"from":"A","to":"B"},"replacements":[{"from":"O.o1","to":"X.a","reason":"r1","loses":"l"},{"from":"O.o2","to":"X.b","reason":"r2","loses":"l"},{"from":"O.o3","to":"Y.a","reason":"r3","loses":"l"},{"from":"O.o4","to":"Y.b","reason":"r4","loses":"l"}]}

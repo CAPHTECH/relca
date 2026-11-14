@@ -74,6 +74,7 @@ impl Ledger {
             "scenario":m.scenario.as_ref().map_or_else(undeclared, |s| known(s.name.clone())),
             "process":known(m.process.name.clone())});
         self.execution["bounds"] = known("/bounds");
+        self.execution["limits"]["agency_limit_scale"] = known(m.agency_limit_scale);
         self.execution["limits"]["state_budget"] = unavailable("execution_settings_unavailable");
         let actors = crate::actor_table::project(m)
             .into_iter()

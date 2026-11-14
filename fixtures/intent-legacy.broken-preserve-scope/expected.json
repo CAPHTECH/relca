@@ -1,0 +1,1 @@
+{"verdict":"invalid","preservation":{"properties":[]},"diagnostics":[{"code":"E-DIFF-0","message":"preserved contract is outside destination configuration scope: contract Controls #1 permitted"},{"code":"W-DIFF-1"}]}

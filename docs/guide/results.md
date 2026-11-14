@@ -110,6 +110,57 @@ conform も適用範囲外の契約は照合しません。いずれも、その
 範囲外の契約は出所と id ごとに未確認の件数に数えます。verdict の再計算には混ぜません。
 mutate の最上位と original は同じ元の検査の情報なので、確認用ページでは original の1件だけを数えます。
 
+## 差分の覆い方
+
+`diff` の `differences` は計算した差分です。理由が付いても、変更の安全性や現実の妥当性を
+認定したことにはなりません。両側の性質の判定と、差分の注記を分けて読んでください。
+
+相手ごとの `intent from A to B` を1つでも書いたモデルには、`intent_block` が出ます。
+
+| 値 | 使った理由の宣言 |
+|---|---|
+| `{"from":"A","to":"B"}` | A→B にだけ書いた宣言 |
+| `{"from":null,"to":"B"}` | B の構成内の既定の宣言 |
+| `null` | この対の宣言も、行き先の既定も無い |
+
+相手別の宣言が無いモデルでは、この欄自体を出しません。空の相手別宣言を選んだ場合は
+その対を表示し、既定の理由は使いません。`preservation` も選んだ宣言の preserve だけから作ります。
+
+`replace` によって説明できた行には、次の配列が付きます。
+
+```json
+{"covered_by":[{"intent":"replace","from":"Clerk.check","to":"Bot.check","via":"derived"}]}
+```
+
+`via: direct` は差し替える能力の削除・追加、`derived` は差し替えだけで説明できた関連の差分です。
+行の `reason` と `loses` は null のまま、文は最上位の `replacements` に宣言ごとに1回だけ置きます。
+`replacements[].covers` は、その宣言が説明した全行の `kind`・`target`・`change`・`via` の一覧です。
+各行の `covered_by` と、各宣言の `covers` を対応させて、理由の出所を辿れます。
+個別の intent が優先された行は個別の理由・注記を持ち、どちらの一覧にも入りません。
+
+複数の差し替えはまとめて扱います。ある宣言を外すと説明しきれなくなる行には、その宣言を記録します。
+そのような宣言が無ければ、単独で説明できる宣言をすべて記録します。
+単独で説明できる宣言も無い場合は、その行をまとめて説明したすべての差し替えを記録します。
+したがって同じ行に複数の宣言が付く場合があります。`covered_by` と `replacements` は差し替え元の名前順です。
+同じ種類・対象の差分が値や向きを変えて残る場合は、説明済みにはしません。
+`replace` を選んでいない diff には `covered_by` も `replacements` も出しません。
+
+| 診断 | 読み方 |
+|---|---|
+| W-DIFF-1 | 計算した差分に対応する intent が無い。差し替えで説明しきれない行にも残る |
+| W-DIFF-2 | retire（keep fallback を除く）または replace に、失われるものの記録が無い |
+| W-DIFF-3 | 保持・上書き・保守・loses の注記が無い。replace の派生行は loses がある場合だけこの警告を消す |
+| E-DIFF-0 | 宣言した変更が計算に当たらない、または保持したい契約が行き先では範囲外。invalid / exit 3 |
+
+[全文例](../../examples/capability-replacement.relca)の A→B は10行を説明します。
+能力の削除・追加の2行が direct、関連する8行が derived で、W-DIFF-1/2/3 は0件です。
+同じ宣言から loses だけを外すと、W-DIFF-2 が1件、派生行の W-DIFF-3 が8件になります。
+C→B は別の宣言を使うので、理由は「別製品へ移行」です。A→C には宣言が無く、10行の W-DIFF-1 が残ります。
+
+compare は、比較する構成に intent の宣言があれば、空でも `unchecked` に `intent` を出します。
+相手ごとの理由の照合はしていません。3案以上の理由を確かめるには、diff を必要な対ごとに回してください。
+確認用ページは宣言と compare の未照合を表示しますが、diff の結果を代わりに照合するものではありません。
+
 ## 合流の出力
 
 [値を返す if](dsl.md#分岐した値を先へ渡す) は、選んだ枝の値を複写します。
@@ -145,10 +196,53 @@ Task ではないので `actor`、`capability`、`executor` はいずれも null
 導出しなかった対象は、コードと `merge_control`、呼出し名・操作名・責務の対象などを
 `agency.unchecked` に記録します。警告が無いことを、問題が解消した証拠と読まないでください。
 責務の observation / refusal も依存する欄だけを `merge_control` とし、独立した欄の
-`W-RESP-1` などは従来どおり導きます。`derivation_limit` は実際に計算上の上限へ達した場合の理由です。
+`W-RESP-1` などは従来どおり導きます。
 ただし、同じ判定が合流に依存する効果にも関わる場合、責務の refusal は欄全体が
 `not_derived(merge_control)` になります。独立した commit への拒否が欠けていても、
 その欄の `W-RESP-2` は警告ではなく未導出の印として残ります。
+
+## Agency の導出の上限
+
+| 警告 | 意味 |
+|---|---|
+| `W-AGY-4` | 主の Agency 導出が計算上限に達した。原本への到達・系譜・拒否と、責務の既定候補を導出しない |
+| `W-AGY-5` | observation / framing / retention / effects のいずれかが計算上限に達した。対象の block ごとに1件出す |
+
+上限に達した block は全体を `not_derived`、理由を `derivation_limit` とし、
+途中までの行を導出済みとして出しません。他の block、性質の verdict、exit はこの警告だけでは変わりません。
+警告は最終出力の理由が `derivation_limit` で、計算上限の記録がある観点だけに出します。
+反復や応答の扱いによって `loop_control` / `response_control` へ置き換わった観点の途中の警告は残しません。
+`limit` の `counter` は depth / paths / contexts / cells / work、`limit` は上限値、
+`requested` は要求した量、`phase` は計算箇所です。process や judgement も、記録できた場合は併記します。
+量が整数に収まらない場合は `requested: null`、`requested_overflow: true` になります。
+不正な内部表現は `invalid_ir` として区別し、計算上限の記録や警告を捏造しません。
+
+`check`、`simulate`、`explain` の `--agency-limit-scale N` は、主の導出、共通原因、
+observation / framing / retention / effects の `work` と `cells` の上限をN倍にします。
+既定は1、最大1000です。`cells` は累計確保量の計数で、最大常駐メモリの上限ではありません。
+倍率を上げると時間やメモリが増える場合があります。
+`depth`、`paths`、`contexts` と、縮退経路の導出の予算は変わりません。
+たとえば `counter: contexts` で止まった計算は、この倍率では上限を増やせません。
+合流を含むモデルでも、独立した部分の導出が計算上限に達した場合は `derivation_limit` と
+`limit` を残し、W-AGY-5を出します。この場合は倍率で導出できるようになる可能性があります。
+`merge_control` は合流値への依存など、構造上の理由で導出しない項目です。
+`merge_control`、`state_guards` そのものを、倍率だけで対応済みにはできません。
+
+実際の倍率は `ledger.execution.limits.agency_limit_scale` に常に出します。
+解析した場合は `{"status":"known","value":20,"reason":null}` のように記録し、省略時は値1です。
+引数の誤りなどで解析しなかった場合は `{"status":"not_applicable","value":null,"reason":"no_analysis"}` です。
+明示した場合だけ、`assumptions` に `field: agency.limit`、`value: computational_x20` のような計算設定も残します。
+これは業務モデルについて追加した仮定ではなく、`uncertainty.model` では既存の計算上限の参照で扱います。
+
+framing の文脈は、Or などで多くの判定をまとめると急増する場合があります。
+同じモデルでも導出の有無は倍率に依存するため、結果を比べるときは倍率もそろえてください。
+倍率の指定は `compare`、`diff`、`mutate`、`sensitivity`、`conform`、`verify` では `invalid`、exit 3 になります。
+性質の verdict と exit は、Agency の警告とは分けて読みます。
+
+応答喪失を含むモデルの retention には別の照合があります。探索の切断、上限、
+二つの探索器の不一致でも `derivation_limit` となり、この場合は `limit` がありません。
+`notice` にある「切断・上限・両探索器の不一致では行使回数を導かない」も読んでください。
+確認用ページにも、結果に記録された倍率と viewpoint の上限を表示します。記録が無い旧出力から倍率1を推測しません。
 
 ## 根拠源の要求と証跡
 

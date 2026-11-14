@@ -4,6 +4,13 @@
 //! The optional recorder uses the legacy path rules but its own budgets. None
 //! mode never records or charges this module's work to the legacy derivation.
 use super::*;
+#[cfg(test)]
+#[path = "viewpoint_enumerator_reference.rs"]
+mod enumerator_reference;
+#[path = "framing_fast.rs"]
+mod framing_fast;
+#[path = "retention_fast.rs"]
+mod retention_fast;
 
 const NOTICE: &str = "行使回数から不要とは判定しない";
 
@@ -59,6 +66,7 @@ pub enum LimitReason {
     LoopControl,
     ResponseControl,
     DerivationLimit,
+    InvalidIr,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -89,6 +97,8 @@ pub enum Observation {
     NotDerived {
         reason: LimitReason,
         fallback: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<Box<DerivationLimit>>,
     },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +155,8 @@ pub enum Framing {
         reason: LimitReason,
         complete: bool,
         unchecked: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<Box<DerivationLimit>>,
     },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +212,8 @@ pub enum Retention {
         reason: LimitReason,
         notice: String,
         unchecked: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<Box<DerivationLimit>>,
     },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -488,6 +502,33 @@ pub(super) fn with_limits_and_warnings(
 ) -> (Viewpoints, Vec<diag::Diagnostic>) {
     with_limits_and_warnings_shared(m, a, limits, effects_limits, false)
 }
+#[cfg(test)]
+pub(super) fn with_limits_and_warnings_reference(
+    m: &ir::Model,
+    a: &Agency,
+    limits: [Limits; 3],
+    effects_limits: Limits,
+) -> (Viewpoints, Vec<diag::Diagnostic>) {
+    with_limits_and_warnings_reference_shared(m, a, limits, effects_limits, false)
+}
+#[cfg(test)]
+pub(super) fn with_limits_and_warnings_reference_shared(
+    m: &ir::Model,
+    a: &Agency,
+    limits: [Limits; 3],
+    effects_limits: Limits,
+    shared: bool,
+) -> (Viewpoints, Vec<diag::Diagnostic>) {
+    with_strategy(
+        m,
+        a,
+        limits,
+        effects_limits,
+        shared,
+        framing_reference,
+        retention_reference,
+    )
+}
 pub(super) fn with_limits_and_warnings_shared(
     m: &ir::Model,
     a: &Agency,
@@ -495,64 +536,221 @@ pub(super) fn with_limits_and_warnings_shared(
     effects_limits: Limits,
     shared: bool,
 ) -> (Viewpoints, Vec<diag::Diagnostic>) {
-    let (effects, warnings) = if shared {
+    with_strategy(
+        m,
+        a,
+        limits,
+        effects_limits,
+        shared,
+        framing_fast::derive,
+        retention_shared,
+    )
+}
+fn with_strategy(
+    m: &ir::Model,
+    a: &Agency,
+    limits: [Limits; 3],
+    effects_limits: Limits,
+    shared: bool,
+    framing_fn: fn(&ir::Model, &mut Budget, bool) -> Result<Framing>,
+    retention_fn: fn(&ir::Model, &mut Budget, bool) -> Result<Retention>,
+) -> (Viewpoints, Vec<diag::Diagnostic>) {
+    let (effects, mut warnings) = if shared {
         effects::derive_shared(m, a, effects_limits, true)
     } else {
         effects::derive(m, a, effects_limits)
     };
-    (
-        Viewpoints {
-            rules: "agency-viewpoints-p1-2".into(),
-            scope: "selected_process_lexical_calls_and_declared_contest_routes".into(),
-            observation: observation(m, a, &mut budget(limits[0])).unwrap_or_else(|_| {
+    let view = Viewpoints {
+        rules: "agency-viewpoints-p1-2".into(),
+        scope: "selected_process_lexical_calls_and_declared_contest_routes".into(),
+        observation: observation(m, a, &mut block_budget(m, limits[0], "observation"))
+            .unwrap_or_else(|error| {
+                let (reason, limit) = failure(error);
                 Observation::NotDerived {
-                    reason: LimitReason::DerivationLimit,
+                    reason,
                     fallback: "unchecked".into(),
+                    limit,
                 }
             }),
-            framing: if m.has_merges() {
-                Framing::NotDerived {
-                    reason: LimitReason::MergeControl,
-                    complete: false,
-                    unchecked: framing_unchecked(),
-                }
-            } else {
-                (if shared {
-                    framing_shared(m, &mut budget(limits[1]), true)
-                } else {
-                    framing(m, &mut budget(limits[1]))
-                })
-                .unwrap_or_else(|_| Framing::NotDerived {
-                    reason: LimitReason::DerivationLimit,
-                    complete: false,
-                    unchecked: framing_unchecked(),
-                })
-            },
-            proposal: Proposal::NotDerived {
-                reason: ProposalReason::NoProposalContract,
-            },
-            retention: if m.has_merges() {
-                Retention::NotDerived {
-                    reason: LimitReason::MergeControl,
-                    notice: NOTICE.into(),
-                    unchecked: retention_unchecked(),
-                }
-            } else {
-                (if shared {
-                    retention_shared(m, &mut budget(limits[2]), true)
-                } else {
-                    retention(m, &mut budget(limits[2]))
-                })
-                .unwrap_or_else(|_| Retention::NotDerived {
-                    reason: LimitReason::DerivationLimit,
-                    notice: NOTICE.into(),
-                    unchecked: retention_unchecked(),
-                })
-            },
-            effects: Some(effects),
+        framing: if m.has_merges() {
+            Framing::NotDerived {
+                reason: LimitReason::MergeControl,
+                limit: None,
+                complete: false,
+                unchecked: framing_unchecked(),
+            }
+        } else {
+            framing_fn(m, &mut block_budget(m, limits[1], "framing"), shared).unwrap_or_else(
+                |error| {
+                    let (reason, limit) = failure(error);
+                    Framing::NotDerived {
+                        reason,
+                        limit,
+                        complete: false,
+                        unchecked: framing_unchecked(),
+                    }
+                },
+            )
         },
-        warnings,
+        proposal: Proposal::NotDerived {
+            reason: ProposalReason::NoProposalContract,
+        },
+        retention: if m.has_merges() {
+            Retention::NotDerived {
+                reason: LimitReason::MergeControl,
+                limit: None,
+                notice: NOTICE.into(),
+                unchecked: retention_unchecked(),
+            }
+        } else {
+            retention_fn(m, &mut block_budget(m, limits[2], "retention"), shared).unwrap_or_else(
+                |error| {
+                    let (reason, limit) = failure(error);
+                    Retention::NotDerived {
+                        reason,
+                        limit,
+                        notice: NOTICE.into(),
+                        unchecked: retention_unchecked(),
+                    }
+                },
+            )
+        },
+        effects: Some(effects),
+    };
+    warnings.extend(view.limit_warnings());
+    (view, warnings)
+}
+
+pub(super) fn block_budget(m: &ir::Model, limits: Limits, block: &str) -> Budget {
+    Budget {
+        location: Location::model(m, block),
+        ..budget(limits)
+    }
+}
+
+#[cfg(test)]
+pub(super) fn domain_probe(m: &ir::Model) -> serde_json::Value {
+    let (calls, _) = recorded(m, &mut budget(DEFAULT)).unwrap();
+    let binding = ir::BindingId(
+        m.process
+            .bindings
+            .iter()
+            .position(|b| b.name == "j1")
+            .unwrap(),
+    );
+    let reject = m.capabilities[calls[binding.0].capability.0]
+        .version_check
+        .as_ref()
+        .unwrap()
+        .reject;
+    let p = Path {
+        guards: vec![Guard::Symbolic(
+            Symbolic::Eq(ir::ResultMatch {
+                binding,
+                value: reject,
+            }),
+            true,
+        )],
+        defined: BTreeSet::from([binding]),
+        trace: Some(Trace::default()),
+        ..Path::default()
+    };
+    let main_reachable = super::assignments(
+        &[binding],
+        &Values::new(),
+        &calls,
+        m,
+        &mut budget(DEFAULT),
+        |v, b| satisfied(&p, v, b),
     )
+    .unwrap();
+    let end = ir::EndId(m.ends.iter().position(|e| e == "rejected").unwrap());
+    let r = Recorder {
+        sinks: vec![(Some(end), p)],
+    };
+    let Framing::Derived { ends, .. } =
+        framing_fast::from_recording(m, &calls, r, &mut block_budget(m, DEFAULT, "framing"))
+            .unwrap()
+    else {
+        panic!()
+    };
+    let viewpoint_end = ends
+        .into_iter()
+        .find(|e| matches!(e, End::Derived { end, .. } if end == "rejected"))
+        .unwrap();
+    serde_json::json!({"status":"ok", "main_reachable":main_reachable, "viewpoint_end":viewpoint_end})
+}
+
+pub(super) fn failure(error: Error) -> (LimitReason, Option<Box<DerivationLimit>>) {
+    match error {
+        Error::InvalidIr(_) => (LimitReason::InvalidIr, None),
+        Error::Limit(limit) => (LimitReason::DerivationLimit, Some(limit)),
+    }
+}
+
+impl Viewpoints {
+    /// Only the final block, not an intermediate attempt, owns this warning.
+    pub(crate) fn limit_warnings(&self) -> Vec<diag::Diagnostic> {
+        let mut out = Vec::new();
+        let mut add = |block: &str, limit: &DerivationLimit| {
+            out.push(diag::Diagnostic {
+                code: diag::W_AGY_5.into(),
+                severity: diag::Severity::Warning,
+                message: format!("Agency viewpoint {block} not derived: {limit}"),
+                span: limit.span,
+            })
+        };
+        if let Observation::NotDerived {
+            reason: LimitReason::DerivationLimit,
+            limit: Some(limit),
+            ..
+        } = &self.observation
+        {
+            add("observation", limit);
+        }
+        if let Framing::NotDerived {
+            reason: LimitReason::DerivationLimit,
+            limit: Some(limit),
+            ..
+        } = &self.framing
+        {
+            add("framing", limit);
+        }
+        if let Retention::NotDerived {
+            reason: LimitReason::DerivationLimit,
+            limit: Some(limit),
+            ..
+        } = &self.retention
+        {
+            add("retention", limit);
+        }
+        if let Some(effects::Effects::NotDerived {
+            reason: LimitReason::DerivationLimit,
+            limit: Some(limit),
+            ..
+        }) = &self.effects
+        {
+            add("effects", limit);
+        }
+        out
+    }
+}
+
+pub(crate) fn refresh_limit_warnings(
+    agency: Option<&AgencyDerivation>,
+    diagnostics: &mut Vec<diag::Diagnostic>,
+) {
+    let at = diagnostics
+        .iter()
+        .position(|d| d.code == diag::W_AGY_5)
+        .unwrap_or(diagnostics.len());
+    diagnostics.retain(|d| d.code != diag::W_AGY_5);
+    let warnings = agency
+        .and_then(AgencyDerivation::as_derived)
+        .and_then(|a| a.viewpoints.as_ref())
+        .map_or_else(Vec::new, Viewpoints::limit_warnings);
+    let at = at.min(diagnostics.len());
+    diagnostics.splice(at..at, warnings);
 }
 
 fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation> {
@@ -997,6 +1195,7 @@ fn reads_zero(
     }
     Ok(false)
 }
+#[cfg(test)]
 fn recorded<'a>(m: &'a ir::Model, b: &mut Budget) -> Result<(Vec<&'a ir::Call>, Recorder<'a>)> {
     recorded_shared(m, b, false)
 }
@@ -1069,7 +1268,7 @@ fn read_support(p: &Path, m: &ir::Model, b: &mut Budget) -> Result<BTreeSet<ir::
 // Same mixed-radix/domain semantics as the legacy evaluator, with independent
 // accounting for all new-mode buffers. Borrow the result domain instead of
 // cloning it on every increment. Never allocate a Cartesian product.
-fn assignments(
+pub(super) fn assignments(
     vars: &[ir::BindingId],
     fixed: &Values,
     calls: &[&ir::Call],
@@ -1134,10 +1333,9 @@ fn assignments(
         }
     }
 }
-fn framing(m: &ir::Model, b: &mut Budget) -> Result<Framing> {
-    framing_shared(m, b, false)
-}
-fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing> {
+#[cfg(test)]
+fn framing_reference(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing> {
+    use enumerator_reference::{assignments, possibly_satisfied};
     let (calls, r) = if shared {
         recorded_shared(m, b, true)?
     } else {
@@ -1156,6 +1354,8 @@ fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing
         if m.overflow_end == Some(ir::EndId(i)) {
             continue;
         }
+        b.location.phase = "framing reachability".into();
+        b.location.effect = Some(end.clone());
         b.copy(1)?;
         let mut ps = Vec::new();
         for (id, p) in &r.sinks {
@@ -1223,6 +1423,8 @@ fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing
         let mut selectors = Vec::new();
         let mut read_only = Vec::new();
         for j in &support {
+            b.location.phase = "framing contexts".into();
+            b.location.judgement = Some(m.process.bindings[j.0].name.clone());
             let mut contexts = BTreeSet::new();
             for (p, local) in &reachable {
                 // Enumerate evaluation variables, then project *only reads*
@@ -1260,6 +1462,7 @@ fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing
             let mut selecting = false;
             let mut bypass = false;
             let mut has_blocked = false;
+            b.location.phase = "framing stopping".into();
             for context in &contexts {
                 let mut may = false;
                 let mut cannot = false;
@@ -1357,16 +1560,23 @@ fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing
     })
 }
 
-fn retention(m: &ir::Model, b: &mut Budget) -> Result<Retention> {
-    retention_shared(m, b, false)
-}
 fn retention_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Retention> {
-    let (calls, r) = if shared {
-        recorded_shared(m, b, true)?
-    } else {
-        recorded(m, b)?
-    };
-    exercised(m, &calls, r, b)
+    let result = (|| {
+        let (calls, r) = recorded_shared(m, b, shared)?;
+        exercised(m, &calls, r, b)
+    })();
+    record_budget("agency.retention", b);
+    result
+}
+fn record_budget(stage: &'static str, b: &Budget) {
+    for (name, n) in [
+        ("work", b.work),
+        ("cells", b.cells),
+        ("contexts", b.contexts),
+        ("paths", b.paths),
+    ] {
+        crate::perf::count(stage, name, n);
+    }
 }
 fn exercised<'a>(
     m: &'a ir::Model,
@@ -1374,8 +1584,28 @@ fn exercised<'a>(
     r: Recorder<'a>,
     b: &mut Budget,
 ) -> Result<Retention> {
+    retention_fast::exercised(m, calls, r, b)
+}
+#[cfg(test)]
+fn retention_reference(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Retention> {
+    let (calls, r) = if shared {
+        recorded_shared(m, b, true)?
+    } else {
+        recorded(m, b)?
+    };
+    exercised_reference(m, &calls, r, b)
+}
+#[cfg(test)]
+fn exercised_reference<'a>(
+    m: &'a ir::Model,
+    calls: &[&'a ir::Call],
+    r: Recorder<'a>,
+    b: &mut Budget,
+) -> Result<Retention> {
+    use enumerator_reference::assignments;
     let routes = routes(m, b)?;
     let capacity = ActorCapacity::new(m, calls, b)?;
+    b.location.phase = "retention exercise".into();
     let n = m.capabilities.len();
     b.copy(n.checked_mul(4).ok_or_else(invalid)?)?;
     let mut mins = vec![usize::MAX; n];
@@ -1548,6 +1778,9 @@ fn exercised<'a>(
 // falling out through a prefix filter; public acceptance owns this population.
 #[cfg(test)]
 pub(crate) fn fixture(name: &str) -> bool {
+    if relca_test_support::fixture_match::agency_limit_fixture(name) {
+        return false;
+    }
     const NAMES: [&str; 46] = [
         "agy-o-people",
         "agy-o-people.broken-no-read",
@@ -1610,6 +1843,65 @@ mod budget_acceptance;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unfactored_context_query_does_not_reserve_local_variables_twice() {
+        let source = crate::agency::limit_test_inputs::joined(10, " || ");
+        let m = lower(&source);
+        let a = m.agency.as_derived().unwrap();
+        let old = with_limits_and_warnings_reference(&m, a, [DEFAULT; 3], DEFAULT).0;
+        assert!(matches!(
+            old.framing,
+            Framing::Derived { complete: true, .. }
+        ));
+        let new = with_limits_and_warnings(&m, a, [DEFAULT; 3], DEFAULT).0;
+        assert_eq!(
+            serde_json::to_vec(&new).unwrap(),
+            serde_json::to_vec(&old).unwrap()
+        );
+    }
+    #[test]
+    fn fixed_context_lookup_does_not_regress_a_large_guard_component() {
+        let names: Vec<_> = (0..9).map(|i| format!("x{i}")).collect();
+        let actors: String = names.iter().map(|x| format!("actor A{x} {{ capacity 1; capability draw() -> V {{ duration fixed 1min; result nondet {{ pass,fail }} }} }}\n")).collect();
+        let calls: String = names
+            .iter()
+            .map(|x| format!("{x} = A{x}.draw(); "))
+            .collect();
+        let any = names
+            .iter()
+            .map(|x| format!("{x} == pass"))
+            .collect::<Vec<_>>()
+            .join(" || ");
+        let include = names
+            .iter()
+            .map(|x| format!("A{x}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let source = format!(
+            r#"model Budgets version "0.2" {{
+            type V = enum {{ pass,fail }}
+            actor C {{ capacity 1; capability draw() -> V {{ duration fixed 1min; result nondet {{ pass,fail }} }} }}
+            {actors}
+            actor Ay {{ capacity 1; capability draw() -> V {{ duration fixed 1min; result nondet {{ pass,fail }} }} }}
+            process Flow {{ c = C.draw(); if c == pass {{ {calls} if {any} {{ end done }} else {{ end returned }} }} else {{ y = Ay.draw(); if y == pass {{}} else {{}} }} }}
+            cut K {{ include [C,{include},Ay] }}
+            bounds {{ cases 1; live_tasks 11; clock 100min }}
+            verify safety no_resource_overcommit
+        }}"#
+        );
+        let m = lower(&source);
+        let a = m.agency.as_derived().unwrap();
+        let old = with_limits_and_warnings_reference(&m, a, [DEFAULT; 3], DEFAULT).0;
+        assert!(matches!(
+            old.framing,
+            Framing::Derived { complete: true, .. }
+        ));
+        let new = with_limits_and_warnings(&m, a, [DEFAULT; 3], DEFAULT).0;
+        assert_eq!(
+            serde_json::to_vec(&new).unwrap(),
+            serde_json::to_vec(&old).unwrap()
+        );
+    }
     use serde_json::{Value, json};
     fn lower(s: &str) -> ir::Model {
         crate::lower::lower(&crate::syntax::parse(s).unwrap()).unwrap()
@@ -1844,11 +2136,17 @@ mod tests {
             }
             assert!(low > 0);
             assert_eq!(run(low), full);
-            let mut want = full.clone();
-            want["observation"] =
-                json!({"status":"not_derived","reason":"derivation_limit","fallback":"unchecked"});
-            assert_eq!(run(low - 1), want);
-            assert_eq!(run(0), want);
+            for n in [low - 1, 0] {
+                let failed = run(n);
+                let record = &failed["observation"]["limit"];
+                assert_eq!(record["counter"], dimension);
+                assert_eq!(record["limit"], n);
+                assert!(record["requested"].as_u64().unwrap() > n as u64);
+                assert!(!record["phase"].as_str().unwrap().is_empty());
+                let mut want = full.clone();
+                want["observation"] = json!({"status":"not_derived","reason":"derivation_limit","fallback":"unchecked","limit":record});
+                assert_eq!(failed, want);
+            }
             eprintln!("ADR0034 nonempty observation/{dimension} k={low}");
         }
     }

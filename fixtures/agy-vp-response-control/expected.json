@@ -1,0 +1,1 @@
+{"verdict":"inconclusive","bounds":{"truncated":false},"agency":{"viewpoints":{"framing":{"status":"not_derived","reason":"response_control"},"retention":{"status":"derived"}}},"properties":[{"id":"safety no_resource_overcommit","verdict":"satisfied"},{"id":"receipt_resolution","verdict":"inconclusive"}],"terminals":[]}

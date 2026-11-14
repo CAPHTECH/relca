@@ -1,0 +1,19 @@
+model Rework version "0.2" {
+type V = enum { pass, fail }
+actor Office { capacity 1
+capability inspect()->V { duration fixed 1min; result nondet { pass,fail } }
+capability second()->V { duration fixed 1min; result nondet { pass,fail } }
+capability correct()->V { duration fixed 2min; result nondet { pass } }
+capability escalate()->V { duration fixed 1min; result nondet { pass } }
+}
+process Main {
+repeat rework at_most 3 {
+r=Office.inspect(); q=Office.second();
+if r==pass || q==pass { again } else { c=Office.correct(); again }
+} on_limit { e=Office.escalate(); end escalated }
+end done
+}
+cut C { include [Office] }
+bounds { cases 1; live_tasks 1; clock 40min }
+verify reachable end.done
+}

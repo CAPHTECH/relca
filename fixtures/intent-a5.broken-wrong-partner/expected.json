@@ -1,0 +1,1 @@
+{"verdict":"invalid","intent_block":{"from":"C","to":"B"},"replacements":[{"from":"Clerk.check","to":"Bot.check","reason":"migration","loses":"support","covers":[]}],"diagnostics":[{"code":"E-DIFF-0"},{"code":"W-DIFF-1"},{"code":"W-DIFF-3"}]}

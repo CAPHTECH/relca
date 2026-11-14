@@ -79,7 +79,27 @@ fn arithmetic_cut_preserves_old_diagnostics_verdict_and_whole_report() {
         .collect();
     assert_eq!(
         codes,
-        vec![Value::from("W-DEADLOCK-0"), Value::from("W-BUDGET-0")]
+        vec![
+            Value::from("W-AGY-5"),
+            Value::from("W-DEADLOCK-0"),
+            Value::from("W-BUDGET-0")
+        ]
+    );
+    // The warning discloses the existing framing budget failure, without
+    // displacing the runtime deadlock/arithmetic-cut evidence below.
+    assert!(
+        old["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("framing")
+    );
+    assert_eq!(
+        old["agency"]["viewpoints"]["framing"]["limit"]["counter"],
+        "work"
+    );
+    assert_eq!(
+        old["agency"]["viewpoints"]["framing"]["limit"]["limit"],
+        1_000_000
     );
     assert_eq!(full["diagnostics"], old["diagnostics"]);
     assert_eq!(h::old_projection(full), h::old_projection(old));

@@ -137,6 +137,7 @@ pub(crate) fn apply(
         v.scope="O/J/E static reach; F/U not_derived(response_control); L independently cross-checked exhaustive per-case Start envelope".into();
         v.framing = viewpoints::Framing::NotDerived {
             reason: viewpoints::LimitReason::ResponseControl,
+            limit: None,
             complete: false,
             unchecked: vec!["response_control".into()],
         };
@@ -189,6 +190,7 @@ pub(crate) fn apply(
         } else {
             v.retention = viewpoints::Retention::NotDerived {
                 reason: viewpoints::LimitReason::DerivationLimit,
+                limit: None,
                 notice: "切断・上限・両探索器の不一致では行使回数を導かない".into(),
                 unchecked: vec!["response_control".into()],
             };

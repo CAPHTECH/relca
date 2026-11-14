@@ -16,16 +16,31 @@ const COMMANDS: &[&str] = &[
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--agency-limit-scale")
+        && !matches!(
+            args.first().map(String::as_str),
+            Some("check" | "simulate" | "explain")
+        )
+    {
+        eprintln!("usage: --agency-limit-scale is accepted only by check, simulate and explain");
+        let result = relca_core::ledger::refusal("cli_refusal", Verdict::Invalid);
+        println!(
+            "{}",
+            serde_json::to_string(&result).expect("argument refusal serializes")
+        );
+        std::process::exit(Verdict::Invalid.exit_code());
+    }
     let verdict = match args.first().map(String::as_str) {
         Some("sensitivity") => std::process::exit(sensitivity::run(&args).exit_code()),
         Some("conform") => conform::run(&args),
         Some("explain") => {
-            let result = match flags(&args, &["--configuration", "--scenario"], EXPLAIN) {
-                Some((path, options)) => match std::fs::read_to_string(path) {
-                    Ok(src) => explain::explain_with_selection(
+            let result = match agency_flags(&args, EXPLAIN) {
+                Some((path, options, scale)) => match std::fs::read_to_string(path) {
+                    Ok(src) => explain::explain_with_agency_limit(
                         &src,
                         options.get("--configuration").copied(),
                         options.get("--scenario").copied(),
+                        scale,
                     ),
                     Err(error) => explain::input_failure_with_selection(
                         &format!("Cannot read {path}: {error}"),
@@ -33,9 +48,7 @@ fn main() {
                         options.get("--scenario").copied(),
                     ),
                 },
-                _ => explain::argument_failure(
-                    "usage: relca explain <path> [--configuration NAME] [--scenario NAME]",
-                ),
+                _ => explain::argument_failure(agency_usage(&args, "explain")),
             };
             for diagnostic in &result.report.diagnostics {
                 eprintln!("{}: {}", diagnostic.code, diagnostic.message);
@@ -135,12 +148,13 @@ fn main() {
             std::process::exit(result.verdict.exit_code());
         }
         Some("check") => {
-            let result = match flags(&args, &["--configuration", "--scenario"], CHECK) {
-                Some((path, options)) => match std::fs::read_to_string(path) {
-                    Ok(src) => report::check_with_selection(
+            let result = match agency_flags(&args, CHECK) {
+                Some((path, options, scale)) => match std::fs::read_to_string(path) {
+                    Ok(src) => report::check_with_agency_limit(
                         &src,
                         options.get("--configuration").copied(),
                         options.get("--scenario").copied(),
+                        scale,
                     ),
                     Err(error) => input_failure_selected(
                         format!("Cannot read {path}: {error}"),
@@ -148,9 +162,7 @@ fn main() {
                         options.get("--scenario").copied(),
                     ),
                 },
-                _ => input_failure(
-                    "usage: relca check <path> [--configuration NAME] [--scenario NAME]".into(),
-                ),
+                _ => input_failure(agency_usage(&args, "check").into()),
             };
             for diagnostic in &result.diagnostics {
                 eprintln!("{}: {}", diagnostic.code, diagnostic.message);
@@ -162,12 +174,13 @@ fn main() {
             std::process::exit(result.verdict.exit_code());
         }
         Some("simulate") => {
-            let result = match flags(&args, &["--configuration", "--scenario"], SIMULATE) {
-                Some((path, options)) => match std::fs::read_to_string(path) {
-                    Ok(src) => report::simulate_with_selection(
+            let result = match agency_flags(&args, SIMULATE) {
+                Some((path, options, scale)) => match std::fs::read_to_string(path) {
+                    Ok(src) => report::simulate_with_agency_limit(
                         &src,
                         options.get("--configuration").copied(),
                         options.get("--scenario").copied(),
+                        scale,
                     ),
                     Err(error) => {
                         let mut r = report::simulation_input_failure(&format!(
@@ -180,9 +193,7 @@ fn main() {
                         report::seal_simulation(r)
                     }
                 },
-                _ => report::simulation_input_failure(
-                    "usage: relca simulate <path> [--configuration NAME] [--scenario NAME]",
-                ),
+                _ => report::simulation_input_failure(agency_usage(&args, "simulate")),
             };
             for diagnostic in &result.diagnostics {
                 eprintln!("{}: {}", diagnostic.code, diagnostic.message);
@@ -322,6 +333,44 @@ fn main() {
 struct Shape {
     path: fn(&str) -> bool,
     value: fn(&str) -> bool,
+}
+
+type AgencyFlags<'a> = (
+    &'a str,
+    std::collections::BTreeMap<&'a str, &'a str>,
+    Option<usize>,
+);
+fn agency_flags(args: &[String], shape: Shape) -> Option<AgencyFlags<'_>> {
+    let (path, options) = flags(
+        args,
+        &["--configuration", "--scenario", "--agency-limit-scale"],
+        shape,
+    )?;
+    let scale = options
+        .get("--agency-limit-scale")
+        .map(|v| relca_core::agency::parse_limit_scale(v))
+        .transpose()
+        .ok()?;
+    Some((path, options, scale))
+}
+fn agency_usage(args: &[String], command: &str) -> &'static str {
+    let explicit = args.iter().any(|a| a == "--agency-limit-scale");
+    match (command, explicit) {
+        ("check", true) => {
+            "usage: relca check <path> [--configuration NAME] [--scenario NAME] [--agency-limit-scale N]"
+        }
+        ("check", false) => "usage: relca check <path> [--configuration NAME] [--scenario NAME]",
+        ("simulate", true) => {
+            "usage: relca simulate <path> [--configuration NAME] [--scenario NAME] [--agency-limit-scale N]"
+        }
+        ("simulate", false) => {
+            "usage: relca simulate <path> [--configuration NAME] [--scenario NAME]"
+        }
+        ("explain", true) => {
+            "usage: relca explain <path> [--configuration NAME] [--scenario NAME] [--agency-limit-scale N]"
+        }
+        _ => "usage: relca explain <path> [--configuration NAME] [--scenario NAME]",
+    }
 }
 const EXPLAIN: Shape = Shape {
     path: |p| !p.is_empty() && !p.starts_with('-'),

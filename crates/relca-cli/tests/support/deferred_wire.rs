@@ -551,6 +551,7 @@ pub fn validate_deferred_metrics_with_source(
             ast::Item::Metrics(_) => has_metrics = true,
             ast::Item::QualityProperty(_) => has_quality = true,
             ast::Item::Compare(_)
+            | ast::Item::PairIntent(_)
             | ast::Item::CohortMetric(_)
             | ast::Item::QuantileMetric(_)
             | ast::Item::Resource(_)

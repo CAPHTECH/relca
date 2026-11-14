@@ -28,23 +28,23 @@ def invocation(model, data):
     command = data.pop("command", "check")
     args = [command, model]
     allowed = {
-        "check": {"configuration", "scenario"},
-        "explain": {"scenario"},
-        "simulate": {"configuration", "scenario"},
+        "check": {"configuration", "scenario", "agency_limit_scale"},
+        "explain": {"scenario", "agency_limit_scale"},
+        "simulate": {"configuration", "scenario", "agency_limit_scale"},
         "mutate": {"set", "scenario"},
         "diff": {"from", "to", "scenario"},
         "compare": {"plans", "mode", "scenario"},
     }
     require(command in allowed, f"unknown fixture command: {command}")
     require(data.keys() <= allowed[command], f"unknown invocation fields: {data}")
-    for key in ("configuration", "from", "to", "plans", "mode", "set", "scenario"):
+    for key in ("configuration", "from", "to", "plans", "mode", "set", "scenario", "agency_limit_scale"):
         if key in data:
             value = data[key]
             if key == "plans":
                 require(isinstance(value, list), "plans must be an array")
                 value = ",".join(value)
             require(isinstance(value, str) and value, f"invalid selector: {key}")
-            args.extend(["--" + key, value])
+            args.extend(["--" + key.replace("_", "-"), value])
     return args
 
 

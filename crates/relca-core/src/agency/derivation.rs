@@ -81,7 +81,14 @@ pub(crate) fn derive_for_model(
     crate::actor_table::validate(model)
         .map_err(|e| Error::InvalidIr(e.message.into()).diagnostic())?;
     let degradation = degradation_for_model(model).map_err(Error::diagnostic)?;
-    match derive_main(model, DEFAULT, [DEFAULT; 3], DEFAULT, degradation.clone()) {
+    let budgets = budgets_for_model(model).map_err(Error::diagnostic)?;
+    match derive_main(
+        model,
+        budgets.main,
+        [budgets.observation, budgets.framing, budgets.retention],
+        budgets.effects,
+        degradation.clone(),
+    ) {
         Ok((agency, warnings)) => Ok((agency.into(), warnings)),
         Err(Error::InvalidIr(reason)) => Err(Error::InvalidIr(reason).diagnostic()),
         Err(Error::Limit(limit)) => {

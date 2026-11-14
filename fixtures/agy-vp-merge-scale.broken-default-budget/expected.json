@@ -1,0 +1,1 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"ledger":{"execution":{"limits":{"agency_limit_scale":{"status":"known","value":1,"reason":null}}}},"agency":{"status":"not_derived","reason":"derivation_limit","limit":{"counter":"work","limit":1000000}},"terminals":[{"end":"done","elapsed":{"min":11,"max":12}},{"end":"rejected","elapsed":{"min":10,"max":11}}]}

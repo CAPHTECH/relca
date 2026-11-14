@@ -172,6 +172,10 @@ pub(super) fn capname(m: &ir::Model, id: ir::CapabilityId) -> String {
 /// it is not a reaching-definition analysis of state writes or synthetic routes.
 fn read_producers(m: &ir::Model) -> BTreeMap<String, String> {
     let shape = Shape::new(m);
+    read_producers_from_shape(m, &shape)
+}
+
+fn read_producers_from_shape(m: &ir::Model, shape: &Shape) -> BTreeMap<String, String> {
     shape
         .calls
         .iter()
@@ -202,6 +206,7 @@ pub(super) fn producer_differences(from: &ir::Model, to: &ir::Model) -> Vec<Diff
                     producer: to.clone(),
                 })),
                 annotations: vec![],
+                covered_by: vec![],
             })
         })
         .collect()
@@ -363,6 +368,15 @@ fn authority(m: &ir::Model, src: &str, id: ir::CapabilityId) -> DiffValue {
 fn projection(src: &str, m: &ir::Model) -> BTreeMap<(Kind, String), DiffValue> {
     let shape = Shape::new(m);
     let active = shape.active(m);
+    projection_from_shape(src, m, &shape, &active)
+}
+
+fn projection_from_shape(
+    src: &str,
+    m: &ir::Model,
+    shape: &Shape,
+    active: &BTreeSet<ir::CapabilityId>,
+) -> BTreeMap<(Kind, String), DiffValue> {
     let mut out = BTreeMap::new();
     for e in &shape.ends {
         out.insert(
@@ -370,7 +384,7 @@ fn projection(src: &str, m: &ir::Model) -> BTreeMap<(Kind, String), DiffValue> {
             DiffValue::Meaning(true),
         );
     }
-    for id in &active {
+    for id in active {
         let value = authority(m, src, *id);
         if value != DiffValue::Inactive {
             out.insert((Kind::Authority, capname(m, *id)), value);
@@ -442,10 +456,10 @@ fn projection(src: &str, m: &ir::Model) -> BTreeMap<(Kind, String), DiffValue> {
             );
         }
     }
-    for (id, modes) in shape.modes {
+    for (id, modes) in &shape.modes {
         out.insert(
-            (Kind::Time, capname(m, id)),
-            DiffValue::Time(modes.into_iter().collect()),
+            (Kind::Time, capname(m, *id)),
+            DiffValue::Time(modes.iter().copied().collect()),
         );
     }
     out
@@ -453,6 +467,13 @@ fn projection(src: &str, m: &ir::Model) -> BTreeMap<(Kind, String), DiffValue> {
 pub(super) fn differences(src: &str, from: &ir::Model, to: &ir::Model) -> Vec<Difference> {
     let a = projection(src, from);
     let b = projection(src, to);
+    projection_differences(a, b)
+}
+
+fn projection_differences(
+    a: BTreeMap<(Kind, String), DiffValue>,
+    b: BTreeMap<(Kind, String), DiffValue>,
+) -> Vec<Difference> {
     let keys: BTreeSet<_> = a.keys().chain(b.keys()).cloned().collect();
     let mut out = Vec::new();
     for (kind, target) in keys {
@@ -498,9 +519,70 @@ pub(super) fn differences(src: &str, from: &ir::Model, to: &ir::Model) -> Vec<Di
             from: Some(from.clone()),
             to: Some(to.clone()),
             annotations: vec![],
+            covered_by: vec![],
         });
     }
     out
+}
+
+/// A comparison-only substitution: keep every value function on the original
+/// from model. Never lower, execute, or recompute Agency for the hypothetical
+/// calls, and never mutate either executable model.
+pub(super) fn replacement_difference_keys(
+    src: &str,
+    from: &crate::lower::SelectedConfiguration,
+    to: &crate::lower::SelectedConfiguration,
+    replacements: &BTreeMap<ir::CapabilityId, ir::CapabilityId>,
+) -> BTreeSet<(Kind, String)> {
+    let m = &from.model;
+    let mut shape = Shape::new(m);
+    let replace = |id: ir::CapabilityId| replacements.get(&id).copied().unwrap_or(id);
+    let active = shape.active(m).into_iter().map(replace).collect();
+    for call in shape.calls.values_mut() {
+        call.capability = replace(call.capability);
+    }
+    let mut modes: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+    for (id, ms) in shape.modes {
+        modes.entry(replace(id)).or_default().extend(ms);
+    }
+    shape.modes = modes;
+    let names: BTreeMap<_, _> = replacements
+        .iter()
+        .map(|(a, b)| (capname(m, *a), capname(m, *b)))
+        .collect();
+    let relations: BTreeSet<_> = from
+        .relations
+        .iter()
+        .map(|n| names.get(n).unwrap_or(n).clone())
+        .collect();
+    let actors: BTreeSet<_> = relations
+        .iter()
+        .map(|n| n.split_once('.').expect("capability name").0.to_owned())
+        .collect();
+    let mut keys = BTreeSet::new();
+    for (kind, a, b) in [
+        (Kind::Actor, &actors, &to.actors),
+        (Kind::Relation, &relations, &to.relations),
+    ] {
+        keys.extend(a.symmetric_difference(b).map(|n| (kind, n.clone())));
+    }
+    keys.extend(
+        projection_differences(
+            projection_from_shape(src, m, &shape, &active),
+            projection(src, &to.model),
+        )
+        .into_iter()
+        .filter(|d| matches!(d.kind, Kind::Authority | Kind::Resource | Kind::Visibility))
+        .map(|d| (d.kind, d.target)),
+    );
+    let a = read_producers_from_shape(m, &shape);
+    let b = read_producers(&to.model);
+    keys.extend(
+        a.into_iter()
+            .filter(|(n, v)| b.get(n).is_some_and(|to| to != v))
+            .map(|(n, _)| (Kind::Relation, n)),
+    );
+    keys
 }
 
 #[cfg(test)]

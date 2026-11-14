@@ -1,0 +1,1 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"agency":{"viewpoints":{"framing":{"status":"derived","complete":true},"retention":{"status":"derived"}}},"terminals":[{"end":"done","elapsed":{"min":12,"max":12}},{"end":"rejected","elapsed":{"min":2,"max":10}}]}

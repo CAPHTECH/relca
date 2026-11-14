@@ -1,0 +1,25 @@
+model GateControl version "0.2" {
+type V = enum { pass, fail }
+type Ack = enum { done }
+actor Doc { source document }
+actor Intake { capacity 1; capability start()->V { reads [Doc]; duration fixed 1min; result nondet { pass } } }
+actor Judge { capacity 1; capability check(x:V)->V { duration fixed 1min; result nondet { pass,fail } } }
+actor Ledger { capacity 1; capability post(x:V)->Ack { commits; duration fixed 1min; result nondet { done } } }
+process Flow {
+s=Intake.start();
+j1=Judge.check(s); if j1==pass {} else {end rejected}
+j2=Judge.check(s); if j2==pass {} else {end rejected}
+j3=Judge.check(s); if j3==pass {} else {end rejected}
+j4=Judge.check(s); if j4==pass {} else {end rejected}
+j5=Judge.check(s); if j5==pass {} else {end rejected}
+j6=Judge.check(s); if j6==pass {} else {end rejected}
+j7=Judge.check(s); if j7==pass {} else {end rejected}
+j8=Judge.check(s); if j8==pass {} else {end rejected}
+j9=Judge.check(s); if j9==pass {} else {end rejected}
+j10=Judge.check(s); if j10==pass {} else {}
+p=Ledger.post(j10); end done
+}
+cut C { include [Doc,Intake,Judge,Ledger] }
+bounds { cases 1; live_tasks 2; clock 100min }
+verify safety no_resource_overcommit
+}

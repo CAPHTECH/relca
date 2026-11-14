@@ -499,6 +499,24 @@ pub fn check_with_selection(
     )
 }
 
+pub fn check_with_agency_limit(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    scale: Option<usize>,
+) -> Report {
+    finite_driver(
+        check_selection_with_agency_limit_using(
+            src,
+            configuration,
+            scenario,
+            scale,
+            engine::explore,
+        ),
+        engine::DEFAULT_STATE_BUDGET,
+    )
+}
+
 /// Sensitivity's all-point gate has already parsed/lowered the captured bytes.
 /// Preserve a static refusal without calling any analysis driver on a prefix.
 pub(crate) fn sensitivity_preflight_failure(
@@ -601,13 +619,23 @@ pub(crate) fn check_selection_using(
     scenario: Option<&str>,
     execute: impl FnOnce(&ir::Model) -> outcome::Outcome,
 ) -> Report {
-    if configuration.is_none() && scenario.is_none() {
+    check_selection_with_agency_limit_using(src, configuration, scenario, None, execute)
+}
+
+pub(crate) fn check_selection_with_agency_limit_using(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    scale: Option<usize>,
+    execute: impl FnOnce(&ir::Model) -> outcome::Outcome,
+) -> Report {
+    if configuration.is_none() && scenario.is_none() && scale.is_none() {
         return check_using(src, execute);
     }
     let mut report = check_with(
         src,
         syntax::parse,
-        |a| lower::lower_with_selection(a, configuration, scenario),
+        |a| lower::lower_with_agency_limit(a, configuration, scenario, scale),
         execute,
     );
     report.ledger.requested(configuration, scenario);
@@ -818,6 +846,24 @@ pub fn simulate_with_selection(
         engine::simulate,
         &mut None,
     ))
+}
+
+pub fn simulate_with_agency_limit(
+    src: &str,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    scale: Option<usize>,
+) -> SimulationReport {
+    let report = simulate_pipeline_raw_with_agency_limit(
+        src,
+        configuration,
+        scenario,
+        engine::simulate,
+        &mut None,
+        None,
+        scale,
+    );
+    simulation_driver(simulation_selection(report, configuration, scenario))
 }
 
 /// The ordinary simulation pipeline with a frozen, pre-execution family. The
@@ -1183,6 +1229,20 @@ fn simulate_pipeline_raw(
     selected: &mut Option<lower::SelectedConfiguration>,
     scope: Option<&crate::sensitivity::statistics::SuiteMultiplicity>,
 ) -> SimulationReport {
+    simulate_pipeline_raw_with_agency_limit(
+        src, selection, scenario, execute, selected, scope, None,
+    )
+}
+
+fn simulate_pipeline_raw_with_agency_limit(
+    src: &str,
+    selection: Option<&str>,
+    scenario: Option<&str>,
+    execute: impl FnOnce(&ir::Model) -> outcome::SimulationOutcome,
+    selected: &mut Option<lower::SelectedConfiguration>,
+    scope: Option<&crate::sensitivity::statistics::SuiteMultiplicity>,
+    scale: Option<usize>,
+) -> SimulationReport {
     let mut base = empty_report(src);
     let ast = match syntax::parse(src) {
         Ok(a) => a,
@@ -1223,9 +1283,13 @@ fn simulate_pipeline_raw(
                     | ast::Item::QuantileMetric(_)
             )
         }) {
-            let model = match selection {
-                Some(c) => lower::lower_configuration(&ast, c).map(|s| s.model),
-                None => lower::lower(&ast),
+            let model = if scale.is_some() {
+                lower::lower_with_agency_limit(&ast, selection, scenario, scale)
+            } else {
+                match selection {
+                    Some(c) => lower::lower_configuration(&ast, c).map(|s| s.model),
+                    None => lower::lower(&ast),
+                }
             };
             if let Ok(m) = model {
                 base.quality = Some(crate::quality::simulation(&m, &[], true));
@@ -1235,10 +1299,12 @@ fn simulate_pipeline_raw(
         // Preserve legacy missing-configuration behavior byte-for-byte. For a
         // new revocation record only, resolve its names before publishing it.
         if ast.items.iter().any(|i| matches!(i, ast::Item::Authority(a) if a.items.iter().any(|f| matches!(f.value, ast::AuthorityItem::RevocableBy(_))))) {
-            let lowered = match selection {
+            let lowered = if scale.is_some() {
+                lower::lower_with_agency_limit(&ast,selection,scenario,scale)
+            } else { match selection {
                 Some(c) => lower::lower_configuration(&ast, c).map(|s| s.model),
                 None => lower::lower(&ast),
-            };
+            }};
             if let Ok(m) = lowered {
                 base.assumptions = m.assumptions.clone();
                 authority_record(&mut base, &m);
@@ -1257,13 +1323,17 @@ fn simulate_pipeline_raw(
             }],
         ));
     }
-    let lowered = match selection {
-        Some(c) => lower::lower_configuration_with_scenario(&ast, c, scenario).map(|c| {
-            let model = c.model.clone();
-            *selected = Some(c);
-            model
-        }),
-        None => lower::lower_with_selection(&ast, None, scenario),
+    let lowered = if scale.is_some() {
+        lower::lower_with_agency_limit(&ast, selection, scenario, scale)
+    } else {
+        match selection {
+            Some(c) => lower::lower_configuration_with_scenario(&ast, c, scenario).map(|c| {
+                let model = c.model.clone();
+                *selected = Some(c);
+                model
+            }),
+            None => lower::lower_with_selection(&ast, None, scenario),
+        }
     };
     let model = match lowered {
         Ok(m) => m,
@@ -3061,7 +3131,20 @@ fn simulation_driver(mut report: SimulationReport) -> SimulationReport {
     seal_simulation(report)
 }
 
+fn computational_assumption_last(rows: &mut Vec<ir::Assumption>) {
+    // Keep all pre-existing assumption pointers stable under an explicit x1.
+    if let Some(i) = rows.iter().position(|a| a.field == "agency.limit") {
+        let assumption = rows.remove(i);
+        rows.push(assumption);
+    }
+}
+
 pub fn seal_simulation(mut report: SimulationReport) -> SimulationReport {
+    computational_assumption_last(&mut report.assumptions);
+    crate::agency::viewpoints::refresh_limit_warnings(
+        report.agency.as_ref(),
+        &mut report.diagnostics,
+    );
     // Both the driver and direct/early simulation paths seal here. Apply the
     // same whole-run gate before serializing evidence for the ledger/decoder.
     report.verdict =
@@ -3080,6 +3163,11 @@ pub fn seal_simulation(mut report: SimulationReport) -> SimulationReport {
 
 /// Finish provenance without touching the model, analysis, or existing evidence.
 pub fn seal(mut report: Report) -> Report {
+    computational_assumption_last(&mut report.assumptions);
+    crate::agency::viewpoints::refresh_limit_warnings(
+        report.agency.as_ref(),
+        &mut report.diagnostics,
+    );
     let timer = crate::perf::span("seal");
     let host = serde_json::to_value(&report).expect("report uncertainty context");
     report.uncertainty.refresh(&host, false);
@@ -3268,6 +3356,7 @@ mod tests {
     fn model() -> ir::Model {
         let span = diag::Span { start: 0, end: 0 };
         ir::Model {
+            agency_limit_scale: 1,
             contract_selection: Default::default(),
             case_priority: None,
             performances: Vec::new(),

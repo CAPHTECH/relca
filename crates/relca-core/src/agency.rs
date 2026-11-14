@@ -10,17 +10,27 @@ mod common_cause;
 pub(crate) mod merge;
 use ancestors::Ancestors;
 mod factor;
+mod limits;
 use factor::Factorization;
+use limits::{DEGRADATION_WORK, budgets_for_model};
+pub use limits::{MAX_LIMIT_SCALE, parse_limit_scale};
+#[cfg(test)]
+#[path = "../tests/support/agency_viewpoint_limit_private.rs"]
+mod agency_viewpoint_limit_acceptance;
 mod derivation;
 mod derivation_error;
 #[cfg(test)]
 mod factor_tests;
+#[cfg(test)]
+mod viewpoint_limit_adapter;
 pub(crate) use derivation::derive_for_model;
 #[cfg(test)]
 pub(crate) use derivation::test_input as limit_test_inputs;
 pub use derivation::{AgencyDerivation, LimitReason, NotDerivedAgency, NotDerivedStatus};
 pub use derivation_error::DerivationLimit;
 use derivation_error::{Error, Location};
+#[cfg(test)]
+use viewpoint_limit_adapter::adr0072_run;
 pub(crate) mod degradation;
 pub use degradation::Degradation;
 mod differences;
@@ -705,7 +715,7 @@ fn via_with_limits_shared(m: &ir::Model, limits: ViaLimits, shared: bool) -> Opt
     Some(result)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
 struct Limits {
     depth: usize,
     paths: usize,
@@ -1843,7 +1853,14 @@ pub fn derive(
     let _timer = crate::perf::span("agency.derive");
     crate::actor_table::validate(model)
         .map_err(|reason| Error::InvalidIr(reason.message.into()).diagnostic())?;
-    derive_with_limits(model, DEFAULT)
+    let budgets = budgets_for_model(model).map_err(Error::diagnostic)?;
+    derive_with_new_limits(
+        model,
+        budgets.main,
+        [budgets.observation, budgets.framing, budgets.retention],
+        budgets.effects,
+    )
+    .map_err(Error::diagnostic)
 }
 
 struct Group {
@@ -1854,6 +1871,7 @@ struct Group {
     sites: BTreeSet<ir::BindingId>,
 }
 
+#[cfg(test)]
 fn derive_with_limits(
     model: &ir::Model,
     limits: Limits,
@@ -1878,7 +1896,7 @@ fn degradation_for_model(model: &ir::Model) -> Result<Option<Degradation>> {
         return Ok(None);
     }
     degradation::validate_indices(model)?;
-    Ok(Some(degradation::derive(model, 1_000_000)))
+    Ok(Some(degradation::derive(model, DEGRADATION_WORK)))
 }
 
 fn derive_main(
@@ -1979,7 +1997,7 @@ fn derive_strategy_shared(
         .collect();
     let mut dependents = vec![Vec::new(); n];
     let mut degree = vec![0usize; n];
-    let extra = read_graph::read_parents(model, &calls)?;
+    let extra = read_graph::with_limits(model, &calls, limits)?;
     for c in &calls {
         budget.work()?;
         let cap = model.capabilities.get(c.capability.0).ok_or_else(invalid)?;
@@ -2643,7 +2661,9 @@ fn derive_strategy_shared(
     if matches!(viewpoints.effects, Some(effects::Effects::Derived { .. })) {
         agency.unchecked.retain(|word| word != "executors");
     }
-    warnings.extend(new_warnings);
+    warnings.extend(new_warnings.into_iter().filter(|d| d.code != diag::W_AGY_5));
+    warnings.retain(|d| d.code != diag::W_AGY_5);
+    warnings.extend(viewpoints.limit_warnings());
     if let viewpoints::Retention::Derived { capabilities, .. } = &viewpoints.retention {
         for id in &model.fallback_capabilities {
             if matches!(

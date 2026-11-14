@@ -1,0 +1,1 @@
+{"verdict":"invalid","replacements":[{"from":"Desk.post","to":"Bot.check","reason":"x","loses":null,"covers":[]}],"diagnostics":[{"code":"E-DIFF-0"},{"code":"W-DIFF-2"},{"code":"W-DIFF-1"},{"code":"W-DIFF-3"}]}

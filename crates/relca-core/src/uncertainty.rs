@@ -205,9 +205,16 @@ fn model_items(host: &Value, aleatory: &Class) -> Vec<Evidence> {
         subjects: Vec::new(),
     }];
     if let Some(rows) = host["assumptions"].as_array() {
-        items.extend((0..rows.len()).map(|i| Evidence::Assumption {
-            at: format!("/assumptions/{i}"),
-        }));
+        // A computational knob is already covered by the execution-limits
+        // context. It is not an additional assumption about the business model.
+        items.extend(
+            rows.iter()
+                .enumerate()
+                .filter(|(_, row)| row["field"] != "agency.limit")
+                .map(|(i, _)| Evidence::Assumption {
+                    at: format!("/assumptions/{i}"),
+                }),
+        );
     }
     // A null agency/local table remains null at its pointer. Do not replace it
     // by an invented empty suppression/lineage table or recompute removed aliases.

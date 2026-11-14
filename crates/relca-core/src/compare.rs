@@ -371,6 +371,7 @@ impl CompareReport {
         });
     }
     fn finish(mut self) -> Self {
+        let intent_unchecked = self.unchecked.iter().any(|x| x == "intent");
         // Applicability is established from the selected IR, not from an
         // automatic property that might be absent after a backend abort.
         let receipt_not_applicable = self
@@ -400,6 +401,9 @@ impl CompareReport {
         if receipt_not_applicable {
             self.unchecked
                 .push(projection::RECEIPT_NOT_APPLICABLE.into());
+        }
+        if intent_unchecked {
+            self.unchecked.push("intent".into());
         }
         if checked.contains("contract_scope") {
             self.checked.push("contract_scope".into());
@@ -671,6 +675,9 @@ fn compare_using(
     let Some(metadata) = metadata.into_iter().collect::<Option<Vec<_>>>() else {
         return result.finish();
     };
+    if metadata.iter().any(|m| m.has_intent) {
+        result.unchecked.push("intent".into());
+    }
     if metadata
         .iter()
         .any(|m| !m.model.response_attempts().is_empty())
@@ -1407,6 +1414,34 @@ mod tests {
     use serde_json::{Value, json};
     const CASES: &str = include_str!("../../../fixtures/compare-case-diff/model.relca");
     const RANDOM: &str = include_str!("../../../fixtures/compare-random/model.relca");
+    #[test]
+    fn intent_disclosure_is_for_compared_destinations_including_empty_blocks() {
+        let source = r#"model Scope version "0.2" {
+            type R = enum { ok }
+            actor Worker { capacity 1; capability run() -> R { duration fixed 1min; result nondet { ok } } }
+            process Flow { x = Worker.run(); end done }
+            cut K { include [Worker] }
+            configuration A { cut K; process Flow }
+            configuration B { cut K; process Flow }
+            configuration C { cut K; process Flow }
+            bounds { cases 1; live_tasks 1; clock 10min }
+            verify reachable end.done
+        }"#;
+        for declaration in [
+            "configuration C { cut K; process Flow; intent { } }",
+            "configuration C { cut K; process Flow } intent from A to C { }",
+        ] {
+            let source = source.replace("configuration C { cut K; process Flow }", declaration);
+            for (plans, count) in [(["A", "B"], 0), (["A", "C"], 1)] {
+                let result = compare(&source, &plans, Analysis::Exhaustive);
+                assert_eq!(result.verdict, Verdict::Satisfied);
+                assert_eq!(
+                    result.unchecked.iter().filter(|w| *w == "intent").count(),
+                    count
+                );
+            }
+        }
+    }
     #[test]
     fn round1_handler_random_sites_are_not_silently_omitted() {
         let s = crate::r2_inputs::paired("R01", "R01");

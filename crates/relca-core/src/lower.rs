@@ -179,6 +179,25 @@ pub fn lower_with_selection(
     configuration: Option<&str>,
     scenario: Option<&str>,
 ) -> Result<ir::Model, Vec<Diagnostic>> {
+    lower_with_agency_limit(model, configuration, scenario, None)
+}
+
+/// A computational option, not DSL syntax. Keep it in every selected IR before
+/// deriving Agency or validating responsibilities and party routes.
+pub fn lower_with_agency_limit(
+    model: &ast::Model,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    agency_limit_scale: Option<usize>,
+) -> Result<ir::Model, Vec<Diagnostic>> {
+    if agency_limit_scale.is_some_and(|n| !(1..=crate::agency::MAX_LIMIT_SCALE).contains(&n)) {
+        return Err(vec![Diagnostic {
+            code: diag::E_SYN_0.into(),
+            severity: diag::Severity::Error,
+            message: "--agency-limit-scale is outside 1..=1000".into(),
+            span: None,
+        }]);
+    }
     #[cfg(test)]
     crate::evaluation_spy::hit(0);
     let scenarios: Vec<_> = model
@@ -214,7 +233,7 @@ pub fn lower_with_selection(
             l.errors.extend(compare_names.errors);
             return Err(l.errors);
         }
-        let lowered = lower_effective(model, configuration, None, &[]);
+        let lowered = lower_effective(model, configuration, None, &[], agency_limit_scale);
         if compare_names.errors.is_empty() {
             return lowered;
         }
@@ -296,7 +315,13 @@ pub fn lower_with_selection(
             errors.extend(l.errors);
             effective.items.push(item);
         }
-        match lower_effective(&effective, configuration, Some(s), &horizons) {
+        match lower_effective(
+            &effective,
+            configuration,
+            Some(s),
+            &horizons,
+            agency_limit_scale,
+        ) {
             Ok(m) if scenario == Some(s.name.value.as_str()) => selected = Some(m),
             Ok(_) => (),
             Err(ds) => errors.extend(ds),
@@ -334,8 +359,10 @@ fn lower_effective(
     configuration: Option<&str>,
     scenario: Option<&ast::ScenarioDecl>,
     horizons: &[ast::Duration],
+    agency_limit_scale: Option<usize>,
 ) -> Result<ir::Model, Vec<Diagnostic>> {
     let mut l = Lower {
+        agency_limit_scale,
         scenario: scenario.map(|s| ir::ScenarioRecord {
             name: s.name.value.clone(),
             span: s.span,
@@ -417,6 +444,10 @@ pub struct SelectedConfiguration {
     /// Source reference responsible for simulation alias diagnostics.
     pub process_reference_span: Span,
     pub intent: Vec<ast::Intent>,
+    pub intent_declared: bool,
+    pub pair_intents: Vec<ast::PairIntent>,
+    pub has_intent: bool,
+    pub configuration_count: usize,
     pub actors: BTreeSet<String>,
     pub relations: BTreeSet<String>,
 }
@@ -463,6 +494,25 @@ pub fn lower_configuration_with_scenario(
         terminal_names,
         process_reference_span: configuration.process.span,
         intent: configuration.intent.clone(),
+        intent_declared: configuration.intent_declared,
+        pair_intents: ast
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                ast::Item::PairIntent(p) => Some(p.clone()),
+                _ => None,
+            })
+            .collect(),
+        has_intent: configuration.intent_declared
+            || ast
+                .items
+                .iter()
+                .any(|i| matches!(i, ast::Item::PairIntent(p) if p.to.value == name)),
+        configuration_count: ast
+            .items
+            .iter()
+            .filter(|i| matches!(i, ast::Item::Configuration(_)))
+            .count(),
         actors: calls.iter().map(|c| c.actor.value.clone()).collect(),
         relations: calls
             .iter()
@@ -1828,6 +1878,7 @@ mod tests {
 
 #[derive(Default)]
 struct Lower {
+    agency_limit_scale: Option<usize>,
     merge_names: BTreeSet<String>,
     merge_target: Option<(ir::BindingId, usize)>,
     block_depth: usize,
@@ -5864,7 +5915,12 @@ impl Lower {
             assumptions.push(ir::Assumption { field:"work_profiles".into(), value:"analyst_declared_not_validated; start snapshot".into(),
                 affects:"資格はPermissionと別。負荷は開始直前の同Actorの他のQueued Task数で、自分・Running・Held・未到着を含めず、stopped案件のQueuedは含む。固定した成績kernelのgivenは従来の終了時に評価する。実技能・疲労・資格の正当性は認定せず、durationを推測しない。".into() });
         }
+        if let Some(scale) = self.agency_limit_scale {
+            assumptions.push(ir::Assumption { field:"agency.limit".into(), value:format!("computational_x{scale}"),
+                affects:"Agency導出のworkとcellsだけに掛ける計算上の倍率。業務上の上限や性質の探索予算は変えない".into() });
+        }
         let mut lowered = ir::Model {
+            agency_limit_scale: self.agency_limit_scale.unwrap_or(1),
             contract_selection,
             case_priority: None,
             arrival_distribution,
@@ -8327,6 +8383,15 @@ impl Lower {
     ) -> (Option<&'a ast::Configuration>, Vec<Diagnostic>) {
         let mut warnings = Vec::new();
         if configurations.is_empty() {
+            for item in &model.items {
+                if let ast::Item::PairIntent(p) = item {
+                    self.error(
+                        E_NAME_0,
+                        "intent references undeclared configurations",
+                        p.span,
+                    );
+                }
+            }
             if selection.is_some() {
                 self.error(
                     diag::E_CONF_0,
@@ -8368,7 +8433,30 @@ impl Lower {
                     c.cut.span,
                 );
             }
-            self.configuration_intent_names(model, c);
+            self.configuration_intent_names(model, c, &c.intent);
+        }
+        for item in &model.items {
+            if let ast::Item::PairIntent(p) = item {
+                for name in [&p.from, &p.to] {
+                    if !names.contains(name.value.as_str()) {
+                        self.error(
+                            E_NAME_0,
+                            "intent references an undeclared configuration",
+                            name.span,
+                        );
+                    }
+                }
+                if p.from.value == p.to.value {
+                    self.error(
+                        diag::E_CON_0,
+                        "intent pair requires different configurations",
+                        p.span,
+                    );
+                }
+                if let Some(c) = configurations.iter().find(|c| c.name.value == p.to.value) {
+                    self.configuration_intent_names(model, c, &p.items);
+                }
+            }
         }
         for item in &model.items {
             let unused = match item {
@@ -8413,7 +8501,12 @@ impl Lower {
         (selected, warnings)
     }
 
-    fn configuration_intent_names(&mut self, model: &ast::Model, c: &ast::Configuration) {
+    fn configuration_intent_names(
+        &mut self,
+        model: &ast::Model,
+        c: &ast::Configuration,
+        intents: &[ast::Intent],
+    ) {
         // Each intent belongs to its destination process, even while another
         // configuration is selected for lowering. Do not use selected IR IDs.
         let mut calls = Vec::new();
@@ -8444,7 +8537,35 @@ impl Lower {
             }
         }
         let mut lanes = BTreeSet::new();
-        for intent in &c.intent {
+        let mut replacements = BTreeSet::new();
+        for intent in intents {
+            if let ast::Intent::Replace { from, to, span, .. } = intent {
+                let key =
+                    |p: &ast::CapabilityPath| (p.actor.value.clone(), p.capability.value.clone());
+                if !replacements.insert(key(from)) {
+                    self.unsupported("duplicate intent target", *span);
+                }
+                if key(from) == key(to) {
+                    self.error(
+                        diag::E_CON_0,
+                        "replace requires different capabilities",
+                        *span,
+                    );
+                }
+                for p in [from, to] {
+                    if !self.cap_names.contains_key(&key(p)) {
+                        self.error(E_NAME_0, "undeclared replacement capability", p.span);
+                    }
+                }
+                if intents.iter().any(|i| matches!(i, ast::Intent::Claim {action, target, ..}
+                    if target.kind == ast::DiffKind::Relation &&
+                    ((*action == ast::IntentAction::Retire && target.name() == format!("{}.{}", from.actor.value, from.capability.value)) ||
+                     (*action == ast::IntentAction::Add && target.name() == format!("{}.{}", to.actor.value, to.capability.value))))) {
+                    self.unsupported("duplicate intent target", *span);
+                }
+            }
+        }
+        for intent in intents {
             if let ast::Intent::Claim {
                 action,
                 target,
@@ -8464,6 +8585,7 @@ impl Lower {
                 continue;
             }
             let (target, lane, selector) = match intent {
+                ast::Intent::Replace { .. } => continue,
                 ast::Intent::Claim { target, .. } => (Some(target), "claim", None),
                 ast::Intent::Preserve { on, selector, .. } => {
                     (on.as_ref(), "preserve", Some(selector.value()))
@@ -8593,8 +8715,13 @@ impl Lower {
             )
             .collect();
         for item in &model.items {
-            if let ast::Item::Configuration(c) = item {
-                for intent in &c.intent {
+            let intents = match item {
+                ast::Item::Configuration(c) => &c.intent,
+                ast::Item::PairIntent(p) => &p.items,
+                _ => continue,
+            };
+            {
+                for intent in intents {
                     if let ast::Intent::Preserve { selector, .. } = intent {
                         let found = match selector {
                             ast::PropertySelector::Contract(name) => {

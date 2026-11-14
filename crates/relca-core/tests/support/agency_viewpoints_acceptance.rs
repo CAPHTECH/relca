@@ -10,6 +10,9 @@ pub fn population() -> Value {
     serde_json::from_str(include_str!("agency_viewpoints_population.json")).unwrap()
 }
 pub fn fixture(name: &str) -> bool {
+    if relca_test_support::fixture_match::agency_limit_fixture(name) {
+        return false;
+    }
     let c5: Vec<String> =
         serde_json::from_str(include_str!("agency_second_half_names.json")).unwrap();
     if c5.iter().any(|n| n == name) {

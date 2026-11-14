@@ -103,6 +103,7 @@ pub(crate) fn differences(
                 from: Some(from),
                 to: Some(to),
                 annotations: vec![],
+                covered_by: vec![],
             })
         })
         .collect())

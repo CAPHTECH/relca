@@ -57,7 +57,7 @@ pub(super) fn read_parents(m: &ir::Model, calls: &[&ir::Call]) -> Result<Vec<Vec
     with_limits(m, calls, DEFAULT)
 }
 
-fn with_limits(
+pub(super) fn with_limits(
     m: &ir::Model,
     calls: &[&ir::Call],
     limits: Limits,

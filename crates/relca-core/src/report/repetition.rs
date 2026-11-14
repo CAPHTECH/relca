@@ -433,11 +433,13 @@ pub(super) fn agency(report: &mut Report, m: &ir::Model) {
     if let Some(v) = &mut a.viewpoints {
         v.framing = viewpoints::Framing::NotDerived {
             reason: viewpoints::LimitReason::LoopControl,
+            limit: None,
             complete: false,
             unchecked: vec!["loop_control".into()],
         };
         v.retention = viewpoints::Retention::NotDerived {
             reason: viewpoints::LimitReason::LoopControl,
+            limit: None,
             notice: "反復の実行回数を静的なcall集合から導かない".into(),
             unchecked: vec!["loop_control".into()],
         };

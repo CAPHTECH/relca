@@ -17,8 +17,10 @@ Relca は、業務の流れを小さなモデルに書き、起こりうる進�
 | 差し戻しや再確認を、初回を含む上限回数つきの `repeat` で書く | `check`、`explain`、`simulate` |
 | 判定に必要な根拠源を `evidence_basis` で求め、読取りの削除を検出する | `check`、`explain`、`mutate` |
 | 契約を適用する構成を `applies_to` と理由で明示し、範囲外を未検査として残す | `check`、`explain`、`simulate`、`compare`、`diff`、`mutate`、`sensitivity`、`conform` |
+| 判断の所在や行使回数の導出に使う計算量を増やす | `check`、`simulate`、`explain` の `--agency-limit-scale N`(既定1、最大1000) |
 | 時間、費用、品質、人の負荷を標本で見積もる | `simulate` |
 | 現行と変更案など、複数の構成を同じ条件で並べる | `compare`、`diff` |
+| 相手ごとに変更理由を書き、能力の差し替えで説明できる差分をまとめる | `intent from A to B`、`replace X.c with Y.d`。照合は `diff` |
 | 到着量や所要時間などの前提を変えて、結論が変わるかを見る | `sensitivity` |
 | 検査そのものが誤りを捕まえるかを確かめる | `mutate` |
 | 実際の業務ログが、モデルの契約に沿っているかを照合する | `conform` |
@@ -103,9 +105,9 @@ cargo build --release
 
 | コマンド | 対象と限界 |
 |---|---|
-| `check <path>` | 有限モデルの網羅探索。切断に関わる性質は判定を保留する |
-| `explain <path> [--configuration NAME] [--scenario NAME]` | check と同じ解析に、契約・安全性・デッドロックの反例と位置を加える。再生できない反例は採用しない |
-| `simulate <path>` | 宣言した反復数と seed による標本推定。解決されていない非決定に出会ったら拒否する |
+| `check <path> [--agency-limit-scale N]` | 有限モデルの網羅探索。切断に関わる性質は判定を保留する。倍率はAgency導出だけに使い、状態探索の予算は変えない |
+| `explain <path> [--configuration NAME] [--scenario NAME] [--agency-limit-scale N]` | check と同じ解析に、契約・安全性・デッドロックの反例と位置を加える。再生できない反例は採用しない |
+| `simulate <path> [--agency-limit-scale N]` | 宣言した反復数と seed による標本推定。解決されていない非決定に出会ったら拒否する |
 | `compare <path> --plans A,B[,C...] --mode exhaustive\|simulation` | 同じ条件の構成を並べる。宣言した必須条件と目的は、性質の検査と分けて評価する |
 | `diff <path> --from A --to B` | 構成、契約、Agency(判断の主体)の差分。計算していない種類は `unchecked` に残す |
 | `mutate <path> [--set bpr-default] [--configuration NAME] [--scenario NAME] [--mutant-limit N] [--kinds k1,k2] [--sites ID1,ID2]` | 変更を生成し、検査が差を捕まえるかを調べる。受理した計算上限は既定128、最大4096。選外は明示。未対応種があれば実行0件でもexit4。未対応が無く実行0件ならvacuous/exit5 |
@@ -118,6 +120,7 @@ cargo build --release
 - [DSL の書き方](docs/guide/dsl.md): 最小モデルと主な構文
 - [根拠源を求める例](examples/evidence-basis.relca): 引数を通じた根拠と直接の読取り。[上流の読取りを外した対](examples/evidence-basis-missing.relca)は違反になる
 - [構成ごとに契約を選ぶ例](examples/configuration-contracts.relca): Old は1分、New は2分で終了。承認の契約は New だけに適用し、Old の範囲外の契約を満たしたとは数えない
+- [相手ごとに差し替えの理由を書く例](examples/capability-replacement.relca): A→B と C→B の各10行をそれぞれの宣言で説明する。compare は理由を照合せず、未検査に残す
 - [結果の読み方](docs/guide/results.md): 判定、exit、JSON の主な欄
 - [保証の範囲](docs/guide/guarantees.md): 分析モード、上限、検査していない事項
 - [請求書の例](examples/invoice/README.md): 入力、手計算、実行コマンドと境界

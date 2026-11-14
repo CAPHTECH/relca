@@ -30,6 +30,7 @@ pub(super) fn restore(
         }
     }
     let legacy_view = legacy.viewpoints.as_ref().ok_or_else(invalid)?;
+    restore_projected_failures(view, legacy_view);
     if let (
         Some(effects::Effects::Derived { rows, .. }),
         Some(effects::Effects::Derived { rows: known, .. }),
@@ -331,6 +332,34 @@ pub(super) fn restore(
     }
     Ok(())
 }
+
+// A computational or malformed-IR failure is not a structural withdrawal.
+// Keep the complete failure block and its record; never expose partial rows.
+fn restore_projected_failures(view: &mut Viewpoints, projected: &Viewpoints) {
+    use viewpoints::{Framing, LimitReason};
+    if matches!(
+        &projected.framing,
+        Framing::NotDerived {
+            reason: LimitReason::DerivationLimit | LimitReason::InvalidIr,
+            ..
+        }
+    ) {
+        view.framing = projected.framing.clone();
+    }
+    if matches!(
+        &projected.effects,
+        Some(effects::Effects::NotDerived {
+            reason: LimitReason::DerivationLimit | LimitReason::InvalidIr,
+            ..
+        })
+    ) {
+        view.effects = projected.effects.clone();
+    }
+}
+
+#[cfg(test)]
+#[path = "merge_failure_tests.rs"]
+mod failure_propagation_tests;
 
 /// O is possible access aggregated by Actor, as in the duplicated-branch
 /// model. Its union is not a judgement's evidence lineage and must never feed

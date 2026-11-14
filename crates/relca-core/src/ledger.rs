@@ -108,6 +108,7 @@ impl Ledger {
             "state_budget",
             "capture_limit",
             "mutant_limit",
+            "agency_limit_scale",
             "max_events",
             "max_line_bytes",
             "max_order_states",
@@ -417,6 +418,7 @@ fn validate_execution(e: &Value, host: &Value) -> Result<(), String> {
             "state_budget",
             "capture_limit",
             "mutant_limit",
+            "agency_limit_scale",
             "max_events",
             "max_line_bytes",
             "max_order_states",
@@ -427,6 +429,14 @@ fn validate_execution(e: &Value, host: &Value) -> Result<(), String> {
         if v["status"] == "known" && v["value"].as_u64().is_none() {
             return Err("settings_unavailable: limit type".into());
         }
+    }
+    let scale = &e["limits"]["agency_limit_scale"];
+    if scale["status"] == "known"
+        && !scale["value"]
+            .as_u64()
+            .is_some_and(|n| (1..=crate::agency::MAX_LIMIT_SCALE as u64).contains(&n))
+    {
+        return Err("settings_unavailable: agency limit scale range".into());
     }
     if e["mode"] == "mutation"
         && host["run"].is_object()

@@ -136,18 +136,39 @@ fn matches(target: &ast::DiffTarget, d: &Difference) -> bool {
     target.kind == d.kind && target.name() == d.target
 }
 
+pub(super) fn unmatched(
+    result: &mut DiffReport,
+    mut message: String,
+    span: diag::Span,
+    guidance: bool,
+) {
+    if guidance {
+        message.push_str(&format!(
+            "; use intent from {} to {} for partner-specific intent",
+            result.from.configuration, result.to.configuration
+        ));
+    }
+    result.diagnostic(diag::E_DIFF_0, message, Some(span));
+}
+
 pub(super) fn apply(
     result: &mut DiffReport,
     from: &lower::SelectedConfiguration,
     to: &lower::SelectedConfiguration,
+    src: &str,
+    guidance: bool,
 ) {
     let mut covered = vec![false; result.differences.len()];
     for i in &to.intent {
+        if matches!(i, ast::Intent::Replace { .. }) {
+            continue;
+        }
         let rule_target = match i {
             ast::Intent::Claim { target, .. }
             | ast::Intent::Override { target, .. }
             | ast::Intent::Maintain { target, .. } => Some(target),
             ast::Intent::Preserve { on, .. } => on.as_ref(),
+            ast::Intent::Replace { .. } => unreachable!(),
         };
         if rule_target.is_some_and(|t| {
             t.kind == Kind::Rule && !result.differences.iter().any(|d| matches(t, d))
@@ -168,6 +189,7 @@ pub(super) fn apply(
             | ast::Intent::Override { target, span, .. }
             | ast::Intent::Maintain { target, span, .. } => (Some(target), *span),
             ast::Intent::Preserve { on, span, .. } => (on.as_ref(), *span),
+            ast::Intent::Replace { .. } => unreachable!(),
         };
         let index = target.and_then(|t| {
             result.differences.iter().position(|d| {
@@ -189,14 +211,16 @@ pub(super) fn apply(
             if let Some(index) = index {
                 covered[index] = true;
             } else {
-                result.diagnostic(
-                    diag::E_DIFF_0,
+                unmatched(
+                    result,
                     format!("intent for {} has no matching computed change", t.name()),
-                    Some(span),
+                    span,
+                    guidance,
                 );
             }
         }
         match i {
+            ast::Intent::Replace { .. } => unreachable!(),
             ast::Intent::Claim {
                 action,
                 target,
@@ -312,6 +336,8 @@ pub(super) fn apply(
             });
         }
     }
+    let replacement_annotations =
+        super::replacements::apply(result, from, to, src, &mut covered, guidance);
     // Preserve legacy diagnostic order and wording; new diagnostics are a suffix.
     let missing: Vec<_> = result
         .differences
@@ -331,7 +357,11 @@ pub(super) fn apply(
     let unannotated: Vec<_> = result
         .differences
         .iter()
-        .filter(|d| d.annotations.is_empty() && d.loses.is_none())
+        .enumerate()
+        .filter(|(i, d)| {
+            d.annotations.is_empty() && d.loses.is_none() && !replacement_annotations[*i]
+        })
+        .map(|(_, d)| d)
         .map(|d| (d.kind, d.target.clone()))
         .collect();
     for (kind, target) in unannotated {
@@ -752,6 +782,7 @@ mod tests {
                 from: None,
                 to: None,
                 annotations: vec![],
+                covered_by: vec![],
             };
             let Annotation::Override {
                 verdict, effects, ..
@@ -786,6 +817,7 @@ mod tests {
             from: None,
             to: None,
             annotations: vec![],
+            covered_by: vec![],
         };
         for wait in [false, true] {
             let mut m = m.clone();

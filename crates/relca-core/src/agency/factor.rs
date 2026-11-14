@@ -4,6 +4,29 @@ use super::*;
 pub(super) struct Factorization {
     support: BTreeSet<ir::BindingId>,
     solutions: Vec<Vec<Values>>,
+    domain: Domain,
+}
+
+#[derive(Clone, Copy)]
+enum Domain {
+    Main,
+    Viewpoint,
+}
+impl Domain {
+    fn assignments(
+        self,
+        vars: &[ir::BindingId],
+        fixed: &Values,
+        calls: &[&ir::Call],
+        m: &ir::Model,
+        b: &mut Budget,
+        visit: impl FnMut(&Values, &mut Budget) -> Result<bool>,
+    ) -> Result<bool> {
+        match self {
+            Self::Main => assignments(vars, fixed, calls, m, b, visit),
+            Self::Viewpoint => viewpoints::assignments(vars, fixed, calls, m, b, visit),
+        }
+    }
 }
 
 fn conjuncts<'a>(guard: Guard<'a>, out: &mut Vec<Guard<'a>>, b: &mut Budget) -> Result<()> {
@@ -130,6 +153,27 @@ impl Factorization {
         m: &ir::Model,
         b: &mut Budget,
     ) -> Result<Option<Self>> {
+        Self::build_domain(p, local, calls, m, b, Domain::Main)
+    }
+
+    pub fn build_viewpoint(
+        p: &Path<'_>,
+        local: &BTreeSet<ir::BindingId>,
+        calls: &[&ir::Call],
+        m: &ir::Model,
+        b: &mut Budget,
+    ) -> Result<Option<Self>> {
+        Self::build_domain(p, local, calls, m, b, Domain::Viewpoint)
+    }
+
+    fn build_domain(
+        p: &Path<'_>,
+        local: &BTreeSet<ir::BindingId>,
+        calls: &[&ir::Call],
+        m: &ir::Model,
+        b: &mut Budget,
+        domain: Domain,
+    ) -> Result<Option<Self>> {
         if p.guards.is_empty() {
             return Ok(None);
         }
@@ -194,7 +238,7 @@ impl Factorization {
             b.copy(support.len())?;
             let vars: Vec<_> = support.into_iter().collect();
             let mut rows = BTreeSet::new();
-            assignments(&vars, &Values::new(), calls, m, b, |values, b| {
+            domain.assignments(&vars, &Values::new(), calls, m, b, |values, b| {
                 if satisfied(&component, values, b)? && !rows.contains(values) {
                     b.copy(values.len().saturating_add(1))?;
                     rows.insert(values.clone());
@@ -208,11 +252,50 @@ impl Factorization {
         Ok(Some(Self {
             support: local.clone(),
             solutions,
+            domain,
         }))
     }
 
     pub fn exists(&self, fixed: &Values, b: &mut Budget) -> Result<bool> {
         for component in &self.solutions {
+            // Viewpoint queries normally fix every variable in a component.
+            // Scanning all satisfying rows here would square an inseparable
+            // relation's size, regressing the old fixed-context enumerator.
+            // Rows have identical keys and BTreeSet order from build_domain.
+            // Keep the main derivation's traversal/accounting exactly intact.
+            if matches!(self.domain, Domain::Viewpoint)
+                && component.len() > 1
+                && fixed.len() >= component[0].len()
+            {
+                b.steps(component[0].len())?;
+                if component[0].keys().all(|id| fixed.contains_key(id)) {
+                    let (mut low, mut high) = (0, component.len());
+                    let mut found = false;
+                    while low < high {
+                        let mid = low + (high - low) / 2;
+                        let mut order = std::cmp::Ordering::Equal;
+                        for (id, value) in &component[mid] {
+                            b.work()?;
+                            order = value.cmp(fixed.get(id).ok_or_else(invalid)?);
+                            if !order.is_eq() {
+                                break;
+                            }
+                        }
+                        match order {
+                            std::cmp::Ordering::Less => low = mid + 1,
+                            std::cmp::Ordering::Greater => high = mid,
+                            std::cmp::Ordering::Equal => {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !found {
+                        return Ok(false);
+                    }
+                    continue;
+                }
+            }
             let mut found = false;
             for row in component {
                 b.steps(row.len().saturating_add(1))?;
@@ -258,7 +341,10 @@ impl Factorization {
             for (component, index) in self.solutions.iter().zip(&indices) {
                 values.extend(component[*index].iter().map(|(id, v)| (*id, *v)));
             }
-            if assignments(&extra, &values, calls, m, b, &mut visit)? {
+            if self
+                .domain
+                .assignments(&extra, &values, calls, m, b, &mut visit)?
+            {
                 return Ok(true);
             }
             let mut i = 0;
@@ -275,5 +361,60 @@ impl Factorization {
                 i += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod viewpoint_domain_tests {
+    use super::*;
+
+    #[test]
+    fn factored_and_unfactored_viewpoint_domains_exclude_version_rejection() {
+        let source = r#"model Domain version "0.2" {
+            type V = enum { pass, fail }
+            actor A { capacity 1; state marker: V = pass;
+                capability start() -> V { duration fixed 1min; result nondet { pass } }
+                capability judge() -> V { duration fixed 1min; result nondet { pass };
+                    version_check [marker] else fail; writes marker; finish { marker = fail } }
+            }
+            process Flow { s = A.start(); j = A.judge(); end done }
+            bounds { cases 1; live_tasks 2; clock 10min }
+            verify safety no_resource_overcommit
+        }"#;
+        let m = crate::lower::lower(&crate::syntax::parse(source).unwrap()).unwrap();
+        let mut b = viewpoints::budget(DEFAULT);
+        let mut indexed = vec![None; 2];
+        collect_shared(&m.process.body, &mut indexed, &m, 0, &mut b, false).unwrap();
+        let calls = indexed.into_iter().collect::<Option<Vec<_>>>().unwrap();
+        let reject = m.capabilities[calls[1].capability.0]
+            .version_check
+            .as_ref()
+            .unwrap()
+            .reject;
+        let local = BTreeSet::from([ir::BindingId(0), ir::BindingId(1)]);
+        let p = Path {
+            guards: vec![
+                Guard::Domain(
+                    ir::BindingId(0),
+                    m.capabilities[calls[0].capability.0].results.clone(),
+                ),
+                Guard::Symbolic(
+                    Symbolic::Eq(ir::ResultMatch {
+                        binding: ir::BindingId(1),
+                        value: reject,
+                    }),
+                    true,
+                ),
+            ],
+            ..Path::default()
+        };
+        let main = Factorization::build(&p, &local, &calls, &m, &mut b)
+            .unwrap()
+            .unwrap();
+        assert!(main.exists(&Values::new(), &mut b).unwrap());
+        let viewpoint = Factorization::build_viewpoint(&p, &local, &calls, &m, &mut b)
+            .unwrap()
+            .unwrap();
+        assert!(!viewpoint.exists(&Values::new(), &mut b).unwrap());
     }
 }

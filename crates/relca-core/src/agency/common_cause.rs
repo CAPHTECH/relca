@@ -7,7 +7,7 @@ const CAUSE_NOTICE: &str = "条件付き独立は given の下でだけ仮定さ
 const BASIS_NOTICE: &str = "basis は分析者の宣言であり、測定根拠の正しさは検査していない";
 const TACIT_NOTICE: &str = "tacit は分析者の宣言であり、根拠源の妥当性は検査していない";
 const CORRELATION_NOTICE: &str = "相関は先行する判定結果への条件付けであり、残余相関の推定ではない";
-const LIMITS: Limits = Limits {
+pub(super) const LIMITS: Limits = Limits {
     work: 1_000_000,
     cells: 1_000_000,
     depth: 128,
@@ -229,7 +229,15 @@ pub(super) fn derive(
     agency: &mut Agency,
     warnings: &mut Vec<diag::Diagnostic>,
 ) -> Result<()> {
-    soft_with_limits(m, calls, ancestors, subjects, agency, warnings, LIMITS)
+    soft_with_limits(
+        m,
+        calls,
+        ancestors,
+        subjects,
+        agency,
+        warnings,
+        budgets_for_model(m)?.common_cause,
+    )
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn derive_shared(
@@ -243,7 +251,14 @@ pub(super) fn derive_shared(
 ) -> Result<()> {
     if shared {
         soft_mode(
-            m, calls, ancestors, subjects, agency, warnings, LIMITS, true,
+            m,
+            calls,
+            ancestors,
+            subjects,
+            agency,
+            warnings,
+            budgets_for_model(m)?.common_cause,
+            true,
         )
     } else {
         derive(m, calls, ancestors, subjects, agency, warnings)

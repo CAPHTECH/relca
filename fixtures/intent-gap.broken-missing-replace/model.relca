@@ -1,0 +1,30 @@
+model Gap version "0.2" {
+  type R = enum { ok }
+  people [p]
+  actor Doc { source document }
+  actor O { executors [p]
+    capability o1() -> R { duration fixed 1min; result nondet { ok } }
+    capability o2() -> R { duration fixed 1min; result nondet { ok } }
+    capability o3() -> R { duration fixed 1min; result nondet { ok } }
+    capability o4() -> R { duration fixed 1min; result nondet { ok } } }
+  actor X { executors [p]
+    capability a() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } }
+    capability b() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } } }
+  actor Y { executors [p]
+    capability a() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } }
+    capability b() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } } }
+  actor K2 { executors [p]
+    capability keep() -> R { duration fixed 1min; result nondet { ok } } }
+  process PA { k = K2.keep(); a = O.o1(); b = O.o2(); c = O.o3(); d = O.o4(); end done }
+  process PB { k = K2.keep(); a = X.a(); b = X.b(); c = Y.a(); d = Y.b(); end done }
+  cut K { include [Doc, O, X, Y, K2] }
+  configuration A { cut K; process PA }
+  configuration B { cut K; process PB }
+  intent from A to B {
+    replace O.o1 with X.a reason "r1" loses "l"
+    replace O.o2 with X.b reason "r2" loses "l"
+    replace O.o3 with Y.a reason "r3" loses "l"
+  }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

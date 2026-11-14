@@ -78,11 +78,39 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `uncertainty` | aleatory / estimation / model の三区分 | モデル不確実性に Cut と系譜の仮定が入る |
 | `ledger.producer.version` | relca の版(現在 `0.0.0`、出所 `cargo_package`、build identity は未記録) | `relca --version` は無い |
 | `ledger.execution.selection.effective.process` | 実際に選ばれた process | 複数 process のモデルで確かめる |
+| `ledger.execution.limits.agency_limit_scale` | Agency導出のwork/cellsの倍率。解析時known、省略は1。未解析はnot_applicable/no_analysis | 状態探索の予算や業務の上限ではない |
 | `unchecked`, `agency.unchecked`, `cut.unchecked` | relca が自分で未検査と申告した項目 | 報告の「確かめていない範囲」に写す |
 | `response_receipts`, `case_outcomes`, `response_analysis`, 性質 `receipt_resolution` | 再送を含むモデルで出る(試行の再送なしの版には無かった。他の Phase 2 の構文で `case_outcomes` が出るかは確かめていない [U]) | 下の「再送を含むモデルで出る欄」 |
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+## 差し替えと相手別の理由
+
+diff は計算した差分を残したまま、その理由の出所を示す。説明済みでも業務上の安全性の認定にはならない。
+
+| 欄 | 読み方 |
+|---|---|
+| `intent_block` | 相手別の宣言があるモデルだけ。`{"from":"A","to":"B"}` は相手別、from=null は行き先の既定、全体がnullなら理由の宣言が無い |
+| `differences[].covered_by[]` | replace の from/to と via。direct は能力の削除/追加、derived は差し替えだけで説明できた関連の行 |
+| `replacements[]` | from/to、reason、loses、宣言のspanと、覆った全行のcovers（kind/target/change/via） |
+
+covered_by と replacements は from 名順。行と宣言は covers と印で対応し、同じ行に複数の宣言が付くこともある。
+必要な宣言も単独で説明できる宣言も無い行は、同時に適用してその行を消した全差し替えに帰属する。
+覆った行の reason/loses は null で、文は宣言ごとに1回だけ置く。
+個別の intent が優先された行は、covers と covered_by に入れず、個別の理由・注記を保つ。
+replace を選ばなかった diff では、covered_by と replacements 自体が出ない。
+
+W-DIFF-1 は理由が当たらない差分。replace で説明しきれない行にも残す。
+loses が無ければ W-DIFF-2 に加え、派生行の W-DIFF-3 を残す。
+[全文例](../../../examples/capability-replacement.relca)の A→B は10行（direct 2、derived 8）で警告0件。
+loses だけを外すと W-DIFF-2 が1件、W-DIFF-3 が8件、W-DIFF-1 は0件。
+元を呼び続ける部分差し替えなどは E-DIFF-0 / invalid / exit 3。個別の intent に分けて書く。
+
+compare は intent の差分照合をしない。比較する構成の空の宣言でも unchecked に intent が1回出る。
+check/explain/simulate などの成功も理由の照合結果ではない。必要な対ごとに diff を実行する。
+確認用ページは source の宣言と compare の未照合を表示し、理由の妥当性を判定しない。
+[詳しい結果の読み方](../../../docs/guide/results.md#差分の覆い方)も参照。
 
 ## 契約の適用範囲
 
@@ -131,12 +159,33 @@ F/U・行使回数・責務や警告の独立した行は従来どおり導出�
 責務のobservation/refusalも欄ごとに区別し、独立したW-RESP-1などは出す。
 同じ判定が合流依存の効果にも関わる場合はrefusal欄全体がnot_derived(merge_control)となり、
 独立commitへの拒否欠落もW-RESP-2の警告ではなく未導出の印になる。
-derivation_limitは実際の計算上の上限で、未接続を意味しない。
+derivation_limitは通常は計算上限を表す。ただし応答喪失のLでは探索切断や二つの探索器の不一致にも使い、limit記録が無い。
 警告が出ないことを、統制が成立した証拠にしない。
 
 確認用ページは値を返すif、各yieldの選択元、Taskでない複写を表と図に出し、
 反例のmerged段も表示する。拒否された合流は正常な流れとして描かない。
 細部は[合流の出力](../../../docs/guide/results.md#合流の出力)を参照。
+
+## Agency の上限と警告
+
+- `W-AGY-4`: 主の原本への到達・系譜・拒否と、責務の既定候補を導出できなかった。
+- `W-AGY-5`: observation / framing / retention / effects の計算上限。blockごとに1件で、途中の行を導出済みとして出さない。
+- blockの `limit` は counter / limit / requested / phase と、記録できたprocessやjudgement。整数に収まらない要求はrequested=null / requested_overflow=true。
+- 不整合な内部表現は `not_derived` / `invalid_ir` で区別し、計算上限の記録は付けない。
+
+W-AGY-5は最終blockがderivation_limitでlimit記録を持つときだけ出す。
+loop_control / response_controlへ置き換えた場合は、途中の静的導出の警告を残さない。
+合流の独立部分を導出する計算が上限に達した場合は、merge_controlで隠さず
+derivation_limit / limit記録 / W-AGY-5を残す。合流値への依存など構造上の未導出だけをmerge_controlとする。
+
+`check`、`simulate`、`explain` の `--agency-limit-scale N` はwork/cellsだけをN倍にする。
+既定1、最大1000。depth/paths/contextsと縮退の予算、性質の探索予算は固定。
+cellsは累計の計数で、最大常駐メモリの上限ではない。倍率を上げても全モデルで導けるとは限らない。
+実際の倍率はledgerで確認し、明示時はassumptionsのagency.limit=computational_xNにも残す。
+業務モデルの追加仮定とは扱わず、uncertainty.modelでは既存の計算上限の参照に含める。
+未解析のno_analysisを倍率1と読まない。compare/diff/mutate/sensitivity/conform/verifyではこのflagを受理しない。
+確認用ページは倍率とblockの上限記録を表示するが、記録が無い旧出力では未記録とし、1を補わない。
+詳しくは[利用ガイド](../../../docs/guide/results.md#agency-の導出の上限)を参照。
 
 ## 根拠源の要求と証跡
 

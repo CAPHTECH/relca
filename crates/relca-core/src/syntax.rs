@@ -1415,6 +1415,13 @@ impl<'s> Parser<'s> {
                 "verify" => Item::Verify(self.verify()?),
                 "cut" => Item::Cut(self.cut()?),
                 "configuration" => Item::Configuration(self.configuration()?),
+                "intent" => {
+                    let pair = self.pair_intent()?;
+                    if items.iter().any(|i| matches!(i, Item::PairIntent(p) if p.from.value == pair.from.value && p.to.value == pair.to.value)) {
+                        return Err(self.error("duplicate intent pair"));
+                    }
+                    Item::PairIntent(pair)
+                }
                 "contract" => Item::Contract(self.contract()?),
                 "people" => {
                     let start = self.expect("people")?.span.start;
@@ -4217,7 +4224,8 @@ impl<'s> Parser<'s> {
             self.separators();
         }
         let mut intent = Vec::new();
-        if self.take("intent") {
+        let intent_declared = self.take("intent");
+        if intent_declared {
             self.expect("{")?;
             self.separators();
             while !self.at("}") {
@@ -4237,6 +4245,39 @@ impl<'s> Parser<'s> {
             process,
             amendments,
             intent,
+            intent_declared,
+            span: self.span(start),
+        })
+    }
+
+    fn pair_intent(&mut self) -> Parsed<PairIntent> {
+        let start = self.expect("intent")?.span.start;
+        self.expect("from")?;
+        let from = self.ident()?;
+        self.expect("to")?;
+        let to = self.ident()?;
+        self.expect("{")?;
+        self.separators();
+        let mut items = Vec::new();
+        while !self.at("}") {
+            let item = self.configuration_intent()?;
+            if matches!(
+                item,
+                Intent::Claim {
+                    keep_fallback: true,
+                    ..
+                }
+            ) {
+                return Err(self.unsupported("keep fallback is not supported in pair intent"));
+            }
+            items.push(item);
+            self.separators();
+        }
+        self.expect("}")?;
+        Ok(PairIntent {
+            from,
+            to,
+            items,
             span: self.span(start),
         })
     }
@@ -4344,6 +4385,25 @@ impl<'s> Parser<'s> {
 
     fn configuration_intent(&mut self) -> Parsed<Intent> {
         let start = self.start();
+        if self.take("replace") {
+            let from = self.capability_path()?;
+            self.expect("with")?;
+            let to = self.capability_path()?;
+            self.configuration_clause("reason")?;
+            let reason = self.string()?;
+            let loses = if self.take("loses") {
+                Some(self.string()?)
+            } else {
+                None
+            };
+            return Ok(Intent::Replace {
+                from,
+                to,
+                reason,
+                loses,
+                span: self.span(start),
+            });
+        }
         if self.take("preserve") {
             let selector = if self.at("}") || self.at(";") || self.at("on") {
                 return Err(self.error("expected preservation selector"));

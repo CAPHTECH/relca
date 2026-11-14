@@ -248,6 +248,7 @@ struct Builder(Model);
 impl Builder {
     fn new(name: &str, capacity: u64, clock: u64) -> Self {
         Self(Model {
+            agency_limit_scale: 1,
             contract_selection: Default::default(),
             case_priority: None,
             performances: Vec::new(),
@@ -1470,7 +1471,10 @@ fn run_corpus(reference_limits: Limits, fixtures: bool) {
     // not change the old 28 directories / 39 inputs / 31 accepted / 8 rejected.
     dirs.retain(|p| {
         let id = p.file_name().unwrap().to_str().unwrap();
-        if relca_test_support::fixture_match::contract_scope_fixture(id) {
+        if relca_test_support::fixture_match::intent_fixture(id)
+            || relca_test_support::fixture_match::agency_limit_fixture(id)
+            || relca_test_support::fixture_match::contract_scope_fixture(id)
+        {
             return false;
         }
         if scenario_population::fixture(id)

@@ -1,0 +1,1 @@
+{"verdict":"invalid","replacements":[{"from":"Clerk.check","to":"Bot.check","reason":"auto","loses":"eye","covers":[]}],"diagnostics":[{"code":"E-DIFF-0"},{"code":"W-DIFF-1"},{"code":"W-DIFF-3"}]}

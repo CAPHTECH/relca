@@ -85,7 +85,25 @@ fn arithmetic_cut_preserves_real_exit_and_old_diagnostics() {
         .collect();
     assert_eq!(
         codes,
-        vec![Value::from("W-DEADLOCK-0"), Value::from("W-BUDGET-0")]
+        vec![
+            Value::from("W-AGY-5"),
+            Value::from("W-DEADLOCK-0"),
+            Value::from("W-BUDGET-0")
+        ]
+    );
+    assert!(
+        old["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("framing")
+    );
+    assert_eq!(
+        old["agency"]["viewpoints"]["framing"]["limit"]["counter"],
+        "work"
+    );
+    assert_eq!(
+        old["agency"]["viewpoints"]["framing"]["limit"]["limit"],
+        1_000_000
     );
     assert_eq!(
         full["quality"]["quantiles"][0]["value"]["reason"],

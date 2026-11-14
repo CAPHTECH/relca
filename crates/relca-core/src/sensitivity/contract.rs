@@ -232,6 +232,7 @@ fn supported(m: &ir::Model) -> Result<()> {
     // A new Model field must be consciously classified here, not silently left
     // out of the gate. Derived reports/assumptions are not declaration inputs.
     let ir::Model {
+        agency_limit_scale: _,
         contract_selection: _,
         performances: _,
         case_priority: _,

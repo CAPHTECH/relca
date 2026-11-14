@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false},"agency":{"viewpoints":{"framing":{"status":"not_derived","reason":"loop_control"},"retention":{"status":"not_derived","reason":"loop_control"}}},"terminals":[{"end":"escalated","elapsed":{"min":7,"max":13}}]}

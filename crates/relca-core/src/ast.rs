@@ -130,6 +130,7 @@ pub enum Item {
     Verify(Verify),
     Cut(CutDecl),
     Configuration(Configuration),
+    PairIntent(PairIntent),
     Contract(ContractDecl),
 }
 
@@ -500,6 +501,15 @@ pub struct Configuration {
     pub process: Ident,
     pub amendments: Vec<Amendment>,
     pub intent: Vec<Intent>,
+    pub intent_declared: bool,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PairIntent {
+    pub from: Ident,
+    pub to: Ident,
+    pub items: Vec<Intent>,
     pub span: Span,
 }
 
@@ -521,9 +531,17 @@ pub enum IntentAction {
     Change,
 }
 
-/// Configuration-only metadata. These declarations never enter execution state.
+/// Comparison metadata, never execution state. A configuration's keep fallback
+/// also supplies the retained-capability inventory for its Agency derivation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Intent {
+    Replace {
+        from: CapabilityPath,
+        to: CapabilityPath,
+        reason: Spanned<String>,
+        loses: Option<Spanned<String>>,
+        span: Span,
+    },
     Claim {
         action: IntentAction,
         target: DiffTarget,

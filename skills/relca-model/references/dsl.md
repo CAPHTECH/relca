@@ -47,6 +47,14 @@
 | 応答喪失・再送・idempotency・Receipt unknown | 下の「応答喪失・再送」の節 | [試] / [U] |
 | カレンダー・優先度・技能と縮退・異議の発生率 | 限定した形を扱う。この早見表では構文を未確認 | [U] |
 
+## Agency の導出の計算量 [実]
+
+`relca check examples/evidence-basis.relca --agency-limit-scale 20` は satisfied / exit 0。
+同じ指定を `simulate`、`explain` でも使える。DSL の宣言や `bounds` の項目ではない。
+ASCII数字の1〜1000で省略は1、先頭の0は可。0、負数、符号、小数、空値、範囲外、overflow、重複は invalid / exit 3。
+work/cellsだけを増やし、depth/paths/contexts、縮退の予算、性質の状態探索予算は変えない。
+他のコマンドでは拒否する。実際の倍率と未導出の読み方は[利用ガイド](../../../docs/guide/results.md#agency-の導出の上限)を参照。
+
 ## Actor
 
 ```relca
@@ -273,6 +281,36 @@ pay = Psp.charge_keyed(case.id) response_loss nondet retry max_attempts 2 when r
 - **結果不明の後の段は書けない。**後ろに呼出しを書くことはできるが、最後の応答が unknown の経路では実行されない。`[unknown, unknown]` にすると後ろの呼出しは `W-UNREACH-0 … never_started`、案件は `receipt_unknown` で止まり、`receipt_resolution` が inconclusive・exit 2 [試]。人が照会して進める・返金する段は今は書けないので、Cut の `defer` に `loses` を付けて外す(SKILL.md「再送を含むモデル」)。
 - 再送を含むモデルは compare・diff・待ちの分解・分位点・contest と組めない(U-SEM-0 `retry_feature_combination`)。`references/unsupported.md`。
 - fork の枝そのものへの retry、`version_check` 付き Capability への retry は U-SEM-0 `retry_feature_combination`(`response_loss_inputs.rs` の `fork-retry`・`version-retry`)[U]。
+
+## 構成変更の理由
+
+構成内の `intent { ... }` は行き先の既定。相手別の `intent from A to B { ... }` は最上位に書く。
+diff A→B は相手別があればそれだけ、無ければ B の既定を使う。空の相手別も既定を除外し、逆向きには使わない。
+
+```relca
+intent from A to B {
+  replace Clerk.check with Bot.check reason "照合を自動化" loses "人の目視"
+}
+intent from C to B {
+  replace Robot.check with Bot.check reason "別製品へ移行" loses "Robot の保守契約"
+}
+```
+
+`replace` は能力の完全な削除・追加だけに当たる。Actor の一括差し替えや、元を呼び続ける部分差し替えには使わない。
+能力の削除・追加に加え、それだけで説明できる Actor・権限・容量/実行者・原本の読み手・生産者の差分を説明する。
+追加の読み手などで説明しきれない行、契約範囲・意味・時間・異議・規則・資格/性能/縮退は自動で覆わない。
+個別の理由や注記が同じ行に当たれば個別を優先する。複数能力から1能力への差し替えは同時に扱う。
+
+個別の形は `add Actor[.capability] reason "..."`、`retire Actor[.capability] reason "..." loses "..."`、
+`change KIND TARGET reason "..." [loses "..."]`。
+保持は `preserve ContractName` または `preserve "性質id"`、特定行なら `on KIND TARGET` を付ける。
+上書きは `override [KIND] TARGET by SUBJECT [reason "..."]`、保守は `maintain [KIND] TARGET by PERSON [reason "..."]`。
+`by` の後ろは単一の主体だけ。通常経路から退ける `retire A.c from normal_path keep fallback` は構成内だけで、相手別では U-SYN-0。
+ここで角括弧は省略可能部分の説明であり、そのまま入力する記号ではない。
+
+すべての宣言を静的検査するが、差分との照合は diff だけ。compare は比較する構成の空の宣言でも `unchecked` に `intent` を残す。
+[全文例](../../../examples/capability-replacement.relca)の A/B/C は3/2/4分。A→B と C→B の diff は各10行を説明し exit 0。
+構文・診断の詳しい対応は[利用ガイド](../../../docs/guide/dsl.md#構成変更の理由を書く)を参照。
 
 ## Cut
 

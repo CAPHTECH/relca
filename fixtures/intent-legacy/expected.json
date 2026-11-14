@@ -1,0 +1,1 @@
+{"verdict":"invalid","diagnostics":[{"code":"E-DIFF-0","message":"intent for Clerk has no matching computed change; use intent from C to B for partner-specific intent"},{"code":"W-DIFF-1"},{"code":"W-DIFF-3"}]}

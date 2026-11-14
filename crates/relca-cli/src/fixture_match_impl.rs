@@ -4,10 +4,48 @@
 
 use serde_json::Value;
 use std::collections::BTreeMap;
+#[path = "../../relca-core/tests/support/agency_vp_fixture_names.rs"]
+mod agency_limit_names;
 #[path = "../tests/support/ledger_shape.rs"]
 mod ledger_shape;
 #[path = "../tests/support/contract_scope_wire.rs"]
 mod scope_wire;
+#[allow(dead_code)]
+pub const AGENCY_LIMIT_FIXTURES: [&str; 10] = agency_limit_names::NAMES;
+#[allow(dead_code)]
+pub fn agency_limit_fixture(name: &str) -> bool {
+    AGENCY_LIMIT_FIXTURES.contains(&name)
+}
+
+#[allow(dead_code)]
+pub const INTENT_FIXTURES: [&str; 16] = [
+    "intent-a1",
+    "intent-a1.broken-no-loses",
+    "intent-a2",
+    "intent-a2.broken-extra-reader",
+    "intent-a3",
+    "intent-a3.broken-no-replace",
+    "intent-a4",
+    "intent-a4.broken-mismatch",
+    "intent-a5",
+    "intent-a5.broken-wrong-partner",
+    "intent-gap",
+    "intent-gap.broken-missing-replace",
+    "intent-legacy",
+    "intent-legacy.broken-preserve-scope",
+    "intent-split",
+    "intent-split.broken-retained-source",
+];
+
+#[allow(dead_code)]
+pub fn intent_fixture(name: &str) -> bool {
+    let known = INTENT_FIXTURES.contains(&name);
+    assert!(
+        !name.starts_with("intent-") || known,
+        "unclassified intent fixture {name}"
+    );
+    known
+}
 
 #[allow(dead_code)]
 pub const CONTRACT_SCOPE_FIXTURES: [&str; 10] = [
@@ -7595,6 +7633,14 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
         .collect();
     let checked = v["checked"].as_array().unwrap();
     let unchecked = v["unchecked"].as_array().unwrap();
+    if unchecked.iter().filter(|w| *w == "intent").count() > 1 {
+        return Err("duplicate unchecked intent".into());
+    }
+    let unchecked: Vec<_> = unchecked
+        .iter()
+        .filter(|w| *w != "intent")
+        .cloned()
+        .collect();
     let feature = plans
         .iter()
         .any(|p| p["report"].get("responsibilities").is_some());
@@ -8389,6 +8435,85 @@ fn preservation_schema() -> Ty {
     ])
 }
 
+fn covered_by_schema() -> Ty {
+    use Ty::*;
+    Arr(Box::new(Obj(vec![
+        ("intent", Lit(&["replace"])),
+        ("from", Str),
+        ("to", Str),
+        ("via", Lit(&["direct", "derived"])),
+    ])))
+}
+
+fn validate_diff_replacements(v: &Value) -> Result<(), String> {
+    use std::collections::BTreeSet;
+    let mut expected = BTreeSet::new();
+    let mut previous = None;
+    if let Some(ds) = v.get("replacements") {
+        let ds = ds.as_array().ok_or("replacements array")?;
+        if ds.is_empty() {
+            return Err("empty replacements field".into());
+        }
+        for d in ds {
+            let from = d["from"].as_str().ok_or("replacement from")?;
+            let to = d["to"].as_str().ok_or("replacement to")?;
+            if previous.is_some_and(|p| p >= from) {
+                return Err("replacement order/duplicate".into());
+            }
+            previous = Some(from);
+            for r in d["covers"].as_array().ok_or("replacement covers")? {
+                let key = (
+                    from,
+                    to,
+                    r["kind"].as_str(),
+                    r["target"].as_str(),
+                    r["change"].as_str(),
+                    r["via"].as_str(),
+                );
+                if !expected.insert(key) {
+                    return Err("duplicate replacement cover".into());
+                }
+            }
+        }
+    }
+    let mut actual = BTreeSet::new();
+    for row in v["differences"].as_array().ok_or("diff rows")? {
+        if let Some(covers) = row.get("covered_by") {
+            let covers = covers.as_array().ok_or("covered_by array")?;
+            if covers.is_empty() || !row["reason"].is_null() || !row["loses"].is_null() {
+                return Err("invalid covered row".into());
+            }
+            let mut previous = None;
+            for c in covers {
+                let from = c["from"].as_str().ok_or("coverage from")?;
+                let to = c["to"].as_str().ok_or("coverage to")?;
+                if previous.is_some_and(|p| p >= from) {
+                    return Err("coverage order/duplicate".into());
+                }
+                previous = Some(from);
+                let direct = row["kind"] == "relation"
+                    && ((row["target"] == from && row["change"] == "removed")
+                        || (row["target"] == to && row["change"] == "added"));
+                if (c["via"] == "direct") != direct {
+                    return Err("coverage via mismatch".into());
+                }
+                actual.insert((
+                    from,
+                    to,
+                    row["kind"].as_str(),
+                    row["target"].as_str(),
+                    row["change"].as_str(),
+                    c["via"].as_str(),
+                ));
+            }
+        }
+    }
+    if actual != expected {
+        return Err("coverage and replacement covers differ".into());
+    }
+    Ok(())
+}
+
 fn diff_row_schema() -> Ty {
     use Ty::*;
     let strings = || Arr(Box::new(Str));
@@ -8459,6 +8584,7 @@ fn diff_row_schema() -> Ty {
                 ),
                 ("reason", Null(Box::new(Str))),
                 ("loses", Null(Box::new(Str))),
+                ("covered_by", OptionalField(Box::new(covered_by_schema()))),
                 (
                     "annotations",
                     OptionalField(Box::new(Arr(Box::new(diff_annotation_schema())))),
@@ -8477,6 +8603,7 @@ fn diff_row_schema() -> Ty {
             ("change", Lit(&["modified"])),
             ("reason", Null(Box::new(Str))),
             ("loses", Null(Box::new(Str))),
+            ("covered_by", OptionalField(Box::new(covered_by_schema()))),
             ("from", Obj(vec![("producer", Str)])),
             ("to", Obj(vec![("producer", Str)])),
             (
@@ -8491,6 +8618,7 @@ fn diff_row_schema() -> Ty {
 /// Semantic checks are independent of production Serde and partial fixture
 /// comparison. Reached by both the ordinary and metric-recursive diff paths.
 fn validate_diff_extensions(v: &Value) -> Result<(), String> {
+    validate_diff_replacements(v)?;
     let legacy;
     let v = if v["differences"]
         .as_array()
@@ -9004,6 +9132,35 @@ fn diff_schema() -> Ty {
             ]))),
         ),
         ("differences", Pairs(Box::new(diff_row_schema()))),
+        (
+            "replacements",
+            OptionalField(Box::new(Arr(Box::new(Obj(vec![
+                ("from", Str),
+                ("to", Str),
+                ("reason", Str),
+                ("loses", Null(Box::new(Str))),
+                ("span", Obj(vec![("start", Int), ("end", Int)])),
+                (
+                    "covers",
+                    Arr(Box::new(Obj(vec![
+                        (
+                            "kind",
+                            Lit(&["actor", "relation", "authority", "resource", "visibility"]),
+                        ),
+                        ("target", Str),
+                        ("change", Lit(&["added", "removed", "modified"])),
+                        ("via", Lit(&["direct", "derived"])),
+                    ]))),
+                ),
+            ]))))),
+        ),
+        (
+            "intent_block",
+            OptionalField(Box::new(Null(Box::new(Obj(vec![
+                ("from", Null(Box::new(Str))),
+                ("to", Str),
+            ]))))),
+        ),
         (
             "preservation",
             OptionalField(Box::new(preservation_schema())),

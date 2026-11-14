@@ -1,0 +1,15 @@
+model Swap version "0.2" {
+  type R = enum { ok }
+  people [clerk, op, boss]
+  actor Doc { source document }
+  actor Clerk { executors [clerk]; capability check() -> R { reads [Doc]; duration fixed 2min; result nondet { ok } } }
+  actor Bot { executors [op]; capability check() -> R { reads [Doc]; duration fixed 1min; result nondet { ok } } }
+  actor Desk { executors [clerk]; capability post(x:R) -> R { duration fixed 1min; result nondet { ok } } }
+  process PA { v = Clerk.check(); p = Desk.post(v); end done }
+  process PB { v = Bot.check(); p = Desk.post(v); end done }
+  cut K { include [Doc, Clerk, Bot, Desk] }
+  configuration A { cut K; process PA }
+  configuration B { cut K; process PB; intent { replace Clerk.check with Bot.check reason "auto" loses "eye" } }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+}

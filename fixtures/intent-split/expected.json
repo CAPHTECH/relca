@@ -1,0 +1,1 @@
+{"verdict":"satisfied","replacements":[{"from":"Clerk.check","to":"Bot.check","reason":"auto","loses":"eye"}],"diagnostics":[{"code":"W-DIFF-1","message":"computed change for visibility Doc has no intent"},{"code":"W-DIFF-1","message":"computed change for w has no intent"},{"code":"W-DIFF-3"}]}

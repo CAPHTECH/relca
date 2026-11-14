@@ -63,6 +63,8 @@ index!(
 /// Diagnostics here are warnings only; an error makes lower return Err instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Model {
+    /// Computational Agency work/cells multiplier; never interpreter state.
+    pub agency_limit_scale: usize,
     /// Verification selection metadata, excluded from interpreter state identity.
     pub contract_selection: crate::contract_scope::Selection,
     pub performances: Vec<Performance>,

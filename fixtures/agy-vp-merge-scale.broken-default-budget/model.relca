@@ -1,0 +1,19 @@
+model MergeScale version "0.2" {
+type V = enum { pass, fail }
+type Ack = enum { done }
+type D = enum { draft, repaired }
+actor Doc { source document }
+actor Intake { capacity 1; capability start()->V { reads [Doc]; duration fixed 1min; result nondet { pass } } }
+actor Judge { capacity 1; capability check(x:V)->V { duration fixed 1min; result nondet { pass,fail } } }
+actor Office { capacity 1; capability write()->D { duration fixed 1min; result nondet { draft } } capability review(d:D)->V { duration fixed 1min; result nondet { pass,fail } } capability fix(d:D)->D { duration fixed 1min; result nondet { repaired } } }
+actor Ledger { capacity 1; capability post(x:V)->Ack { commits; duration fixed 1min; result nondet { done } } }
+process Flow {
+s=Intake.start(); d=Office.write(); r=Office.review(d); ready=if r==fail { f=Office.fix(d); yield f } else { yield d }
+j1=Judge.check(s); j2=Judge.check(s); j3=Judge.check(s); j4=Judge.check(s); j5=Judge.check(s); j6=Judge.check(s); j7=Judge.check(s);
+if j1==pass || j2==pass || j3==pass || j4==pass || j5==pass || j6==pass || j7==pass {} else {end rejected}
+p=Ledger.post(j7); end done
+}
+cut C { include [Doc,Intake,Judge,Office,Ledger] }
+bounds { cases 1; live_tasks 2; clock 100min }
+verify safety no_resource_overcommit
+}

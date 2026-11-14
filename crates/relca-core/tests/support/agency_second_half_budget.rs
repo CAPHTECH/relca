@@ -111,10 +111,41 @@ pub fn effects(mut run: impl FnMut(&str, &str, &str, usize) -> Value) {
             let failed = run(&s, "effects", dimension, n);
             let mut expected = full.clone();
             expected["agency"]["viewpoints"]["effects"] = json!({"status":"not_derived","reason":"derivation_limit","unchecked":["authority","fallback_path"]});
+            let record = &failed["agency"]["viewpoints"]["effects"]["limit"];
+            assert_eq!(record["counter"], dimension);
+            assert_eq!(record["limit"], n);
+            assert!(record["requested"].as_u64().unwrap() > n as u64);
+            assert!(!record["phase"].as_str().unwrap().is_empty());
+            expected["agency"]["viewpoints"]["effects"]["limit"] = record.clone();
+            let warnings: Vec<_> = failed["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|d| d["code"] == "W-AGY-5")
+                .cloned()
+                .collect();
+            assert_eq!(warnings.len(), 1);
+            assert_eq!(warnings[0]["severity"], "warning");
+            let text = warnings[0]["message"].as_str().unwrap();
+            for token in [
+                "effects".to_owned(),
+                dimension.to_owned(),
+                n.to_string(),
+                record["requested"].to_string(),
+                record["phase"].as_str().unwrap().to_owned(),
+            ] {
+                assert!(text.contains(&token));
+            }
             expected["diagnostics"]
                 .as_array_mut()
                 .unwrap()
                 .retain(|d| d["code"] != "W-AGY-2");
+            let diagnostics = expected["diagnostics"].as_array_mut().unwrap();
+            let at = diagnostics
+                .iter()
+                .position(|d| d["code"] == "W-RESP-0")
+                .unwrap_or(diagnostics.len());
+            diagnostics.splice(at..at, warnings);
             let tags = expected["agency"]["unchecked"].as_array_mut().unwrap();
             assert!(!tags.contains(&json!("executors")));
             let at = tags.iter().position(|x| x == "fallback_path").unwrap() + 1;
