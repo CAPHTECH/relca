@@ -1,0 +1,28 @@
+model M5 version "0.2" {
+  type V = enum { pass, fail }
+  type Ack = enum { ok }
+  people [c1,a1]
+  observed case { po: optional<V> }
+  actor PurchaseOrder { source record }
+  actor Invoice { source document }
+  actor Clerk { executors [c1]
+    capability enter() -> V { reads [Invoice]; duration fixed 1min; result nondet { pass, fail } }
+    capability match_po(e:V) -> V { reads [PurchaseOrder]; duration fixed 1min; result nondet { pass }; writes po }
+  }
+  actor Approver { executors [a1]
+    capability approve(e:V) -> V { reads [po]; duration fixed 1min; result nondet { pass } }
+  }
+  actor Ledger { capacity 1
+    capability post(a:V) -> Ack { commits; duration fixed 1min; result nondet { ok } }
+  }
+  cut S { include [PurchaseOrder,Invoice,Clerk,Approver,Ledger] }
+  process Main {
+    e = Clerk.enter()
+    if e == pass { p = Clerk.match_po(e) } else {}
+    a = Approver.approve(e)
+    x = Ledger.post(a)
+    end posted
+  }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.posted
+}

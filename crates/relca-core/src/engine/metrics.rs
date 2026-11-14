@@ -22,6 +22,7 @@ pub(super) fn validate(m: &ir::Model) -> Result<(), &'static str> {
     fn visit(b: &ir::Block, caps: &mut std::collections::BTreeSet<usize>) {
         for s in b {
             match &s.kind {
+                ir::Stmt::MergeCopy { .. } => {}
                 ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                     caps.insert(c.capability.0);
@@ -551,6 +552,7 @@ pub(super) fn snapshot_with_horizon(
     fn inventory<'a>(b: &'a ir::Block, calls: &mut Vec<&'a ir::Call>, ends: &mut Vec<ir::EndId>) {
         for s in b {
             match &s.kind {
+                ir::Stmt::MergeCopy { .. } => {}
                 ir::Stmt::LoopControl(_) | ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => calls.push(c),
                 ir::Stmt::Response(c, r) => {

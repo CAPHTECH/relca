@@ -127,21 +127,40 @@ fn table_cells(b: &mut Budget, n: usize, width: usize) -> Result<()> {
 // survive a merge only on every continuing path. A cancelled loser has no result.
 fn before_start(
     block: &ir::Block,
+    finished: Option<BTreeSet<ir::BindingId>>,
+    before: &mut [BTreeSet<ir::BindingId>],
+    b: &mut Budget,
+    depth: usize,
+) -> Result<Option<BTreeSet<ir::BindingId>>> {
+    before_start_shared(block, finished, before, b, depth, &mut None)
+}
+fn before_start_shared(
+    block: &ir::Block,
     mut finished: Option<BTreeSet<ir::BindingId>>,
     before: &mut [BTreeSet<ir::BindingId>],
     b: &mut Budget,
     depth: usize,
+    seen: &mut Option<Vec<bool>>,
 ) -> Result<Option<BTreeSet<ir::BindingId>>> {
     b.depth(depth)?;
     for stmt in block {
         b.location.span = Some(stmt.span);
         b.work()?;
         match &stmt.kind {
+            ir::Stmt::MergeCopy { .. } => {}
             ir::Stmt::Wait(_) | ir::Stmt::WaitUntil(_) => {}
             ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
                 if let Some(f) = &mut finished {
                     b.copy(f.len())?;
-                    before[c.binding.0] = f.clone();
+                    if seen.as_ref().is_some_and(|s| s[c.binding.0]) {
+                        b.copy(before[c.binding.0].len())?;
+                        before[c.binding.0].retain(|id| f.contains(id));
+                    } else {
+                        before[c.binding.0] = f.clone();
+                    }
+                    if let Some(seen) = seen {
+                        seen[c.binding.0] = true;
+                    }
                     b.insert(f, c.binding)?;
                 }
             }
@@ -149,7 +168,15 @@ fn before_start(
                 if let Some(f) = &mut finished {
                     for c in branches {
                         b.copy(f.len())?;
-                        before[c.binding.0] = f.clone();
+                        if seen.as_ref().is_some_and(|s| s[c.binding.0]) {
+                            b.copy(before[c.binding.0].len())?;
+                            before[c.binding.0].retain(|id| f.contains(id));
+                        } else {
+                            before[c.binding.0] = f.clone();
+                        }
+                        if let Some(seen) = seen {
+                            seen[c.binding.0] = true;
+                        }
                     }
                     for c in branches {
                         b.work()?;
@@ -174,8 +201,9 @@ fn before_start(
                 ..
             } => {
                 b.copy(finished.as_ref().map_or(0, BTreeSet::len))?;
-                let left = before_start(then_body, finished.clone(), before, b, depth + 1)?;
-                let right = before_start(else_body, finished, before, b, depth + 1)?;
+                let left =
+                    before_start_shared(then_body, finished.clone(), before, b, depth + 1, seen)?;
+                let right = before_start_shared(else_body, finished, before, b, depth + 1, seen)?;
                 finished = match (left, right) {
                     (Some(mut l), Some(r)) => {
                         b.steps(l.len())?;
@@ -203,6 +231,24 @@ pub(super) fn derive(
 ) -> Result<()> {
     soft_with_limits(m, calls, ancestors, subjects, agency, warnings, LIMITS)
 }
+#[allow(clippy::too_many_arguments)]
+pub(super) fn derive_shared(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    ancestors: &[Ancestors],
+    subjects: &[BTreeSet<ir::ActorId>],
+    agency: &mut Agency,
+    warnings: &mut Vec<diag::Diagnostic>,
+    shared: bool,
+) -> Result<()> {
+    if shared {
+        soft_mode(
+            m, calls, ancestors, subjects, agency, warnings, LIMITS, true,
+        )
+    } else {
+        derive(m, calls, ancestors, subjects, agency, warnings)
+    }
+}
 
 fn soft_with_limits(
     m: &ir::Model,
@@ -213,8 +259,29 @@ fn soft_with_limits(
     warnings: &mut Vec<diag::Diagnostic>,
     limits: Limits,
 ) -> Result<()> {
+    soft_mode(
+        m, calls, ancestors, subjects, agency, warnings, limits, false,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn soft_mode(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    ancestors: &[Ancestors],
+    subjects: &[BTreeSet<ir::ActorId>],
+    agency: &mut Agency,
+    warnings: &mut Vec<diag::Diagnostic>,
+    limits: Limits,
+    shared: bool,
+) -> Result<()> {
     let before = warnings.len();
-    match with_limits(m, calls, ancestors, subjects, agency, warnings, limits) {
+    match if shared {
+        with_limits_mode(
+            m, calls, ancestors, subjects, agency, warnings, limits, true,
+        )
+    } else {
+        with_limits(m, calls, ancestors, subjects, agency, warnings, limits)
+    } {
         Ok(()) => Ok(()),
         Err(Error::Limit(limit)) => {
             // The pass may have produced rows or warnings before the limit.
@@ -246,6 +313,21 @@ fn with_limits(
     agency: &mut Agency,
     warnings: &mut Vec<diag::Diagnostic>,
     limits: Limits,
+) -> Result<()> {
+    with_limits_mode(
+        m, calls, ancestors, subjects, agency, warnings, limits, false,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn with_limits_mode(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    ancestors: &[Ancestors],
+    subjects: &[BTreeSet<ir::ActorId>],
+    agency: &mut Agency,
+    warnings: &mut Vec<diag::Diagnostic>,
+    limits: Limits,
+    shared: bool,
 ) -> Result<()> {
     let mut descriptions = Vec::new();
     for a in &m.actors {
@@ -282,13 +364,25 @@ fn with_limits(
     let n = calls.len();
     table_cells(&mut b, n, 7)?;
     let mut before = vec![BTreeSet::new(); n];
-    before_start(
-        &m.process.body,
-        Some(BTreeSet::new()),
-        &mut before,
-        &mut b,
-        0,
-    )?;
+    if shared {
+        table_cells(&mut b, n, 1)?;
+        before_start_shared(
+            &m.process.body,
+            Some(BTreeSet::new()),
+            &mut before,
+            &mut b,
+            0,
+            &mut Some(vec![false; n]),
+        )?;
+    } else {
+        before_start(
+            &m.process.body,
+            Some(BTreeSet::new()),
+            &mut before,
+            &mut b,
+            0,
+        )?;
+    }
     let mut evidence = Vec::with_capacity(n);
     for (i, c) in calls.iter().enumerate() {
         b.copy(subjects[i].len())?;
@@ -1085,6 +1179,7 @@ mod tests {
                 vec![ir::BindingId(i - 1)]
             };
             m.process.bindings.push(ir::Binding {
+                merge: None,
                 repetition: None,
                 name: format!("v{i}"),
                 ty: m.capabilities[cid.0].return_type,

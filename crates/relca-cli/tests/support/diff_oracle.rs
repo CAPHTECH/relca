@@ -37,6 +37,7 @@ struct Shape {
 fn walk(block: &ir::Block, s: &mut Shape) {
     for statement in block {
         match &statement.kind {
+            ir::Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
             ir::Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
             ir::Stmt::Query(_, _)
             | ir::Stmt::ResolveEffect { .. }

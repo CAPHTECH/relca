@@ -1056,6 +1056,7 @@ pub fn agency_identity_check(report: &Value, model: &ir::Model) -> Result<(), St
         };
         for s in block {
             match &s.kind {
+                ir::Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
                 ir::Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
                 ir::Stmt::Query(_, _)
                 | ir::Stmt::ResolveEffect { .. }

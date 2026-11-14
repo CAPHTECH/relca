@@ -202,6 +202,8 @@ impl Names<'_> {
             body.iter()
                 .filter(|s| !matches!(&s.kind, ir::Stmt::Response(_, r) if r.attempt != 1))
                 .map(|s| Ok(match &s.kind {
+                    ir::Stmt::MergeCopy { .. } =>
+                        return Err(unsupported("merge_feature_combination")),
                     ir::Stmt::LoopControl(_) =>
                         return Err(unsupported("loop_feature_combination")),
                     ir::Stmt::Call(c) => json!(["call", self.call(c)?]),

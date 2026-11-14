@@ -13,6 +13,8 @@ mod arrivals;
 pub(crate) use arrivals::q6_private as q6_observe;
 mod arrivals_replay;
 mod authority;
+mod evidence;
+mod evidence_scope;
 mod metrics;
 
 #[cfg(test)]
@@ -525,6 +527,7 @@ impl Evidence {
 /// every frame. They do not purport to observe the other implementation's paths.
 #[derive(Debug, Default, Clone)]
 pub struct Statistics {
+    evidence_unsupported: BTreeSet<ClauseId>,
     // Output collection only. Never consulted by dispatch, reserve, or any
     // transition. The model (including metric-ready task history) stays intact.
     projection: Projection,
@@ -1100,7 +1103,9 @@ fn explore_unprojected(model: &Model, limits: Limits, projection: Projection) ->
                             .unwrap_or_default();
                         if broken {
                             Verdict::Violated
-                        } else if stop != StopReason::Complete {
+                        } else if interpreter.statistics.evidence_unsupported.contains(&id)
+                            || stop != StopReason::Complete
+                        {
                             Verdict::Unsupported
                         } else if interpreter.evidence.truncated {
                             Verdict::Inconclusive
@@ -1993,6 +1998,13 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                         .is_some()
                 }))?;
             }
+            ContractKind::EvidenceBasis {
+                capability,
+                sources,
+                ..
+            } => {
+                evidence::validate(m, *capability, sources)?;
+            }
             ContractKind::Permitted { capability }
             | ContractKind::AuthorityBasis { capability, .. } => {
                 let c = m
@@ -2034,7 +2046,8 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                             | Stmt::WaitUntil(_)
                             | Stmt::ResolveEffect { .. }
                             | Stmt::StopReceiptUnknown
-                            | Stmt::LoopControl(_) => false,
+                            | Stmt::LoopControl(_)
+                            | Stmt::MergeCopy { .. } => false,
                         })
                     }
                     require(!invokes(&m.process.body, e.capability))?;
@@ -2127,7 +2140,13 @@ fn validate(m: &Model, limits: Limits) -> Execution {
         }
     }
     require(
-        validator.calls.len() == m.process.bindings.len()
+        validator.calls.len()
+            + m.process
+                .bindings
+                .iter()
+                .filter(|b| b.merge.is_some())
+                .count()
+            == m.process.bindings.len()
             && validator.forks.len() == m.process.forks.len(),
     )?;
     // Independent runtime-target guard. Do not trust a serialized static
@@ -2216,7 +2235,7 @@ impl Validator<'_> {
                         .is_some_and(|b| b.ty == p.ty)
             })?;
         }
-        require(b.ty == cap.return_type && self.calls.insert(c.binding))?;
+        require(b.merge.is_none() && b.ty == cap.return_type && self.calls.insert(c.binding))?;
         if let Some(alias) = self.model.loop_alias(c.binding) {
             require(self.model.process.bindings[alias.0].ty == b.ty)?;
             self.calls.insert(alias);
@@ -2294,6 +2313,30 @@ impl Validator<'_> {
         }
         for s in block {
             match &s.kind {
+                Stmt::MergeCopy { binding, source } => {
+                    let target = self
+                        .model
+                        .process
+                        .bindings
+                        .get(binding.0)
+                        .ok_or(StopReason::SemanticAbort)?;
+                    let value = self
+                        .model
+                        .process
+                        .bindings
+                        .get(source.0)
+                        .ok_or(StopReason::SemanticAbort)?;
+                    require(
+                        binding != source
+                            && target.ty == value.ty
+                            && target
+                                .merge
+                                .as_ref()
+                                .is_some_and(|m| m.sources.contains(source)),
+                    )?;
+                    require(known.contains(source))?;
+                    known.insert(*binding);
+                }
                 Stmt::LoopControl(control) => {
                     for c in &control.aliases {
                         self.call(c)?;
@@ -2493,6 +2536,7 @@ fn reference_notify(frame: &mut Frame<'_>, own: Option<usize>, writes: &[StateWr
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Occurrence {
+    Merged(BindingId, BindingId, ValueId, crate::diag::Span),
     RecoveryEnter(BindingId),
     ReceiptQuery(recovery::QueryEvidence),
     ResolveEffect(recovery::Resolution),
@@ -2871,6 +2915,33 @@ struct Frame<'a> {
 }
 
 impl Frame<'_> {
+    fn merge_value(&self, model: &Model, binding: BindingId) -> Result<ValueId, StopReason> {
+        if let Some(value) = self.trace.iter().rev().find_map(|o| match o.event {
+            Occurrence::Merged(id, _, value, _) | Occurrence::AdoptResponse(id, value)
+                if id == binding =>
+            {
+                Some(value)
+            }
+            _ => None,
+        }) {
+            return Ok(value);
+        }
+        let task = self
+            .tasks
+            .iter()
+            .find(|t| t.call.binding == binding)
+            .or_else(|| {
+                self.tasks.iter().rev().find(|t| {
+                    model.loop_alias(t.call.binding) == Some(binding)
+                        && matches!(t.phase, Phase::Finished(_) | Phase::Refused(_))
+                })
+            })
+            .ok_or(StopReason::SemanticAbort)?;
+        match task.phase {
+            Phase::Finished(value) | Phase::Refused(value) => Ok(value),
+            _ => Err(StopReason::SemanticAbort),
+        }
+    }
     fn condition_enter(&mut self) {
         if self.condition_waits.last().is_none_or(|w| w.1.is_some()) {
             self.condition_waits.push((self.now, None));
@@ -3890,6 +3961,7 @@ impl<'a> Interpreter<'a> {
             && !self.model.has_metric_wait()
             && !self.model.has_requires()
             && self.model.response_attempts().is_empty()
+            && !matches!(event, Occurrence::Merged(..))
         {
             return Ok(());
         }
@@ -4246,6 +4318,21 @@ impl<'a> Interpreter<'a> {
                         }
                     }
                 }
+                ContractKind::EvidenceBasis {
+                    capability,
+                    direct,
+                    sources,
+                    ..
+                } => match evidence::facts(self.model, &f.trace, *capability, *direct, sources) {
+                    Ok((active, broken, issue)) => {
+                        facts.0 |= active;
+                        facts.1 |= broken;
+                        if issue {
+                            self.statistics.evidence_unsupported.insert(ClauseId(i));
+                        }
+                    }
+                    Err(_) => aborted = true,
+                },
                 ContractKind::Permitted { capability } => {
                     let c = &self.model.capabilities[capability.0];
                     let allowed = c.permission.as_ref().unwrap_or_else(|| {
@@ -4557,6 +4644,15 @@ impl<'a> Interpreter<'a> {
                         let statement = &block[0];
                         *block = &block[1..];
                         match &statement.kind {
+                            Stmt::MergeCopy { binding, source } => {
+                                let value = f.merge_value(self.model, *source)?;
+                                require(!f.trace.iter().any(|o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding)))?;
+                                self.record(
+                                    &mut f,
+                                    Occurrence::Merged(*binding, *source, value, statement.span),
+                                    None,
+                                )?;
+                            }
                             Stmt::LoopControl(control) => {
                                 for (id, x) in &control.updates {
                                     f.state_values[id.0] = *x;
@@ -4949,6 +5045,17 @@ impl<'a> Interpreter<'a> {
             let statement = &block[0];
             *block = &block[1..];
             match &statement.kind {
+                Stmt::MergeCopy { binding, source } => {
+                    let value = f.merge_value(self.model, *source)?;
+                    require(!f.trace.iter().any(
+                        |o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding),
+                    ))?;
+                    self.record(
+                        &mut f,
+                        Occurrence::Merged(*binding, *source, value, statement.span),
+                        None,
+                    )?;
+                }
                 Stmt::LoopControl(control) => {
                     for (id, x) in &control.updates {
                         f.state_values[id.0] = *x;
@@ -5356,7 +5463,11 @@ impl<'a> Interpreter<'a> {
                 .ok_or(StopReason::SemanticAbort),
             Cond::Eq(m) => {
                 if let Some(value) = f.trace.iter().rev().find_map(|o| match o.event {
-                    Occurrence::AdoptResponse(id, value) if id == m.binding => Some(value),
+                    Occurrence::Merged(id, _, value, _) | Occurrence::AdoptResponse(id, value)
+                        if id == m.binding =>
+                    {
+                        Some(value)
+                    }
                     _ => None,
                 }) {
                     return Ok(value == m.value);

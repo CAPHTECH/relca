@@ -103,7 +103,8 @@ pub(super) fn independent_with_q1(
             | ir::ContractKind::Invariant { .. }
             | ir::ContractKind::StateInvariant { .. }
             | ir::ContractKind::Permitted { .. }
-            | ir::ContractKind::AuthorityBasis { .. } => continue,
+            | ir::ContractKind::AuthorityBasis { .. }
+            | ir::ContractKind::EvidenceBasis { .. } => continue,
         };
         rows.push(Check::new(
             format!(
@@ -152,7 +153,8 @@ pub(super) fn supported_contract_with_q1(
         | ir::ContractKind::Invariant { .. }
         | ir::ContractKind::StateInvariant { .. }
         | ir::ContractKind::Permitted { .. }
-        | ir::ContractKind::AuthorityBasis { .. } => false,
+        | ir::ContractKind::AuthorityBasis { .. }
+        | ir::ContractKind::EvidenceBasis { .. } => false,
     }
 }
 
@@ -202,7 +204,8 @@ pub(super) fn ordered_with_q1(
             | ir::ContractKind::Invariant { .. }
             | ir::ContractKind::StateInvariant { .. }
             | ir::ContractKind::Permitted { .. }
-            | ir::ContractKind::AuthorityBasis { .. } => continue,
+            | ir::ContractKind::AuthorityBasis { .. }
+            | ir::ContractKind::EvidenceBasis { .. } => continue,
         };
         let a = observed(before, case, tasks, m, events);
         let b = observed(start, case, tasks, m, events);

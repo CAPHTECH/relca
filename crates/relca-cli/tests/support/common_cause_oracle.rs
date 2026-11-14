@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 fn calls<'a>(block: &'a ir::Block, out: &mut Vec<&'a ir::Call>) {
     for statement in block {
         match &statement.kind {
+            ir::Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
             ir::Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
             ir::Stmt::Query(_, _)
             | ir::Stmt::ResolveEffect { .. }
@@ -38,6 +39,7 @@ fn must_before(
 ) -> Option<BTreeSet<ir::BindingId>> {
     for s in block {
         match &s.kind {
+            ir::Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
             ir::Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
             ir::Stmt::Query(_, _)
             | ir::Stmt::ResolveEffect { .. }

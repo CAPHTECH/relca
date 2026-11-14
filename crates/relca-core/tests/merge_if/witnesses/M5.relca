@@ -1,0 +1,33 @@
+model M5 version "0.2" {
+  type D = enum { draft, repaired }
+  type V = enum { pass, fail, reject }
+  type Ack = enum { sent }
+  actor Invoice { source document }
+  actor Manual { source record }
+  kernel Review { * -> { 0.75: pass; 0.25: fail } }
+  actor Clerk { capacity 1
+    capability write() -> D { reads [Invoice]; duration fixed 1min; result nondet { draft } }
+    capability fix(d:D) -> D { reads [Manual]; duration fixed 2min; result nondet { repaired } }
+  }
+  actor Rev { capacity 1; capability review(d:D) -> V { duration fixed 1min; outcomes kernel Review } }
+  actor Ledger { capacity 1; capability send(d:D) -> Ack { commits; duration fixed 1min; result nondet { sent } } }
+  process Flow {
+    d = Clerk.write()
+    r = Rev.review(d)
+    if r == fail {
+      f = Clerk.fix(d)
+      s1 = Ledger.send(f)
+      if f == repaired { end done_fixed } else { end done_as_is }
+    } else {
+      s2 = Ledger.send(d)
+      if d == repaired { end done_fixed } else { end done_as_is }
+    }
+  }
+  cut C { include [Invoice, Manual, Clerk, Rev, Ledger] }
+  arrivals fixed [0min, 10min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 2; clock 30min }
+  metrics { window 30min; currency "JPY"; rate Clerk per_minute 1; rate Rev per_minute 1; rate Ledger per_minute 1; rate Clerk.write per_start 1; rate Clerk.fix per_start 1; rate Rev.review per_start 1; rate Ledger.send per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.done_fixed >= 0.25
+}

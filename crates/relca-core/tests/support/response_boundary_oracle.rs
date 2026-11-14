@@ -64,6 +64,9 @@ pub fn expected(source: &str) -> (Value, Vec<Value>) {
     ) {
         for s in b {
             match &s.value {
+                ast::Stmt::Merge { .. } | ast::Stmt::Yield(_) => {
+                    panic!("merge control is outside this oracle")
+                }
                 ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {
                     panic!("bounded repetition is outside this oracle")
                 }

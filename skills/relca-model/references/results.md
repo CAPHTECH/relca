@@ -15,7 +15,12 @@ stdout は JSON が 1 つ、stderr は診断が 1 行に 1 つ(`CODE: message`)�
 | `vacuous` | 5 | 前提が一度も起きず、空虚に成り立つ | 「検査が働いていない」。満たすとは言わない |
 
 引数の誤り・読込み失敗などで模型が未読の report は hash が null、Cut は unresolved。
-Cut の有無は分からないので W-CUT-0 は出さない。読んだ模型の Cut 未宣言とは区別する。
+構文解析で止まった場合も、Cut の有無は分からないため Cut は unresolved、W-CUT-0 は出さない。
+ただし、読めた入力の hash は残る。ソース上に Cut があっても同じ扱い。
+parse が通り Cut 未宣言と分かった場合は、その後の型検査や lower で止まっても W-CUT-0 を出す。
+compare・diff の各案、mutate の original、sensitivity の各点、conform でもこの区別を守る。
+ただし conform は、parse 後の lower 拒否でも Cut が unresolved のままになる既存の例外がある。
+そのとき Cut 未宣言なら W-CUT-0 は出る。unresolved や E-SYN-0 / U-SYN-0 だけから parse 失敗や警告無しと判断しない。
 explain の構成指定が不足したときは、stderr の --configuration の案内に従う。
 
 ### 全体の verdict
@@ -36,6 +41,7 @@ compare と diff の最上位は、通常は各案(diff は from と to)の repo
 - `priority_feature_combination`(compare・diff)
 - `retry_feature_combination`(compare・diff。再送を含むモデル)
 - `condition_wait_diff_unsupported`(diff だけ)
+- `merge_feature_combination`(compare・diff。合流を含むモデル)
 
 EC 試行(再送を含む 2 案)では、compare も diff も最上位 unsupported・exit 4、各案の report はどちらも violated だった(1 回)。各案の性質の verdict は `check --configuration` の結果と一致した。
 この拒否では単純な畳み込みだけで最上位を再計算できない。読むときは次のとおりにする。
@@ -76,6 +82,60 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+## 合流した値の読み方
+
+[合流の例](../../../examples/merge-if/model.relca)のcheckはviolated・exit1。
+done_fixedは確率1/4・5分、done_unchangedは3/4・3分。手計算の期待時間7/2分と、
+metricsの経路範囲3〜5分を混同しない。Taskはd・r・f・sの4行で、readyはTaskにならない。
+同例のexplainは、時刻4に`kind: merged`、`binding: ready`、`source: f`を示す。
+既存の`result`に複写した観測値が入り、`location.span`はyield文。
+`actor`・`capability`・`executor`は必須nullで、独立参照が選択元と値を再現できない反例の再生はunsupportedになる。
+
+合流値を直接・間接に引数として受ける判定は、lineage行を出さず、
+`agency.unchecked`に`lineage(merge_control): 呼出し名`を残す。
+全枝の根拠の和集合や積集合を一つの確定した系譜として報告しない。
+依存しない判定の系譜、原本への直接・間接到達、commit実行者は保持する。
+originの間接到達はActor単位の可能な経路の集約で、全経路共通の根拠や独立検証数ではない。
+F/U・行使回数・責務や警告の独立した行は従来どおり導出し、合流値やその制御に依存する項目だけを
+`not_derived`、理由`merge_control`にする。
+未導出の一覧はW-AGY-0/1/2/3、W-RESP-0/1/2、W-LIN-2。
+対象の呼出し・操作・責務の名前とともにagency.uncheckedへ残す。
+責務のobservation/refusalも欄ごとに区別し、独立したW-RESP-1などは出す。
+同じ判定が合流依存の効果にも関わる場合はrefusal欄全体がnot_derived(merge_control)となり、
+独立commitへの拒否欠落もW-RESP-2の警告ではなく未導出の印になる。
+derivation_limitは実際の計算上の上限で、未接続を意味しない。
+警告が出ないことを、統制が成立した証拠にしない。
+
+確認用ページは値を返すif、各yieldの選択元、Taskでない複写を表と図に出し、
+反例のmerged段も表示する。拒否された合流は正常な流れとして描かない。
+細部は[合流の出力](../../../docs/guide/results.md#合流の出力)を参照。
+
+## 根拠源の要求と証跡
+
+`evidence_basis` は `contract Basis #1 evidence_basis` のような性質行。
+check の行には id/verdict と必要時の cases だけで、新しい根拠欄は無い。
+対象が一度も正常終了しなければ vacuous、計算切断なら inconclusive。
+simulate の反例なしを全スケジュールの satisfied と読まない。
+対象の判断の引数・観測読取りへ合流値が直接・間接に流れ込む組合せはU-SEM-0 merge_control。
+無関係な合流や条件だけの参照は根拠へ数えず、契約を通常どおり判定する。
+
+explain の違反した反例 object だけに `evidence` が付く。
+[読取りを外した実例](../../../examples/evidence-basis-missing.relca)では、正常終了は時刻2分で、
+binding=p、actor=Clerk、capability=match_po、required=[Invoice,PurchaseOrder]、
+sources=[PurchaseOrder]、missing=[Invoice]、excluded_edges=[]。
+後半4欄は昇順の配列。excluded_edges は `p -> a` のような、数えなかった観測変数の辺である。
+sources はモデルの照合に数えた集合で、実際の資料参照を観測したログではない。
+確認用ページは source の契約とこの証跡を表示し、欠けた・不整合な証跡を正常な空欄にしない。
+
+mutate の evidence_missing はこの行も使う。original_access_removed が使うのは direct だけ。
+正の実例の2/2検出はその入力の件数であり、他のモデルの検出率や網羅率ではない。
+契約が悪化しても同じ変異で系譜行が消える場合は、既存規則によりinconclusive / assigned_check_unavailableになりうる。
+異議経路の対象は、その性質だけU-SEM-0 evidence_basis_contest_route。他の判定は残す。
+compare/diff/sensitivity は U-SEM-0 evidence_basis_unsupported_command で拒否する。
+diff の両側の個別検査が violated でも、最上位unsupportedは比較未実施を示す。両方を報告する。
+conform は U-LOG-1、not_checked に unsupported_request、unchecked に evidence_basis を残す。
+詳しくは[利用ガイド](../../../docs/guide/results.md#根拠源の要求と証跡)を参照。
 
 ## 繰り返しを含むモデルで出る欄
 

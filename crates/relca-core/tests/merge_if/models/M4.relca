@@ -1,0 +1,30 @@
+model M4 version "0.2" {
+  type D = enum { draft, repaired }
+  type V = enum { pass, fail, reject }
+  actor Invoice { source document }
+  actor Manual { source record }
+  latent case { bad: bool ~ { true: 0.2, false: 0.8 } }
+  kernel Review given [bad] { true -> { 0.75: fail; 0.25: pass }; false -> { 1: pass } }
+  kernel Fix given [bad] { true -> { 1: repaired with bad = false }; false -> { 1: repaired with bad = false } }
+  kernel Audit given [bad] { true -> { 1: fail }; false -> { 1: pass } }
+  actor Clerk { capacity 1
+    capability write() -> D { reads [Invoice]; duration fixed 1min; result nondet { draft } }
+    capability fix(d:D) -> D { reads [Manual]; duration fixed 2min; outcomes kernel Fix; kernel_reads latent [bad]; writes bad }
+  }
+  actor Rev { capacity 1; capability review(d:D) -> V { duration fixed 1min; outcomes kernel Review; kernel_reads latent [bad] } }
+  actor Auditor { capacity 1; capability audit(d:D) -> V { reads [Manual]; duration fixed 1min; outcomes kernel Audit; kernel_reads latent [bad] } }
+  process Flow {
+    d = Clerk.write()
+    r = Rev.review(d)
+    d2 = if r == fail { f = Clerk.fix(d); yield f } else { yield d }
+    a = Auditor.audit(d2)
+    if a == pass { end done } else { end flagged }
+  }
+  cut C { include [Invoice, Manual, Clerk, Rev, Auditor] }
+  bounds { cases 1; live_tasks 2; clock 30min }
+  metrics { window 30min; currency "JPY"; rate Clerk per_minute 1; rate Rev per_minute 1; rate Auditor per_minute 1; rate Clerk.write per_start 1; rate Clerk.fix per_start 1; rate Rev.review per_start 1; rate Auditor.audit per_start 1; breakdown waits }
+  verify safety no_resource_overcommit
+  verify probability reached end.flagged <= 0.05
+  property case.Flagged = reached(end.flagged)
+  metric cohort.FlaggedPerArrival = expected(count(case.Flagged)) / arrivals
+}

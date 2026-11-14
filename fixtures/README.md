@@ -47,6 +47,17 @@ fixture と試験文書にある Q4、C7、Stage C などの符号やレビュ�
 
 ## 手計算と回帰の区別
 
+### 構文解析で止まる入力の Cut（2026-11-14）
+
+構文解析が完了しなかった入力は Cut の有無を判断できないため、`cut: "unresolved"` とし、
+W-CUT-0 を出しません。型検査・lower まで進んだ入力の Cut 未宣言警告は保持します。
+古い `calc.md` の観測記録や Fault/control oracle に残る「parse 失敗に W-CUT-0 を加える」
+という説明・出力例は、この決定より前の挙動です。その部分の現行期待値は本節と
+`expected.json` に従い、構文エラー自体の code・位置・exit は変えません。
+対象は `agy2-static-*`、`pol-*.broken-change`、`rec-s*`、`rsrc-actor-use` / `rsrc-members`、
+`sinv-static-*` / `sinv-grouping.broken-nested` の構文解析失敗例です。
+詳しくは[結果の読み方](../docs/guide/results.md)を参照してください。
+
 `calc.md` では経路、イベント時刻、占有区間、分数、系譜集合などから値を導きます。
 `expected.json` は部分照合の場合もあり、全出力の仕様を表すとは限りません。
 core と CLI の試験には、手値、独立参照、単一変更の負対照があります。

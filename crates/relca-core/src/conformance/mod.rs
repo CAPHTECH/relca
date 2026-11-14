@@ -36,6 +36,8 @@ pub struct ConformanceReport {
     pub summary: Summary,
     pub unmapped_actor: Vec<identity::UnmappedActor>,
     pub unmapped_operation: Vec<identity::UnmappedOperation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unchecked: Vec<String>,
     pub not_checked: Vec<NotChecked>,
     pub limits: Limits,
     pub diagnostics: Vec<LogDiagnostic>,
@@ -158,6 +160,7 @@ impl Default for ConformanceReport {
             summary: Summary::default(),
             unmapped_actor: Vec::new(),
             unmapped_operation: Vec::new(),
+            unchecked: Vec::new(),
             not_checked: [
                 "process_path",
                 "fork_join_control",
@@ -478,6 +481,16 @@ fn conform_raw(
         json!({"cases":m.bounds.cases,"live_tasks":m.bounds.live_tasks,"clock":m.bounds.clock}),
     );
     r.ledger.execution["limits"]["state_budget"] = crate::ledger::na("no_analysis");
+    if m.has_merges() {
+        r.verdict = Verdict::Unsupported;
+        r.diagnostics.push(diagnostic(
+            diag::U_LOG_1,
+            "unsupported_merge_model_feature",
+            "merge_feature_combination: merged values are not observable in event logs",
+            Some(m.process.span),
+        ));
+        return r;
+    }
     if m.has_loops() {
         r.verdict = Verdict::Unsupported;
         r.diagnostics.push(diagnostic(
@@ -748,6 +761,11 @@ fn conform_raw(
     }
     for (i, c) in m.contracts.iter().enumerate() {
         if !monitors::supported_contract_with_q1(&c.kind, &m, &q1_capabilities) {
+            if matches!(c.kind, ir::ContractKind::EvidenceBasis { .. })
+                && !r.unchecked.iter().any(|s| s == "evidence_basis")
+            {
+                r.unchecked.push("evidence_basis".into());
+            }
             r.not_checked.push(NotChecked {
                 item: c.property_id(ir::ClauseId(i)),
                 reason: "unsupported_request",

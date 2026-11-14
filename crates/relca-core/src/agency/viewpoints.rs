@@ -55,6 +55,7 @@ impl TryFrom<ViewpointsWire> for Viewpoints {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LimitReason {
+    MergeControl,
     LoopControl,
     ResponseControl,
     DerivationLimit,
@@ -62,6 +63,7 @@ pub enum LimitReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StateReason {
+    MergeControl,
     LoopControl,
     ResponseControl,
     StateGuards,
@@ -484,7 +486,20 @@ pub(super) fn with_limits_and_warnings(
     limits: [Limits; 3],
     effects_limits: Limits,
 ) -> (Viewpoints, Vec<diag::Diagnostic>) {
-    let (effects, warnings) = effects::derive(m, a, effects_limits);
+    with_limits_and_warnings_shared(m, a, limits, effects_limits, false)
+}
+pub(super) fn with_limits_and_warnings_shared(
+    m: &ir::Model,
+    a: &Agency,
+    limits: [Limits; 3],
+    effects_limits: Limits,
+    shared: bool,
+) -> (Viewpoints, Vec<diag::Diagnostic>) {
+    let (effects, warnings) = if shared {
+        effects::derive_shared(m, a, effects_limits, true)
+    } else {
+        effects::derive(m, a, effects_limits)
+    };
     (
         Viewpoints {
             rules: "agency-viewpoints-p1-2".into(),
@@ -495,21 +510,45 @@ pub(super) fn with_limits_and_warnings(
                     fallback: "unchecked".into(),
                 }
             }),
-            framing: framing(m, &mut budget(limits[1])).unwrap_or_else(|_| Framing::NotDerived {
-                reason: LimitReason::DerivationLimit,
-                complete: false,
-                unchecked: framing_unchecked(),
-            }),
+            framing: if m.has_merges() {
+                Framing::NotDerived {
+                    reason: LimitReason::MergeControl,
+                    complete: false,
+                    unchecked: framing_unchecked(),
+                }
+            } else {
+                (if shared {
+                    framing_shared(m, &mut budget(limits[1]), true)
+                } else {
+                    framing(m, &mut budget(limits[1]))
+                })
+                .unwrap_or_else(|_| Framing::NotDerived {
+                    reason: LimitReason::DerivationLimit,
+                    complete: false,
+                    unchecked: framing_unchecked(),
+                })
+            },
             proposal: Proposal::NotDerived {
                 reason: ProposalReason::NoProposalContract,
             },
-            retention: retention(m, &mut budget(limits[2])).unwrap_or_else(|_| {
+            retention: if m.has_merges() {
                 Retention::NotDerived {
-                    reason: LimitReason::DerivationLimit,
+                    reason: LimitReason::MergeControl,
                     notice: NOTICE.into(),
                     unchecked: retention_unchecked(),
                 }
-            }),
+            } else {
+                (if shared {
+                    retention_shared(m, &mut budget(limits[2]), true)
+                } else {
+                    retention(m, &mut budget(limits[2]))
+                })
+                .unwrap_or_else(|_| Retention::NotDerived {
+                    reason: LimitReason::DerivationLimit,
+                    notice: NOTICE.into(),
+                    unchecked: retention_unchecked(),
+                })
+            },
             effects: Some(effects),
         },
         warnings,
@@ -959,9 +998,16 @@ fn reads_zero(
     Ok(false)
 }
 fn recorded<'a>(m: &'a ir::Model, b: &mut Budget) -> Result<(Vec<&'a ir::Call>, Recorder<'a>)> {
+    recorded_shared(m, b, false)
+}
+fn recorded_shared<'a>(
+    m: &'a ir::Model,
+    b: &mut Budget,
+    shared: bool,
+) -> Result<(Vec<&'a ir::Call>, Recorder<'a>)> {
     b.copy(m.process.bindings.len())?;
     let mut indexed = vec![None; m.process.bindings.len()];
-    collect(&m.process.body, &mut indexed, m, 0, b)?;
+    collect_shared(&m.process.body, &mut indexed, m, 0, b, shared)?;
     let calls = indexed
         .into_iter()
         .collect::<Option<Vec<_>>>()
@@ -1089,7 +1135,14 @@ fn assignments(
     }
 }
 fn framing(m: &ir::Model, b: &mut Budget) -> Result<Framing> {
-    let (calls, r) = recorded(m, b)?;
+    framing_shared(m, b, false)
+}
+fn framing_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Framing> {
+    let (calls, r) = if shared {
+        recorded_shared(m, b, true)?
+    } else {
+        recorded(m, b)?
+    };
     let capacity = ActorCapacity::new(m, &calls, b)?;
     let infeasible = if precise_resources(m) {
         BTreeSet::new()
@@ -1305,7 +1358,14 @@ fn framing(m: &ir::Model, b: &mut Budget) -> Result<Framing> {
 }
 
 fn retention(m: &ir::Model, b: &mut Budget) -> Result<Retention> {
-    let (calls, r) = recorded(m, b)?;
+    retention_shared(m, b, false)
+}
+fn retention_shared(m: &ir::Model, b: &mut Budget, shared: bool) -> Result<Retention> {
+    let (calls, r) = if shared {
+        recorded_shared(m, b, true)?
+    } else {
+        recorded(m, b)?
+    };
     exercised(m, &calls, r, b)
 }
 fn exercised<'a>(

@@ -106,7 +106,7 @@ fn t21_inline_position(decides_first: bool) {
         let v = check(&s, None, None);
         assert_eq!(v["verdict"], "unsupported");
         let ds = v["diagnostics"].as_array().unwrap();
-        assert_eq!(ds.len(), 2);
+        assert_eq!(ds.len(), 1);
         assert_eq!(ds[0]["code"], "U-SYN-0");
         assert_eq!(ds[0]["severity"], "error");
         assert_eq!(
@@ -116,10 +116,7 @@ fn t21_inline_position(decides_first: bool) {
         assert!(ds[0]["span"].is_object());
         let start = s.find("enum { open, closed }").unwrap();
         assert_eq!(ds[0]["span"], json!({"start":start,"end":start+4}));
-        assert_eq!(
-            ds[1],
-            json!({"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared; exclusions are unknown","span":null})
-        );
+        assert_eq!(v["cut"], "unresolved");
     }
 }
 #[test]
@@ -148,7 +145,7 @@ fn s01_named_record_refuses_at_lower_with_one_located_error() {
 }
 
 #[test]
-fn s22_scenario_body_amend_keeps_parser_error_and_old_cut_warning() {
+fn s22_scenario_body_amend_keeps_parser_error_without_cut_warning() {
     let good = i::scenarios();
     assert_eq!(
         check(&good, Some("AsIs"), Some("Light"))["verdict"],
@@ -162,7 +159,7 @@ fn s22_scenario_body_amend_keeps_parser_error_and_old_cut_warning() {
     let v = check(&bad, Some("AsIs"), Some("Light"));
     assert_eq!(v["verdict"], "unsupported");
     let ds = v["diagnostics"].as_array().unwrap();
-    assert_eq!(ds.len(), 2);
+    assert_eq!(ds.len(), 1);
     let start = bad.find("scenario Light").unwrap()
         + bad[bad.find("scenario Light").unwrap()..]
             .find("amend")
@@ -171,10 +168,7 @@ fn s22_scenario_body_amend_keeps_parser_error_and_old_cut_warning() {
         ds[0],
         json!({"code":"U-SYN-0","severity":"error","message":"unsupported syntax: scenario item","span":{"start":start,"end":start+5}})
     );
-    assert_eq!(
-        ds[1],
-        json!({"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared; exclusions are unknown","span":null})
-    );
+    assert_eq!(v["cut"], "unresolved");
 }
 
 #[test]

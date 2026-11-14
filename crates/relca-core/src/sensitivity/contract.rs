@@ -210,6 +210,14 @@ impl Contract {
 }
 
 fn supported(m: &ir::Model) -> Result<()> {
+    if m.has_merges() {
+        return Err(unsupported(
+            "merge_feature_combination: merge sensitivity is not connected",
+        ));
+    }
+    if crate::evidence_basis::present(m) {
+        return Err(unsupported("evidence_basis_unsupported_command"));
+    }
     if m.has_loops() {
         return Err(unsupported(
             "loop_feature_combination: repeat sensitivity is not connected",

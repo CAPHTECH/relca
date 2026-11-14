@@ -20,8 +20,17 @@ explain と mutate も `--configuration NAME` と `--scenario NAME` で check �
 構成の指定が必要なモデルで省略した場合や、未知の構成名は invalid です。
 mutate の元の検査と変異体、explain の反例と再生は同じ選択を使います。
 引数の誤りなどで模型を読む前に止まった report は、hash が null、Cut は `unresolved` です。
-この場合は未宣言とは判断できないため W-CUT-0 を出しません。
-読んだ模型の Cut が未宣言なら、従来どおり警告します。
+この場合は Cut 未宣言とは判断できないため、W-CUT-0 を出しません。
+また、模型を読めても構文解析で止まった report（`E-SYN-0`、`U-SYN-0` など）は、
+Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 を出しません。
+この場合は読んだ入力の hash が残ります。ソースに Cut が書いてあっても同じ扱いです。
+構文解析が通って Cut が無いと分かった場合は、その後の型検査や lower で止まっても、
+従来どおり W-CUT-0 を出します。構文解析後に Cut 宣言の解決に失敗した場合も
+`unresolved` なので、Cut の欄だけで停止した段を判断せず、診断を併読してください。
+この区別は compare・diff の各案、mutate の original、sensitivity の各点、conform にも適用します。
+ただし conform は既存の例外として、parse 成功後に lower が拒否した場合も `cut: "unresolved"` のままです。
+その入力に Cut が無ければ W-CUT-0 を同時に出します。`unresolved` だけで parse 失敗や警告無しとは判断できません。
+また、`E-SYN-0` / `U-SYN-0` は lower から出る場合もあるため、診断 code だけから停止した段を推測しないでください。
 欄は宣言や分析モードによって省略されることがあります。欄の省略だけから、対応済み・検査済みとは判断しないでください。
 
 | 欄 | 確認する内容 |
@@ -43,6 +52,92 @@ mutate の元の検査と変異体、explain の反例と再生は同じ選択�
 null は 0 ではありません。`not_configured`、`undetermined`、`truncated` などの理由を
 値と一緒に扱ってください。`per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
 simulate の `basis` は性質や中断の有無で異なり、`properties[].cases[]` の `basis: statistical` は網羅探索の確率ではなく標本推定を表します。
+
+## 合流の出力
+
+[値を返す if](dsl.md#分岐した値を先へ渡す) は、選んだ枝の値を複写します。
+例の `check` は `done_fixed` が確率1/4・5分、`done_unchanged` が確率3/4・3分です。
+期待時間は手計算で7/2分ですが、`metrics` の `min` / `max` は経路の範囲3〜5分で、平均ではありません。
+Task の行は `d`、`r`、`f`、`s` の4行です。合流値 `ready` の行はなく、送付 `s` も枝ごとに増えません。
+
+`relca explain examples/merge-if/model.relca` の期限違反の反例には、時刻4に
+`kind: merged`、`binding: ready`、`source: f` の段が入ります。
+`result` は複写した観測結果、`location.span` は `yield` 文のバイト位置です。
+Task ではないので `actor`、`capability`、`executor` はいずれも null です。
+独立した参照実行で選択元と値を再現できない反例は、再生を `unsupported` として扱います。
+
+合流後の系譜は経路に依存するため、全枝の根拠を足し合わせて一つの判定の根拠にはしません。
+合流値を直接・間接に引数として受ける判定の `lineage` 行は出さず、
+`agency.unchecked` に `lineage(merge_control): 呼出し名` を残します。
+合流に依存しない判定の系譜、原本への直接・間接到達、commit の実行者は保持します。
+`origin` の間接到達は、Actor ごとに存在しうる読取り経路の集約であり、
+すべての経路で同じ根拠を使うという主張でも、独立検証の数でもありません。
+合流から独立した判定、拒否、行使回数、責務や警告の導出は保持します。
+合流値やその値で選ぶ制御に依存する項目だけを `not_derived`、理由 `merge_control` とします。
+終端や操作ごとの行には、導出済みと未導出の項目が混在することがあります。
+
+| 未導出になる警告 | 対象 |
+|---|---|
+| `W-AGY-0` / `W-AGY-1` | 効果を止めない判定 / 迂回のある判定 |
+| `W-AGY-2` | 判定・拒否・実行の集中 |
+| `W-AGY-3` | 縮退のために保持する操作の通常経路での行使 |
+| `W-RESP-0` | 責務の宣言が無い判断の担い手 |
+| `W-RESP-1` / `W-RESP-2` | 宣言した責務に必要な観測 / 拒否 |
+| `W-LIN-2` | 独立な検出力に必要な新しい根拠源 |
+
+導出しなかった対象は、コードと `merge_control`、呼出し名・操作名・責務の対象などを
+`agency.unchecked` に記録します。警告が無いことを、問題が解消した証拠と読まないでください。
+責務の observation / refusal も依存する欄だけを `merge_control` とし、独立した欄の
+`W-RESP-1` などは従来どおり導きます。`derivation_limit` は実際に計算上の上限へ達した場合の理由です。
+ただし、同じ判定が合流に依存する効果にも関わる場合、責務の refusal は欄全体が
+`not_derived(merge_control)` になります。独立した commit への拒否が欠けていても、
+その欄の `W-RESP-2` は警告ではなく未導出の印として残ります。
+
+## 根拠源の要求と証跡
+
+`evidence_basis` の性質の id は `contract Basis #1 evidence_basis` のようになります。
+`check` の性質行は他の契約と同じ `id`、`verdict`、必要な場合の `cases` で、根拠の証跡は加えません。
+`satisfied` は、終了した対象の呼出しが要求したすべての源を含んだというモデル上の結果です。
+正常終了が一度も無い契約の `vacuous` と、切断の `inconclusive` を合格として読まないでください。
+`simulate` で違反が見つからなくても、全スケジュールの安全性を満たしたという結果にはしません。
+値を返す if と併用する場合、対象の判断の引数や観測読取りへ合流値が直接・間接に流れ込む形は
+`U-SEM-0`、理由 `merge_control` で拒否します。無関係な合流や条件だけの参照は、契約の根拠に加えず通常どおり判定します。
+
+[上流の読取りを外した例](../../examples/evidence-basis-missing.relca)の explain は、
+時刻2分に `Clerk.match_po` が正常に終了するまでの反例を出します。
+その性質の `explanation.counterexamples[]` にある `evidence` は次の形です。
+
+```json
+{"binding":"p","actor":"Clerk","capability":"match_po","required":["Invoice","PurchaseOrder"],"sources":["PurchaseOrder"],"missing":["Invoice"],"excluded_edges":[]}
+```
+
+| 欄 | 読み方 |
+|---|---|
+| `binding`, `actor`, `capability` | 違反を確認した操作の正常終了。steps と同じ識別子・操作名 |
+| `required` | 契約が要求した源 |
+| `sources` | その呼出しの照合に数えた源。direct の場合は自身の reads だけ |
+| `missing` | required のうち sources に含まれなかった源 |
+| `excluded_edges` | 必ず先に正常終了して最後の値を書くとは認めず、数えなかった観測変数の辺。`p -> a` のような binding 間の表記 |
+
+後半の4欄は名前の昇順の配列です。`excluded_edges` がある場合、そこを読んだはずだと補完しません。
+反例は参照実行器で再生した経路であり、`evidence` はモデル上の系譜の証跡です。
+実際の資料アクセスを記録したログではありません。確認用ページも、この区別を付けて表示します。
+
+`mutate --kinds evidence_missing` はこの契約の行も割当てに含めます。
+`original_access_removed` に割り当てるのは `direct` の行だけです。
+[正の例](../../examples/evidence-basis.relca)では2つの読取り削除をどちらも検出しますが、
+他のモデルの検出件数や確率・網羅率を表す値ではありません。
+原検査の全体が `vacuous` なら、mutate は候補の実行へ進みません。
+契約が悪化しても、同時に割当てた系譜の行が消えて照合できなくなった場合は、
+`inconclusive / assigned_check_unavailable` のままです。契約の変化だけで `detected` に置き換えません。
+
+この契約を含む `compare`、`diff`、`sensitivity` は、対応外の比較として exit 4 で拒否します。
+diff の個別 check が `violated` でも、最上位の `unsupported` は比較していないという意味です。
+個別の違反を、比較の拒否で打ち消さないでください。
+異議経路を対象にした契約は `evidence_basis_contest_route` で未対応にします。
+通常の呼出しとして追跡できない対象を `vacuous` として隠さず、他の性質の結果は残します。
+`conform` は `U-LOG-1` で拒否し、`not_checked` に契約を `unsupported_request` として、
+`unchecked` に `evidence_basis` を残します。読取りを観測しないログから満たしたとは判定しません。
 
 ## 繰り返しの出力
 
@@ -134,10 +229,14 @@ O/F/P/J/U/E/L は次のような集合・件数・状態を読む記号として
 | O | `origin`, `viewpoints.observation` | source までの直接・間接経路、Actor と実行者の集合 |
 | F | `viewpoints.framing` | 終端への到達条件を変える call の列と対象集合 |
 | P | `viewpoints.proposal` | 現在は `not_derived` とその理由 |
-| J | `lineage` | 入力や reads を持つ判定 call と、その祖先となる根拠源 |
+| J | `lineage` | commit の効果に関わり、引数などで先行 call の結果を受ける判定 call と、その祖先の根拠源。合流に依存する判定は理由付きで未導出 |
 | U | `refusal` | commit を止める条件と迂回文脈、`all_paths` / `conditional` / `none` |
 | E | `viewpoints.effects` | commit の位置、実行可能な人、Permission や Authority の記録 |
 | L | `viewpoints.retention` | 通常経路での呼出し回数の min/max、contest route や intent の有無 |
+
+`case.id` だけを引数に取る call や、source を `reads` するだけで他の call の結果を受けない call は、J に数えません。
+他の call が書いた観測値を読む場合も、先行結果への依存として扱います。
+繰り返しでは、`case.id` 以外の引数を受け、条件に使う call も対象に加えます。
 
 `not_derived` は「存在しない」ではありません。`rules`、`scope`、`unchecked` を併読します。
 回数や経路の有無から、実際の人物の能力や業務上の正当性を判定できません。

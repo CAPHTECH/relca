@@ -15,6 +15,7 @@ pub mod diag;
 pub mod diff;
 pub mod engine;
 pub mod evaluation;
+mod evidence_basis;
 #[cfg(test)]
 #[path = "../tests/support/r2_round2_inputs.rs"]
 mod r2_round2_inputs;

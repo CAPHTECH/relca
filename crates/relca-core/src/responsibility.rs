@@ -863,6 +863,9 @@ fn derive_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Responsibil
     if m.agency.as_derived().is_none() {
         return empty_row(m, d, id);
     }
+    if m.has_merges() {
+        return derive_merge_row(m, d, id, limits);
+    }
     let mut row = empty_row(m, d, id);
     let mut budget = Budget {
         limits,
@@ -875,6 +878,103 @@ fn derive_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Responsibil
         row.time_frame = derive_time(m, d, &row, time_limits(id - 1));
         row
     }
+}
+
+fn derive_merge_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Responsibility {
+    let projection = match crate::agency::merge::projection(m) {
+        Ok(p) => p,
+        Err(reason) => {
+            let mut row = empty_row(m, d, id);
+            row.observation.reason = Some(reason.into());
+            row.refusal.reason = Some(reason.into());
+            row.time_frame = TimeFrame::unchecked(d.within, reason);
+            return row;
+        }
+    };
+    let p = &projection;
+    let mut row = derive_row(&p.model, d, id, limits);
+    let mut seeds = BTreeSet::new();
+    let mut vars = BTreeSet::new();
+    let mut budget = Budget {
+        limits,
+        work: 0,
+        cells: 0,
+    };
+    let formula = match &d.target {
+        Target::Condition(c) => Some(Formula::State(c.clone())),
+        Target::Formula(f) => Some(f.clone()),
+        _ => None,
+    };
+    if let Some(f) = &formula
+        && formula_support(f, &mut vars, &mut budget, 0).is_err()
+    {
+        return empty_row(m, d, id);
+    }
+    for (binding, cap) in &p.capabilities {
+        let c = &m.capabilities[cap.0];
+        if match d.target {
+            Target::Capability(target) => target == *cap,
+            Target::Maintenance(actor) => c.actor == actor,
+            _ => vars.iter().any(|v| writes(c, *v)),
+        } {
+            seeds.insert(*binding);
+        }
+    }
+    let observation_depends =
+        seeds.iter().any(|id| p.data.contains(id)) || !vars.is_disjoint(&p.variables);
+    let refusal_depends = observation_depends
+        || seeds.iter().any(|id| p.control.contains(id))
+        || row
+            .refusal
+            .effects
+            .iter()
+            .any(|e| p.id(&e.call).is_some_and(|id| p.affected(id)));
+    if observation_depends {
+        row.observation = Observation {
+            status: "not_derived".into(),
+            required_sources: vec![],
+            direct: vec![],
+            indirect: vec![],
+            missing_sources: vec![],
+            reason: Some("merge_control".into()),
+        };
+        row.warnings.retain(|code| code != diag::W_RESP_1);
+    }
+    if refusal_depends {
+        row.refusal = Refusal {
+            status: "not_derived".into(),
+            effects: vec![],
+            reason: Some("merge_control".into()),
+        };
+        row.warnings.retain(|code| code != diag::W_RESP_2);
+    }
+    if observation_depends || refusal_depends {
+        row.time_frame = TimeFrame::unchecked(d.within, "merge_control");
+    }
+    for e in &mut row.refusal.effects {
+        e.call = p.name(m, &e.call);
+        for j in &mut e.judgements {
+            j.call = p.name(m, &j.call);
+        }
+    }
+    if let Some(time) = &mut row.time_frame.details {
+        for path in &mut time.paths {
+            for value in [
+                &mut path.source,
+                &mut path.judgement_call,
+                &mut path.effect_call,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                *value = p.name(m, value);
+            }
+            for value in &mut path.calls {
+                *value = p.name(m, value);
+            }
+        }
+    }
+    row
 }
 fn derive_row_into(
     m: &ir::Model,
@@ -1543,6 +1643,7 @@ fn time_guard_edges(
                 ir::Stmt::Wait(_) => {}
                 ir::Stmt::WaitUntil(_) => return Err("condition_wait_control"),
                 ir::Stmt::LoopControl(_) => return Err("loop_control"),
+                ir::Stmt::MergeCopy { .. } => return Err("merge_control"),
             }
         }
         Ok((alive.then_some(guards), may_end))
@@ -1618,6 +1719,23 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
     }
     warnings.extend(undeclared_responsibility(m));
     let unchecked = m.agency.unchecked_mut();
+    for row in &rows {
+        for (field, reason, code) in [
+            ("observation", &row.observation.reason, diag::W_RESP_1),
+            ("refusal", &row.refusal.reason, diag::W_RESP_2),
+        ] {
+            if reason.as_deref() == Some("merge_control") {
+                unchecked.push(format!(
+                    "responsibility_{field}(merge_control): {} {}",
+                    row.person, row.target.value
+                ));
+                unchecked.push(format!(
+                    "{code}(merge_control): {} {}",
+                    row.person, row.target.value
+                ));
+            }
+        }
+    }
     if !rows.is_empty() {
         unchecked.retain(|v| v != "W-RESP-1");
         if rows.iter().any(|r| r.time_frame.status == "unchecked") {
@@ -1675,6 +1793,28 @@ fn undeclared_responsibility(m: &ir::Model) -> Vec<diag::Diagnostic> {
     };
     let mut warnings = Vec::new();
     let mut actors = BTreeSet::new();
+    if m.has_merges()
+        && let Ok(p) = crate::agency::merge::projection(m)
+        && let Some(projected) = p.model.agency.as_derived()
+    {
+        for r in &projected.refusal {
+            if r.reachable {
+                for j in r
+                    .judgements
+                    .iter()
+                    .filter_map(crate::agency::Judgement::process)
+                {
+                    if j.stops != Stops::None
+                        && p.id(&j.call).is_some_and(|id| !p.affected(id))
+                        && let Some((actor, _)) = j.capability.split_once('.')
+                        && let Some(a) = m.actors.iter().find(|a| a.name == actor)
+                    {
+                        actors.insert(a.name.as_str());
+                    }
+                }
+            }
+        }
+    }
     for r in &agency.refusal {
         if r.reachable {
             actors.insert(r.effect.split('.').next().unwrap_or(""));

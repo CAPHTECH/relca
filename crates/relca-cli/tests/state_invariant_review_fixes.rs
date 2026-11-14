@@ -5,6 +5,8 @@
 use serde_json::Value;
 #[path = "support/ledger_shape.rs"]
 mod ledger_shape;
+#[path = "support/syntax_cut_expectations.rs"]
+mod syntax_cut_expectations;
 #[path = "support/test_tmp.rs"]
 mod test_tmp;
 use std::{
@@ -140,13 +142,17 @@ fn old_event_invariant_group_followed_by_arithmetic_is_byte_identical_to_pre_adr
         }
         let o = check(&format!("event-{}", sha(src.as_bytes())), &src);
         let spec = ledger_shape::Spec::prelower("exhaustive", false);
-        let original = ledger_shape::remove_expected_prefix(&o.stdout, &spec);
+        let original = syntax_cut_expectations::archived_projection(
+            &ledger_shape::remove_expected_prefix(&o.stdout, &spec),
+        );
         if !calibrated {
             let mut fault = o.stdout.clone();
             let key = b"\"verdict\":\"";
             let at = fault.windows(key.len()).position(|s| s == key).unwrap() + key.len();
             fault[at] = b'v';
-            let bad = ledger_shape::remove_expected_prefix(&fault, &spec);
+            let bad = syntax_cut_expectations::archived_projection(
+                &ledger_shape::remove_expected_prefix(&fault, &spec),
+            );
             assert_ne!(
                 sha(&bad),
                 stdout,
@@ -160,7 +166,11 @@ fn old_event_invariant_group_followed_by_arithmetic_is_byte_identical_to_pre_adr
                 String::from_utf8_lossy(&o.stderr).into_owned(),
                 o.status.code()
             ),
-            (stdout.to_string(), stderr.to_string(), Some(exit)),
+            (
+                stdout.to_string(),
+                stderr.replace("W-CUT-0: Cut is undeclared; exclusions are unknown\n", ""),
+                Some(exit)
+            ),
             "old event invariant {form} (actor state {actor_state})"
         );
     }
@@ -182,7 +192,7 @@ fn state_invariant_group_followed_by_arithmetic_is_the_same_unsupported_comparis
         assert_eq!(o.status.code(), Some(4), "{form}");
         assert_eq!(
             String::from_utf8_lossy(&o.stderr),
-            OLD_USYN,
+            "U-SYN-0: unsupported syntax: comparison expression\n",
             "{form}: same code and message as the old comparison check"
         );
         let v: Value = serde_json::from_slice(&o.stdout).unwrap();

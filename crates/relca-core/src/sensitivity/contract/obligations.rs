@@ -243,6 +243,9 @@ impl Names<'_> {
                     json!(["separation", self.event(*left)?, self.event(*right)?])
                 }
                 K::Permitted { capability } => json!(["permitted", self.capability(*capability)?]),
+                K::EvidenceBasis { .. } => {
+                    return Err(unsupported("evidence_basis_unsupported_command"));
+                }
                 K::AuthorityBasis {
                     capability,
                     authority,

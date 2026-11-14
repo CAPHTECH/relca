@@ -29,9 +29,16 @@ pub fn parse(src: &str) -> Result<Model, Vec<Diagnostic>> {
 }
 
 fn parse_with_priority_context(src: &str) -> (Result<Model, Vec<Diagnostic>>, bool) {
+    let tokens = lex(src);
+    let words: Vec<_> = tokens.iter().filter(|t| t.text != "\n").collect();
+    let merge_bindings = words
+        .windows(3)
+        .filter(|w| w[0].kind == Kind::Word && w[1].text == "=" && w[2].text == "if")
+        .map(|w| w[0].text.to_string())
+        .collect();
     let mut parser = Parser {
         src,
-        tokens: lex(src),
+        tokens,
         pos: 0,
         depth: 0,
         priority_declaration: false,
@@ -39,6 +46,8 @@ fn parse_with_priority_context(src: &str) -> (Result<Model, Vec<Diagnostic>>, bo
         degradation_depth: 0,
         recovery_depth: 0,
         repeat_depth: 0,
+        merge_yield_depths: Vec::new(),
+        merge_bindings,
     };
     let result = parser.model().map_err(|diagnostic| vec![diagnostic]);
     (result, parser.priority_declaration)
@@ -54,6 +63,8 @@ struct Parser<'s> {
     degradation_depth: usize,
     recovery_depth: usize,
     repeat_depth: usize,
+    merge_yield_depths: Vec<usize>,
+    merge_bindings: std::collections::BTreeSet<String>,
 }
 
 impl<'s> Parser<'s> {
@@ -447,6 +458,11 @@ impl<'s> Parser<'s> {
         self.lines();
         let token = self.current();
         if token.kind != Kind::Integer {
+            if self.merge_bindings.contains(token.text) {
+                return Err(
+                    self.error("merge_read_position: expected a nonnegative integer literal")
+                );
+            }
             return Err(self.error("expected nonnegative integer"));
         }
         let value = token
@@ -500,6 +516,9 @@ impl<'s> Parser<'s> {
             self.pos += 1;
         }
         if self.current().kind != Kind::Integer {
+            if self.merge_bindings.contains(self.current().text) {
+                return Err(self.error("merge_read_position: expected a probability literal"));
+            }
             return Err(self.error("expected probability"));
         }
         let mut end = self.current().span.end;
@@ -554,6 +573,11 @@ impl<'s> Parser<'s> {
             self.pos += 1;
         }
         if self.current().kind != Kind::Integer {
+            if self.merge_bindings.contains(self.current().text) {
+                return Err(
+                    self.unsupported("merge_read_position: expected a simulation integer literal")
+                );
+            }
             return Err(
                 if self.current().kind == Kind::Word
                     && !matches!(self.current().text, "replications" | "seed" | "confidence")
@@ -2152,6 +2176,9 @@ impl<'s> Parser<'s> {
     fn capability_path(&mut self) -> Parsed<CapabilityPath> {
         let start = self.start();
         let actor = self.ident()?;
+        if !self.at(".") && self.merge_bindings.contains(&actor.value) {
+            return Err(self.error("merge_read_position: expected a capability path, not a result"));
+        }
         if actor.value == "change" && !self.at(".") {
             return Err(self.unsupported("rule-change grants"));
         }
@@ -2994,6 +3021,19 @@ impl<'s> Parser<'s> {
     }
 
     fn stmt(&mut self) -> Parsed<Spanned<Stmt>> {
+        if self.position_word("yield") {
+            if self.merge_yield_depths.last() == Some(&self.depth) {
+                return self.yield_statement();
+            }
+            return Err(self.merge_error("merge_yield_outside"));
+        }
+        let mut head = self.tokens[self.pos..].iter().filter(|t| t.text != "\n");
+        if head.next().is_some_and(|t| t.kind == Kind::Word)
+            && head.next().is_some_and(|t| t.text == "=")
+            && head.next().is_some_and(|t| t.text == "if")
+        {
+            return self.merge_statement();
+        }
         if self.at("repeat") {
             let mut ts = self.tokens[self.pos + 1..]
                 .iter()
@@ -3042,6 +3082,95 @@ impl<'s> Parser<'s> {
         let mut d = self.unsupported("loop_feature_combination");
         d.code = diag::U_SEM_0.into();
         d
+    }
+
+    fn merge_error(&self, reason: &str) -> Diagnostic {
+        let mut d = self.error(reason);
+        d.code = diag::E_CON_0.into();
+        d
+    }
+
+    fn merge_block(&mut self) -> Parsed<Block> {
+        // Reuse the existing small recursive block frame. Yield parsing owns
+        // its larger locals only at a leaf, not once per nesting level.
+        self.merge_yield_depths.push(self.depth + 1);
+        let body = self.block()?;
+        self.merge_yield_depths.pop();
+        if !body
+            .last()
+            .is_some_and(|s| matches!(s.value, Stmt::Yield(_) | Stmt::End(_)))
+        {
+            return Err(self.merge_error("merge_fallthrough"));
+        }
+        Ok(body)
+    }
+
+    fn yield_statement(&mut self) -> Parsed<Spanned<Stmt>> {
+        let start = self.expect("yield")?.span.start;
+        let mut source = self.ident()?;
+        let after_source = self.pos;
+        // Recognize qualified state/field names only to reject their source
+        // kind. A failed lookahead must not extend the span over separators.
+        if self.take(".") {
+            let field = self.ident()?;
+            source.value.push('.');
+            source.value.push_str(&field.value);
+            source.span.end = field.span.end;
+        } else {
+            self.pos = after_source;
+        }
+        let span = self.span(start);
+        self.separators();
+        if !self.at("}") {
+            return Err(self.merge_error("merge_unreachable_after_yield"));
+        }
+        Ok(Spanned {
+            value: Stmt::Yield(source),
+            span,
+        })
+    }
+
+    fn merge_statement(&mut self) -> Parsed<Spanned<Stmt>> {
+        let header = self.merge_header()?;
+        let then_body = self.merge_block()?;
+        self.separators();
+        self.expect("else")?;
+        let else_body = self.merge_block()?;
+        if [then_body.last(), else_body.last()]
+            .iter()
+            .all(|s| s.is_some_and(|s| matches!(s.value, Stmt::End(_))))
+        {
+            return Err(self.merge_error("merge_no_continuing_branch"));
+        }
+        let (start, binding, condition) = *header;
+        Ok(Spanned {
+            value: Stmt::Merge {
+                binding,
+                condition,
+                then_body,
+                else_body,
+            },
+            span: self.span(start),
+        })
+    }
+
+    // Header temporaries must not stay in a recursive merge frame: the syntax
+    // limit and the standard test stack are the same as for ordinary if.
+    fn merge_header(&mut self) -> Parsed<Box<(usize, Ident, Spanned<Cond>)>> {
+        if self.repeat_depth > 0 {
+            return Err(self.loop_combination());
+        }
+        if self.recovery_depth > 0 || self.degradation_depth > 0 {
+            let mut d = self.unsupported("merge_feature_combination");
+            d.code = diag::U_SEM_0.into();
+            return Err(d);
+        }
+        let start = self.start();
+        let binding = self.ident()?;
+        self.expect("=")?;
+        self.expect("if")?;
+        let condition = self.cond()?;
+        Ok(Box::new((start, binding, condition)))
     }
 
     fn repeat_statement(&mut self) -> Parsed<Spanned<Stmt>> {
@@ -3308,9 +3437,17 @@ impl<'s> Parser<'s> {
         }
         self.expect("=")?;
         let actor = self.ident()?;
+        if !self.at(".") && self.merge_bindings.contains(&actor.value) {
+            return Err(self.error("merge_read_position: result assignment is unsupported"));
+        }
         self.expect(".")?;
         let capability = self.ident()?;
-        let args = self.arguments()?;
+        let args = self.arguments().map_err(|mut d| {
+            if self.merge_bindings.contains(&actor.value) {
+                d.message = format!("merge_read_position: {}", d.message);
+            }
+            d
+        })?;
         if self.repeat_depth > 0
             && ["response_loss", "retry", "on"]
                 .iter()
@@ -4646,6 +4783,7 @@ impl<'s> Parser<'s> {
                     | "separation"
                     | "permitted"
                     | "authority_basis"
+                    | "evidence_basis"
                     | "excludes"
                     | "waive"
                     | "contest"
@@ -4840,6 +4978,31 @@ impl<'s> Parser<'s> {
                 ContractClause::AuthorityBasis {
                     target,
                     authority: self.ident()?,
+                }
+            } else if self.take("evidence_basis") {
+                // Contextual words remain legal names outside this clause.
+                let direct = self.at("direct")
+                    && self.tokens[self.pos + 1..]
+                        .iter()
+                        .find(|t| t.text != "\n")
+                        .is_none_or(|t| t.text != ".")
+                    && self.take("direct");
+                let target = self.capability_path()?;
+                self.expect("[")?;
+                let mut sources = Vec::new();
+                if !self.at("]") {
+                    loop {
+                        sources.push(self.path()?);
+                        if !self.take(",") {
+                            break;
+                        }
+                    }
+                }
+                self.expect("]")?;
+                ContractClause::EvidenceBasis {
+                    direct,
+                    target,
+                    sources,
                 }
             } else if self.take("invariant") {
                 self.invariant_clause()?

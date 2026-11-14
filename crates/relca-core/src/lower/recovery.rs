@@ -126,7 +126,12 @@ impl Lower {
                             return Err((U_SEM_0, "recovery_feature_combination", c.span));
                         }
                     }
-                    ast::Stmt::If {
+                    ast::Stmt::Merge {
+                        then_body,
+                        else_body,
+                        ..
+                    }
+                    | ast::Stmt::If {
                         then_body,
                         else_body,
                         ..
@@ -281,7 +286,13 @@ impl Lower {
         ) -> Result<(), Vec<Diagnostic>> {
             for s in b {
                 match &s.value {
-                    ast::Stmt::If {
+                    ast::Stmt::Merge {
+                        condition,
+                        then_body,
+                        else_body,
+                        ..
+                    }
+                    | ast::Stmt::If {
                         condition,
                         then_body,
                         else_body,

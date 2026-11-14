@@ -12,5 +12,5 @@ ADR 0001 の fork 文は直後に join を必須とするため、共有診断 E
 故障版は構文検査で拒否するので実行経路は無く、terminals は空。
 暗黙の join を補って 5 分と出したり、drain せず done としてはならない。
 ADR 0002 により性質は評価せず properties は空、全体は invalid。
-Cut は undeclared、W-CUT-0 も期待する。
+構文解析が止まるため Cut は unresolved、W-CUT-0 は出さない（2026-11-14 の決定）。
 未決: なし。手計算のみで、実装との照合はしていない。

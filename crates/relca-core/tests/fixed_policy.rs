@@ -742,17 +742,12 @@ fn static_diagnostic_spans_point_at_bad_choice_or_second_extension() {
         }
         .unwrap();
         let ds = v["diagnostics"].as_array().unwrap();
-        // A parse failure ends report::check_with before the Cut is projected;
-        // report::finish then adds the existing W-CUT-0 (span null). Lower
-        // errors keep the Cut and add nothing.
+        // Parse failures cannot establish Cut presence. Lower errors retain
+        // the written Cut without adding a missing-Cut warning.
         if code == "U-SYN-0" {
-            assert_eq!(ds.len(), 2, "{name}");
-            assert_eq!(ds[1]["code"], "W-CUT-0", "{name}");
-            assert_eq!(ds[1]["severity"], "warning", "{name}");
-            assert!(ds[1]["span"].is_null(), "{name}");
-        } else {
-            assert_eq!(ds.len(), 1, "{name}");
+            assert_eq!(v["cut"], "unresolved", "{name}");
         }
+        assert_eq!(ds.len(), 1, "{name}");
         assert_eq!(ds[0]["code"], code);
         assert_eq!(ds[0]["severity"], "error");
         assert_eq!(ds[0]["message"], message);

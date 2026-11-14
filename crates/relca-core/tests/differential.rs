@@ -360,6 +360,7 @@ impl Builder {
             span: SPAN,
         });
         self.0.process.bindings.push(Binding {
+            merge: None,
             repetition: None,
             name: format!("b{id}"),
             ty: TypeId(0),
@@ -1092,6 +1093,7 @@ fn model_identity(mut m: Model) -> Model {
         for s in body {
             s.span = SPAN;
             match &mut s.kind {
+                Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
                 Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
                 Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")
@@ -2018,11 +2020,9 @@ fn run_corpus(reference_limits: Limits, fixtures: bool) {
                 }
                 let report = relca_core::report::check(&source);
                 assert_eq!(report.verdict, Invalid, "{id} static rejection verdict");
-                // calc.md also requires external W-CUT-0 for undeclared Cut.
-                // A parse error has no lowered Model whose warnings could be
-                // compared to report; use the explicit external oracle instead.
+                // Only a parsed model can establish an undeclared Cut.
                 let code = expected_rejection.expect("classified rejected fixture");
-                let expected = if id.starts_with("cut-declared.") {
+                let expected = if id.starts_with("cut-declared.") || code == diag::E_SYN_0 {
                     BTreeSet::from([code])
                 } else {
                     BTreeSet::from([code, diag::W_CUT_0])
@@ -2435,6 +2435,7 @@ fn render(m: &Model) -> String {
     fn block(s: &mut String, m: &Model, body: &Block) {
         for statement in body {
             match &statement.kind {
+                Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
                 Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
                 Stmt::Query(_, _) | Stmt::ResolveEffect { .. } | Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")

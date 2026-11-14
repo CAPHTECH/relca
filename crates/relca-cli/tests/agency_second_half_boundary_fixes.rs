@@ -249,7 +249,7 @@ fn m2_unseparated_reads_keep_the_pre_c5_syntax_diagnostic_bytes() {
         assert_eq!(o.status.code(), Some(3), "{reads}");
         assert_eq!(
             String::from_utf8(o.stderr.clone()).unwrap(),
-            "E-SYN-0: expected ]\nW-CUT-0: Cut is undeclared; exclusions are unknown\n",
+            "E-SYN-0: expected ]\n",
             "{reads}"
         );
         let v = json_of(&o);

@@ -450,13 +450,86 @@ class ReviewPageTest(unittest.TestCase):
         broken.write_text(src.replace("  bounds", "  // note\n  bounds", 1), encoding="utf-8")
         out, err, code = relca(self.tmp, "comment", "check", broken)
         self.assertEqual(code, 4)
-        self.assertEqual(json.loads(Path(out).read_text())["cut"], "undeclared")  # relca 自体は undeclared と出す
+        report = json.loads(Path(out).read_text())
+        self.assertEqual(report["cut"], "unresolved")
+        self.assertFalse(any(d["code"] == "W-CUT-0" for d in report["diagnostics"]))
         _, data = page(self.tmp, "comment", "--model", broken, "--check", out, "--check-exit", code)
         cut = [u for u in data["unverified"] if u[1] == "Cut"]
         self.assertEqual(len(cut), 1)
         self.assertIn("parse に失敗", cut[0][3])
+        self.assertIn("diagnostics に W-CUT-0 は無い", cut[0][3])
         self.assertEqual(cut[0][2], "unsupported")  # U-SYN-0
         self.assertFalse(any("Cut が宣言されていない" in a[1] for a in data["alerts"]))
+
+    def test_cut_status_reads_report_fields_for_lower_syn_errors(self):
+        for name in ("rec-s01-latent-case.broken-unsupported", "rec-s02-latent-actor.broken-unsupported",
+                     "rec-s08-nested-field.broken-unsupported", "rec-s10-field-write.broken-field",
+                     "rec-s12-none.broken-non-eq"):
+            with self.subTest(name=name):
+                model = ROOT / "fixtures" / name / "model.relca"
+                out, err, code = relca(self.tmp, name, "check", model)
+                report = json.loads(out.read_text())
+                self.assertEqual(code, 4)
+                self.assertIsNotNone(report["model"]["name"])
+                self.assertEqual(report["cut"], "undeclared")
+                self.assertIn("U-SYN-0", [d["code"] for d in report["diagnostics"]])
+                self.assertIn("W-CUT-0", [d["code"] for d in report["diagnostics"]])
+                _, data = page(self.tmp, name, "--model", model, "--check", out,
+                               "--check-exit", code, "--check-stderr", err)
+                cut = [u for u in data["unverified"] if u[1] == "Cut"]
+                self.assertEqual([u[2] for u in cut], ["undeclared"])
+                self.assertTrue(any("W-CUT-0" in a[1] and "Cut が宣言されていない" in a[1]
+                                    for a in data["alerts"]))
+                self.assertFalse(any("parse に失敗" in a[1] for a in data["alerts"]))
+                self.assertNotIn("W-CUT-0 は出さない", cut[0][3])
+
+    def test_cut_parse_failures_use_metadata_and_actual_warning_inventory(self):
+        source = MINIMAL.read_text(encoding="utf-8")
+        start = source.index("  cut ExpenseCut")
+        end = source.index("  }\n", start) + 4
+        for declared in (False, True):
+            base = source if declared else source[:start] + source[end:]
+            for fault, expected_exit in (("  // note\n  bounds", 4), ("  bounds }", 3)):
+                with self.subTest(declared=declared, fault=fault):
+                    model = Path(self.tmp) / "cut-parse.relca"
+                    model.write_text(base.replace("  bounds", fault, 1), encoding="utf-8")
+                    out, err, code = relca(self.tmp, "cut-parse", "check", model)
+                    report = json.loads(out.read_text())
+                    self.assertEqual(code, expected_exit)
+                    self.assertEqual(report["cut"], "unresolved")
+                    self.assertIsNone(report["model"]["name"])
+                    self.assertNotIn("W-CUT-0", [d["code"] for d in report["diagnostics"]])
+                    _, data = page(self.tmp, "cut-parse", "--model", model, "--check", out,
+                                   "--check-exit", code, "--check-stderr", err)
+                    cut = [u for u in data["unverified"] if u[1] == "Cut"]
+                    self.assertEqual([u[2] for u in cut], [report["verdict"]])
+                    self.assertIn("parse に失敗", cut[0][3])
+                    self.assertFalse(any("Cut が宣言されていない" in a[1] for a in data["alerts"]))
+
+    def test_cut_warning_and_parsed_metadata_are_not_inferred_from_syn_codes(self):
+        model = ROOT / "fixtures" / "rec-s01-latent-case.broken-unsupported" / "model.relca"
+        out, _, _ = relca(self.tmp, "cut-fields", "check", model)
+        for cut_value, name, warning, error_code, verdict, expected_status, parse_failed in (
+                ("undeclared", "Records", True, "E-SYN-0", "invalid", "undeclared", False),
+                ("unresolved", "Records", True, "U-SYN-0", "unsupported", "unresolved", False),
+                ("undeclared", "Records", False, "U-SYN-0", "unsupported", "undeclared", False),
+                ("unresolved", None, True, "E-NAME-0", "invalid", "invalid", True)):
+            with self.subTest(cut=cut_value, name=name, warning=warning, code=error_code):
+                report = json.loads(out.read_text())
+                report["cut"] = cut_value
+                report["model"]["name"] = name
+                report["verdict"] = verdict
+                report["diagnostics"][0]["code"] = error_code
+                if not warning:
+                    report["diagnostics"] = [d for d in report["diagnostics"] if d["code"] != "W-CUT-0"]
+                changed = Path(self.tmp) / "cut-fields-changed.json"
+                changed.write_text(json.dumps(report), encoding="utf-8")
+                _, data = page(self.tmp, "cut-fields", "--model", model, "--check", changed,
+                               "--check-exit", review_page.EXIT_OF[verdict])
+                cut = [u for u in data["unverified"] if u[1] == "Cut"]
+                self.assertEqual([u[2] for u in cut], [expected_status])
+                self.assertEqual(any("parse に失敗" in a[1] for a in data["alerts"]), parse_failed)
+                self.assertEqual(any("W-CUT-0" in a[1] for a in data["alerts"]), warning)
 
     def test_syntax_error_parse_failure_is_invalid(self):
         src = MINIMAL.read_text(encoding="utf-8")
@@ -1146,6 +1219,153 @@ class RepetitionPageTest(unittest.TestCase):
                          {"compare 案 A", "compare 案 B", "mutate original"})
         for origin in ("compare 案 A", "compare 案 B", "mutate original"):
             self.assertIn("<h4>%s</h4>" % origin, text)
+
+
+@unittest.skipUnless(RELCA.exists(), "relca の binary が必要")
+class MergePageTest(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory(prefix="merge-page-", dir=ROOT / ".tmp")
+        self.tmp = self.tmpdir.name
+        self.model = ROOT / "crates/relca-core/tests/merge_if/models/M1.relca"
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_real_merge_and_verified_event_are_not_tasks_or_hidden_steps(self):
+        check, _, code = relca(self.tmp, "merge-check", "check", self.model)
+        explain, _, xcode = relca(self.tmp, "merge-explain", "explain", self.model)
+        self.assertEqual((code, xcode), (1, 1))
+        text, data = page(self.tmp, "merge", "--model", self.model, "--check", explain,
+                          "--check-exit", xcode)
+        model = section(text, "model")
+        self.assertIn("d2 = if r == fail", model)
+        self.assertIn("yield f", model)
+        self.assertIn("yield d", model)
+        self.assertIn("値の複写(Task なし)", model)
+        self.assertNotIn("未解釈", model)
+        self.assertIn("d2 ← f(Task なし)", html.unescape(text))
+        self.assertIn("merged", text)
+        self.assertIn("repaired", text)
+        self.assertTrue(any("merge_control" in str(row) for row in data["not_derived"]))
+        raw = json.loads(check.read_text())
+        self.assertEqual({t["binding"] for t in raw["metrics"]["cases"][0]["tasks"]}, {"d", "r", "f", "s"})
+
+    def test_rejected_merge_is_not_drawn_as_an_accepted_flow(self):
+        base = self.model.read_text()
+        merge = "d2 = if r == fail { f = Clerk.fix(d); yield f } else { yield d }"
+        variants = {
+            "fallthrough": (base.replace("yield f", ""), "merge_fallthrough"),
+            "no-else": (base.replace("else { yield d }", ""), None),
+            "all-end": (base.replace(merge, "d2 = if r == fail { end done_fixed } else { end done_as_is }"), "merge_no_continuing_branch"),
+            "after-yield": (base.replace("yield f", "yield f; wait 1min"), "merge_unreachable_after_yield"),
+            "outside": (base.replace(merge, "yield d"), "merge_yield_outside"),
+            "undefined": (base.replace("yield f", "yield missing"), "undefined merge source"),
+            "qualified-latent": (base.replace("actor Clerk { capacity 1", "actor Clerk { capacity 1; latent secret:D=draft")
+                                 .replace("yield f", "yield Clerk.secret"), "latent"),
+        }
+        for name, (body, reason) in variants.items():
+            with self.subTest(shape=name):
+                source = Path(self.tmp) / (name + ".relca")
+                source.write_text(body)
+                check, _, code = relca(self.tmp, name, "check", source)
+                self.assertEqual(code, 3)
+                text, _ = page(self.tmp, name, "--model", source, "--check", check, "--check-exit", code)
+                model = section(text, "model")
+                self.assertIn("Relca が受け付けない形", model)
+                if reason:
+                    self.assertIn(reason, model)
+                self.assertNotIn("未解釈", model)
+
+    def test_nested_merge_keeps_selected_sources_and_yield_can_still_be_a_name(self):
+        source = ROOT / "crates/relca-core/tests/merge_if/models/M2.relca"
+        src = review_page.Source(source.read_text())
+        steps = review_page.flatten_steps(review_page.parse_process(src, src.items_of("process")[0][1]))
+        self.assertEqual({s["binding"] for s in steps if s["kind"] == "merge"}, {"d2", "g"})
+        self.assertEqual({(s["binding"], s["source"]) for s in steps if s["kind"] == "yield"},
+                         {("g", "f"), ("g", "d"), ("d2", "g")})
+        named = Path(self.tmp) / "yield-name.relca"
+        named.write_text(self.model.read_text().replace("d = Clerk.write()", "yield = Clerk.write(); d = Clerk.write()"))
+        src = review_page.Source(named.read_text())
+        steps = review_page.flatten_steps(review_page.parse_process(src, src.items_of("process")[0][1]))
+        self.assertTrue(any(s["kind"] == "call" and s["binding"] == "yield" for s in steps))
+
+
+@unittest.skipUnless(RELCA.exists(), "relca の binary が無い")
+class EvidenceBasisPageTest(unittest.TestCase):
+    def setUp(self):
+        (ROOT / ".tmp").mkdir(exist_ok=True)
+        self.directory = tempfile.TemporaryDirectory(prefix="evidence-review-", dir=ROOT / ".tmp")
+        self.tmp = self.directory.name
+        self.addCleanup(self.directory.cleanup)
+        self.model = ROOT / "examples/evidence-basis-missing.relca"
+        self.out, self.err, self.code = relca(self.tmp, "missing", "explain", self.model)
+        self.assertEqual(self.code, 1)
+
+    def build(self, name, output=None):
+        return page(self.tmp, name, "--model", self.model, "--check", output or self.out,
+                    "--check-exit", self.code, "--check-stderr", self.err, "--no-mermaid")
+
+    def test_positive_example_keeps_hand_times_and_both_read_mutations(self):
+        model = ROOT / "examples/evidence-basis.relca"
+        out, _, code = relca(self.tmp, "positive", "check", model)
+        self.assertEqual(code, 0)
+        value = json.loads(out.read_text())
+        row = next(p for p in value["properties"] if p["id"] == "contract Basis #1 evidence_basis")
+        self.assertEqual(row, {"id": "contract Basis #1 evidence_basis", "verdict": "satisfied"})
+        self.assertEqual(len(value["terminals"]), 1)
+        self.assertEqual(value["terminals"][0]["elapsed"], {"min": 2, "max": 2})
+        self.assertEqual(value["terminals"][0]["work"], {"min": 2, "max": 2})
+        out, _, code = relca(self.tmp, "positive-mutate", "mutate", model, "--kinds", "evidence_missing")
+        self.assertEqual(code, 0)
+        value = json.loads(out.read_text())
+        mutants = next(k for k in value["mutations"] if k["kind"] == "evidence_missing")["mutants"]
+        self.assertEqual(len(mutants), 2)
+        self.assertEqual({m["result"] for m in mutants}, {"detected"})
+
+    def test_real_counterexample_has_source_clause_and_evidence(self):
+        raw = json.loads(self.out.read_text())
+        trace = raw["explanation"]["counterexamples"][0]
+        self.assertEqual(trace["replay"]["status"], "verified")
+        self.assertEqual(trace["evidence"]["missing"], ["Invoice"])
+        text, data = self.build("valid")
+        self.assertIn("evidence_basis Clerk.match_po [Invoice,PurchaseOrder]", text)
+        self.assertIn("モデルの根拠源の証跡", text)
+        self.assertIn("要求した源", text)
+        self.assertIn("照合に数えた源", text)
+        self.assertIn("不足した源", text)
+        self.assertIn("実際の資料アクセスを観測したログではない", text)
+        self.assertFalse(any(u[0] == "review_page" and u[1] == "根拠源の証跡" for u in data["unverified"]))
+
+    def test_direct_clause_remains_contextual_source_text(self):
+        source = self.model.read_text().replace("evidence_basis Clerk.match_po [Invoice,PurchaseOrder]",
+                                               "evidence_basis direct Clerk.match_po [Invoice]")
+        model = Path(self.tmp) / "direct.relca"
+        model.write_text(source)
+        out, err, code = relca(self.tmp, "direct", "explain", model)
+        self.assertEqual(code, 1)
+        text, _ = page(self.tmp, "direct-page", "--model", model, "--check", out,
+                       "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+        self.assertIn("evidence_basis direct Clerk.match_po [Invoice]", text)
+        self.assertIn("モデルの根拠源の証跡", text)
+
+    def test_missing_malformed_and_inconsistent_evidence_is_unverified(self):
+        def evidence(value):
+            return value["explanation"]["counterexamples"][0]["evidence"]
+
+        mutations = {
+            "absent": lambda v: v["explanation"]["counterexamples"][0].pop("evidence"),
+            "wrong-type": lambda v: evidence(v).__setitem__("sources", None),
+            "wrong-missing": lambda v: evidence(v).__setitem__("missing", []),
+            "unordered": lambda v: evidence(v).__setitem__("required", ["PurchaseOrder", "Invoice"]),
+            "unknown-key": lambda v: evidence(v).__setitem__("assumed", True),
+            "wrong-call": lambda v: evidence(v).__setitem__("actor", "Other"),
+        }
+        for name, change in mutations.items():
+            with self.subTest(fault=name):
+                altered = rewrite(self.out, Path(self.tmp) / (name + ".json"), change)
+                text, data = self.build(name, altered)
+                self.assertIn("この節を生成できなかった", text)
+                self.assertTrue(any(u[0] == "review_page" and u[1] == "根拠源の証跡" for u in data["unverified"]))
 
 
 if __name__ == "__main__":

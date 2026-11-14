@@ -107,7 +107,7 @@ impl Rejection {
             let start = s.find(anchor).unwrap() + anchor.len();
             start + s[start..].find(token).unwrap()
         };
-        let mut rows = match self {
+        let rows = match self {
             Self::NestedInstance => vec![error(
                 "U-SYN-0",
                 "unsupported syntax: instance",
@@ -159,12 +159,6 @@ impl Rejection {
                 8,
             )],
         };
-        if matches!(
-            self,
-            Self::NestedInstance | Self::NestedActor | Self::SharedKeyword
-        ) {
-            rows.push(json!({"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared; exclusions are unknown","span":null}));
-        }
         Value::Array(rows)
     }
 }

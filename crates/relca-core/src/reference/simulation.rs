@@ -156,6 +156,11 @@ fn histories(m: &Model, f: &Frame<'_>, case_index: usize) -> Result<Vec<History>
                 _ => {}
             }
         }
+        if let ContractKind::EvidenceBasis { capability, direct, sources, .. } = &clause.kind {
+            let (active, broken, _) = evidence::facts(m, &f.trace, *capability, *direct, sources)?;
+            h.active = active;
+            h.broken = broken;
+        }
         if let ContractKind::StateInvariant { antecedent, condition } = &clause.kind {
             for (_, values) in &f.state_snapshots {
                 if match antecedent { Some(c) => snapshot_condition_at(c, &[], values, case_index)?, None => true } {
@@ -582,7 +587,7 @@ fn finished<'a>(
         Occurrence::Completion(cap, value),
         person,
     );
-    if tree.m.site_contest(binding).is_some() {
+    if tree.m.site_contest(binding).is_some() || evidence::present(tree.m) {
         next.cases[k]
             .payload_mut()
             .unwrap()
@@ -1122,6 +1127,17 @@ fn run_rep<'a>(
                 }
                 *block = &block[1..];
                 match &stmt.kind {
+                    Stmt::MergeCopy { binding, source } => {
+                        let value = c.frame.merge_value(m, *source)?;
+                        require(!c.frame.trace.iter().any(|o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding)))?;
+                        append(
+                            tree,
+                            &mut w,
+                            k,
+                            Occurrence::Merged(*binding, *source, value, stmt.span),
+                            None,
+                        );
+                    }
                     Stmt::LoopControl(control) => {
                         for (id, x) in &control.updates {
                             c.frame.state_values[id.0] = *x;
@@ -1524,7 +1540,7 @@ fn run_rep<'a>(
                     tree.notify(&mut next, k, j, &cap.start_writes);
                     append(tree, &mut next, k, Occurrence::Dispatch(cap_id), person);
                     let binding = c.frame.tasks[j].call.binding;
-                    if m.site_contest(binding).is_some() {
+                    if m.site_contest(binding).is_some() || evidence::present(m) {
                         next.cases[k]
                             .payload_mut()
                             .unwrap()
@@ -2881,6 +2897,7 @@ mod simulation_tests {
     fn s_reference_hazard_task_order_revisit_occurrence_and_cancel() {
         let mut m = model("sim-hazard");
         m.process.bindings.push(Binding {
+            merge: None,
             repetition: None,
             name: "b".into(),
             ty: m.process.bindings[0].ty,

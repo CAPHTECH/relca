@@ -441,6 +441,14 @@ pub(super) fn derive(
     a: &Agency,
     limits: Limits,
 ) -> (Effects, Vec<diag::Diagnostic>) {
+    derive_shared(m, a, limits, false)
+}
+pub(super) fn derive_shared(
+    m: &ir::Model,
+    a: &Agency,
+    limits: Limits,
+    shared: bool,
+) -> (Effects, Vec<diag::Diagnostic>) {
     let mut unchecked = vec!["authority".into(), "fallback_path".into()];
     fn state_only(body: &ir::Block, m: &ir::Model) -> bool {
         let cap_state_only = |c: &ir::Call| {
@@ -481,7 +489,11 @@ pub(super) fn derive(
     if state_only(&m.process.body, m) {
         unchecked.push("state_write_effects".into());
     }
-    match rows(m, a, &mut viewpoints::budget(limits)) {
+    match if shared {
+        rows_shared(m, a, &mut viewpoints::budget(limits), true)
+    } else {
+        rows(m, a, &mut viewpoints::budget(limits))
+    } {
         Ok((rows, warnings)) => (Effects::Derived { rows, unchecked }, warnings),
         Err(_) => (
             Effects::NotDerived {
@@ -493,10 +505,56 @@ pub(super) fn derive(
     }
 }
 fn rows(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<(Vec<Effect>, Vec<diag::Diagnostic>)> {
+    rows_shared(m, a, b, false)
+}
+fn rows_shared(
+    m: &ir::Model,
+    a: &Agency,
+    b: &mut Budget,
+    shared: bool,
+) -> Result<(Vec<Effect>, Vec<diag::Diagnostic>)> {
+    if m.has_merges() {
+        b.copy(m.process.bindings.len())?;
+        let mut indexed = vec![None; m.process.bindings.len()];
+        collect_shared(&m.process.body, &mut indexed, m, 0, b, shared)?;
+        let mut rows = Vec::new();
+        let underived = || Underived {
+            status: NotDerived::NotDerived,
+            reason: viewpoints::StateReason::MergeControl,
+        };
+        for c in indexed.into_iter().flatten() {
+            b.work()?;
+            let cap = m.capabilities.get(c.capability.0).ok_or_else(invalid)?;
+            if !cap.commits {
+                continue;
+            }
+            b.copy(8)?;
+            rows.push(Effect {
+                effect: viewpoints::cap_name(m, c.capability)?,
+                call: m.site_name(c.binding),
+                status: Derived::Derived,
+                e: carrier(m, cap, b)?,
+                j: None,
+                u: None,
+                state_refusers: Vec::new(),
+                process_judgements: ProcessJudgements::NotDerived(underived()),
+                concentration: Concentration {
+                    single_actor: Truth::unknown(),
+                    single_person: Truth::unknown(),
+                    single_generation_root: Truth::unknown(),
+                    generation_roots: Roots::NotDerived(underived()),
+                    signal: "判定・拒否・実行の担い手と生成根の集中の兆候".into(),
+                    mechanism: "合流後の判定と拒否は未導出".into(),
+                    check: "モデル外の統制・原本参照・ログで確認する".into(),
+                },
+            });
+        }
+        return Ok((rows, Vec::new()));
+    }
     viewpoints::depth(b, 3)?;
     b.copy(m.process.bindings.len())?;
     let mut indexed = vec![None; m.process.bindings.len()];
-    collect(&m.process.body, &mut indexed, m, 0, b)?;
+    collect_shared(&m.process.body, &mut indexed, m, 0, b, shared)?;
     let calls = indexed
         .into_iter()
         .collect::<Option<Vec<_>>>()

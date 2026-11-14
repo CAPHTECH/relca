@@ -6,6 +6,8 @@ use serde_json::Value;
 use std::{fs, process::Command};
 #[path = "support/ledger_shape.rs"]
 mod ledger_shape;
+#[path = "support/syntax_cut_expectations.rs"]
+mod syntax_cut_expectations;
 
 fn rows() -> Vec<Value> {
     let v: Value = serde_json::from_str(include_str!("caseset_review_fixes.json")).unwrap();
@@ -67,14 +69,18 @@ fn old_syntax_outputs_match_the_pre_adr0035_binary_byte_for_byte() {
             spec.selection["requested"]["configuration"] = row["args"][2].clone();
         }
         assert_eq!(exit, row["exit"].as_i64().unwrap() as i32, "{name}");
+        let (current_stdout, current_stderr) = syntax_cut_expectations::current(
+            row["stdout"].as_str().unwrap(),
+            row["stderr"].as_str().unwrap(),
+        );
         assert_eq!(
             String::from_utf8(stdout).unwrap(),
-            ledger_shape::extend_raw(row["stdout"].as_str().unwrap(), &spec),
+            ledger_shape::extend_raw(&current_stdout, &spec),
             "{name} stdout"
         );
         assert_eq!(
             String::from_utf8(stderr).unwrap(),
-            row["stderr"].as_str().unwrap(),
+            current_stderr,
             "{name} stderr"
         );
     }

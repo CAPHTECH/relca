@@ -1,8 +1,8 @@
 {
   "verdict": "invalid",
   "bounds": { "truncated": null },
-  "cut": "undeclared",
-  "diagnostics": [{ "code": "E-SYN-0" }, { "code": "W-CUT-0" }],
+  "cut": "unresolved",
+  "diagnostics": [{ "code": "E-SYN-0" }],
   "properties": [],
   "terminals": []
 }

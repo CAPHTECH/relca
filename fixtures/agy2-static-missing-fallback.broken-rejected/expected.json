@@ -4,9 +4,6 @@
   "diagnostics": [
     {
       "code": "E-SYN-0"
-    },
-    {
-      "code": "W-CUT-0"
     }
   ]
 }

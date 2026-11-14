@@ -28,6 +28,32 @@ pub struct Model {
 }
 
 impl Model {
+    pub fn has_merges(&self) -> bool {
+        fn block(b: &Block) -> bool {
+            b.iter().any(|s| match &s.value {
+                Stmt::Merge { .. } => true,
+                Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => block(then_body) || block(else_body),
+                Stmt::Repeat { body, on_limit, .. } => block(body) || block(on_limit),
+                Stmt::Call(c) => c.recovery.as_deref().is_some_and(block),
+                _ => false,
+            })
+        }
+        self.items
+            .iter()
+            .any(|i| matches!(i, Item::Process(p) if block(&p.body)))
+    }
+
+    pub fn has_evidence_basis(&self) -> bool {
+        self.items.iter().any(|item| {
+            matches!(item, Item::Contract(c)
+            if c.clauses.iter().any(|c| matches!(c.value, ContractClause::EvidenceBasis { .. })))
+        })
+    }
+
     pub fn uses_priority(&self) -> bool {
         let limit = |q: &Spanned<AdmissionQueue>| {
             matches!(q.value.overflow, Overflow::WaitExternalPriority(_))
@@ -50,7 +76,12 @@ impl Model {
         fn contains(b: &Block) -> bool {
             b.iter().any(|s| match &s.value {
                 Stmt::WaitUntil(_) => true,
-                Stmt::If {
+                Stmt::Merge {
+                    then_body,
+                    else_body,
+                    ..
+                }
+                | Stmt::If {
                     then_body,
                     else_body,
                     ..
@@ -418,6 +449,11 @@ pub enum ContractClause {
     AuthorityBasis {
         target: CapabilityPath,
         authority: Ident,
+    },
+    EvidenceBasis {
+        direct: bool,
+        target: CapabilityPath,
+        sources: Vec<Path>,
     },
     Invariant {
         event: Event,
@@ -902,7 +938,12 @@ impl Model {
         fn block(b: &Block) -> bool {
             b.iter().any(|s| match &s.value {
                 Stmt::Repeat { .. } => true,
-                Stmt::If {
+                Stmt::Merge {
+                    then_body,
+                    else_body,
+                    ..
+                }
+                | Stmt::If {
                     then_body,
                     else_body,
                     ..
@@ -920,6 +961,13 @@ impl Model {
 /// Fork owns its mandatory immediately following join; branches are only calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    Merge {
+        binding: Ident,
+        condition: Spanned<Cond>,
+        then_body: Block,
+        else_body: Block,
+    },
+    Yield(Ident),
     Repeat {
         name: Ident,
         at_most: Integer,

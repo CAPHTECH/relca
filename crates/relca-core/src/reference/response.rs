@@ -183,7 +183,9 @@ pub(super) fn visible_values(
             Occurrence::Channel(r) if r.observation == crate::ast::Receipt::Delivered => {
                 values[r.binding.0] = Some(r.actual)
             }
-            Occurrence::AdoptResponse(id, v) => values[id.0] = Some(*v),
+            Occurrence::Merged(id, _, v, _) | Occurrence::AdoptResponse(id, v) => {
+                values[id.0] = Some(*v)
+            }
             _ => {}
         }
     }

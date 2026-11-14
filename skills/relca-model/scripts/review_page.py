@@ -478,6 +478,19 @@ def parse_block(src, toks):
             i += 1
             continue
         line = src.line_of_char(t.start)
+        statement_start = i
+        head = []
+        for k in range(i, n):
+            if toks[k].kind != "nl":
+                head.append((k, toks[k]))
+                if len(head) == 3:
+                    break
+        merge_binding = None
+        if (len(head) == 3 and head[0][1].kind == "word" and
+                head[1][1].text == "=" and head[2][1].text == "if"):
+            merge_binding = t.text
+            i = head[2][0]
+            t = toks[i]
         if t.text == "repeat" and i + 1 < n and toks[i + 1].text != "=":
             stmt, i = parse_repeat(src, toks, i)
             stmts.append(stmt)
@@ -512,10 +525,22 @@ def parse_block(src, toks):
                     k = n
             else:
                 else_stmts = []
-            stmts.append({
-                "kind": "if", "cond": cond, "line": line,
-                "then": parse_block(src, then_body), "else": else_stmts,
-            })
+            then_stmts = parse_block(src, then_body)
+            st = {"kind": "merge" if merge_binding else "if", "cond": cond, "line": line,
+                  "then": then_stmts, "else": else_stmts}
+            if merge_binding:
+                st.update(binding=merge_binding, text=src.slice(toks[statement_start:k]))
+                st["span"] = {"start": len(src.text[:toks[statement_start].start].encode("utf-8")),
+                              "end": len(src.text[:toks[min(k, n) - 1].end].encode("utf-8"))}
+                for body in (then_stmts, else_stmts):
+                    for sub in body:
+                        if sub["kind"] == "yield":
+                            sub["binding"] = merge_binding
+                if (any(not body or body[-1]["kind"] not in ("yield", "end") or
+                        any(s["kind"] == "yield" for s in body[:-1]) for body in (then_stmts, else_stmts))
+                        or all(body and body[-1]["kind"] == "end" for body in (then_stmts, else_stmts))):
+                    st["kind"], st["reason"] = "rejected_merge", "枝の末尾に yield または end が必要。少なくとも一方は yield"
+            stmts.append(st)
             i = k
             continue
         if t.text == "fork":
@@ -637,6 +662,11 @@ def classify_stmt(src, part, line):
     if not words:
         return {"kind": "unknown", "text": text, "line": line}
     w0 = words[0].text
+    if w0 == "yield" and len(words) == 2 and words[1].kind == "word":
+        return {"kind": "yield", "source": words[1].text, "line": line, "text": text}
+    if (w0 == "yield" and len(words) == 4 and words[1].kind == "word"
+            and words[2].text == "." and words[3].kind == "word"):
+        return {"kind": "yield", "source": words[1].text + "." + words[3].text, "line": line, "text": text}
     if w0 in ("again", "leave") and len(words) == 1:
         return {"kind": w0, "text": text, "line": line}
     if w0 == "end" and len(words) >= 2:
@@ -671,7 +701,7 @@ def flatten_steps(stmts, conds=None, out=None, branch=None):
     conds = conds or []
     out = [] if out is None else out
     for s in stmts:
-        if s["kind"] == "if":
+        if s["kind"] in ("if", "merge"):
             out.append(dict(s, conds=list(conds), branch=branch))
             flatten_steps(s["then"], conds + ["%s のとき" % s["cond"]], out, branch)
             flatten_steps(s["else"], conds + ["%s でないとき" % s["cond"]], out, branch)
@@ -735,10 +765,14 @@ def mermaid_flow(stmts, executors_of):
                 j = node(s["text"], "stadium")
                 connect(pend, j)
                 pend = [(j, None)]
-            elif k == "if":
-                d = node(s["cond"], "diamond")
+            elif k in ("if", "merge"):
+                d = node((s["binding"] + " = if " if k == "merge" else "") + s["cond"], "diamond")
                 connect(pend, d)
                 pend = build(s["then"], [(d, "はい")], loop) + build(s["else"], [(d, "いいえ")], loop)
+            elif k == "yield":
+                y = node("yield %s → %s(値の複写。Task なし)" % (s["source"], s.get("binding", "?")), "stadium")
+                connect(pend, y)
+                pend = [(y, None)]
             elif k == "repeat":
                 entry = node(repeat_label(s), "stadium")
                 body = node("body %s(初回は1回目)" % s["name"], "stadium")
@@ -770,7 +804,7 @@ def mermaid_flow(stmts, executors_of):
                 w = node(s["text"])
                 connect(pend, w)
                 pend = [(w, None)]
-            elif k == "rejected_repeat":
+            elif k in ("rejected_repeat", "rejected_merge"):
                 u = node("Relca が受け付けない形: %s\n%s" % (s["reason"], s["text"]), cls="unknown")
                 connect(pend, u)
                 pend = []
@@ -1235,21 +1269,25 @@ class Page:
                 self.unv(origin, "plans", "unsupported", "案が一つも無い")
         # Cut
         diags = [d for d in as_list(data.get("diagnostics")) if isinstance(d, dict)]
-        parse_err = [d for d in diags if d.get("severity") == "error"
-                     and str(d.get("code", "")).startswith(("U-SYN", "E-SYN"))]
         if kind in ("main", "simulate", "plan", "mutate_original"):
             cut = data.get("cut")
-            if parse_err:
-                code = str(parse_err[0].get("code"))
-                msg = "%s: %s" % (code, parse_err[0].get("message"))
-                self.unv(origin, "Cut", "unsupported" if code.startswith("U-") else "invalid",
-                         "モデルの parse に失敗した(%s)。Cut の有無は判定できていない(relca はこのとき W-CUT-0 も出す)" % msg)
-                self.alert("error", "%s: モデルの parse に失敗した(%s)" % (origin, short(msg, 160)))
-            elif cut == "undeclared":
-                self.unv(origin, "Cut", "undeclared", "Cut が宣言されていない(W-CUT-0)。何をモデルから外したか分からない")
-                self.alert("error", "%s: Cut が宣言されていない(W-CUT-0)。exit 0 でも結論の範囲が不明" % origin)
+            model = data.get("model")
+            cut_warning = any(d.get("code") == "W-CUT-0" for d in diags)
+            warning_note = "diagnostics に W-CUT-0 がある" if cut_warning else "diagnostics に W-CUT-0 は無い"
+            # SYN codes can also originate in lower. Only report metadata
+            # establishes whether parsing completed; the code/message is detail.
+            if cut == "undeclared":
+                self.unv(origin, "Cut", "undeclared", "Cut が宣言されていない(cut: undeclared)。何をモデルから外したか分からない。%s" % warning_note)
+                self.alert("error", "%s: Cut が宣言されていない(cut: undeclared)。exit 0 でも結論の範囲が不明" % origin)
+            elif (cut == "unresolved" and isinstance(model, dict) and "name" in model
+                  and model["name"] is None and isinstance(model.get("sha256"), str)):
+                msg = "; ".join("%s: %s" % (d.get("code"), d.get("message"))
+                                for d in diags if d.get("severity") == "error")
+                self.unv(origin, "Cut", v if v in UNVERIFIED else "unresolved",
+                         "モデルの parse に失敗した(model.name は null、入力hashあり)。Cut の有無は判定できていない(cut: unresolved)。%s。%s" % (warning_note, msg))
+                self.alert("error", "%s: モデルの parse に失敗した(model.name は null、入力hashあり)。%s" % (origin, short(msg, 160)))
             elif isinstance(cut, str):
-                self.unv(origin, "Cut", cut, "Cut を解決できていない。モデルが通っていない可能性(%s)" % self._reason_of(data))
+                self.unv(origin, "Cut", cut, "Cut を解決できていない。モデルが通っていない可能性(%s)。%s" % (self._reason_of(data), warning_note))
             elif isinstance(cut, dict):
                 for k in ("exclude", "defer"):
                     for e in as_list(cut.get(k)):
@@ -1257,6 +1295,8 @@ class Page:
                             self.alert("warn", "%s: Cut の %s %s に loses(失うもの)が無い" % (origin, k, short(get(e, "target"), 60)))
             else:
                 self.unv(origin, "Cut", "unsupported", "cut の欄が無い・読めない")
+            if cut_warning:
+                self.alert("error", "%s: W-CUT-0: Cut が宣言されていないという診断がある(cut: %s)" % (origin, short(cut, 80)))
             # 上限
             b = data.get("bounds")
             scen = get(data, "ledger", "execution", "selection", "effective", "scenario", "value")
@@ -1447,15 +1487,26 @@ class Page:
         errors = [d for d in as_list(get(data, "diagnostics")) if get(d, "severity") == "error"]
         loop_errors = [d for d in errors if any(w in str(get(d, "message")) for w in
                       ("loop", "iteration", "expected on_limit", "expected at_most"))]
+        merge_errors = [d for d in errors if "merge_" in str(get(d, "message"))]
 
         def mark_rejected(block):
             for st in block:
+                span = st.get("span", {})
+                local_errors = [d for d in errors if isinstance(get(d, "span", "start"), int)
+                                and span.get("start", -1) <= get(d, "span", "start") < span.get("end", -1)] if span else []
                 if loop_errors and (st["kind"] == "repeat" or (st["kind"] == "unknown" and
                         any(t.kind == "word" and t.text == "repeat" for t in lex(st["text"])))):
                     st["kind"] = "rejected_repeat"
                     st.setdefault("name", "?")
                     st["reason"] = "; ".join(str(get(d, "message")) for d in loop_errors)
-                elif st["kind"] == "if":
+                elif (merge_errors or local_errors) and st["kind"] == "merge":
+                    st["kind"] = "rejected_merge"
+                    st["reason"] = "; ".join(str(get(d, "message")) for d in (local_errors or merge_errors))
+                elif merge_errors and st["kind"] == "rejected_merge":
+                    st["reason"] = "; ".join(str(get(d, "message")) for d in merge_errors)
+                elif merge_errors and st["kind"] == "yield" and "binding" not in st:
+                    st.update(kind="rejected_merge", binding="?", reason="; ".join(str(get(d, "message")) for d in merge_errors))
+                elif st["kind"] in ("if", "merge"):
                     mark_rejected(st["then"])
                     mark_rejected(st["else"])
                 elif st["kind"] == "fork":
@@ -1476,6 +1527,10 @@ class Page:
                 rows.append([str(no), "<b>%s</b>" % esc(s["actor"]), esc(who(s["actor"])),
                              "<code>%s.%s(%s)</code>" % (esc(s["actor"]), esc(s["capability"]), esc(s["args"])),
                              "<code>%s</code>" % esc(s["binding"]), cond, str(s["line"])])
+            elif k == "merge":
+                rows.append(["", "値を返す分岐", "", "<code>%s = if %s</code>" % (esc(s["binding"]), esc(s["cond"])), esc(s["binding"]), cond, str(s["line"])])
+            elif k == "yield":
+                rows.append(["", "値の複写(Task なし)", "", "<code>yield %s</code>" % esc(s["source"]), esc(s.get("binding", "?")), cond, str(s["line"])])
             elif k == "if":
                 rows.append(["", "分岐", "", "<code>if %s</code>" % esc(s["cond"]), "", cond, str(s["line"])])
             elif k == "end":
@@ -1485,8 +1540,8 @@ class Page:
             elif k in ("again", "leave"):
                 desc = ("次の回へ。最後の回なら on_limit(gap なし)" if k == "again" else "繰り返しの後へ")
                 rows.append(["", esc(k), "", "<code>%s</code>: %s" % (esc(k), esc(desc)), "", cond, str(s["line"])])
-            elif k == "rejected_repeat":
-                self.unv(title, "repeat %s" % s["name"], "unsupported", s["reason"])
+            elif k in ("rejected_repeat", "rejected_merge"):
+                self.unv(title, ("repeat %s" % s["name"]) if k == "rejected_repeat" else "merge %s" % s["binding"], "unsupported", s["reason"])
                 rows.append(["", '<span class="badge warn">Relca が受け付けない形</span>', "",
                              "<code>%s</code><br>%s" % (esc(s["text"]), esc(s["reason"])), "", cond, str(s["line"])])
             elif k in ("fork", "join", "wait"):
@@ -2439,12 +2494,14 @@ class Page:
         for s in as_list(cx.get("steps")):
             if not isinstance(s, dict):
                 continue
-            if not (s.get("actor") or s.get("violation")):
+            if not (s.get("actor") or s.get("violation") or s.get("kind") == "merged"):
                 continue
             where, text = self.loc(get(s, "location", "span"))
             mark = ' <span class="badge bad">違反</span>' if s.get("violation") else ""
             who = "%s.%s" % (s.get("actor"), s.get("capability")) if s.get("actor") else "—"
             res = esc(s.get("result") or "—")
+            if s.get("kind") == "merged":
+                who = "%s ← %s(Task なし)" % (s.get("binding"), s.get("source"))
             if s.get("observed_receipt") == "unknown" and s.get("result") is None:
                 res = "未受信(応答 unknown)"
             rows.append([esc(s.get("index")), esc(s.get("time")), esc(s.get("case_id")), esc(s.get("kind")) + mark,
@@ -2453,10 +2510,46 @@ class Page:
         where, text = self.loc(get(cx, "context_location", "span"))
         head = ('<h4>反例: <code>%s</code>(状態 %s、遷移 %s 本)</h4>'
                 % (esc(cx.get("id")), esc(cx.get("status")), esc(cx.get("transition_count"))))
-        return (head + '<p class="note">一つの例であり、原因ではない。Actor の関わる段と違反の段だけを出す。'
+        return (head + '<p class="note">一つの例であり、原因ではない。Actor の関わる段、値の合流、違反の段を出す。'
                 '文脈の位置 %s <code>%s</code></p>' % (esc(where), esc(short(text, 100)))
                 + self.table(["#", "時刻", "案件", "事象", "操作", "実行者", "結果(呼出し元が観測)", "行:列", "source"], rows)
-                + self.guarded("反例の応答", lambda: self._response_steps_html(cx)))
+                + self.guarded("反例の応答", lambda: self._response_steps_html(cx))
+                + self.guarded("根拠源の証跡", lambda: self._evidence_html(cx)))
+
+    def _evidence_html(self, cx):
+        is_basis = str(cx.get("id", "")).endswith(" evidence_basis")
+        if "evidence" not in cx:
+            if is_basis and cx.get("status") == "verified":
+                raise ValueError("検証済みの根拠契約の反例に evidence が無い")
+            return ""
+        evidence = cx["evidence"]
+        keys = {"binding", "actor", "capability", "required", "sources", "missing", "excluded_edges"}
+        if not is_basis or cx.get("status") != "verified" or not isinstance(evidence, dict) or set(evidence) != keys:
+            raise ValueError("evidence の種類・状態・鍵が対応範囲外")
+        for key in ("binding", "actor", "capability"):
+            if not isinstance(evidence[key], str) or not evidence[key].strip():
+                raise ValueError("evidence.%s は空でない文字列が必要" % key)
+        steps = cx.get("steps")
+        if (not isinstance(steps, list) or not steps or not isinstance(steps[-1], dict)
+                or steps[-1].get("kind") != "finish"
+                or any(steps[-1].get(key) != evidence[key] for key in ("binding", "actor", "capability"))):
+            raise ValueError("evidence の呼出しが反例の最後の Finish と一致しない")
+        for key in ("required", "sources", "missing", "excluded_edges"):
+            values = evidence[key]
+            if (not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values)
+                    or values != sorted(set(values))):
+                raise ValueError("evidence.%s は重複のない昇順の文字列配列が必要" % key)
+        if (not evidence["required"] or not evidence["missing"]
+                or set(evidence["missing"]) != set(evidence["required"]) - set(evidence["sources"])):
+            raise ValueError("evidence の要求・数えた源・不足した源が整合しない")
+        rows = [["呼出し", "<code>%s = %s.%s</code>" % (
+            esc(evidence["binding"]), esc(evidence["actor"]), esc(evidence["capability"]))]]
+        for key, title in (("required", "要求した源"), ("sources", "照合に数えた源"),
+                           ("missing", "不足した源"), ("excluded_edges", "数えなかった観測変数の辺")):
+            rows.append([title, "<code>%s</code>" % esc(", ".join(evidence[key]) or "(なし)")])
+        return ("<h5>モデルの根拠源の証跡</h5>" + self.table(["項目", "値"], rows)
+                + '<p class="note">reads の宣言とデータの系譜の照合であり、実際の資料アクセスを観測したログではない。'
+                '数えなかった辺を、読んだことにして補完しない。</p>')
 
     def _compare_html(self, r):
         data = r.data

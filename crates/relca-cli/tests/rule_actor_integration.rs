@@ -93,7 +93,7 @@ fn inline_position(decides_first: bool) {
     assert_eq!(o.status.code(), Some(4));
     assert_eq!(v["verdict"], "unsupported");
     let ds = v["diagnostics"].as_array().unwrap();
-    assert_eq!(ds.len(), 2);
+    assert_eq!(ds.len(), 1);
     assert_eq!(ds[0]["code"], "U-SYN-0");
     assert_eq!(ds[0]["severity"], "error");
     assert_eq!(
@@ -103,10 +103,7 @@ fn inline_position(decides_first: bool) {
     assert!(ds[0]["span"].is_object());
     let start = s.find("enum { open, closed }").unwrap();
     assert_eq!(ds[0]["span"], json!({"start":start,"end":start+4}));
-    assert_eq!(
-        ds[1],
-        json!({"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared; exclusions are unknown","span":null})
-    );
+    assert_eq!(v["cut"], "unresolved");
 }
 #[test]
 fn inline_enum_decides_position_is_unsupported_and_exit_four() {

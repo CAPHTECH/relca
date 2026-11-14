@@ -14,6 +14,7 @@ fn effects(body: &ir::Block, m: &ir::Model, out: &mut BTreeSet<String>) {
     }
     for statement in body {
         match &statement.kind {
+            ir::Stmt::MergeCopy { .. } => panic!("merge control is outside this oracle"),
             ir::Stmt::LoopControl(_) => panic!("bounded repetition is outside this oracle"),
             ir::Stmt::Query(_, _)
             | ir::Stmt::ResolveEffect { .. }

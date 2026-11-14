@@ -267,6 +267,9 @@ pub(super) fn advance(
     }
     let value = value.ok_or("response completed without receipt or refusal")?;
     state.results[r.command.0] = Some(value);
+    if let Some(h) = &mut state.evidence {
+        h.adopt(r.command, binding);
+    }
     if again {
         state.pc = failure.ok_or("missing exhausted instruction")?;
     } else {

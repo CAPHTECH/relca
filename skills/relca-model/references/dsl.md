@@ -2,7 +2,7 @@
 
 根拠の印:
 
-- **[実]** `examples/invoice/*.relca` か `fixtures/*/model.relca` に実在し、relca がその例で期待どおりの exit を返す形。
+- **[実]** `examples/` か `fixtures/*/model.relca` に実在し、relca がその例で期待どおりの exit を返す形。
 - **[試]** `references/minimal.relca` か一時的なモデルで 1 回だけ回して確かめた形。1 回の観測であり、一般化しない。一時的なモデルの全文はこの資料には含めず、再実行できる入力を各節で案内する。
 - **[コ]** `crates/relca-core/src/syntax.rs` / `syntax/lexer.rs` を読んで確かめた形。回してはいない。
 - **[U]** 未確認。機能名だけから構文を推測せず、書く前に実装と fixture を照合して実行する。
@@ -76,9 +76,39 @@ Capability の中 [実]:
 `cancel cooperative ack_within 1min` / `cancel forbidden_after_start`、`atomic { if key in keys { result r } else { … } }`。
 
 - 正の所要時間を持つ Capability の Actor に容量も実行者も無いと invalid(`fixtures/serial-time.broken-missing-capacity/`)。
-- **判定として数えられる呼出しは、`case.id` 以外の引数を取るか、追加の読取りを持つものだけ**([構造の出力](../../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。`case.id` だけで追加の読取りも無い呼出しは判定に数えない。
+- **判定として数えられる呼出しは、`case.id` 以外の引数を取るか、他のcallが書いた観測値の読取りを持つものだけ**([構造の出力](../../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。sourceの`reads`だけでは判定に数えない。通常モデルではcommitの効果に関わるものが対象。
   `review()` のように引数なしだと、後ろの `if` で止めていても「止める判定なし」(W-RESP-2)になった [試]。申請を受け取る `review(claim)` にすると「全経路で止める」になった [試]。
   **引数は、その操作が実際にデータを受け取るときだけ書く。**警告を消すために引数を足さない。足すとモデルが業務と違うものになり、警告が示していたこと(判定が効果を止めていない)が隠れる。
+
+## 根拠源を求める契約 [実]
+
+```relca
+contract Basis { evidence_basis Clerk.match_po [Invoice,PurchaseOrder] }
+```
+
+[全文例](../../../examples/evidence-basis.relca)は check が satisfied / exit 0。
+`enter` の読む Invoice は引数 e を通じて、PurchaseOrder は match_po 自身の reads から届く。
+2操作が各1分で終わり、対象が正常に終わるのは時刻2分。
+[上流の読取りを外した対](../../../examples/evidence-basis-missing.relca)は violated / exit 1。
+
+- `evidence_basis direct Clerk.match_po [Invoice]` に置き換えると、引数の源を数えないため violated。
+- source Actor のみを要求でき、複数は全部を求める。空・重複・state・観測・潜在は不可。
+- 引数が受け取るのは正常終了して返った値の根拠。拒否のelse値・拒否応答の採用には、生産者のreadsを加えない。
+- 観測変数の reads は、同じ/外側のblockで先行し、必ず正常終了して最後の値を書く操作だけを数える。必ず上書きされる古い源は残さない。
+  if/forkの枝、requiresの拒否、任意の再送試行などのmay辺だけから届く要求は
+  `U-SEM-0 evidence_basis_conditional_snapshot`。別の要求源の確定欠落は violated のまま。
+- 条件式、requires、wait until、kernel_reads latent、given はデータの読取りに数えない。
+  引数の源は実際の呼出し引数から計算するので、readsに引数名を重ねても増えない。
+- 正常終了の無い対象は vacuous。計算切断は inconclusive。異議経路の対象はその性質だけ evidence_basis_contest_route でunsupportedとし、他の性質は残す。契約の追加を Agency や責務の補完に使わない。
+- Cutで除外したsourceの要求は、既存の範囲外Actor参照と同じE-CUT-1で静的に拒否する。
+- repeat は `loop_feature_combination`、縮退/recovery は `evidence_basis_feature_combination`、
+  compare/diff/sensitivity は `evidence_basis_unsupported_command` で拒否する。
+  conform は読取りを観測しないため U-LOG-1 の unsupported。
+
+`mutate --kinds evidence_missing` はこの行も検査に使い、全文例の2削除はどちらもdetected。
+original_access_removed が使うのは direct の行だけ。未検出を0件にするため全readsを転記しない。
+詳細な[構文と診断](../../../docs/guide/dsl.md#根拠源を求める契約)、
+[結果と証跡](results.md#根拠源の要求と証跡)を参照する。
 
 ## process
 
@@ -99,10 +129,40 @@ process Flow {
 | `fork NAME { 呼出し; … }` + `join all NAME` | [実] |
 | `join any NAME where result == V tie by [a, b] remaining cancel_then_drain if none -> END`(複数行に分けてよい) | [実](../../../fixtures/coop-cancel/) |
 | `if <条件> { … } else { … }`。`&&` と `||` の混在は括弧が要る | [実] / [コ] |
+| `ready = if r == fail { f = Office.fix(d); yield f } else { yield d }` | [試]。全入力は[合流の例](../../../examples/merge-if/model.relca) |
 | `end NAME` | [実] |
 | `wait 5min` | [実](../../../fixtures/) |
 | `repeat NAME at_most N [gap fixed DURATION] { ... } on_limit { ... }`。角括弧は省略可能部分で、入力には書かない | [試]。実行した全文は[繰り返しの例](../../../docs/guide/dsl.md#繰り返し) |
 | 条件に潜在変数(`Invoice.difficulty` 等)を書く | **E-POL-LATENT で invalid** [実](../../../examples/invoice/to-be-c.relca) |
+
+## 分岐した値の合流 [試]
+
+値を返す `if` の各枝の末尾を `yield 結果名` または `end 終端名` にする。
+`else` は必須で、両枝を `end` にしてはならない。入れ子も使える。
+全 `yield` 元は同じ型名で、枝末尾で確実に作成済みの呼出し結果か、先行する合流値に限る。
+後続の call 引数、process の `if`、後の `yield` から読める。
+wait until、guard、権限のscope、契約・性質・指標の式、kernelのgiven、通常の代入や数値の宣言は読取り位置ではない。
+静的に拒否し、既存codeのmessageに`merge_read_position`を付ける。
+合流はTask、時間、資源、乱数drawを増やさず、枝の書込みを保持する。
+
+通常のbindingも合流名もprocess内で重複できない。枝内の結果を後で直接読むには、
+続行するすべての経路で利用可能でなければならない。同名を両枝で宣言しても合流にはならない。
+合流は観測case欄への書込みではないので、その欄と同名にもできない。
+`yield = Office.write()` のように名前として使う形は変わらない。
+
+check・explain・simulate、指標・品質、複数案件に接続する。compare・diff・mutate・sensitivityは
+`U-SEM-0 merge_feature_combination`、conformは`U-LOG-1`で閉じる。
+契約・requires・joinのwhere・property・metricでの合流値の参照、contest・quantileとの併用、
+recovery handlerや縮退経路内の合流も未対応。
+repeatのbody・on_limit内は`loop_feature_combination`。
+repeatや応答喪失・再送・recoveryの公開結果をyieldする形も未対応である。
+合流前に固定した値を、その後のrepeatのcall引数に渡すことはできる。
+観測状態や定数のyieldは`merge_source_unsupported`、潜在は`E-POL-LATENT`。
+
+枝の閉鎖の違反は`E-CON-0`の`merge_fallthrough`、`merge_unreachable_after_yield`、
+`merge_no_continuing_branch`、`merge_yield_outside`。型名の不一致は`E-TYPE-0 merge_type_mismatch`。
+未定義の元は`E-NAME-0`、取消されうる元は従来の可用性の`U-SEM-0`で拒否する。
+[利用ガイド](../../../docs/guide/dsl.md#分岐した値を先へ渡す)に実行例と境界をまとめている。
 
 ## 上限つきの繰り返し [試]
 

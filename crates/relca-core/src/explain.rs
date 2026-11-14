@@ -43,6 +43,7 @@ pub enum Scope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
+    Merged,
     LoopControl,
     ReceiptQuery,
     ResolveEffect,
@@ -114,6 +115,8 @@ pub struct Omitted {
 pub struct Counterexample {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub degradation_routes: Vec<DegradationTrace>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<Evidence>,
     pub id: String,
     pub case_id: Option<u64>,
     pub status: ReplayStatus,
@@ -124,6 +127,17 @@ pub struct Counterexample {
     pub transition_count: Option<usize>,
     pub steps: Vec<Stage>,
     pub replay: ReplayResult,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Evidence {
+    pub binding: String,
+    pub actor: String,
+    pub capability: String,
+    pub required: Vec<String>,
+    pub sources: Vec<String>,
+    pub missing: Vec<String>,
+    pub excluded_edges: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -188,6 +202,10 @@ impl Location {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct Stage {
+    #[serde(skip)]
+    pub evidence_sources: Option<Vec<ir::ActorId>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub saved_key: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -709,12 +727,15 @@ fn add_counterexample(
         final_choice,
     )
     .err();
+    let mapped_evidence = evidence_for(model, id, &steps);
+    let evidence_failure = mapped_evidence.as_ref().err().copied();
     let reason = trace
         .failure
         .or(mapping_failure)
         .or(obligations_failure)
         .or(authority_mapping_failure)
         .or(state_mapping_failure)
+        .or(evidence_failure)
         .or_else(|| {
             if steps.is_empty() {
                 Some(ReplayReason::IllegalTransition)
@@ -783,6 +804,11 @@ fn add_counterexample(
         .collect();
     out.counterexamples.push(Counterexample {
         degradation_routes,
+        evidence: if reason.is_none() {
+            mapped_evidence.ok().flatten()
+        } else {
+            None
+        },
         id: id.into(),
         case_id,
         status,
@@ -794,6 +820,87 @@ fn add_counterexample(
         steps,
         replay: ReplayResult { status, reason },
     });
+}
+
+fn evidence_for(
+    model: &ir::Model,
+    id: &str,
+    steps: &[Stage],
+) -> Result<Option<Evidence>, ReplayReason> {
+    let Some(clause) = model
+        .contracts
+        .iter()
+        .enumerate()
+        .find_map(|(i, c)| (c.property_id(ir::ClauseId(i)) == id).then_some(c))
+    else {
+        return Ok(None);
+    };
+    let ir::ContractKind::EvidenceBasis {
+        capability,
+        sources: required,
+        calls,
+        ..
+    } = &clause.kind
+    else {
+        return Ok(None);
+    };
+    let last = steps.last().ok_or(ReplayReason::ViolationMismatch)?;
+    let cap = &model.capabilities[capability.0];
+    if last.kind != Kind::Finish
+        || last.capability.as_deref() != Some(cap.name.as_str())
+        || last.actor.as_deref() != Some(model.actors[cap.actor.0].name.as_str())
+    {
+        return Err(ReplayReason::ViolationMismatch);
+    }
+    let call = calls
+        .iter()
+        .find(|c| last.binding.as_deref() == Some(model.site_name(c.binding).as_str()))
+        .ok_or(ReplayReason::SourceMappingFailed)?;
+    let names = |ids: &[ir::ActorId]| -> Result<Vec<String>, ReplayReason> {
+        let mut names = ids
+            .iter()
+            .map(|s| {
+                model
+                    .actors
+                    .get(s.0)
+                    .map(|a| a.name.clone())
+                    .ok_or(ReplayReason::SourceMappingFailed)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        names.sort();
+        names.dedup();
+        Ok(names)
+    };
+    let actual = if matches!(
+        clause.kind,
+        ir::ContractKind::EvidenceBasis { direct: true, .. }
+    ) {
+        model.capabilities[capability.0].reads.clone()
+    } else {
+        last.evidence_sources
+            .clone()
+            .ok_or(ReplayReason::SourceMappingFailed)?
+    };
+    let missing: Vec<_> = required
+        .iter()
+        .filter(|s| !actual.contains(s))
+        .copied()
+        .collect();
+    if missing.is_empty() {
+        return Err(ReplayReason::ViolationMismatch);
+    }
+    let mut excluded_edges = call.excluded_edges.clone();
+    excluded_edges.sort();
+    excluded_edges.dedup();
+    Ok(Some(Evidence {
+        binding: model.site_name(call.binding),
+        actor: model.actors[cap.actor.0].name.clone(),
+        capability: cap.name.clone(),
+        required: names(required)?,
+        sources: names(&actual)?,
+        missing: names(&missing)?,
+        excluded_edges,
+    }))
 }
 
 pub(crate) fn recovery_evidence_id(case: u64, command: &str, binding: &str, at: u64) -> String {

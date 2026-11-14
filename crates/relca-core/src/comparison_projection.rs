@@ -681,7 +681,7 @@ pub(crate) fn validate_metrics(
     ) {
         for statement in block {
             match &statement.kind {
-                ir::Stmt::LoopControl(_) => {}
+                ir::Stmt::MergeCopy { .. } | ir::Stmt::LoopControl(_) => {}
                 ir::Stmt::Wait(_)
                 | ir::Stmt::WaitUntil(_)
                 | ir::Stmt::ResolveEffect { .. }

@@ -951,12 +951,38 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
             report: report::finite_driver(to_report, crate::engine::DEFAULT_STATE_BUDGET),
         },
     );
+    if crate::syntax::parse(src).is_ok_and(|m| m.has_merges()) {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "merge_feature_combination: merge diff projection is not connected".into(),
+            None,
+        );
+        result.finish();
+        result.verdict = Verdict::Unsupported;
+        return result;
+    }
     let (Some(from_model), Some(to_model)) = (from_model, to_model) else {
         if crate::syntax::parse(src).is_ok_and(|m| m.items.iter().any(|i| matches!(i, ast::Item::Actor(a) if a.items.iter().any(|f| matches!(f, ast::ActorItem::Decides(_)))))) {
             result.unchecked.push("rule".into());
         }
         return result;
     };
+    if crate::evidence_basis::present(&from_model.model)
+        || crate::evidence_basis::present(&to_model.model)
+    {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "evidence_basis_unsupported_command".into(),
+            None,
+        );
+        result.finish();
+        // The native side checks can establish violations, but no evidence
+        // comparison was performed. Retain those facts without making this
+        // unsupported command look like a supported, violated comparison.
+        result.verdict = Verdict::Unsupported;
+        result.seal();
+        return result;
+    }
     if from_model.model.has_loops() || to_model.model.has_loops() {
         result.diagnostic(
             diag::U_SEM_0,

@@ -193,9 +193,11 @@ pub enum Unit {
     Min,
 }
 
-/// ADR 0007: "undeclared" (with W-CUT-0, also when parsing failed),
-/// "unresolved" (a cut was written but static errors stopped resolution), or
-/// the resolved declaration. Conclusions hold only under the stated Cut.
+/// "undeclared" (with W-CUT-0, only after parsing confirmed no Cut),
+/// "unresolved" (parsing did not complete, or a written Cut could not be
+/// resolved), or the resolved declaration. Conclusions hold only under the Cut.
+/// Exception: conformance also retains "unresolved" on a lowering refusal
+/// after a successful parse. If that AST has no Cut, W-CUT-0 is still emitted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Cut {
@@ -212,6 +214,14 @@ pub enum CutStatus {
 
 impl Cut {
     pub const UNDECLARED: Cut = Cut::Status(CutStatus::Undeclared);
+
+    fn parsed(model: &ast::Model) -> Self {
+        if model.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
+            Self::Status(CutStatus::Unresolved)
+        } else {
+            Self::UNDECLARED
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -500,9 +510,7 @@ pub(crate) fn sensitivity_preflight_failure(
     r.ledger.requested(configuration, scenario);
     if let Ok(ast) = syntax::parse(src) {
         r.model.name = Some(ast.name.value.clone());
-        if ast.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
-            r.cut = Cut::Status(CutStatus::Unresolved);
-        }
+        r.cut = Cut::parsed(&ast);
     }
     if let Some(m) = model
         && crate::actor_table::validate(m).is_ok()
@@ -1154,9 +1162,7 @@ fn simulate_pipeline_raw(
         Err(ds) => return simulation_empty(finish(base, ds)),
     };
     base.model.name = Some(ast.name.value.clone());
-    if ast.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
-        base.cut = Cut::Status(CutStatus::Unresolved);
-    }
+    base.cut = Cut::parsed(&ast);
     if scenario.is_none()
         && !ast
             .items
@@ -1995,9 +2001,7 @@ pub(crate) fn check_selected_scenario_using(
         // cohort. Legacy syntax retains its historical omitted field.
         report.case_outcomes = Some(Vec::new());
     }
-    if ast.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
-        report.cut = Cut::Status(CutStatus::Unresolved);
-    }
+    report.cut = Cut::parsed(&ast);
     let selected = match lower::lower_configuration_with_scenario(&ast, configuration, scenario) {
         Ok(selected) => selected,
         Err(diagnostics) => return (finish(report, diagnostics), None),
@@ -2076,9 +2080,7 @@ fn check_with(
         Err(diagnostics) => return finish(report, diagnostics),
     };
     report.model.name = Some(ast.name.value.clone());
-    if ast.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
-        report.cut = Cut::Status(CutStatus::Unresolved);
-    }
+    report.cut = Cut::parsed(&ast);
     if ast.has_condition_wait()
         || ast.items.iter().any(|i| {
             matches!(
@@ -2222,7 +2224,7 @@ fn empty_report(src: &str) -> Report {
             name: None,
             sha256: Some(sha256),
         },
-        cut: Cut::UNDECLARED,
+        cut: Cut::Status(CutStatus::Unresolved),
         assumptions: Vec::new(),
         diagnostics: Vec::new(),
         bounds: Bounds {
@@ -2920,7 +2922,7 @@ fn degradation_cut_verdict(
 
 fn finish(mut report: Report, diagnostics: Vec<diag::Diagnostic>) -> Report {
     report.diagnostics.extend(diagnostics);
-    // W-CUT-0 exactly once when undeclared, never when a cut was written.
+    // W-CUT-0 exactly once when parsing confirmed no Cut, never when unresolved.
     let undeclared = report.cut == Cut::UNDECLARED;
     let mut seen_cut = false;
     report.diagnostics.retain(|diagnostic| {
@@ -3359,14 +3361,14 @@ mod tests {
             assert!(report.properties.is_empty());
             assert!(report.terminals.is_empty());
             assert_eq!(report.bounds.truncated, None);
-            assert_eq!(report.cut, Cut::UNDECLARED);
+            assert_eq!(report.cut, Cut::Status(CutStatus::Unresolved));
             assert_eq!(
                 report
                     .diagnostics
                     .iter()
                     .filter(|d| d.code == diag::W_CUT_0)
                     .count(),
-                1
+                0
             );
         }
     }

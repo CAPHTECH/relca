@@ -1099,6 +1099,8 @@ fn global_instant<'a>(
                     .unwrap_or_else(|| vec![None])
                 {
                     let s = Stage {
+                        source: None,
+                        evidence_sources: None,
                         saved_key: None,
                         evidence_ref: None,
                         command: None,

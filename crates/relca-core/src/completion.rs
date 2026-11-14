@@ -410,7 +410,7 @@ impl Observed {
                 let mut path = prefix.to_vec();
                 path.push(i);
                 match &s.kind {
-                    ir::Stmt::LoopControl(_) => {}
+                    ir::Stmt::MergeCopy { .. } | ir::Stmt::LoopControl(_) => {}
                     ir::Stmt::Wait(_)
                     | ir::Stmt::WaitUntil(_)
                     | ir::Stmt::ResolveEffect { .. }

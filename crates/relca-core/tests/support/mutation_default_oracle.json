@@ -1071,9 +1071,6 @@
         "diagnostics": [
           {
             "code": "U-SYN-0"
-          },
-          {
-            "code": "W-CUT-0"
           }
         ]
       }
@@ -1094,7 +1091,7 @@
     ],
     "terminals": {},
     "old_sites": null,
-    "calculation": "T09: retry semantics absent, U-SYN-0 blocks six kinds. Parsing fails before an AST is available, so report::check_with retains empty_report Cut=undeclared and finish adds W-CUT-0 (report.rs:1178–1185,1511–1526). The warning is not mutation detection.",
+    "calculation": "T09: retry semantics absent, U-SYN-0 blocks six kinds. Parsing fails before an AST is available, so Cut is unresolved and W-CUT-0 is absent under the 2026-11-14 decision. The syntax refusal is not mutation detection.",
     "hand_edits": []
   },
   "mut2-limit": {

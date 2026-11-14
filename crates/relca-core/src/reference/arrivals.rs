@@ -2190,6 +2190,19 @@ impl<'a> Tree<'a> {
         let statement = &block[0];
         *block = &block[1..];
         match &statement.kind {
+            Stmt::MergeCopy { binding, source } => {
+                let value = c.frame.merge_value(self.m, *source)?;
+                require(!c.frame.trace.iter().any(
+                    |o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding),
+                ))?;
+                self.record(
+                    &mut next,
+                    k,
+                    Occurrence::Merged(*binding, *source, value, statement.span),
+                    None,
+                    false,
+                )?;
+            }
             Stmt::LoopControl(control) => {
                 for (id, x) in &control.updates {
                     c.frame.state_values[id.0] = *x;
@@ -2584,6 +2597,17 @@ impl<'a> Tree<'a> {
                 }
                 *block = &block[1..];
                 match &statement.kind {
+                    Stmt::MergeCopy { binding, source } => {
+                        let value = c.frame.merge_value(self.m, *source)?;
+                        require(!c.frame.trace.iter().any(|o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding)))?;
+                        self.record(
+                            &mut w,
+                            k,
+                            Occurrence::Merged(*binding, *source, value, statement.span),
+                            None,
+                            false,
+                        )?;
+                    }
                     Stmt::LoopControl(control) => {
                         for (id, x) in &control.updates {
                             c.frame.state_values[id.0] = *x;
@@ -3332,6 +3356,11 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
                     }
                     Property::Contract(id) if tree.cases[k].contract_facts[id.0].1 => {
                         Verdict::Violated
+                    }
+                    Property::Contract(id)
+                        if tree.cases[k].statistics.evidence_unsupported.contains(&id) =>
+                    {
+                        Verdict::Unsupported
                     }
                     Property::StateInRange if !tree.cases[k].statistics.ranges.is_empty() => {
                         Verdict::Violated

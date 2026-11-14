@@ -635,8 +635,7 @@
   {
     "name": "agy2-static-actor.broken-rejected",
     "codes": [
-      "U-SYN-0",
-      "W-CUT-0"
+      "U-SYN-0"
     ],
     "invocation": {
       "command": "check",
@@ -667,8 +666,7 @@
   {
     "name": "agy2-static-path.broken-rejected",
     "codes": [
-      "U-SYN-0",
-      "W-CUT-0"
+      "U-SYN-0"
     ],
     "invocation": {
       "command": "check",
@@ -699,8 +697,7 @@
   {
     "name": "agy2-static-action.broken-rejected",
     "codes": [
-      "E-SYN-0",
-      "W-CUT-0"
+      "E-SYN-0"
     ],
     "invocation": {
       "command": "check",
@@ -731,8 +728,7 @@
   {
     "name": "agy2-static-missing-fallback.broken-rejected",
     "codes": [
-      "E-SYN-0",
-      "W-CUT-0"
+      "E-SYN-0"
     ],
     "invocation": {
       "command": "check",

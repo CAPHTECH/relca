@@ -30,6 +30,15 @@ pub(super) fn declarations(model: &ast::Model) -> Vec<Feature> {
     fn block(b: &ast::Block, p: &str, rows: &mut Vec<Feature>) {
         for s in b {
             match &s.value {
+                ast::Stmt::Merge {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    block(then_body, p, rows);
+                    block(else_body, p, rows);
+                }
+                ast::Stmt::Yield(_) => {}
                 ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {
                     rows.push(Feature {
                         item: format!("loop:process:{p}:repeat"),

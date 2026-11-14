@@ -101,7 +101,12 @@ impl Lower {
                         walk(l, body, names);
                         walk(l, on_limit, names);
                     }
-                    ast::Stmt::If {
+                    ast::Stmt::Merge {
+                        then_body,
+                        else_body,
+                        ..
+                    }
+                    | ast::Stmt::If {
                         then_body,
                         else_body,
                         ..

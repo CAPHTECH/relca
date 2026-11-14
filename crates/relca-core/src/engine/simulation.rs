@@ -972,6 +972,7 @@ mod simulation_tests {
     fn s_key_occurrences_two_task_hazards_order_revisit_and_final_one() {
         let mut m = fixture("sim-hazard");
         m.process.bindings.push(ir::Binding {
+            merge: None,
             repetition: None,
             name: "b".into(),
             ty: m.process.bindings[0].ty,

@@ -1,0 +1,22 @@
+model EvidenceBasis version "0.2" {
+  type V = enum { pass }
+  actor Invoice { source document }
+  actor PurchaseOrder { source record }
+  actor Clerk { capacity 1
+    capability enter() -> V {
+      reads [Invoice]; duration fixed 1min; result nondet { pass }
+    }
+    capability match_po(e:V) -> V {
+      reads [PurchaseOrder]; duration fixed 1min; result nondet { pass }
+    }
+  }
+  cut S { include [Invoice,PurchaseOrder,Clerk] }
+  process Main {
+    e = Clerk.enter()
+    p = Clerk.match_po(e)
+    end done
+  }
+  bounds { cases 1; live_tasks 1; clock 5min }
+  verify reachable end.done
+  contract Basis { evidence_basis Clerk.match_po [Invoice,PurchaseOrder] }
+}

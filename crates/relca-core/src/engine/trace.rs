@@ -31,6 +31,7 @@ pub(crate) struct Capture {
     recorded_edges: usize,
     pub(super) spans: Vec<diag::Span>,
     loop_controls: BTreeSet<usize>,
+    merge_copies: BTreeMap<usize, (ir::BindingId, ir::BindingId)>,
     calls: BTreeMap<ir::BindingId, ir::Call>,
     pub current: usize,
     pub initial: Option<Stage>,
@@ -55,9 +56,13 @@ impl Capture {
             spans: &mut Vec<diag::Span>,
             calls: &mut BTreeMap<ir::BindingId, ir::Call>,
             loop_controls: &mut BTreeSet<usize>,
+            merge_copies: &mut BTreeMap<usize, (ir::BindingId, ir::BindingId)>,
         ) {
             for stmt in block.iter().rev() {
                 match &stmt.kind {
+                    ir::Stmt::MergeCopy { binding, source } => {
+                        merge_copies.insert(spans.len(), (*binding, *source));
+                    }
                     ir::Stmt::LoopControl(_) => {
                         loop_controls.insert(spans.len());
                     }
@@ -66,8 +71,8 @@ impl Capture {
                         else_body,
                         ..
                     } => {
-                        walk(then_body, spans, calls, loop_controls);
-                        walk(else_body, spans, calls, loop_controls);
+                        walk(then_body, spans, calls, loop_controls, merge_copies);
+                        walk(else_body, spans, calls, loop_controls, merge_copies);
                     }
                     ir::Stmt::Response(call, r) => {
                         calls.insert(call.binding, call.clone());
@@ -78,7 +83,7 @@ impl Capture {
                             spans.push(r.retry_span.unwrap_or(stmt.span));
                         }
                         if let Some(body) = &r.recovery {
-                            walk(body, spans, calls, loop_controls);
+                            walk(body, spans, calls, loop_controls, merge_copies);
                         }
                         spans.push(stmt.span);
                     }
@@ -102,11 +107,13 @@ impl Capture {
         let mut spans = vec![model.process.span];
         let mut calls = BTreeMap::new();
         let mut loop_controls = BTreeSet::new();
+        let mut merge_copies = BTreeMap::new();
         walk(
             &model.process.body,
             &mut spans,
             &mut calls,
             &mut loop_controls,
+            &mut merge_copies,
         );
         let arrival_span = crate::syntax::parse(src).ok().and_then(|ast| {
             ast.items.into_iter().find_map(|item| match item {
@@ -120,6 +127,7 @@ impl Capture {
             recorded_edges: 0,
             spans,
             loop_controls,
+            merge_copies,
             calls,
             current: 0,
             initial: None,
@@ -185,6 +193,8 @@ impl Capture {
         kind: Kind,
     ) -> Result<Stage, ReplayReason> {
         Ok(Stage {
+            source: None,
+            evidence_sources: None,
             saved_key: None,
             evidence_ref: None,
             command: None,
@@ -505,6 +515,13 @@ impl Capture {
         };
         stage.location = self.location(span)?;
         stage.binding = Some(m.site_name(t.binding));
+        if kind == Kind::Finish {
+            stage.evidence_sources = s
+                .evidence
+                .as_ref()
+                .and_then(|h| h.values.get(&t.binding))
+                .map(|v| v.roots.iter().copied().collect());
+        }
         if let Some(r) = m.response_attempt(t.binding) {
             stage.command = Some(m.site_name(r.command));
             stage.attempt = Some(r.attempt);
@@ -767,6 +784,25 @@ impl Capture {
                     },
                 );
             }
+        }
+        if a.pc != b.pc
+            && let Some(&(binding, source)) = self.merge_copies.get(&a.pc)
+        {
+            let mut stage = self.stage(b, m, Kind::Merged)?;
+            stage.binding = Some(m.site_name(binding));
+            stage.source = Some(m.site_name(source));
+            let value = b
+                .results
+                .get(binding.0)
+                .copied()
+                .flatten()
+                .ok_or(ReplayReason::StateMismatch)?;
+            stage.result = m.types[m.process.bindings[binding.0].ty.0]
+                .members
+                .get(value.0)
+                .cloned();
+            stage.location = self.location(self.spans[a.pc])?;
+            return Ok(stage);
         }
         let kind = if a.adopted != b.adopted && b.adopted.is_some() {
             Kind::Adopt

@@ -580,6 +580,17 @@ fn mutate_using_raw(
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
+    if syntax::parse(src).is_ok_and(|ast| ast.has_merges()) {
+        r.verdict = Verdict::Unsupported;
+        r.run.reason = Some("merge_feature_combination");
+        r.diagnostics.push(diag::Diagnostic {
+            code: diag::U_SEM_0.into(),
+            severity: diag::Severity::Error,
+            message: "merge_feature_combination: merge mutation sites are not connected".into(),
+            span: None,
+        });
+        return r;
+    }
     if syntax::parse(src).is_ok_and(|ast| ast.has_repetition()) {
         r.verdict = Verdict::Unsupported;
         r.run.reason = Some("loop_feature_combination");
@@ -627,6 +638,18 @@ fn mutate_using_raw(
     // blocked by the original check, just as it does for mutant execution.
     let context = lower::lower_with_selection(&ast, configuration, scenario)
         .expect("a decidable check already lowered this selection");
+    let direct_basis: BTreeSet<_> = context
+        .contracts
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| matches!(c.kind, ir::ContractKind::EvidenceBasis { direct: true, .. }))
+        .map(|(i, c)| c.property_id(ir::ClauseId(i)))
+        .collect();
+    if !direct_basis.is_empty() {
+        r.mutations[9]
+            .assigned_checks
+            .push("contracts.evidence_basis.direct");
+    }
     let process = scoped_process(options).then_some(context.process.name.as_str());
     let reads = read_sites(src, &ast, process);
     let guards = guard_sites(src, &ast, process);
@@ -700,7 +723,7 @@ fn mutate_using_raw(
                         &consumer.binding,
                         &consumer.capability,
                     ),
-                    _ => compare(i, &original, &report),
+                    _ => compare_with_basis(i, &original, &report, &direct_basis),
                 };
                 m.result = comparison.result;
                 m.reason = comparison.reason;
@@ -827,6 +850,7 @@ fn no_time_elapse(context: &ir::Model, original: &report::Report) -> bool {
 
 fn has_time_wait(block: &ir::Block) -> bool {
     block.iter().any(|s| match &s.kind {
+        ir::Stmt::MergeCopy { .. } => false,
         ir::Stmt::Wait(tick) => *tick > 0,
         ir::Stmt::WaitUntil(_) => true,
         ir::Stmt::If {
@@ -1361,6 +1385,7 @@ fn site(src: &str, span: diag::Span) -> Site {
 fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
     for stmt in block {
         match &stmt.value {
+            ast::Stmt::Merge { .. } | ast::Stmt::Yield(_) => {}
             ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {}
             ast::Stmt::Call(c) => {
                 out.push(c);
@@ -2132,7 +2157,17 @@ fn comparison_failure(
         other: vec![],
     })
 }
+#[cfg(test)]
 fn compare(kind: usize, before: &report::Report, after: &report::Report) -> Comparison {
+    compare_with_basis(kind, before, after, &BTreeSet::new())
+}
+
+fn compare_with_basis(
+    kind: usize,
+    before: &report::Report,
+    after: &report::Report,
+    direct_basis: &BTreeSet<String>,
+) -> Comparison {
     if let Some(c) = comparison_failure(
         before,
         after,
@@ -2158,6 +2193,7 @@ fn compare(kind: usize, before: &report::Report, after: &report::Report) -> Comp
             1 => contract && b.id.ends_with(" authority_basis"),
             2 => invariant || requires,
             8 => invariant,
+            9 => direct_basis.contains(&b.id),
             _ => false,
         };
         if selected {

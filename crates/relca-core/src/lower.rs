@@ -44,6 +44,7 @@ use crate::{ast, diag, ir};
 use diag::{Diagnostic, E_CANCEL_0, E_CAP_0, E_NAME_0, E_TYPE_0, Span, U_SEM_0};
 
 mod arrival_distribution;
+mod merge;
 mod priority;
 mod recovery;
 mod resource_time;
@@ -476,11 +477,16 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
                 collect_comparison_ends(body, names);
                 collect_comparison_ends(on_limit, names);
             }
-            ast::Stmt::Again | ast::Stmt::Leave => {}
+            ast::Stmt::Again | ast::Stmt::Leave | ast::Stmt::Yield(_) => {}
             ast::Stmt::End(name) => {
                 names.insert(name.value.clone());
             }
-            ast::Stmt::If {
+            ast::Stmt::Merge {
+                then_body,
+                else_body,
+                ..
+            }
+            | ast::Stmt::If {
                 then_body,
                 else_body,
                 ..
@@ -516,7 +522,7 @@ fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
                 collect_calls(body, calls);
                 collect_calls(on_limit, calls);
             }
-            ast::Stmt::Again | ast::Stmt::Leave => {}
+            ast::Stmt::Again | ast::Stmt::Leave | ast::Stmt::Yield(_) => {}
             ast::Stmt::Call(call) => {
                 calls.push(call);
                 if let Some(body) = &call.recovery {
@@ -524,7 +530,12 @@ fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
                 }
             }
             ast::Stmt::Fork { branches, .. } => calls.extend(branches),
-            ast::Stmt::If {
+            ast::Stmt::Merge {
+                then_body,
+                else_body,
+                ..
+            }
+            | ast::Stmt::If {
                 then_body,
                 else_body,
                 ..
@@ -1816,6 +1827,10 @@ mod tests {
 
 #[derive(Default)]
 struct Lower {
+    merge_names: BTreeSet<String>,
+    merge_target: Option<(ir::BindingId, usize)>,
+    block_depth: usize,
+    unstable_merge_sources: BTreeSet<String>,
     loop_variables: BTreeMap<String, ir::StateVarId>,
     loop_context: Option<repetition::LoopContext>,
     performances: Vec<ir::Performance>,
@@ -2598,7 +2613,11 @@ impl Lower {
             if value.is_none() {
                 self.error(
                     E_TYPE_0,
-                    "integer initial value outside its domain",
+                    if self.merge_names.contains(&name.value) {
+                        "merge_read_position: integer initial value requires a literal"
+                    } else {
+                        "integer initial value outside its domain"
+                    },
                     name.span,
                 );
             }
@@ -2985,7 +3004,13 @@ impl Lower {
             if let ast::Stmt::WaitUntil(c) = &s.value {
                 self.policy_condition(c);
             }
-            if let ast::Stmt::If {
+            if let ast::Stmt::Merge {
+                condition,
+                then_body,
+                else_body,
+                ..
+            }
+            | ast::Stmt::If {
                 condition,
                 then_body,
                 else_body,
@@ -3218,7 +3243,15 @@ impl Lower {
                 .map(|(_, p)| p.as_slice())
                 .unwrap_or(&[]);
             let Some(parameter) = params.iter().position(|p| p.name == a.value.value) else {
-                self.error(E_NAME_0, "undefined CaseId parameter", a.value.span);
+                self.error(
+                    E_NAME_0,
+                    if self.merge_names.contains(&a.value.value) {
+                        "merge_read_position: set insertion requires a CaseId parameter"
+                    } else {
+                        "undefined CaseId parameter"
+                    },
+                    a.value.span,
+                );
                 return None;
             };
             if params[parameter].ty != ir::CASE_ID_TYPE {
@@ -3244,7 +3277,11 @@ impl Lower {
                 Err(_) => {
                     self.error(
                         diag::U_SYN_0,
-                        "integer effect requires constant",
+                        if self.merge_names.contains(&a.value.value) {
+                            "merge_read_position: integer effect requires constant"
+                        } else {
+                            "integer effect requires constant"
+                        },
                         a.value.span,
                     );
                     None
@@ -3267,6 +3304,9 @@ impl Lower {
     /// variable there is outside ADR 0029 (like a variable on the right of an
     /// assignment): unsupported. Any other name is a type error.
     fn integer_operand_error(&mut self, value: &ast::Ident) {
+        if self.merge_read_name_forbidden(value) {
+            return;
+        }
         if self
             .state_names
             .get(&value.value)
@@ -3341,6 +3381,12 @@ impl Lower {
         }
     }
     fn prob_ref(&mut self, path: &ast::Path) -> Option<ir::StateVarId> {
+        if let Some(name) = path.value.first()
+            && !(path.value.len() > 1 && self.actor_names.contains_key(&name.value))
+            && self.merge_read_name_forbidden(name)
+        {
+            return None;
+        }
         if path
             .value
             .first()
@@ -3730,6 +3776,9 @@ impl Lower {
         (Some(kernel), reads, latent)
     }
     fn probability_condition(&mut self, c: &ast::Spanned<ast::Cond>) -> Option<ir::Cond> {
+        if self.merge_condition_forbidden(c) {
+            return None;
+        }
         match &c.value {
             ast::Cond::Contains { .. } => {
                 self.error(diag::U_SYN_0, "membership at unsupported location", c.span);
@@ -3797,6 +3846,9 @@ impl Lower {
     // All pre-existing leaves retain probability_condition's state-only checks,
     // including diagnostics for bindings in unselected processes.
     fn responsibility_condition(&mut self, c: &ast::Spanned<ast::Cond>) -> Option<ir::Cond> {
+        if self.merge_condition_forbidden(c) {
+            return None;
+        }
         match &c.value {
             ast::Cond::Contains { element, set } => self.membership(element, set, None),
             ast::Cond::Group(c) => self.responsibility_condition(c),
@@ -3826,6 +3878,9 @@ impl Lower {
         match &c.value {
             C::Compare(c) => self.responsibility_condition(c).map(F::State),
             C::Bool(name) => {
+                if self.merge_read_name_forbidden(name) {
+                    return None;
+                }
                 let Some(&id) = self.state_names.get(&name.value) else {
                     self.error(
                         if self.global_bindings.contains(&name.value) {
@@ -3898,6 +3953,7 @@ impl Lower {
         model: &ast::Model,
         selection: Option<&str>,
     ) -> Result<ir::Model, Vec<Diagnostic>> {
+        self.index_merges(model);
         self.total_cases = model
             .items
             .iter()
@@ -4368,7 +4424,12 @@ impl Lower {
                             note(c);
                         }
                     }
-                    ast::Stmt::If {
+                    ast::Stmt::Merge {
+                        then_body,
+                        else_body,
+                        ..
+                    }
+                    | ast::Stmt::If {
                         then_body,
                         else_body,
                         ..
@@ -4423,7 +4484,17 @@ impl Lower {
                             names(body, out);
                             names(on_limit, out);
                         }
-                        ast::Stmt::Again | ast::Stmt::Leave => {}
+                        ast::Stmt::Again | ast::Stmt::Leave | ast::Stmt::Yield(_) => {}
+                        ast::Stmt::Merge {
+                            binding,
+                            then_body,
+                            else_body,
+                            ..
+                        } => {
+                            out.insert(binding.value.clone());
+                            names(then_body, out);
+                            names(else_body, out);
+                        }
                         ast::Stmt::Call(c) => {
                             out.insert(c.binding.value.clone());
                             if let Some(body) = &c.recovery {
@@ -4584,6 +4655,7 @@ impl Lower {
             self.fork_spans.clear();
             self.ambiguous_forks.clear();
             self.collect(&p.body);
+            self.merge_types(&p.body);
             let mut sites = Vec::new();
             collect_calls(&p.body, &mut sites);
             for c in sites {
@@ -5828,6 +5900,7 @@ impl Lower {
             cut,
         };
         priority::lower(model, &mut lowered, &self.called_actors)?;
+        crate::evidence_basis::prepare(&mut lowered)?;
         work_profiles::supported(&lowered, model.span)?;
         if !lowered.process.degradations.is_empty() {
             lowered.assumptions.push(ir::Assumption {field:"agency.retention.normal.scope".into(),value:"whole_process_paths".into(),
@@ -5866,6 +5939,24 @@ impl Lower {
                 field: "resource_time.on_close".into(), value: "continue; resource-time-v1".into(),
                 affects: "休み・勤務終了でも実行者・資源・残時間を保持し通常終了又は取消ackまで壁時計で継続する。料金時間外と予定枠超過を別量にする。現実の勤務制度は認定しない。".into(),
             });
+        }
+        if lowered.has_merges()
+            && (!lowered.contests().is_empty()
+                || lowered
+                    .quality
+                    .as_ref()
+                    .is_some_and(|q| !q.quantiles.is_empty()))
+        {
+            let mut ds = lowered.diagnostics;
+            ds.push(Diagnostic {
+                code: U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message:
+                    "merge_feature_combination: merge with contest or quantiles is not connected"
+                        .into(),
+                span: Some(model.span),
+            });
+            return Err(ds);
         }
         if lowered.has_loops()
             && (!lowered.contests().is_empty()
@@ -6632,6 +6723,9 @@ impl Lower {
         c: &ast::Spanned<ast::Cond>,
         bindings: &BTreeSet<String>,
     ) -> Option<ir::Cond> {
+        if self.merge_condition_forbidden(c) {
+            return None;
+        }
         match &c.value {
             ast::Cond::Contains { element, set } => self.membership(element, set, None),
             ast::Cond::Compare {
@@ -7138,6 +7232,52 @@ impl Lower {
                     authority,
                 })
             }
+            ast::ContractClause::EvidenceBasis {
+                direct,
+                target,
+                sources,
+            } => {
+                let capability = self.capability_path(target)?;
+                if sources.is_empty() {
+                    self.error(diag::E_CON_0, "evidence_basis_empty", target.span);
+                }
+                let mut seen = BTreeSet::new();
+                let mut resolved = Vec::new();
+                for source in sources {
+                    let name = source
+                        .value
+                        .iter()
+                        .map(|n| n.value.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if !seen.insert(name.clone()) {
+                        self.error(
+                            diag::E_CON_0,
+                            "evidence_basis_duplicate_source",
+                            source.span,
+                        );
+                    }
+                    if source.value.len() != 1 {
+                        self.error(diag::E_CON_0, "evidence_basis_not_source", source.span);
+                    } else if let Some(&id) = self.actor_names.get(&name) {
+                        if self.actors[id.0].source.is_some() {
+                            resolved.push(id);
+                        } else {
+                            self.error(diag::E_CON_0, "evidence_basis_not_source", source.span);
+                        }
+                    } else if self.state_names.contains_key(&name) {
+                        self.error(diag::E_CON_0, "evidence_basis_not_source", source.span);
+                    } else {
+                        self.error(E_NAME_0, "undefined source", source.span);
+                    }
+                }
+                Some(ir::ContractKind::EvidenceBasis {
+                    capability,
+                    direct: *direct,
+                    sources: resolved,
+                    calls: Vec::new(),
+                })
+            }
             ast::ContractClause::Invariant { event, condition } => {
                 let event = self.contract_event(event)?;
                 let sites: Vec<_> = self
@@ -7289,6 +7429,9 @@ impl Lower {
     }
 
     fn state_invariant_name(&mut self, n: &ast::Ident) -> Option<ir::StateVarId> {
+        if self.merge_read_name_forbidden(n) {
+            return None;
+        }
         let Some(&id) = self.state_names.get(&n.value) else {
             self.error(
                 if self.global_bindings.contains(&n.value) {
@@ -7409,6 +7552,9 @@ impl Lower {
         c: &ast::Spanned<ast::Cond>,
         available: Option<&BTreeSet<ir::BindingId>>,
     ) -> Option<ir::Cond> {
+        if self.merge_condition_forbidden(c) {
+            return None;
+        }
         match &c.value {
             ast::Cond::Contains { element, set } => self.membership(element, set, None),
             ast::Cond::Compare {
@@ -7813,7 +7959,13 @@ impl Lower {
         }
         fn block_actors<'c>(b: &'c ast::Block, out: &mut Vec<&'c ast::Spanned<ast::Cond>>) {
             for s in b {
-                if let ast::Stmt::If {
+                if let ast::Stmt::Merge {
+                    condition,
+                    then_body,
+                    else_body,
+                    ..
+                }
+                | ast::Stmt::If {
                     condition,
                     then_body,
                     else_body,
@@ -8802,7 +8954,7 @@ impl Lower {
             fn calls(b: &ir::Block, caps: &mut BTreeSet<usize>) {
                 for s in b {
                     match &s.kind {
-                        ir::Stmt::LoopControl(_) => {}
+                        ir::Stmt::MergeCopy { .. } | ir::Stmt::LoopControl(_) => {}
                         ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
                             caps.insert(c.capability.0);
                         }
@@ -8907,7 +9059,14 @@ impl Lower {
                 .unwrap_or_else(|| enumeration.name.clone());
             self.error(
                 E_TYPE_0,
-                format!("{} is not a member of {}", name.value, written),
+                if self.merge_names.contains(&name.value) {
+                    format!(
+                        "merge_read_position: {} is not a literal member of {}",
+                        name.value, written
+                    )
+                } else {
+                    format!("{} is not a member of {}", name.value, written)
+                },
                 name.span,
             );
             None
@@ -9089,6 +9248,9 @@ impl Lower {
                                 );
                             }
                         } else {
+                            if self.merge_read_name_forbidden(n) {
+                                continue;
+                            }
                             self.error(E_NAME_0, "undefined version_check target", n.span);
                         }
                     }
@@ -9185,6 +9347,21 @@ impl Lower {
                     self.unique_members(names, item.span);
                     let mut sources = Vec::new();
                     for name in names {
+                        if let Some((prefix, _)) = name.value.split_once('.')
+                            && self.merge_names.contains(prefix)
+                            && !self.actor_names.contains_key(prefix)
+                            && !params.iter().any(|p| p.name == prefix)
+                            && self.merge_read_name_forbidden(name)
+                        {
+                            continue;
+                        }
+                        if !self.actor_names.contains_key(&name.value)
+                            && !self.state_names.contains_key(&name.value)
+                            && !params.iter().any(|p| p.name == name.value)
+                            && self.merge_read_name_forbidden(name)
+                        {
+                            continue;
+                        }
                         if name.value.contains('.') {
                             self.error(
                                 diag::U_SYN_0,
@@ -9688,7 +9865,7 @@ impl Lower {
                     on_limit,
                     ..
                 } => self.collect_loop(name, at_most, body, on_limit),
-                ast::Stmt::Again | ast::Stmt::Leave => {}
+                ast::Stmt::Again | ast::Stmt::Leave | ast::Stmt::Yield(_) => {}
                 ast::Stmt::Call(call) => {
                     self.collect_call(call);
                     if let Some(body) = &call.recovery {
@@ -9725,6 +9902,16 @@ impl Lower {
                         self.collect_call(call);
                     }
                 }
+                ast::Stmt::Merge {
+                    binding,
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    self.collect_merge(binding);
+                    self.collect(then_body);
+                    self.collect(else_body);
+                }
                 ast::Stmt::If {
                     then_body,
                     else_body,
@@ -9749,7 +9936,7 @@ impl Lower {
                     self.collect_ends(body);
                     self.collect_ends(on_limit);
                 }
-                ast::Stmt::Again | ast::Stmt::Leave => {}
+                ast::Stmt::Again | ast::Stmt::Leave | ast::Stmt::Yield(_) => {}
                 ast::Stmt::End(name) => {
                     if !self.end_names.contains_key(&name.value) {
                         self.end_names
@@ -9757,7 +9944,12 @@ impl Lower {
                         self.ends.push(name.value.clone());
                     }
                 }
-                ast::Stmt::If {
+                ast::Stmt::Merge {
+                    then_body,
+                    else_body,
+                    ..
+                }
+                | ast::Stmt::If {
                     then_body,
                     else_body,
                     ..
@@ -9788,10 +9980,22 @@ impl Lower {
     }
 
     fn collect_call(&mut self, call: &ast::Call) {
+        if call.response_loss.is_some() || call.retry.is_some() || call.recovery.is_some() {
+            self.unstable_merge_sources
+                .insert(call.binding.value.clone());
+        }
         self.response_contract(call);
         let actor = self.actor_names.get(&call.actor.value).copied();
         if actor.is_none() {
-            self.error(E_NAME_0, "undefined Actor", call.actor.span);
+            self.error(
+                E_NAME_0,
+                if self.merge_names.contains(&call.actor.value) {
+                    "merge_read_position: a result value is not an Actor"
+                } else {
+                    "undefined Actor"
+                },
+                call.actor.span,
+            );
         }
         let cap = self
             .cap_names
@@ -9850,6 +10054,7 @@ impl Lower {
         self.binding_names
             .insert(call.binding.value.clone(), binding);
         self.bindings.push(ir::Binding {
+            merge: None,
             repetition: None,
             name: call.binding.value.clone(),
             ty: cap
@@ -9898,9 +10103,17 @@ impl Lower {
     }
 
     fn block(&mut self, block: &ast::Block, flow: &mut Flow) -> ir::Block {
+        self.block_depth += 1;
         let mut resolved = Vec::new();
         for stmt in block {
             let kind = match &stmt.value {
+                ast::Stmt::Merge {
+                    binding,
+                    condition,
+                    then_body,
+                    else_body,
+                } => self.merge_block(binding, condition, then_body, else_body, flow),
+                ast::Stmt::Yield(source) => self.merge_copy(source, stmt.span, flow),
                 ast::Stmt::Repeat {
                     name,
                     at_most,
@@ -9960,7 +10173,13 @@ impl Lower {
                     flow.histories.clear();
                     Some(ir::Stmt::StopReceiptUnknown)
                 }
-                ast::Stmt::WaitUntil(c) => self.condition(c, flow).map(ir::Stmt::WaitUntil),
+                ast::Stmt::WaitUntil(c) => {
+                    if self.merge_condition_forbidden(c) {
+                        None
+                    } else {
+                        self.condition(c, flow).map(ir::Stmt::WaitUntil)
+                    }
+                }
                 ast::Stmt::Wait(d) => self.ticks(d).map(ir::Stmt::Wait),
                 ast::Stmt::Call(ast_call) => {
                     let mut renamed = ast_call.clone();
@@ -10137,6 +10356,7 @@ impl Lower {
                 }
             }
         }
+        self.block_depth -= 1;
         resolved
     }
 
@@ -10245,7 +10465,8 @@ impl Lower {
                     return None;
                 };
                 if self.ambiguous_bindings.contains(&binding.value)
-                    || !self.calls.contains_key(&binding.value)
+                    || (!self.calls.contains_key(&binding.value)
+                        && !self.merge_names.contains(&binding.value))
                 {
                     // Check the fact common to all candidates, not the first
                     // declaration. Unknown types cannot establish a type error.
@@ -10317,6 +10538,9 @@ impl Lower {
         cond: &ast::Spanned<ast::Cond>,
         owner: ir::ActorId,
     ) -> Option<ir::Cond> {
+        if self.merge_condition_forbidden(cond) {
+            return None;
+        }
         match &cond.value {
             ast::Cond::Contains { element, set } => self.membership(element, set, Some(owner)),
             ast::Cond::Compare {
@@ -10458,7 +10682,15 @@ impl Lower {
             }
             ir::Cond::Eq(m) => {
                 let Some(call) = self.calls.values().find(|c| c.binding == m.binding) else {
-                    return (true, true);
+                    return if self
+                        .bindings
+                        .get(m.binding.0)
+                        .is_some_and(|b| b.merge.is_some())
+                    {
+                        self.merge_truth(m)
+                    } else {
+                        (true, true)
+                    };
                 };
                 let cap = &self.capabilities[call.capability.0];
                 let results = cap.possible_results();
@@ -10485,6 +10717,15 @@ impl Lower {
         join: &ast::Spanned<ast::Join>,
         flow: &mut Flow,
     ) -> Option<ir::Join> {
+        if let ast::Join::Any { result, .. } = &join.value
+            && self.merge_names.contains(&result.value)
+        {
+            self.unsupported(
+                "merge_feature_combination: merge_read_position",
+                result.span,
+            );
+            return None;
+        }
         let target = match &join.value {
             ast::Join::All { fork } | ast::Join::Any { fork, .. } => fork,
         };
@@ -10626,6 +10867,10 @@ impl Lower {
     }
 
     fn check_join_branches(&mut self, branches: &[ast::Call], join: &ast::Spanned<ast::Join>) {
+        if matches!(&join.value, ast::Join::Any { result, .. } if self.merge_names.contains(&result.value))
+        {
+            return;
+        }
         let ast::Join::Any {
             result,
             tie,

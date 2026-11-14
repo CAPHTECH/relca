@@ -342,9 +342,9 @@ fn all_resource_syntax_limits_and_unselected_uses_fail_closed_with_exact_classif
     ] {
         let s = hand::edit(&base, from, to);
         let r = v(&s);
-        assert_eq!(r["diagnostics"].as_array().unwrap().len(), 2, "{r}");
+        assert_eq!(r["diagnostics"].as_array().unwrap().len(), 1, "{r}");
         assert_eq!(r["diagnostics"][0]["code"], code, "{to}: {r}");
-        assert_eq!(r["diagnostics"][1]["code"], "W-CUT-0");
+        assert_eq!(r["cut"], "unresolved");
         assert_eq!(
             r["verdict"],
             if code == "E-SYN-0" {

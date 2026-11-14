@@ -1,0 +1,26 @@
+model MergeIf version "0.2" {
+  type Doc = enum { draft, repaired }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { sent }
+  kernel Review { * -> { 0.75: pass; 0.25: fail } }
+  actor Office { capacity 1
+    capability write() -> Doc { duration fixed 1min; result nondet { draft } }
+    capability review(d:Doc) -> Verdict { duration fixed 1min; outcomes kernel Review }
+    capability fix(d:Doc) -> Doc { duration fixed 2min; result nondet { repaired } }
+    capability send(d:Doc) -> Ack { commits; duration fixed 1min; result nondet { sent } }
+  }
+  process Main {
+    d = Office.write()
+    r = Office.review(d)
+    ready = if r == fail { f = Office.fix(d); yield f } else { yield d }
+    s = Office.send(ready)
+    if ready == repaired { end done_fixed } else { end done_unchanged }
+  }
+  cut Scope { include [Office] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  metrics { window 10min; currency "JPY"; rate Office per_minute 1; rate Office.write per_start 1; rate Office.review per_start 1; rate Office.fix per_start 1; rate Office.send per_start 1; breakdown waits }
+  simulation replications 32 seed 7 confidence 0.5
+  verify safety no_resource_overcommit
+  verify probability reached end.done_fixed >= 0.25
+  contract Deadline { response case.received -> one_of(end.done_fixed,end.done_unchanged) by 4min after case.received otherwise unresolved }
+}

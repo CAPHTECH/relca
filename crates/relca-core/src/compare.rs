@@ -531,6 +531,19 @@ pub fn compare_with_scenario(
     scenario: Option<&str>,
 ) -> CompareReport {
     if let Ok(ast) = crate::syntax::parse(src) {
+        if ast.has_merges() {
+            let mut result = CompareReport::empty(Some(analysis));
+            result.diagnostic(
+                diag::U_SEM_0,
+                "merge_feature_combination: merge comparison is not connected",
+            );
+            return result.finish();
+        }
+        if ast.has_evidence_basis() {
+            let mut result = CompareReport::empty(Some(analysis));
+            result.diagnostic(diag::U_SEM_0, "evidence_basis_unsupported_command");
+            return result.finish();
+        }
         if ast.has_repetition() {
             let mut result = CompareReport::empty(Some(analysis));
             result.diagnostic(

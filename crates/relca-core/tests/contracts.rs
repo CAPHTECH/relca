@@ -74,13 +74,13 @@ fn non_model_source_is_never_reported_as_satisfied() {
     assert_ne!(report.verdict.exit_code(), 0);
     assert!(report.terminals.is_empty());
     assert!(report.properties.is_empty());
-    assert!(report.diagnostics.iter().any(|d| d.code == diag::W_CUT_0));
+    assert!(!report.diagnostics.iter().any(|d| d.code == diag::W_CUT_0));
     assert!(report.diagnostics.iter().any(|d| {
         d.severity == diag::Severity::Error
             && [diag::E_SYN_0, diag::U_SYN_0].contains(&d.code.as_str())
     }));
     let value = serde_json::to_value(report).unwrap();
-    assert_eq!(value["cut"], "undeclared");
+    assert_eq!(value["cut"], "unresolved");
     assert!(value["model"]["name"].is_null());
     assert!(value["bounds"]["clock"].is_null());
     assert!(value["bounds"]["truncated"].is_null());

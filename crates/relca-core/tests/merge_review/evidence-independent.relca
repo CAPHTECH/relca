@@ -1,0 +1,24 @@
+model MergeEvidence version "0.2" {
+  type V = enum { pass, fail }
+  actor Invoice { source document }
+  actor Reader { capacity 1
+    capability enter() -> V { reads [Invoice]; duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Worker { capacity 1
+    capability echo(v:V) -> V { duration fixed 1min; result nondet { pass } }
+  }
+  actor Judge { capacity 1
+    capability assess(v:V) -> V { duration fixed 1min; result nondet { pass } }
+  }
+  process Flow {
+    d = Reader.enter()
+    merged = if d == pass { yield d } else { yield d }
+    other = Worker.echo(merged)
+    t = Judge.assess(d)
+    end done
+  }
+  cut Scope { include [Invoice,Reader,Worker,Judge] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  contract Basis { evidence_basis Judge.assess [Invoice] }
+}

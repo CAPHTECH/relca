@@ -2143,6 +2143,27 @@ fn transition_inner(
         let mut v = s.view(k, m)?;
         let mut terminal = None;
         match &program[v.pc] {
+            Instruction::MergeCopy {
+                binding,
+                source,
+                next,
+            } => {
+                let value = v
+                    .results
+                    .get(source.0)
+                    .copied()
+                    .flatten()
+                    .ok_or("merge source has no result")?;
+                let target = v
+                    .results
+                    .get_mut(binding.0)
+                    .ok_or("merge target out of range")?;
+                if target.is_some() {
+                    return Err("merge target already written".into());
+                }
+                *target = Some(value);
+                v.pc = *next;
+            }
             Instruction::LoopControl { updates, next } => {
                 for (id, value) in updates {
                     v.state_values[id.0] = *value;
@@ -4694,6 +4715,9 @@ pub(super) fn explore_traced(
                     }
                     ir::Property::Contract(id) if f.per[k].violation.get(id.0) == Some(&true) => {
                         Verdict::Violated
+                    }
+                    ir::Property::Contract(id) if f.per[k].evidence_issues.contains_key(&id) => {
+                        Verdict::Unsupported
                     }
                     ir::Property::StateInRange if !f.per[k].ranges.is_empty() => Verdict::Violated,
                     _ if abort.is_some() => Verdict::Unsupported,

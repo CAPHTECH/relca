@@ -487,6 +487,21 @@ pub enum Overflow {
 }
 
 impl Model {
+    pub fn has_merges(&self) -> bool {
+        fn block(b: &Block) -> bool {
+            b.iter().any(|s| match &s.kind {
+                Stmt::MergeCopy { .. } => true,
+                Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => block(then_body) || block(else_body),
+                Stmt::Response(_, r) => r.recovery.as_ref().is_some_and(block),
+                _ => false,
+            })
+        }
+        block(&self.process.body)
+    }
     pub(crate) fn unsupported_stochastic_arrival_combination(&self) -> bool {
         self.arrival_distribution.is_some()
             && (self.quality.is_some()
@@ -706,7 +721,8 @@ impl Model {
                 | Stmt::End(_)
                 | Stmt::ResolveEffect { .. }
                 | Stmt::StopReceiptUnknown
-                | Stmt::LoopControl(_) => false,
+                | Stmt::LoopControl(_)
+                | Stmt::MergeCopy { .. } => false,
             })
         }
         layers.process = layers.opaque
@@ -1041,7 +1057,8 @@ pub struct Capability {
     /// Modelled eligibility, independent of permission and Actor declaration order.
     pub qualified_executors: Option<Vec<PersonId>>,
     pub version_check: Option<VersionCheck>,
-    /// Observed case snapshots used only by static lineage derivation.
+    /// Observed case snapshots used by lineage derivation and evidence contracts;
+    /// they do not add business guards or executable state reads.
     pub read_variables: Vec<StateVarId>,
     pub atomic: Option<Atomic>,
     pub uses: Vec<ResourceUse>,
@@ -1428,11 +1445,18 @@ pub struct Degradation {
 /// A call result is absent until finish. Cancelled tasks have no enum value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Binding {
+    /// Static merge provenance, not a call, Task, judgement, or random key.
+    pub merge: Option<MergeSite>,
     /// Output provenance only; never part of the execution or random site key.
     pub repetition: Option<LoopSite>,
     pub name: String,
     pub ty: TypeId,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeSite {
+    pub sources: Vec<BindingId>,
 }
 
 /// Control-flow tree in execution order; no loops or detached tasks.
@@ -1449,6 +1473,11 @@ pub struct Statement {
 /// End terminates control immediately; suffix statements are not executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    /// Copy an observed result into a merge slot, without a Task or random site.
+    MergeCopy {
+        binding: BindingId,
+        source: BindingId,
+    },
     /// Compiler-only forward control for a finitely expanded repeat. No Task,
     /// elapsed time, random draw, or user state is created by this operation.
     LoopControl(LoopControl),
@@ -1763,6 +1792,7 @@ impl ContractClause {
             ContractKind::Separation { .. } => "separation",
             ContractKind::Permitted { .. } => "permitted",
             ContractKind::AuthorityBasis { .. } => "authority_basis",
+            ContractKind::EvidenceBasis { .. } => "evidence_basis",
         };
         let name = self
             .name
@@ -1811,6 +1841,14 @@ pub enum ContractKind {
         capability: CapabilityId,
         authority: AuthorityId,
     },
+    /// Required sources never feed Agency derivation. `calls` is a separate,
+    /// must-only table for the selected process, keyed by binding identity.
+    EvidenceBasis {
+        capability: CapabilityId,
+        direct: bool,
+        sources: Vec<ActorId>,
+        calls: Vec<EvidenceCall>,
+    },
     /// None only for an inactive Capability whose condition needs another process's binding.
     Invariant {
         event: Event,
@@ -1832,6 +1870,17 @@ pub enum ContractKind {
         before: Event,
         start: Event,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceCall {
+    pub binding: BindingId,
+    pub sources: Vec<ActorId>,
+    pub possible_sources: Vec<ActorId>,
+    /// Roots whose presence depends on which snapshot write is last.
+    pub conditional_sources: Vec<ActorId>,
+    /// Lexical snapshot edges excluded because the writer does not dominate.
+    pub excluded_edges: Vec<String>,
 }
 
 /// Verification source order is also outcome property order (one per request).

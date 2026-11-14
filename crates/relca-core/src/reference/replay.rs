@@ -1374,6 +1374,38 @@ pub(super) fn apply<'a>(
                 f.waiting = None;
             }
         }
+        Kind::Merged => {
+            let stmt = next_statement(f)?;
+            let Stmt::MergeCopy { binding, source } = &stmt.kind else {
+                return Err(ReplayReason::IllegalTransition);
+            };
+            legal(
+                stage.location.span == stmt.span
+                    && stage.binding.as_deref() == Some(m.site_name(*binding).as_str())
+                    && stage.source.as_deref() == Some(m.site_name(*source).as_str())
+                    && stage.actor.is_none()
+                    && stage.capability.is_none()
+                    && stage.executor.is_none(),
+            )?;
+            let value = reference(f.merge_value(m, *source))?;
+            legal(
+                stage.result.as_deref()
+                    == m.types[m.process.bindings[binding.0].ty.0]
+                        .members
+                        .get(value.0)
+                        .map(String::as_str),
+            )?;
+            legal(
+                !f.trace
+                    .iter()
+                    .any(|o| matches!(o.event, Occurrence::Merged(id, _, _, _) if id == *binding)),
+            )?;
+            reference(i.record(
+                f,
+                Occurrence::Merged(*binding, *source, value, stmt.span),
+                None,
+            ))?;
+        }
         Kind::LoopControl => {
             let stmt = next_statement(f)?;
             legal(stage.location.span == stmt.span)?;
@@ -1918,6 +1950,44 @@ pub(super) fn validate_resource_display(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn merged_replay_checks_source_value_location_and_non_task_columns() {
+        use super::*;
+        let source = include_str!("../../tests/merge_if/models/M1.relca")
+            .replace("outcomes kernel Review", "result nondet { fail }");
+        let model = crate::lower::lower(&crate::syntax::parse(&source).unwrap()).unwrap();
+        let explained = crate::explain::explain(&source);
+        let trace = explained
+            .explanation
+            .counterexamples
+            .iter()
+            .find(|c| c.id.contains("Deadline"))
+            .unwrap();
+        assert_eq!(trace.status, x::ReplayStatus::Verified);
+        replay(&model, &trace.steps, &trace.id, trace.case_id).unwrap();
+        for fault in 0..7 {
+            let mut steps = trace.steps.clone();
+            let index = steps.iter().position(|s| s.kind == Kind::Merged).unwrap();
+            let merged = &mut steps[index];
+            match fault {
+                0 => merged.source = Some("d".into()),
+                1 => merged.result = Some("draft".into()),
+                2 => merged.time += 1,
+                3 => merged.location.span.start += 1,
+                4 => merged.actor = Some("Clerk".into()),
+                5 => merged.binding = Some("f".into()),
+                _ => {
+                    let duplicate = merged.clone();
+                    steps.insert(index + 1, duplicate);
+                }
+            }
+            assert!(
+                replay(&model, &steps, &trace.id, trace.case_id).is_err(),
+                "fault {fault}"
+            );
+        }
+    }
+
     #[test]
     fn req_reference_wait_overflow_is_semantic_abort_not_early_wake() {
         use super::*;

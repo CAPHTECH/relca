@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 mod ancestors;
 mod common_cause;
+pub(crate) mod merge;
 use ancestors::Ancestors;
 mod factor;
 use factor::Factorization;
@@ -401,6 +402,9 @@ pub(crate) fn via_model_paths(m: &ir::Model) -> Option<ViaModelPaths> {
 }
 
 fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
+    via_with_limits_shared(m, limits, false)
+}
+fn via_with_limits_shared(m: &ir::Model, limits: ViaLimits, shared: bool) -> Option<ViaModelPaths> {
     if !m.actors.iter().any(|a| a.metadata.via_model.is_some()) {
         return None;
     }
@@ -422,6 +426,50 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         limit: None,
         invalid_ir: None,
     };
+    if m.has_merges() {
+        return match merge::projection(m) {
+            Ok(p) => {
+                let mut known = via_with_limits_shared(&p.model, limits, true)?;
+                let before = known.paths.len();
+                known.paths.retain(|path| {
+                    let independent = |name: &str| p.id(name).is_none_or(|id| !p.affected(id));
+                    path.calls.iter().all(|c| independent(&c.call))
+                        && match &path.target {
+                            ViaTarget::E { call } => independent(call),
+                            ViaTarget::U {
+                                call, effect_call, ..
+                            } => independent(call) && independent(effect_call),
+                        }
+                });
+                for path in &mut known.paths {
+                    path.start_call = p.name(m, &path.start_call);
+                    for call in &mut path.calls {
+                        call.call = p.name(m, &call.call);
+                    }
+                    match &mut path.target {
+                        ViaTarget::E { call } => *call = p.name(m, call),
+                        ViaTarget::U {
+                            call, effect_call, ..
+                        } => {
+                            *call = p.name(m, call);
+                            *effect_call = p.name(m, effect_call);
+                        }
+                    }
+                }
+                if known.paths.len() != before {
+                    known.truncated = true;
+                    known.unchecked.push("merge_control".into());
+                }
+                known.path_count_lower_bound = known.paths.len() as u64;
+                Some(known)
+            }
+            Err(reason) => {
+                result.truncated = true;
+                result.unchecked.push(reason.into());
+                Some(result)
+            }
+        };
+    }
     fn failed(r: &mut ViaModelPaths, error: Error) {
         r.truncated = true;
         let why = match error {
@@ -462,7 +510,7 @@ fn via_with_limits(m: &ir::Model, limits: ViaLimits) -> Option<ViaModelPaths> {
         location: Location::model(m, "via graph collection"),
     };
     let mut indexed = vec![None; n];
-    if let Err(e) = collect(&m.process.body, &mut indexed, m, 0, &mut budget) {
+    if let Err(e) = collect_shared(&m.process.body, &mut indexed, m, 0, &mut budget, shared) {
         failed(&mut result, e);
         return Some(result);
     }
@@ -1269,6 +1317,17 @@ fn collect<'a>(
     depth: usize,
     budget: &mut Budget,
 ) -> Result<()> {
+    collect_shared(block, calls, model, depth, budget, false)
+}
+
+fn collect_shared<'a>(
+    block: &'a ir::Block,
+    calls: &mut [Option<&'a ir::Call>],
+    model: &ir::Model,
+    depth: usize,
+    budget: &mut Budget,
+    shared: bool,
+) -> Result<()> {
     budget.depth(depth)?;
     for stmt in block {
         budget.location.span = Some(stmt.span);
@@ -1276,12 +1335,15 @@ fn collect<'a>(
         let mut register = |c: &'a ir::Call| -> Result<()> {
             budget.work()?;
             let slot = calls.get_mut(c.binding.0).ok_or_else(invalid)?;
-            if slot.replace(c).is_some() {
+            if let Some(previous) = slot.replace(c)
+                && !(shared && previous == c)
+            {
                 return Err(Error::InvalidIr("duplicate binding registration".into()));
             }
             Ok(())
         };
         match &stmt.kind {
+            ir::Stmt::MergeCopy { .. } => {}
             ir::Stmt::LoopControl(control) => {
                 for c in &control.aliases {
                     register(c)?;
@@ -1295,7 +1357,7 @@ fn collect<'a>(
                 if metadata.attempt == 1 {
                     register(&metadata.command_call)?;
                     if let Some(body) = &metadata.recovery {
-                        collect(body, calls, model, depth + 1, budget)?;
+                        collect_shared(body, calls, model, depth + 1, budget, shared)?;
                     }
                 }
             }
@@ -1335,8 +1397,8 @@ fn collect<'a>(
                 else_body,
             } => {
                 condition_support(condition, &mut BTreeSet::new(), model, 0, budget)?;
-                collect(then_body, calls, model, depth + 1, budget)?;
-                collect(else_body, calls, model, depth + 1, budget)?;
+                collect_shared(then_body, calls, model, depth + 1, budget, shared)?;
+                collect_shared(else_body, calls, model, depth + 1, budget, shared)?;
             }
             ir::Stmt::End(id) => {
                 if id.0 >= model.ends.len() {
@@ -1374,6 +1436,7 @@ fn paths<'a>(
         };
         budget.work()?;
         match &stmt.kind {
+            ir::Stmt::MergeCopy { .. } => {}
             ir::Stmt::LoopControl(control) => {
                 for p in &mut incoming {
                     budget.copy(control.updates.len())?;
@@ -1843,6 +1906,26 @@ fn derive_strategy(
     degradation: Option<Degradation>,
     reference: bool,
 ) -> Result<(Agency, Vec<diag::Diagnostic>)> {
+    derive_strategy_shared(
+        model,
+        limits,
+        viewpoint_limits,
+        effects_limits,
+        degradation,
+        reference,
+        false,
+    )
+}
+
+fn derive_strategy_shared(
+    model: &ir::Model,
+    limits: Limits,
+    viewpoint_limits: [Limits; 3],
+    effects_limits: Limits,
+    degradation: Option<Degradation>,
+    reference: bool,
+    shared: bool,
+) -> Result<(Agency, Vec<diag::Diagnostic>)> {
     let mut budget = Budget {
         limits,
         work: 0,
@@ -1860,11 +1943,40 @@ fn derive_strategy(
     // from their variable-sized memo cells below.
     budget.cells(n.checked_mul(8).ok_or_else(invalid)?)?;
     let mut indexed = vec![None; n];
-    collect(&model.process.body, &mut indexed, model, 0, &mut budget)?;
-    let calls: Vec<_> = indexed
-        .into_iter()
-        .collect::<Option<_>>()
-        .ok_or_else(invalid)?;
+    collect_shared(
+        &model.process.body,
+        &mut indexed,
+        model,
+        0,
+        &mut budget,
+        shared,
+    )?;
+    let has_merges = model.has_merges();
+    if has_merges {
+        // Sparse call inventory and the dependency marks are additional tables
+        // only for this control form. Keep legacy budget accounting unchanged.
+        budget.cells(n.checked_mul(2).ok_or_else(invalid)?)?;
+    }
+    let calls: Vec<_> = if has_merges {
+        for (i, c) in indexed.iter().enumerate() {
+            if c.is_none() && model.process.bindings[i].merge.is_none() {
+                return Err(invalid());
+            }
+        }
+        indexed.iter().flatten().copied().collect()
+    } else {
+        indexed
+            .iter()
+            .copied()
+            .collect::<Option<_>>()
+            .ok_or_else(invalid)?
+    };
+    let mut merge_dependent: Vec<_> = model
+        .process
+        .bindings
+        .iter()
+        .map(|b| b.merge.is_some())
+        .collect();
     let mut dependents = vec![Vec::new(); n];
     let mut degree = vec![0usize; n];
     let extra = read_graph::read_parents(model, &calls)?;
@@ -1932,21 +2044,32 @@ fn derive_strategy(
     while let Some(i) = ready.pop_front() {
         budget.work()?;
         visited += 1;
-        let c = calls[i];
-        for arg in c.args.iter().chain(&extra[i]) {
-            if *arg == ir::CURRENT_CASE {
-                continue;
-            }
-            budget.work()?;
-            for s in &source_sets[arg.0] {
-                budget.insert(&mut subjects[i], *s)?;
-            }
-            Ancestors::inherit(&mut ancestors, i, *arg, &mut budget)?;
-        }
-        budget.copy(subjects[i].len())?;
-        source_sets[i] = subjects[i].clone();
-        for source in &model.capabilities[c.capability.0].reads {
-            budget.insert(&mut source_sets[i], *source)?;
+        if let Some(c) = indexed[i] {
+            crate::evidence_basis::derive_sources(
+                c,
+                &model.capabilities[c.capability.0],
+                &extra[i],
+                |input| {
+                    match input {
+                        crate::evidence_basis::SourceInput::Parent(arg) => {
+                            budget.work()?;
+                            merge_dependent[i] |= merge_dependent[arg.0];
+                            for s in &source_sets[arg.0] {
+                                budget.insert(&mut subjects[i], *s)?;
+                            }
+                            Ancestors::inherit(&mut ancestors, i, arg, &mut budget)?;
+                        }
+                        crate::evidence_basis::SourceInput::Direct(sources) => {
+                            budget.copy(subjects[i].len())?;
+                            source_sets[i] = subjects[i].clone();
+                            for source in sources {
+                                budget.insert(&mut source_sets[i], *source)?;
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
         }
         for next in &dependents[i] {
             budget.work()?;
@@ -1969,6 +2092,27 @@ fn derive_strategy(
         format!("{}.{}", model.actors[cap.actor.0].name, cap.name)
     };
     let mut agency = Agency::empty();
+    if has_merges {
+        for c in &calls {
+            if merge_dependent[c.binding.0] {
+                agency.unchecked.push(format!(
+                    "lineage(merge_control): {}",
+                    model.site_name(c.binding)
+                ));
+            }
+        }
+        agency.unchecked.extend(
+            [
+                "F(merge_control)",
+                "U(merge_control)",
+                "W-AGY-0(merge_control)",
+                "W-AGY-2(merge_control)",
+                "W-LIN-2(merge_control)",
+                "W-RESP-2(merge_control)",
+            ]
+            .map(String::from),
+        );
+    }
     agency.degradation = degradation;
     if block_has_state_guard(&model.process.body, model) {
         agency.rules = "agency-p1-state-1".into();
@@ -2012,13 +2156,17 @@ fn derive_strategy(
     }
     budget.cells(model.actors.len().checked_mul(2).ok_or_else(invalid)?)?;
     let mut direct = vec![BTreeSet::new(); model.actors.len()];
-    let mut indirect = direct.clone();
+    let mut indirect = if has_merges {
+        merge::indirect_origins(model, &calls, &extra, &mut budget)?
+    } else {
+        direct.clone()
+    };
     for c in &calls {
         let cap = &model.capabilities[c.capability.0];
         for source in &cap.reads {
             budget.insert(&mut direct[cap.actor.0], *source)?;
         }
-        for source in &subjects[c.binding.0] {
+        for source in subjects[c.binding.0].iter().filter(|_| !has_merges) {
             budget.insert(&mut indirect[cap.actor.0], *source)?;
         }
     }
@@ -2035,9 +2183,10 @@ fn derive_strategy(
     let mut effect_paths = BTreeMap::new();
     budget.location = Location::model(model, "path expansion");
     // Models without effects need no path expansion.
-    if calls
-        .iter()
-        .any(|c| model.capabilities[c.capability.0].commits)
+    if !has_merges
+        && calls
+            .iter()
+            .any(|c| model.capabilities[c.capability.0].commits)
     {
         paths(
             &model.process.body,
@@ -2053,7 +2202,7 @@ fn derive_strategy(
     let mut warnings = Vec::new();
     for effect in calls
         .iter()
-        .filter(|c| model.capabilities[c.capability.0].commits)
+        .filter(|c| !has_merges && model.capabilities[c.capability.0].commits)
     {
         budget.location = Location::model(model, "refusal reachability");
         budget.location.effect = Some(model.process.bindings[effect.binding.0].name.clone());
@@ -2314,6 +2463,13 @@ fn derive_strategy(
         }
     }
     let mut groups: Vec<Group> = Vec::new();
+    if has_merges
+        && calls
+            .iter()
+            .any(|c| model.capabilities[c.capability.0].commits)
+    {
+        all_j.extend(merge::candidates(model, &calls, &extra, &mut budget)?);
+    }
     budget.location = Location::model(model, "lineage");
     let has_loops = model.has_loops();
     if has_loops {
@@ -2367,7 +2523,11 @@ fn derive_strategy(
         all_j.retain(|id| !aliases.contains(id));
     }
     for j in all_j {
-        let cap = &model.capabilities[calls[j.0].capability.0];
+        if merge_dependent[j.0] {
+            continue;
+        }
+        let call = indexed[j.0].ok_or_else(invalid)?;
+        let cap = &model.capabilities[call.capability.0];
         let mut independent = BTreeSet::new();
         for s in &cap.reads {
             budget.work()?;
@@ -2377,7 +2537,7 @@ fn derive_strategy(
         }
         agency.lineage.push(Lineage {
             call: model.process.bindings[j.0].name.clone(),
-            capability: cap_name(calls[j.0]),
+            capability: cap_name(call),
             subject_sources: names(&subjects[j.0]),
             independent_sources: names(&independent),
         });
@@ -2430,7 +2590,15 @@ fn derive_strategy(
             independent_sources: names(&group.independent),
         })
         .collect();
-    if calls
+    if has_merges {
+        agency.unchecked.extend(
+            [
+                "common_cause(merge_control)",
+                "model_uncertainties(merge_control)",
+            ]
+            .map(String::from),
+        );
+    } else if calls
         .iter()
         .any(|c| model.capabilities[c.capability.0].performance.is_some())
     {
@@ -2445,20 +2613,33 @@ fn derive_strategy(
             .map(String::from),
         );
     } else {
-        common_cause::derive(
+        common_cause::derive_shared(
             model,
             &calls,
             &ancestors,
             &subjects,
             &mut agency,
             &mut warnings,
+            shared,
         )?;
     }
     if extra.iter().any(|p| !p.is_empty()) {
         agency.rules = "agency-p1-reads-1".into();
     }
-    let (viewpoints, new_warnings) =
-        viewpoints::with_limits_and_warnings(model, &agency, viewpoint_limits, effects_limits);
+    let (mut viewpoints, new_warnings) = if shared {
+        viewpoints::with_limits_and_warnings_shared(
+            model,
+            &agency,
+            viewpoint_limits,
+            effects_limits,
+            true,
+        )
+    } else {
+        viewpoints::with_limits_and_warnings(model, &agency, viewpoint_limits, effects_limits)
+    };
+    if has_merges {
+        merge::restore(model, &mut agency, &mut viewpoints, &mut warnings)?;
+    }
     if matches!(viewpoints.effects, Some(effects::Effects::Derived { .. })) {
         agency.unchecked.retain(|word| word != "executors");
     }

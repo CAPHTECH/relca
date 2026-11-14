@@ -8,12 +8,10 @@
     "limit_reached": false
   },
   "original": {
+    "cut": "unresolved",
     "diagnostics": [
       {
         "code": "U-SYN-0"
-      },
-      {
-        "code": "W-CUT-0"
       }
     ]
   }

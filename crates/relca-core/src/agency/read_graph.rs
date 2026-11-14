@@ -15,18 +15,7 @@ pub(crate) fn lexical_has_capability(body: &ir::Block, id: ir::CapabilityId) -> 
 }
 
 fn writes(c: &ir::Capability, v: ir::StateVarId) -> bool {
-    c.start_writes
-        .iter()
-        .chain(c.finish_writes())
-        .any(|w| w.variable == v)
-        || c.kernel_writes.contains(&v)
-        || c.structural_kernel().is_some_and(|k| {
-            k.rows
-                .iter()
-                .flat_map(|r| &r.branches)
-                .flat_map(|b| &b.overrides)
-                .any(|(x, _)| *x == v)
-        })
+    crate::evidence_basis::writes(c, v)
 }
 
 pub(crate) fn concurrent_read(body: &ir::Block, caps: &[ir::Capability]) -> Option<diag::Span> {
@@ -73,6 +62,24 @@ fn with_limits(
     calls: &[&ir::Call],
     limits: Limits,
 ) -> Result<Vec<Vec<ir::BindingId>>> {
+    if m.has_merges() {
+        let mut out = vec![Vec::new(); m.process.bindings.len()];
+        let mut b = viewpoints::budget(limits);
+        for (i, c) in calls.iter().enumerate() {
+            for w in &calls[..i] {
+                b.work()?;
+                if m.capabilities[c.capability.0]
+                    .read_variables
+                    .iter()
+                    .any(|v| writes(&m.capabilities[w.capability.0], *v))
+                {
+                    b.copy(1)?;
+                    out[c.binding.0].push(w.binding);
+                }
+            }
+        }
+        return Ok(out);
+    }
     if m.capabilities.iter().all(|c| c.read_variables.is_empty()) {
         return Ok(vec![Vec::new(); calls.len()]);
     }

@@ -225,7 +225,8 @@ pub fn verify(name: &str, v: &Value) {
         );
         assert_eq!(v["agency"], Value::Null);
         if o["parser"] == true {
-            assert_eq!(count(v, "W-CUT-0"), 1);
+            assert_eq!(count(v, "W-CUT-0"), 0);
+            assert_eq!(v["cut"], "unresolved");
         }
     }
     if let Some(profile) = o["profile"].as_str() {

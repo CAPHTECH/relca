@@ -137,6 +137,8 @@ W-CUT-0: Cut is undeclared: all declared Actors are included; exclusions are unk
 
 #[path = "support/ledger_shape.rs"]
 mod ledger_shape;
+#[path = "support/syntax_cut_expectations.rs"]
+mod syntax_cut_expectations;
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -184,12 +186,14 @@ fn legacy(prefix: &str) {
             row.name
         );
         let (stdout, stderr, exit) = run(row.name, &source);
+        let (current_stdout, current_stderr) =
+            syntax_cut_expectations::current(row.stdout, row.stderr);
         let expected = ledger_shape::extend_raw(
-            row.stdout,
+            &current_stdout,
             &ledger_shape::Spec::prelower("exhaustive", false),
         );
         assert_eq!(stdout, expected, "{}: stdout", row.name);
-        assert_eq!(stderr, row.stderr, "{}: stderr", row.name);
+        assert_eq!(stderr, current_stderr, "{}: stderr", row.name);
         assert_eq!(exit, row.exit, "{}: exit", row.name);
     }
 }

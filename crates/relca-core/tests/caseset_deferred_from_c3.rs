@@ -94,7 +94,8 @@ fn both_with(
 fn refused(s: &str) {
     let v = check(s);
     assert_eq!(v["verdict"], "unsupported", "{v}");
-    assert_eq!(codes(&v), ["U-SYN-0", "W-CUT-0"]);
+    assert_eq!(codes(&v), ["U-SYN-0"]);
+    assert_eq!(v["cut"], "unresolved");
     assert_eq!(v["properties"], json!([]));
     assert!(
         v["terminals"].as_array().is_none_or(|t| t.is_empty()),

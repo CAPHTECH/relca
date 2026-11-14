@@ -52,6 +52,7 @@ mod authority_tests;
 mod calendar_frontier_tests;
 #[cfg(test)]
 mod completion_impl_tests;
+pub(crate) mod evidence;
 #[cfg(test)]
 #[path = "../tests/support/limits_population.rs"]
 pub(crate) mod limits_population;
@@ -2191,6 +2192,8 @@ pub fn explore_with_budget(model: &ir::Model, max_states: usize) -> outcome::Out
     if let Some(quality) = &mut out.quality {
         quality.apply_deferred(model);
     }
+    out.diagnostics
+        .extend(evidence::diagnostics(model, &out.properties));
     out
 }
 fn attach_legacy_quality(
@@ -3128,6 +3131,11 @@ mod executor_tests {
 
 #[derive(Debug)]
 enum Instruction {
+    MergeCopy {
+        binding: ir::BindingId,
+        source: ir::BindingId,
+        next: usize,
+    },
     LoopControl {
         updates: Vec<(ir::StateVarId, ir::StateValue)>,
         next: usize,
@@ -3187,6 +3195,11 @@ fn compile_at(
         let mut path = prefix.to_vec();
         path.push(i);
         let instruction = match &statement.kind {
+            ir::Stmt::MergeCopy { binding, source } => Instruction::MergeCopy {
+                binding: *binding,
+                source: *source,
+                next,
+            },
             ir::Stmt::LoopControl(control) => Instruction::LoopControl {
                 updates: control.updates.clone(),
                 next,
@@ -3353,6 +3366,7 @@ impl std::fmt::Debug for Task {
 
 #[derive(Clone, PartialEq, Eq)]
 struct State {
+    evidence: Option<evidence::History>,
     response: Option<response::History>,
     lost_updates: Vec<ir::StateVarId>,
     sleep_until: Option<u64>,
@@ -3374,6 +3388,9 @@ struct State {
 
 impl std::hash::Hash for State {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        if let Some(evidence) = &self.evidence {
+            evidence.hash(h);
+        }
         if let Some(response) = &self.response {
             response.hash(h);
         }
@@ -3409,6 +3426,7 @@ impl std::hash::Hash for State {
 impl State {
     fn initial(model: &ir::Model, pc: usize) -> Self {
         Self {
+            evidence: crate::evidence_basis::present(model).then(evidence::History::default),
             response: (!model.response_attempts().is_empty())
                 .then(|| response::History::for_model(model)),
             lost_updates: Vec::new(),
@@ -3438,7 +3456,19 @@ impl State {
                 .state_variables
                 .iter()
                 .any(|v| !matches!(v.initial, ir::InitialValue::Fixed(_))),
-            monitors: vec![Monitor::default(); model.contracts.len()],
+            monitors: model
+                .contracts
+                .iter()
+                .map(|c| {
+                    let mut monitor = Monitor::default();
+                    if let ir::ContractKind::EvidenceBasis { capability, .. } = c.kind
+                        && evidence::route(model, capability)
+                    {
+                        monitor.evidence_issue = Some(evidence::Issue::Contest);
+                    }
+                    monitor
+                })
+                .collect(),
             time: 0,
             pc,
             results: vec![None; model.process.bindings.len()],
@@ -3616,8 +3646,9 @@ enum Step {
 }
 
 /// Sufficient path-local history; all fields participate in State's Eq/Hash.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Monitor {
+    evidence_issue: Option<evidence::Issue>,
     left_people: BTreeSet<ir::PersonId>,
     right_people: BTreeSet<ir::PersonId>,
     activated: bool,
@@ -3625,6 +3656,21 @@ struct Monitor {
     count: u8,
     before_seen: bool,
     pending: Vec<ir::Tick>,
+}
+
+impl std::hash::Hash for Monitor {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.left_people.hash(h);
+        self.right_people.hash(h);
+        self.activated.hash(h);
+        self.violated.hash(h);
+        self.count.hash(h);
+        self.before_seen.hash(h);
+        self.pending.hash(h);
+        if let Some(issue) = self.evidence_issue {
+            issue.hash(h);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -3764,9 +3810,10 @@ fn emit_in(
         }
     }
     refresh_contests(state, model, state.time, false);
+    evidence::event(state, bundle, binding, model);
     update_state_invariants(state, model, case_index)?;
     let ledger = update_debts(state, bundle, binding, model);
-    let result = update_monitors(state, bundle, model, case_index).and(ledger);
+    let result = update_monitors(state, bundle, binding, model, case_index).and(ledger);
     exploration.contracts(state);
     if result.is_err() {
         if model
@@ -3824,6 +3871,7 @@ fn update_state_invariants(
 fn update_monitors(
     state: &mut State,
     bundle: Bundle,
+    binding: Option<ir::BindingId>,
     model: &ir::Model,
     case_index: usize,
 ) -> EngineResult<()> {
@@ -3873,6 +3921,48 @@ fn update_monitors(
                     (Ok(p), Some(allowed)) => m.violated |= !allowed.contains(&p),
                     _ => {
                         error.get_or_insert(Halt::from("unresolved Permission event"));
+                    }
+                }
+            }
+            ir::ContractKind::EvidenceBasis {
+                capability,
+                sources,
+                ..
+            } if matches!(bundle, Bundle::Finish(c, _, _) if c == *capability) => {
+                m.activated = true;
+                if binding.is_some_and(|b| model.site_contest(b).is_some()) {
+                    m.evidence_issue = Some(evidence::Issue::Contest);
+                    continue;
+                }
+                match binding.and_then(|b| state.evidence.as_ref().and_then(|h| h.values.get(&b))) {
+                    Some(value) => {
+                        let direct = matches!(
+                            clause.kind,
+                            ir::ContractKind::EvidenceBasis { direct: true, .. }
+                        );
+                        let roots = if direct {
+                            model.capabilities[capability.0]
+                                .reads
+                                .iter()
+                                .copied()
+                                .collect()
+                        } else {
+                            value.roots.clone()
+                        };
+                        let unknown = if direct {
+                            BTreeSet::new()
+                        } else {
+                            value.unknown.clone()
+                        };
+                        m.violated |= sources
+                            .iter()
+                            .any(|s| !roots.contains(s) && !unknown.contains(s));
+                        if sources.iter().any(|s| unknown.contains(s)) {
+                            m.evidence_issue = Some(evidence::Issue::Snapshot);
+                        }
+                    }
+                    None => {
+                        error.get_or_insert(Halt::from("evidence_basis Finish missing call"));
                     }
                 }
             }
@@ -4144,6 +4234,7 @@ fn expire_debts(state: &mut State, horizon: u64, inclusive: bool) {
 
 #[derive(Default)]
 struct Exploration {
+    evidence_issues: BTreeMap<ir::ClauseId, evidence::Issue>,
     lost_updates: BTreeSet<ir::StateVarId>,
     // A valid emitted bundle may be followed by an independent clause error.
     // Keep its valuation for all-case monitoring, never as a new graph state.
@@ -4540,13 +4631,16 @@ impl Exploration {
         for (i, m) in state.monitors.iter().enumerate() {
             self.activation[i] |= m.activated;
             self.violation[i] |= m.violated;
+            if let Some(issue) = m.evidence_issue {
+                self.evidence_issues.insert(ir::ClauseId(i), issue);
+            }
         }
     }
 
     fn contract_verdict(&self, id: ir::ClauseId, aborted: bool) -> Verdict {
         if self.violation.get(id.0) == Some(&true) {
             Verdict::Violated
-        } else if aborted {
+        } else if self.evidence_issues.contains_key(&id) || aborted {
             Verdict::Unsupported
         } else if self.truncated || !self.ranges.is_empty() {
             Verdict::Inconclusive
@@ -5874,7 +5968,12 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
             "condition value out of range",
         )
     };
-    let mut bound = vec![false; model.process.bindings.len()];
+    let mut bound: Vec<_> = model
+        .process
+        .bindings
+        .iter()
+        .map(|b| b.merge.is_some())
+        .collect();
     let mut call = |call: &ir::Call| {
         let cap = model
             .capabilities
@@ -6064,6 +6163,27 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
     while let Some(block) = blocks.pop() {
         for statement in block {
             match &statement.kind {
+                ir::Stmt::MergeCopy { binding, source } => {
+                    let target = model
+                        .process
+                        .bindings
+                        .get(binding.0)
+                        .ok_or("invalid merge target")?;
+                    let value = model
+                        .process
+                        .bindings
+                        .get(source.0)
+                        .ok_or("invalid merge source")?;
+                    ok(
+                        target.ty == value.ty
+                            && target
+                                .merge
+                                .as_ref()
+                                .is_some_and(|m| m.sources.contains(source))
+                            && binding != source,
+                        "invalid merge copy",
+                    )?;
+                }
                 ir::Stmt::LoopControl(control) => {
                     for c in &control.aliases {
                         call(c)?;
@@ -6179,6 +6299,7 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
     };
     let mut d1_ordinals = BTreeSet::new();
     let mut d1_labels = BTreeSet::new();
+    crate::evidence_basis::validate(model)?;
     for c in &model.contracts {
         if model.tracks_obligations() {
             if let Some(n) = c.ordinal {
@@ -6284,6 +6405,7 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
                     )?;
                 }
             }
+            ir::ContractKind::EvidenceBasis { .. } => {} // Independently checked above.
             ir::ContractKind::Permitted { capability }
             | ir::ContractKind::AuthorityBasis { capability, .. } => {
                 let cap = model
@@ -7330,6 +7452,29 @@ fn step_observed_inner(
         (&[], &post_join, &post_next)
     } else {
         match &program[state.pc] {
+            Instruction::MergeCopy {
+                binding,
+                source,
+                next,
+            } => {
+                let value = state
+                    .results
+                    .get(source.0)
+                    .copied()
+                    .flatten()
+                    .ok_or("merge source has no result")?;
+                let target = state
+                    .results
+                    .get_mut(binding.0)
+                    .ok_or("merge target out of range")?;
+                if target.is_some() {
+                    return Err("merge target already written".into());
+                }
+                *target = Some(value);
+                state.pc = *next;
+                room.take(1)?;
+                return Ok(Step::Next(vec![state]));
+            }
             Instruction::LoopControl { updates, next } => {
                 for (id, value) in updates {
                     state.state_values[id.0] = *value;
@@ -8302,6 +8447,12 @@ fn apply_kernel_branch(
     }
     for &(id, x) in &branch.overrides {
         next.state_values[id.0] = x;
+    }
+    if let Some(h) = &mut next.evidence {
+        h.overrides(
+            task.binding,
+            branch.overrides.iter().map(|(v, _)| *v).collect(),
+        );
     }
     let mut receipts = cap.writes.clone();
     receipts.extend(
@@ -10444,6 +10595,7 @@ mod tests {
                 bindings: ["a", "b"]
                     .into_iter()
                     .map(|name| ir::Binding {
+                        merge: None,
                         repetition: None,
                         name: name.into(),
                         ty: ir::TypeId(0),
@@ -11118,6 +11270,7 @@ mod tests {
         third.cancel = ir::Cancel::Cooperative { ack_within: 1 };
         model.capabilities.push(third);
         model.process.bindings.push(ir::Binding {
+            merge: None,
             repetition: None,
             name: "c".into(),
             ty: ir::TypeId(0),
@@ -11263,6 +11416,7 @@ mod tests {
             clock: 6,
         };
         model.process.bindings.push(ir::Binding {
+            merge: None,
             repetition: None,
             name: "c".into(),
             ty: ir::TypeId(0),

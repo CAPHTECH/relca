@@ -4,10 +4,6 @@
     {
       "code": "U-SYN-0",
       "severity": "error"
-    },
-    {
-      "code": "W-CUT-0",
-      "severity": "warning"
     }
   ],
   "properties": [],
