@@ -33,6 +33,7 @@
 - 流入・方策・シナリオ: `arrival-*`、`pol-*`、`lim-*`、`scn-*`。
 - 指標・品質・待ち・比較: `met-*`、`qual-*`、`wait-*`、`eval-*`、`qtl-*`。
 - 構成・系譜・規則: `config-diff-*`、`diff2-*`、`agency-*`、`agy2-*`、`lin-*`、`rule-*`。
+- 契約の適用範囲: `scope-a1`〜`scope-a5` と各 `.broken-*`。非適用の開示、適用内の違反、空虚な契約、比較セル、保持宣言を、1分/2分の手計算で照合する。
 - 反例・変更生成: `explain-*`、`mut-*`、`mut2-*`。
 
 追加の組合せや内部状態の手計算は `crates/relca-core/tests/` と

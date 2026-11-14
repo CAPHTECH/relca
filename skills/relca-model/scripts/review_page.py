@@ -43,7 +43,7 @@ EXIT_OF = {
     "unsupported": 4,
     "vacuous": 5,
 }
-# ADR 0002 の畳み込み順(重いほど大きい)
+# ADR 0002 の判定の優先順(重いほど大きい)
 RANK = {
     "satisfied": 0,
     "vacuous": 1,
@@ -885,7 +885,7 @@ class Run:
 # 走査で読む鍵。report の種類ごとに、これに加えて表示で読む鍵がある。
 # これ以外の最上位の鍵は「読まなかった鍵」としてページに出す。
 SCAN_KEYS = {"verdict", "cut", "bounds", "properties", "diagnostics", "unchecked", "agency", "repetition",
-             "explanation", "mismatch", "model", "ledger", "mode"}
+             "explanation", "mismatch", "model", "ledger", "mode", "contract_scope"}
 SHOWN_KEYS = {
     "main": {"actors", "cut_context", "metrics", "responsibilities", "assumptions", "uncertainty", "terminals", "unit",
              "response_receipts", "response_analysis", "case_outcomes"},
@@ -958,6 +958,7 @@ class Page:
         self.resp_steps = []      # 反例の command のある段の読み
         self.case_view = []       # case_outcomes の案件ごとの読み
         self.repetitions = []     # (出所, repetition, Source)。全 report を同じ規則で読む。
+        self.contract_scopes = []  # (出所, 範囲外の契約)。verdict には混ぜない。
         self.runs = []
         self.model_path = args.model
         self.model_sha = None
@@ -1257,14 +1258,14 @@ class Page:
             self.unv(origin, "結果全体", "unsupported", note)
         elif v in UNVERIFIED:
             self.unv(origin, "結果全体", v, self._reason_of(data))
-        # 畳み込みの照合
+        # 全体の判定の照合
         if kind in ("main", "simulate", "plan", "mutate_original"):
             folded = fold_report(data)
-            self._compare_fold(origin, v, folded, "性質と診断の畳み込み")
+            self._compare_fold(origin, v, folded, "性質と診断をまとめた判定")
         elif kind == "compare":
             plan_vs = [canon_verdict(get(pl, "report", "verdict"))[0] for pl in as_list(data.get("plans"))]
             if plan_vs:
-                self._compare_fold(origin, v, max(plan_vs, key=lambda x: RANK[x]), "案の verdict の畳み込み")
+                self._compare_fold(origin, v, max(plan_vs, key=lambda x: RANK[x]), "各案をまとめた判定")
             else:
                 self.unv(origin, "plans", "unsupported", "案が一つも無い")
         # Cut
@@ -1323,13 +1324,20 @@ class Page:
                 if case_vs:
                     worst, wid = max(case_vs, key=lambda x: RANK[x[0]])
                     if RANK[worst] > RANK[pv]:
-                        self.alert("error", "%s: 性質 %s は %s だが case %s が %s。畳み込みが矛盾している"
+                        self.alert("error", "%s: 性質 %s は %s だが case %s が %s。全体と案件ごとの判定が矛盾している"
                                    % (origin, pid, pv, wid, worst))
-                        self.unv(origin, "%s の畳み込み" % pid, worst,
+                        self.unv(origin, "%s の全体判定" % pid, worst,
                                  "性質は %s だが cases[] に %s(case %s)がある" % (pv, worst, wid))
                 if "mechanism_unmodeled" in as_list(p.get("notes")):
                     self.mechanism.append((origin, pid))
         # mismatch
+        if "contract_scope" in data:
+            if kind == "mutate" and isinstance(data.get("original"), dict):
+                if data["contract_scope"] != data["original"].get("contract_scope", []):
+                    self.unv(origin, "contract_scope", "unsupported", "最上位と original の適用範囲が一致しない")
+                    self.alert("error", "%s: contract_scope が original と違う" % origin)
+            else:
+                self._scan_contract_scopes(origin, data["contract_scope"])
         if data.get("mismatch") is not None:
             self.unv(origin, "mismatch", "mismatch", "比較条件が合わない: %s" % short(data.get("mismatch"), 200))
             self.alert("error", "%s: 比較条件が合わない(mismatch が null でない)" % origin)
@@ -1365,10 +1373,36 @@ class Page:
             if k not in read:
                 self.unread.setdefault(str(k), []).append(origin)
 
+    def _scan_contract_scopes(self, origin, rows):
+        keys = {"id", "contract", "applies_to", "reason", "status", "masks_call"}
+        if not isinstance(rows, list):
+            self.unv(origin, "contract_scope", "unsupported", "適用範囲の表が list でない")
+            self.alert("error", "%s: contract_scope を読めない" % origin)
+            return
+        seen = set()
+        for row in rows:
+            valid = (isinstance(row, dict) and set(row) == keys
+                     and all(isinstance(row[k], str) for k in ("id", "contract", "reason"))
+                     and row["id"] and row["contract"]
+                     and row["status"] == "not_applicable" and type(row["masks_call"]) is bool
+                     and isinstance(row["applies_to"], list) and row["applies_to"]
+                     and all(isinstance(n, str) and n for n in row["applies_to"])
+                     and len(set(row["applies_to"])) == len(row["applies_to"])
+                     and row["id"] not in seen)
+            if not valid:
+                self.unv(origin, "contract_scope", "unsupported", "適用範囲の行が不正: %s" % short(row, 160))
+                self.alert("error", "%s: contract_scope の行を読めない" % origin)
+                continue
+            seen.add(row["id"])
+            self.contract_scopes.append((origin, row))
+            self.unv(origin, row["id"], "not_applicable",
+                     "構成の適用範囲外で未検査。適用先 %s、理由: %s、masks_call: %s"
+                     % (", ".join(row["applies_to"]), row["reason"], row["masks_call"]))
+
     def _compare_fold(self, origin, reported, folded, how):
         if RANK[folded] > RANK[reported]:
             self.alert("error", "%s: 全体の verdict %s が%s %s より軽い。全体の verdict を信用しない" % (origin, reported, how, folded))
-            self.unv(origin, "verdict の畳み込み", folded, "全体は %s だが%sは %s" % (reported, how, folded))
+            self.unv(origin, "全体の判定", folded, "全体は %s だが%sは %s" % (reported, how, folded))
             for r in self.runs:
                 if r.role == origin and r.verdict == "satisfied":
                     r.verdict = folded
@@ -1804,6 +1838,22 @@ class Page:
                     vrows.append(["contract %s" % esc(name), "<code>%s</code>" % esc(text), str(line)])
         out.append("<h4>検査・方策・流入の宣言(verify / contract / policy 等)</h4>")
         out.append(self.table(["種類", "宣言", "行"], vrows))
+        scope_headers = []
+        for origin, src in (("model", self.src), ("compare-model", self.compare_src)):
+            if not src or (origin == "compare-model" and self.compare_sha == self.model_sha):
+                continue
+            for name, toks in src.items_of("contract"):
+                opening = next((i for i, t in enumerate(toks) if t.text == "{"), len(toks))
+                header = toks[:opening]
+                if len(header) > 2 and header[2].text == "applies_to":
+                    scope_headers.append([esc(origin), esc(name), "<code>%s</code>" % esc(src.slice(header)), str(src.line_of_toks(toks))])
+        if scope_headers or self.contract_scopes:
+            out.append("<h4>契約の適用範囲</h4>")
+            out.append(self.table(["source", "契約", "適用先と理由の宣言", "行"], scope_headers))
+            scope_rows = [[esc(origin), "<code>%s</code>" % esc(row["id"]), esc(", ".join(row["applies_to"])), esc(row["reason"]),
+                           "not_applicable / verdict なし", esc(row["masks_call"])] for origin, row in self.contract_scopes]
+            out.append(self.table(["結果の出所", "未検査の契約", "適用先", "理由", "扱い", "検査を隠す可能性(masks_call)"], scope_rows))
+            out.append('<p class="note">範囲外は satisfied ではなく未検査。未確認の件数に数えるが、全体の判定には数えない。masks_call は手順や異議・復旧等の経路に呼出しがある場合と、Capability を参照しない節を外す場合に true。実際の到達性の判定ではない。</p>')
         # 既定値
         drows = []
         for a in self.actors_json():
@@ -2581,6 +2631,11 @@ class Page:
                 continue
             cells = []
             for val in as_list(p.get("values")):
+                if get(val, "status") == "not_applicable":
+                    if get(val, "verdict") is not None or get(val, "reason") != "configuration_scope":
+                        raise ValueError("比較の非適用セルに verdict がある、または理由が違う")
+                    cells.append('<span class="badge warn">非適用(not_applicable、verdict なし)</span>')
+                    continue
                 v, _ = canon_verdict(get(val, "verdict"))
                 prob = get(val, "probability")
                 cells.append(verdict_badge(v, get(val, "verdict")) +

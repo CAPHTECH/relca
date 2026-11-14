@@ -93,6 +93,8 @@ pub(crate) fn review_fixture(name: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MutationReport {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub contract_scope: Vec<crate::contract_scope::Excluded>,
     pub ledger: crate::ledger::Ledger,
     pub uncertainty: crate::uncertainty::Uncertainty,
     pub verdict: Verdict,
@@ -302,6 +304,7 @@ fn uncomputed(reason: &'static str, limit: usize) -> MutationReport {
     })
     .collect();
     MutationReport {
+        contract_scope: Vec::new(),
         ledger: crate::ledger::Ledger::aggregate("mutation"),
         uncertainty: crate::uncertainty::Uncertainty::not_lowered(),
         verdict: Verdict::Invalid,
@@ -550,6 +553,15 @@ fn mutate_using(
     ))
 }
 fn seal(mut r: MutationReport) -> MutationReport {
+    if let Some(original) = &r.original {
+        r.contract_scope = original.contract_scope.clone();
+        for row in &r.contract_scope {
+            let key = format!("contract.scope.{}", row.id);
+            if !r.unchecked.contains(&key) {
+                r.unchecked.push(key);
+            }
+        }
+    }
     r.ledger.execution["limits"]["mutant_limit"] = match r.run.mutant_limit {
         MutantLimit::Used(n) => crate::ledger::known(n),
         MutantLimit::Unused { .. } => crate::ledger::na("no_analysis"),
@@ -653,7 +665,7 @@ fn mutate_using_raw(
     let process = scoped_process(options).then_some(context.process.name.as_str());
     let reads = read_sites(src, &ast, process);
     let guards = guard_sites(src, &ast, process);
-    let authorities = authority_sites(src, &ast, process);
+    let authorities = authority_sites_selected(src, &ast, process, configuration);
     if !context.process.degradations.is_empty() {
         r.verdict = Verdict::Unsupported;
         r.diagnostics.push(diag::Diagnostic {
@@ -1484,12 +1496,25 @@ fn block_at<'a>(mut block: &'a mut ast::Block, path: &[(usize, bool)]) -> &'a mu
     block
 }
 
+#[cfg(test)]
 fn authority_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
+    authority_sites_selected(src, model, process, None)
+}
+
+fn authority_sites_selected(
+    src: &str,
+    model: &ast::Model,
+    process: Option<&str>,
+    configuration: Option<&str>,
+) -> Vec<Candidate> {
     let mut named: BTreeMap<&str, BTreeSet<(&str, &str)>> = BTreeMap::new();
     let mut all_calls = vec![];
     for item in &model.items {
         match item {
             ast::Item::Contract(c) => {
+                if !crate::contract_scope::applies(c, configuration) {
+                    continue;
+                }
                 for clause in &c.clauses {
                     if let ast::ContractClause::AuthorityBasis { target, authority } = &clause.value
                     {

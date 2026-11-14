@@ -284,7 +284,7 @@ macro_rules! difference_wire {
     }
 }
 difference_wire! {
-    Actor, Meaning(MeaningValue), Authority(Nullable<AuthorityValue>),
+    ContractScope, Actor, Meaning(MeaningValue), Authority(Nullable<AuthorityValue>),
     Resource(Nullable<ResourceValue>), Time(Vec<CallMode>), Visibility(Vec<String>), Contest(Vec<ContestValue>),
     Rule(RuleValue),
     Qualification(Nullable<Vec<String>>), Performance(Nullable<report::work_profiles::Profile>),
@@ -308,6 +308,22 @@ impl TryFrom<DifferenceWire> for Difference {
             };
         }
         let d = match wire {
+            DifferenceWire::ContractScope {
+                target,
+                change,
+                reason,
+                loses,
+                annotations,
+            } => row!(
+                ContractScope,
+                target,
+                change,
+                reason,
+                loses,
+                annotations,
+                None,
+                None
+            ),
             DifferenceWire::Qualification {
                 target,
                 change,
@@ -556,7 +572,8 @@ impl TryFrom<DifferenceWire> for Difference {
                 Some(DiffValue::Contests(to))
             ),
         };
-        if matches!(d.kind, Kind::Actor | Kind::Relation) && d.from.is_none() {
+        if matches!(d.kind, Kind::Actor | Kind::Relation | Kind::ContractScope) && d.from.is_none()
+        {
             if d.change == Change::Modified {
                 return Err("legacy differences cannot be modified");
             }
@@ -581,7 +598,8 @@ impl TryFrom<DifferenceWire> for Difference {
                 Kind::Meaning => DiffValue::Meaning(false),
                 Kind::Visibility => DiffValue::Readers(vec![]),
                 Kind::Contest => DiffValue::Contests(vec![]),
-                Kind::Actor
+                Kind::ContractScope
+                | Kind::Actor
                 | Kind::Relation
                 | Kind::Authority
                 | Kind::Resource
@@ -671,10 +689,14 @@ pub struct TerminalComparison {
 #[serde(deny_unknown_fields)]
 pub struct PropertyComparison {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_status: Option<crate::contract_scope::Applicability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_status: Option<crate::contract_scope::Applicability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cases: Option<Vec<CasePropertyComparison>>,
     pub id: String,
-    pub from: Verdict,
-    pub to: Verdict,
+    pub from: Option<Verdict>,
+    pub to: Option<Verdict>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -713,8 +735,8 @@ pub struct CaseValue {
 pub struct CasePropertyComparison {
     pub case_id: u64,
     pub arrival: u64,
-    pub from: PropertyValue,
-    pub to: PropertyValue,
+    pub from: Option<PropertyValue>,
+    pub to: Option<PropertyValue>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1061,6 +1083,30 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
         return result;
     }
     result.differences = static_differences(&from_model, &to_model);
+    if from_model.model.contract_selection.scoped()
+        && [
+            (&result.from.report, &from_model.model),
+            (&result.to.report, &to_model.model),
+        ]
+        .iter()
+        .any(|(r, m)| {
+            !m.contract_selection
+                .excluded()
+                .is_ok_and(|expected| r.contract_scope == expected)
+                || crate::comparison_projection::exhaustive(r, m).is_err()
+        })
+    {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "configuration report inventories differ".into(),
+            None,
+        );
+        result.finish();
+        return result;
+    }
+    result
+        .differences
+        .extend(scope_differences(&from_model.model, &to_model.model));
     result.differences.extend(static_projection::differences(
         src,
         &from_model.model,
@@ -1111,7 +1157,7 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
     if result.case_outcomes.is_some() {
         project_case_reports(&mut result, &from_model.model, &to_model.model);
     } else {
-        project_reports(&mut result);
+        project_reports(&mut result, from_model.model.contract_selection.scoped());
     }
     intent::preservation(&mut result, &to_model);
     if from_model.model.metrics.is_some()
@@ -1307,7 +1353,7 @@ fn static_differences(
     differences
 }
 
-fn project_reports(result: &mut DiffReport) {
+fn project_reports(result: &mut DiffReport, scoped: bool) {
     let a = &result.from.report;
     let b = &result.to.report;
     result.terminals.clear();
@@ -1340,6 +1386,12 @@ fn project_reports(result: &mut DiffReport) {
         .iter()
         .chain(&b.properties)
         .map(|p| &p.id)
+        .chain(
+            a.contract_scope
+                .iter()
+                .chain(&b.contract_scope)
+                .map(|c| &c.id),
+        )
         .collect();
     // Contract inventories have model-wide clause ordinals and interleaved
     // explicit verifies. Preserve that inventory order, not lexical id order.
@@ -1350,6 +1402,12 @@ fn project_reports(result: &mut DiffReport) {
             .iter()
             .chain(&b.properties)
             .map(|p| &p.id)
+            .chain(
+                a.contract_scope
+                    .iter()
+                    .chain(&b.contract_scope)
+                    .map(|c| &c.id),
+            )
             .filter(|id| seen.insert(*id))
             .collect()
     } else {
@@ -1358,11 +1416,28 @@ fn project_reports(result: &mut DiffReport) {
     let properties: Option<Vec<_>> = ids
         .into_iter()
         .map(|id| {
+            let av = a.properties.iter().find(|p| &p.id == id).map(|p| p.verdict);
+            let bv = b.properties.iter().find(|p| &p.id == id).map(|p| p.verdict);
+            if (av.is_none() && !a.contract_scope.iter().any(|c| &c.id == id))
+                || (bv.is_none() && !b.contract_scope.iter().any(|c| &c.id == id))
+            {
+                return None;
+            }
             Some(PropertyComparison {
+                from_status: scoped.then_some(if av.is_some() {
+                    crate::contract_scope::Applicability::Applied
+                } else {
+                    crate::contract_scope::Applicability::NotApplicable
+                }),
+                to_status: scoped.then_some(if bv.is_some() {
+                    crate::contract_scope::Applicability::Applied
+                } else {
+                    crate::contract_scope::Applicability::NotApplicable
+                }),
                 cases: None,
                 id: id.clone(),
-                from: a.properties.iter().find(|p| &p.id == id)?.verdict,
-                to: b.properties.iter().find(|p| &p.id == id)?.verdict,
+                from: av,
+                to: bv,
             })
         })
         .collect();
@@ -1483,22 +1558,62 @@ fn response_differences(from: &crate::ir::Model, to: &crate::ir::Model) -> Vec<D
         .collect()
 }
 
+fn scope_differences(from: &crate::ir::Model, to: &crate::ir::Model) -> Vec<Difference> {
+    let mut seen = BTreeSet::new();
+    from.contract_selection
+        .clauses
+        .iter()
+        .filter_map(|a| {
+            let b = to
+                .contract_selection
+                .clauses
+                .iter()
+                .find(|b| b.id == a.id)?;
+            let name = a.contract.as_ref()?;
+            (a.excluded != b.excluded && seen.insert(name.clone())).then(|| Difference {
+                kind: Kind::ContractScope,
+                target: name.clone(),
+                change: if b.excluded {
+                    Change::Removed
+                } else {
+                    Change::Added
+                },
+                reason: None,
+                loses: None,
+                from: None,
+                to: None,
+                annotations: Vec::new(),
+            })
+        })
+        .collect()
+}
+
 fn project_case_reports(result: &mut DiffReport, from: &crate::ir::Model, to: &crate::ir::Model) {
     use crate::comparison_projection::{self as projection, TerminalValue};
     let projected = (|| -> projection::Result<_> {
         let a = projection::exhaustive(&result.from.report, from)?;
         let b = projection::exhaustive(&result.to.report, to)?;
+        let scoped = from.contract_selection.scoped();
         if a.arrivals != b.arrivals
-            || !a
-                .properties
-                .iter()
-                .map(|p| &p.id)
-                .filter(|id| id.as_str() != "receipt_resolution")
-                .eq(b
-                    .properties
+            || if scoped {
+                crate::contract_scope::inventory(
+                    a.properties.iter().map(|p| p.id.as_str()),
+                    &from.contract_selection,
+                ) != crate::contract_scope::inventory(
+                    b.properties.iter().map(|p| p.id.as_str()),
+                    &to.contract_selection,
+                )
+            } else {
+                !a.properties
                     .iter()
                     .map(|p| &p.id)
-                    .filter(|id| id.as_str() != "receipt_resolution"))
+                    .filter(|id| id.as_str() != "receipt_resolution")
+                    .eq(b
+                        .properties
+                        .iter()
+                        .map(|p| &p.id)
+                        .filter(|id| id.as_str() != "receipt_resolution"))
+            }
         {
             return Err("configuration report inventories differ");
         }
@@ -1525,18 +1640,53 @@ fn project_case_reports(result: &mut DiffReport, from: &crate::ir::Model, to: &c
                     rows.push(CasePropertyComparison {
                         case_id,
                         arrival,
-                        from: value(p)?,
-                        to: value(q)?,
+                        from: Some(value(p)?),
+                        to: Some(value(q)?),
                     });
                 }
                 Some(rows)
             };
             properties.push(PropertyComparison {
+                from_status: scoped.then_some(crate::contract_scope::Applicability::Applied),
+                to_status: scoped.then_some(crate::contract_scope::Applicability::Applied),
                 id: p.id.clone(),
-                from: p.aggregate,
-                to: q.aggregate,
+                from: Some(p.aggregate),
+                to: Some(q.aggregate),
                 cases,
             });
+        }
+        if scoped {
+            for c in &from.contract_selection.clauses {
+                if properties.iter().any(|p| p.id == c.id) {
+                    continue;
+                }
+                let p = a.properties.iter().find(|p| p.id == c.id);
+                let q = b.properties.iter().find(|p| p.id == c.id);
+                let cases = if from.legacy_route() {
+                    None
+                } else {
+                    Some(a.arrivals.iter().map(|(&case_id, &arrival)| {
+                    let value = |p: Option<&projection::Property>| -> projection::Result<Option<PropertyValue>> { p.map(|p| { let v = p.values.get(&Some(case_id)).ok_or("missing property case")?; Ok(PropertyValue { verdict: v.verdict, probability: v.probability.clone() }) }).transpose() };
+                    Ok(CasePropertyComparison { case_id, arrival, from: value(p)?, to: value(q)? })
+                }).collect::<projection::Result<Vec<_>>>()?)
+                };
+                properties.push(PropertyComparison {
+                    id: c.id.clone(),
+                    from: p.map(|p| p.aggregate),
+                    to: q.map(|p| p.aggregate),
+                    from_status: Some(if p.is_some() {
+                        crate::contract_scope::Applicability::Applied
+                    } else {
+                        crate::contract_scope::Applicability::NotApplicable
+                    }),
+                    to_status: Some(if q.is_some() {
+                        crate::contract_scope::Applicability::Applied
+                    } else {
+                        crate::contract_scope::Applicability::NotApplicable
+                    }),
+                    cases,
+                });
+            }
         }
         let mut outcomes = Vec::new();
         if !a.aborted && !b.aborted {
@@ -1647,7 +1797,7 @@ mod tests {
                 } else {
                     side.report.properties.remove(0);
                 }
-                project_reports(&mut result);
+                project_reports(&mut result, false);
                 result.finish();
                 assert!(result.properties.is_empty());
                 assert_eq!(result.terminals, terminals);

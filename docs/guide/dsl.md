@@ -264,6 +264,51 @@ body と `on_limit` で使えるのは、操作の呼出し、`if`、固定 `wai
 未宣言の Cut は警告とともに出力されます。`configuration` は Cut と process を選び、
 `intent` で構成変更の理由を添えます。複数の構成がある check には `--configuration NAME` が必要です。
 
+### 契約を適用する構成を選ぶ
+
+契約は、何も指定しなければすべての構成に適用されます。
+ある構成だけに必要な統制は、名前付きの契約に `applies_to` と理由を書いて区別します。
+
+```relca
+contract Controls applies_to [New] reason "Oldには承認画面がない" {
+  authority_basis Screen.approve Mgr
+}
+```
+
+[実行できる全文例](../../examples/configuration-contracts.relca)では、Old は支払だけ、
+New は承認してから支払います。各操作は1分です。
+
+```sh
+relca check examples/configuration-contracts.relca --configuration Old
+relca check examples/configuration-contracts.relca --configuration New
+relca compare examples/configuration-contracts.relca --plans Old,New --mode exhaustive
+```
+
+| 構成 | done までの時間 | reachable end.done | Controls の扱い | check の exit |
+|---|---:|---|---|---:|
+| Old | 1分 | satisfied | 範囲外で未検査 | 0 |
+| New | 2分 | satisfied | satisfied | 0 |
+
+Old の契約は satisfied になったのではなく、検査する性質から外れています。
+`contract_scope` と `unchecked` に範囲と理由が残ります。
+Old では承認操作を呼ばないという既存の警告も残ります。
+詳しくは[結果の適用範囲](results.md#契約の適用範囲)を参照してください。
+
+- 適用先は宣言した構成名の空でない並びです。未知名、重複、configuration の無いモデルではエラーになります。
+  全構成を列挙した場合の意味は、指定を省略した場合と同じです。
+- 契約名と `reason "..."` は必須です。名前なしの契約への指定は未対応、理由の欠落は構文エラーです。
+  Cut の除外理由と同じく空の文字列も構文上は受理しますが、使うときは除外の理由を記入してください。
+- 適用範囲内で前件が一度も起きなければ、従来どおり `vacuous` です。
+  到達しない枝に対象があるだけでも、自動で範囲外にはしません。
+- 範囲外の構成の手順や、別の契約の異議経路から対象を呼ぶ場合は W-CONF-2 で警告します。
+  到達しない枝、復旧、再送、縮退の代替も呼出しの候補に含め、実際に開始するかどうかとは分けます。
+  Capability を参照しない state invariant も、検査を外していることを警告します。
+- `waive` の範囲は参照する response の範囲の部分集合にします。
+  `contest` を含む契約への指定は、実行経路も変えてしまうため未対応です。
+- `verify` の要求は構成ごとに外せません。適用する契約と verify がどちらも0件なら、
+  範囲外の宣言だけで成功とはせず `unsupported` になります。
+- `intent { preserve Controls }` と書いた行き先で Controls が範囲外なら、diff は E-DIFF-0 で拒否します。
+
 `bounds` の `cases`、`live_tasks`、`clock` は計算の上限です。
 `arrivals`、queue、`scenario` の horizon などの業務条件と混同しないでください。
 `simulation replications N seed S confidence P` は simulate の標本設定です。
@@ -343,11 +388,12 @@ Agency の判定行に出ていない操作にも使えますが、契約を足�
 | Cut で除外した Actor を要求 | `E-CUT-1`。既存の契約・条件式と同じく、範囲外の Actor 参照を拒否 |
 | repeat との併用 | `U-SEM-0`、`loop_feature_combination` |
 | 縮退経路・recovery との併用 | `U-SEM-0`、`evidence_basis_feature_combination` |
-| compare / diff / sensitivity | `U-SEM-0`、`evidence_basis_unsupported_command` |
+| 選んだ構成にこの契約が適用される compare / diff / sensitivity | `U-SEM-0`、`evidence_basis_unsupported_command` |
 
 `check`、`explain`、`mutate` で扱い、`simulate` では標本中の違反だけを確認します。
 応答喪失と有限再送は既存の操作・権限契約が受理する範囲で扱い、応答の受信と操作の正常終了を分けます。
-`conform` は読取りをログで観測しないので、この契約を検査せず `unsupported` にします。
+`conform` は読取りをログで観測しないので、適用されるこの契約を検査せず `unsupported` にします。
+範囲外の契約はこれらの未対応要求にも数えず、適用範囲の欄に残します。
 詳しくは[根拠の結果と証跡](results.md#根拠源の要求と証跡)を参照してください。
 
 要求を書くのは、業務で本当に必要な根拠源だけです。

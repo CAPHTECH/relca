@@ -25,18 +25,18 @@ explain の構成指定が不足したときは、stderr の --configuration の
 
 ### 全体の verdict
 
-check・explain・simulate の report(compare の各案の report も同じ)の全体の verdict は、次を `invalid > violated > unsupported > inconclusive > vacuous > satisfied` で畳む(`crates/relca-core/src/report.rs` の `fold_verdict`):
+check・explain・simulate の report(compare の各案の report も同じ)の全体の verdict は、次の結果を `invalid > violated > unsupported > inconclusive > vacuous > satisfied` の優先順でまとめる(`crates/relca-core/src/report.rs` の `fold_verdict`):
 
 - 性質ごとの verdict
 - diagnostics の severity が error のもの: code が `U-` で始まれば unsupported、それ以外は invalid
 - 性質が一つ以上あるときの `W-DEADLOCK-0`: violated(到達できる deadlock は反例)
 - 上のどれも無い(性質が空で error も無い)とき: unsupported
 
-warning は中立で、畳み込みに入らない。
-後段(ledger の完成処理)で全体が重くなる場合があるかは確かめていない [U]。examples/invoice の実出力では、全 report で畳み直した値と一致した。
+warning は中立で、全体の判定には数えない。
+後段(ledger の完成処理)で全体が重くなる場合があるかは確かめていない [U]。examples/invoice の実出力では、全 report で計算し直した判定と一致した。
 
-compare と diff の最上位は、通常は各案(diff は from と to)の report の verdict と、compare・diff 自身の error の診断を同じ順で畳む(`crates/relca-core/src/compare.rs` の `fold` と `diff.rs`)。
-**例外:** 次の拒否では、畳んだ後で最上位を unsupported に上書きする。各案の report が violated でも最上位は unsupported になり、畳み込みより軽い。
+compare と diff の最上位は、通常は各案(diff は from と to)の report の verdict と、compare・diff 自身の error の診断を同じ優先順でまとめる(`crates/relca-core/src/compare.rs` の `fold` と `diff.rs`)。
+**例外:** 次の拒否では、結果をまとめた後で最上位を unsupported に上書きする。各案の report が violated でも最上位は unsupported になり、単純にまとめた判定より軽い。
 
 - `priority_feature_combination`(compare・diff)
 - `retry_feature_combination`(compare・diff。再送を含むモデル)
@@ -44,13 +44,13 @@ compare と diff の最上位は、通常は各案(diff は from と to)の repo
 - `merge_feature_combination`(compare・diff。合流を含むモデル)
 
 EC 試行(再送を含む 2 案)では、compare も diff も最上位 unsupported・exit 4、各案の report はどちらも violated だった(1 回)。各案の性質の verdict は `check --configuration` の結果と一致した。
-この拒否では単純な畳み込みだけで最上位を再計算できない。読むときは次のとおりにする。
+この拒否では、単に各案の最も重い判定を選ぶだけでは最上位を再計算できない。読むときは次のとおりにする。
 
 - 最上位の unsupported は「比較・差分をしていない」という意味で読む。
 - 案ごとの結論は `plans[].report.verdict`(diff は `from.report.verdict`・`to.report.verdict`)から読み、**両方を報告する**。案の violated を最上位の unsupported で打ち消さない。
 - exit は最上位の verdict に対応する(上の例は 4)。exit だけ見て案の違反を見落とさない。
 
-review_page は、check・explain・simulate・各案・mutate の original を `fold_verdict` と同じ規則で畳み直す。compare の最上位は各案の verdict の最も重いものと照合する(`scripts/review_page.py` の `scan` の `kind == "compare"` の分岐)。どちらも全体の verdict が軽ければ「全体の verdict を信用しない」と警告する。上の拒否では、この警告が出るのが正しい。
+review_page は、check・explain・simulate・各案・mutate の original の全体の判定を `fold_verdict` と同じ規則で計算し直す。compare の最上位は各案の verdict の最も重いものと照合する(`scripts/review_page.py` の `scan` の `kind == "compare"` の分岐)。どちらも全体の verdict が軽ければ「全体の verdict を信用しない」と警告する。上の拒否では、この警告が出るのが正しい。
 review_page の端末・ページ冒頭・結論の未確認件数は、性質や入力の保留に加えて、
 Agency の `not_derived` と根拠不明、繰り返しの `coverage: not_derived` も同じ集計で数える。
 繰り返しは `repetition.coverage` の1項目として数え、出所と場所を含む項目単位で重複を除く。
@@ -67,6 +67,7 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `cut` | 宣言した Cut の object、または `"undeclared"` / `"unresolved"` | `"undeclared"` でも exit 0 になりうる |
 | `bounds` | `cases / live_tasks / clock / truncated` | `truncated: true` なら切断に関わる性質は inconclusive |
 | `properties[]` | `id`, `verdict`, 確率なら `probability.min/max`, `notes` | `notes: ["mechanism_unmodeled"]` は仕組みをモデル化していない印 |
+| `contract_scope[]` | 範囲外の契約のid、適用先、理由、not_applicable、masks_call | 検査済みではない。uncheckedにもcontract.scope.IDを残す |
 | `terminals[]` | 終端ごとの `elapsed` / `work` の min..max、確率 | 全到達経路の範囲。平均ではない |
 | `assumptions[]` | `field / value / affects` | 既定で埋めた欄・置いた仮定の一覧。報告に必ず付ける |
 | `actors[]` | Actor の各欄と `status: declared / default` | `default` は省略時既定。業務の人に確かめてもらう対象 |
@@ -82,6 +83,32 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+## 契約の適用範囲
+
+`applies_to` の範囲外では性質を問わず、not_applicable を verdict や satisfied にしない。
+compare は行を残し、非適用セルを status=not_applicable、verdict=null、reason=configuration_scope とする。
+適用セルは status=applied。scopeを使わない模型には新status欄を出さない。
+非対称ならW-CMP-1、checkedにcontract_scope、仮定にcompare.contract_scope=asymmetric。
+宣言評価は各案の適用分を使うため、契約が違う比較だという仮定を併記する。
+
+diffはfrom_status/to_statusで適用を区別し、範囲外側のfrom/toはnull。
+kind=contract_scopeのadded/removedで統制の増減を示す。行き先のpreserveが非適用契約を選べばE-DIFF-0。
+explainはomittedにverdict=null、reason=not_applicable_configuration_scopeを残す。
+mutateのauthority_expired候補にも適用範囲を使い、候補0件はvacuousのまま。
+sensitivityは適用先の宣言が変わればsensitivity_contract_mismatch。conformは適用分だけを照合する。
+
+W-CONF-1は、複数構成の模型で、対象の呼出しが字句上も無いvacuous契約への案内。
+対象を呼ぶ構成や構成が1つだけの模型には出さない。
+W-CONF-2 / masks_call=trueは、範囲外の構成の手順・異議経路・復旧・再送・縮退の代替から対象を呼ぶ場合の警告で、到達しない枝も含む。
+Capability参照の無い節もtrue。違反なしの保証にはしない。
+確認用ページは適用先と理由を表示し、非適用契約を出所とidごとに未確認の件数へ加える。
+最上位のverdictの再計算には加えない。
+全文例の実行値とJSON欄は[利用ガイド](../../../docs/guide/results.md#契約の適用範囲)を参照。
+最初の案で非適用の契約は表の末尾へ回る場合がある。位置でなくidを使って対応させる。
+intentには `change contract_scope Controls reason "適用先を見直す"`、追加/削除には
+`add contract_scope Controls reason "承認を追加する"` / `retire contract_scope Controls reason "承認を外す" loses "承認契約"` と書ける。
+mutate最上位のcontract_scope/uncheckedにもoriginalと同じ範囲を残す。確認用ページでは同じ元検査の重複としてoriginalだけを未確認に数える。
 
 ## 合流した値の読み方
 
@@ -132,9 +159,10 @@ mutate の evidence_missing はこの行も使う。original_access_removed が�
 正の実例の2/2検出はその入力の件数であり、他のモデルの検出率や網羅率ではない。
 契約が悪化しても同じ変異で系譜行が消える場合は、既存規則によりinconclusive / assigned_check_unavailableになりうる。
 異議経路の対象は、その性質だけU-SEM-0 evidence_basis_contest_route。他の判定は残す。
-compare/diff/sensitivity は U-SEM-0 evidence_basis_unsupported_command で拒否する。
+選んだ構成に適用される契約のcompare/diff/sensitivity は U-SEM-0 evidence_basis_unsupported_command で拒否する。
 diff の両側の個別検査が violated でも、最上位unsupportedは比較未実施を示す。両方を報告する。
 conform は U-LOG-1、not_checked に unsupported_request、unchecked に evidence_basis を残す。
+範囲外の契約は未対応要求にも数えず、contract_scopeに残す。
 詳しくは[利用ガイド](../../../docs/guide/results.md#根拠源の要求と証跡)を参照。
 
 ## 繰り返しを含むモデルで出る欄

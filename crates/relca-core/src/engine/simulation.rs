@@ -1335,6 +1335,9 @@ mod simulation_tests {
             if super::super::legacy_census::responsibility_fixture(name) {
                 continue;
             }
+            if relca_test_support::fixture_match::contract_scope_fixture(name) {
+                continue;
+            }
             old_dirs += 1;
             let src = std::fs::read_to_string(dir.join("model.relca")).unwrap();
             let at = src.rfind('}').unwrap();

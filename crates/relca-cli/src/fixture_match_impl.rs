@@ -6,6 +6,32 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 #[path = "../tests/support/ledger_shape.rs"]
 mod ledger_shape;
+#[path = "../tests/support/contract_scope_wire.rs"]
+mod scope_wire;
+
+#[allow(dead_code)]
+pub const CONTRACT_SCOPE_FIXTURES: [&str; 10] = [
+    "scope-a1",
+    "scope-a1.broken-called",
+    "scope-a2",
+    "scope-a2.broken-grant",
+    "scope-a3",
+    "scope-a3.broken-outside",
+    "scope-a4",
+    "scope-a4.broken-global",
+    "scope-a5",
+    "scope-a5.broken-preserve",
+];
+
+#[allow(dead_code)]
+pub fn contract_scope_fixture(name: &str) -> bool {
+    let known = CONTRACT_SCOPE_FIXTURES.contains(&name);
+    assert!(
+        !name.starts_with("scope-") || known,
+        "unclassified scope fixture {name}"
+    );
+    known
+}
 #[allow(dead_code)]
 pub fn original_report_fields(v: &Value) -> Value {
     ledger_shape::original_report(v)
@@ -1224,6 +1250,7 @@ fn property_probability(id: &str) -> bool {
 /// JSON in negative controls, without depending on a production DTO or solver.
 #[allow(dead_code)]
 pub fn validate_completion_wire(v: &Value) -> Result<(), String> {
+    scope_wire::report(v)?;
     validate_authority_record(v)?;
     let properties = v["properties"].as_array().ok_or("completion properties")?;
     let simulation = v["mode"] == "simulation";
@@ -1277,7 +1304,8 @@ pub fn validate_completion_wire(v: &Value) -> Result<(), String> {
             if !(word == "unreachable"
                 || (!simulation && word == "completion_graph")
                 || (simulation && word == "obligation_outcomes")
-                || word == "dynamic_authority_revocation")
+                || word == "dynamic_authority_revocation"
+                || scope_wire::marker(word))
             {
                 return Err("unknown completion unchecked word".into());
             }
@@ -3840,6 +3868,10 @@ fn mutation_schema() -> Ty {
     Obj(vec![
         ("verdict", Verdict),
         ("mode", Lit(&["mutation"])),
+        (
+            "contract_scope",
+            OptionalField(Box::new(scope_wire::schema())),
+        ),
         ("ledger", Ledger),
         ("uncertainty", Uncertainty),
         ("analysis", Lit(&["exhaustive"])),
@@ -3966,6 +3998,7 @@ fn mutation_schema() -> Ty {
 pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
     check(v, &mutation_schema(), "mutation wire")?;
     complete(v, &mutation_schema(), "mutation wire")?;
+    scope_wire::mutation(v)?;
     let rows = v["mutations"].as_array().unwrap();
     for row in rows {
         match row["status"].as_str().unwrap() {
@@ -4138,6 +4171,7 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
         .filter(|w| {
             !w.as_str().unwrap_or("").starts_with("mutation.kind.")
                 && !w.as_str().unwrap_or("").starts_with("mutation.site.")
+                && !scope_wire::marker(w)
         })
         .cloned()
         .collect();
@@ -7218,7 +7252,7 @@ fn compare_schema() -> Ty {
         ("arrival", Null(Box::new(Int))),
         (
             "values",
-            Arr(Box::new(Obj(vec![
+            Arr(Box::new(scope_wire::compare_cell(vec![
                 ("configuration", Str),
                 ("verdict", Verdict),
                 ("probability", Null(Box::new(Probability))),
@@ -7600,7 +7634,8 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
         return Err("feature unchecked order/presence".into());
     }
     let unchecked = &unchecked[..obligations_end];
-    let applicable: Vec<_> = [
+    let scoped = scope_wire::comparison(v)?;
+    let mut applicable: Vec<_> = [
         "configuration_selection",
         "cut_compatibility",
         "terminal_compatibility",
@@ -7612,6 +7647,9 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
     .into_iter()
     .filter(|x| sim || !["simulation_clause", "random_key_separation"].contains(x))
     .collect();
+    if checked.contains(&serde_json::json!("contract_scope")) {
+        applicable.push("contract_scope");
+    }
     let fixed = [
         "ranking",
         "hard_filter",
@@ -7794,15 +7832,40 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
                     ]));
                 }
             }
+            if scoped {
+                for r in plan["report"]["contract_scope"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                {
+                    let cases: Vec<_> = plan["report"]["case_outcomes"]
+                        .as_array()
+                        .map(|cs| {
+                            cs.iter()
+                                .map(|c| (c["case_id"].clone(), c["arrival"].clone()))
+                                .collect()
+                        })
+                        .unwrap_or_else(|| vec![(serde_json::json!(1), serde_json::json!(0))]);
+                    rows.extend(
+                        cases
+                            .into_iter()
+                            .map(|(case, arrival)| serde_json::json!([r["id"], case, arrival])),
+                    );
+                }
+                rows.sort_by_key(Value::to_string);
+            }
             if !inventory.is_empty() && inventory != rows {
                 return Err("raw property inventory disagreement".into());
             }
             inventory = rows;
         }
-        let table: Vec<_> = properties
+        let mut table: Vec<_> = properties
             .iter()
             .map(|p| serde_json::json!([p["id"], p["case_id"], p["arrival"]]))
             .collect();
+        if scoped {
+            table.sort_by_key(Value::to_string);
+        }
         if table != inventory {
             return Err("property table inventory/order".into());
         }
@@ -7872,6 +7935,12 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
         for (cell, plan) in cells.iter().zip(plans) {
             let raw = &plan["report"];
             if row.get("id").is_some() {
+                if cell["status"] == "not_applicable" {
+                    if !scope_wire::excluded(raw, &row["id"]) {
+                        return Err("unexplained non-applicable cell".into());
+                    }
+                    continue;
+                }
                 let prop = raw["properties"]
                     .as_array()
                     .unwrap()
@@ -8004,6 +8073,7 @@ fn validate_terminal_identity(t: &Value) -> Result<(), String> {
 }
 
 fn validate_diff_cases(v: &Value) -> Result<(), String> {
+    scope_wire::diff(v)?;
     let Some(cases) = v.get("case_outcomes") else {
         if v["properties"]
             .as_array()
@@ -8114,6 +8184,12 @@ fn validate_diff_cases(v: &Value) -> Result<(), String> {
         } else if let Some(cs) = p.get("cases") {
             unique_composite(cs.as_array().unwrap(), &["case_id"])?;
             for (i, side) in ["from", "to"].into_iter().enumerate() {
+                if p[format!("{side}_status")] == "not_applicable" {
+                    if cs.as_array().unwrap().iter().any(|c| !c[side].is_null()) {
+                        return Err("excluded diff case has a value".into());
+                    }
+                    continue;
+                }
                 let rp = raw[i]["properties"]
                     .as_array()
                     .unwrap()
@@ -8171,6 +8247,8 @@ enum Ty {
     RationalText,
     SimulationInterval,
     MetricNumber,
+    ScopeMarker,
+    OnlyNull,
 }
 
 fn diff_subject_schema() -> Ty {
@@ -8338,6 +8416,7 @@ fn diff_row_schema() -> Ty {
     };
     OneOf(
         [
+            "contract_scope",
             "actor",
             "relation",
             "meaning",
@@ -8353,6 +8432,7 @@ fn diff_row_schema() -> Ty {
             // Each discriminator has its own closed shape: from on an old row
             // cannot be admitted through a permissive shared base object.
             let lit: &'static [&'static str] = match kind {
+                "contract_scope" => &["contract_scope"],
                 "actor" => &["actor"],
                 "relation" => &["relation"],
                 "meaning" => &["meaning"],
@@ -8369,7 +8449,7 @@ fn diff_row_schema() -> Ty {
                 ("target", Str),
                 (
                     "change",
-                    if ["actor", "relation", "meaning"].contains(&kind) {
+                    if ["contract_scope", "actor", "relation", "meaning"].contains(&kind) {
                         Lit(&["added", "removed"])
                     } else if ["time", "visibility", "rule"].contains(&kind) {
                         Lit(&["modified"])
@@ -8384,7 +8464,7 @@ fn diff_row_schema() -> Ty {
                     OptionalField(Box::new(Arr(Box::new(diff_annotation_schema())))),
                 ),
             ];
-            if !["actor", "relation"].contains(&kind) {
+            if !["contract_scope", "actor", "relation"].contains(&kind) {
                 fields.extend([("from", value(kind)), ("to", value(kind))]);
             }
             Obj(fields)
@@ -8411,6 +8491,18 @@ fn diff_row_schema() -> Ty {
 /// Semantic checks are independent of production Serde and partial fixture
 /// comparison. Reached by both the ordinary and metric-recursive diff paths.
 fn validate_diff_extensions(v: &Value) -> Result<(), String> {
+    let legacy;
+    let v = if v["differences"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|r| r["kind"] == "contract_scope")
+    {
+        legacy = scope_wire::diff_legacy(v)?;
+        &legacy
+    } else {
+        v
+    };
     if let Some(d) = v.pointer("/agency/differences") {
         validate_agency_differences(d)?;
         validate_capacity_difference_context(
@@ -8929,23 +9021,7 @@ fn diff_schema() -> Ty {
         ),
         (
             "properties",
-            Keyed(
-                "id",
-                Box::new(Obj(vec![
-                    ("id", Str),
-                    ("from", Verdict),
-                    ("to", Verdict),
-                    (
-                        "cases",
-                        OptionalField(Box::new(Arr(Box::new(Obj(vec![
-                            ("case_id", Int),
-                            ("arrival", Int),
-                            ("from", property_value_schema()),
-                            ("to", property_value_schema()),
-                        ]))))),
-                    ),
-                ])),
-            ),
+            Keyed("id", Box::new(scope_wire::diff_property())),
         ),
         (
             "case_outcomes",
@@ -11155,6 +11231,10 @@ fn report_schema() -> Ty {
     };
     let strings = || Arr(Box::new(Str));
     Obj(vec![
+        (
+            "contract_scope",
+            OptionalField(Box::new(scope_wire::schema())),
+        ),
         ("ledger", Ledger),
         ("uncertainty", Uncertainty),
         ("verdict", Verdict),
@@ -11164,10 +11244,13 @@ fn report_schema() -> Ty {
         ("cut_context", cut_context_schema()),
         (
             "unchecked",
-            OptionalField(Box::new(Arr(Box::new(Lit(&[
-                "unreachable",
-                "completion_graph",
-                "dynamic_authority_revocation",
+            OptionalField(Box::new(Arr(Box::new(OneOf(vec![
+                ScopeMarker,
+                Lit(&[
+                    "unreachable",
+                    "completion_graph",
+                    "dynamic_authority_revocation",
+                ]),
             ]))))),
         ),
         (
@@ -11349,6 +11432,10 @@ fn check(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
             validate_probability(&serde_json::json!({"min": value["lower"], "max": value["upper"]}))
         }
         Ty::OptionalField(inner) => check(value, inner, path),
+        Ty::ScopeMarker if scope_wire::marker(value) => Ok(()),
+        Ty::OnlyNull if value.is_null() => Ok(()),
+        Ty::ScopeMarker => bad("a contract scope marker"),
+        Ty::OnlyNull => bad("null"),
         Ty::Probability => validate_probability(value).map_err(|e| format!("{path}: {e}")),
         Ty::Str if value.is_string() => Ok(()),
         Ty::Int if value.is_u64() => Ok(()),
@@ -12259,6 +12346,7 @@ fn validate_wire(actual: &Value) -> Result<(), String> {
     validate_wire_inner(actual)
 }
 fn validate_wire_inner(actual: &Value) -> Result<(), String> {
+    scope_wire::report(actual)?;
     if waiting_declared(actual) {
         validate_waiting_wire(actual)?;
         return validate_wire_inner(&waiting_projection(actual));

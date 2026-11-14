@@ -374,6 +374,7 @@ pub enum AuthorityItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractDecl {
     pub name: Option<Ident>,
+    pub applies_to: Option<(Vec<Ident>, Spanned<String>)>,
     pub clauses: Vec<Spanned<ContractClause>>,
     pub span: Span,
 }
@@ -555,6 +556,7 @@ pub enum Intent {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DiffKind {
+    ContractScope,
     Actor,
     Relation,
     Meaning,
@@ -572,6 +574,7 @@ pub enum DiffKind {
 impl DiffKind {
     pub fn name(self) -> &'static str {
         match self {
+            Self::ContractScope => "contract_scope",
             Self::Actor => "actor",
             Self::Relation => "relation",
             Self::Meaning => "meaning",
@@ -588,6 +591,7 @@ impl DiffKind {
     }
     pub fn parse(name: &str) -> Option<Self> {
         [
+            Self::ContractScope,
             Self::Actor,
             Self::Relation,
             Self::Meaning,

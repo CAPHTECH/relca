@@ -88,6 +88,7 @@ pub enum Visibility {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Omission {
+    NotApplicableConfigurationScope,
     ProbabilisticProperty,
     NonPathProperty,
     StaticProperty,
@@ -108,7 +109,7 @@ pub struct Explanation {
 #[derive(Debug, Clone, Serialize)]
 pub struct Omitted {
     pub id: String,
-    pub verdict: Verdict,
+    pub verdict: Option<Verdict>,
     pub reason: Omission,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -580,7 +581,7 @@ fn explain_selected(
             if let Some(reason) = reason {
                 explanation.omitted.push(Omitted {
                     id: property.id.clone(),
-                    verdict: property.verdict,
+                    verdict: Some(property.verdict),
                     reason,
                 });
             } else if property.verdict == Verdict::Violated {
@@ -619,6 +620,13 @@ fn explain_selected(
             explanation.unchecked.push("reference_replay".into());
         }
     }
+    explanation
+        .omitted
+        .extend(report.contract_scope.iter().map(|c| Omitted {
+            id: c.id.clone(),
+            verdict: None,
+            reason: Omission::NotApplicableConfigurationScope,
+        }));
     seal(
         ExplainReport {
             report: report::finite_driver(report, crate::engine::DEFAULT_STATE_BUDGET),

@@ -4293,7 +4293,16 @@ impl<'s> Parser<'s> {
 
     fn diff_target(&mut self, explicit: bool) -> Parsed<DiffTarget> {
         self.lines();
-        let kind = DiffKind::parse(self.current().text);
+        let scoped_annotation = self.tokens[self.pos + 1..]
+            .iter()
+            .filter(|t| t.text != "\n")
+            .nth(1)
+            .is_some_and(|t| t.text == "by");
+        let kind = if !explicit && self.at("contract_scope") && !scoped_annotation {
+            None
+        } else {
+            DiffKind::parse(self.current().text)
+        };
         if kind.is_some() {
             self.pos += 1;
         } else if explicit {
@@ -4401,7 +4410,16 @@ impl<'s> Parser<'s> {
         } else {
             return Err(self.configuration_error("expected configuration intent"));
         };
-        let target = if action == IntentAction::Change {
+        // add/retire historically omit the Actor/Relation kind. Admit the new
+        // explicit scope kind without reserving an Actor named contract_scope:
+        // its legacy `retire contract_scope reason "..."` remains untyped.
+        let explicit_scope = self.at("contract_scope")
+            && self.tokens[self.pos + 1..]
+                .iter()
+                .filter(|t| t.text != "\n")
+                .nth(1)
+                .is_some_and(|t| t.text == "reason");
+        let target = if action == IntentAction::Change || explicit_scope {
             self.diff_target(true)?
         } else {
             let path = self.path()?;
@@ -4896,10 +4914,32 @@ impl<'s> Parser<'s> {
 
     fn contract(&mut self) -> Parsed<ContractDecl> {
         let start = self.expect("contract")?.span.start;
+        if self.at("applies_to")
+            && self.tokens[self.pos + 1..]
+                .iter()
+                .find(|t| t.text != "\n")
+                .is_some_and(|t| t.text == "[")
+        {
+            return Err(self.unsupported("contract_scope_anonymous"));
+        }
         let name = if self.at("{") {
             None
         } else {
             Some(self.ident()?)
+        };
+        let applies_to = if self.take("applies_to") {
+            self.expect("[")?;
+            let names = if self.take("]") {
+                Vec::new()
+            } else {
+                self.names("]")?
+            };
+            if !self.take("reason") {
+                return Err(self.error("contract_scope_reason_missing"));
+            }
+            Some((names, self.string()?))
+        } else {
+            None
         };
         self.expect("{")?;
         self.separators();
@@ -5093,6 +5133,7 @@ impl<'s> Parser<'s> {
         self.expect("}")?;
         Ok(ContractDecl {
             name,
+            applies_to,
             clauses,
             span: self.span(start),
         })

@@ -44,6 +44,11 @@ fn contract_fixtures_match_binary_reports_and_exit_codes() {
 }
 
 #[test]
+fn contract_scope_fixtures_match_binary_reports_and_exit_codes() {
+    run_fixtures(47);
+}
+
+#[test]
 fn executor_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(5);
 }
@@ -302,7 +307,7 @@ fn run_fixtures(group: usize) {
         }
     }
     assert!(layout.is_empty(), "fixture layout:\n{}", layout.join("\n"));
-    let mut populations = [0; 47];
+    let mut populations = [0; 48];
     for name in &names {
         let groups = [
             fixture_match::LEGACY_FIXTURES.contains(&name.as_str()),
@@ -352,6 +357,7 @@ fn run_fixtures(group: usize) {
             fixture_match::QUANTILE_FIXTURES.contains(&name.as_str()),
             ACCEPTANCE_GAP_FIXTURES.contains(&name.as_str()),
             REVIEW_MUTATION_FIXTURES.contains(&name.as_str()),
+            fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_str()),
         ];
         assert_eq!(
             groups.iter().filter(|&&yes| yes).count(),
@@ -446,6 +452,7 @@ fn run_fixtures(group: usize) {
     assert_eq!(quantiles, 67);
     assert_eq!(populations[45], 9);
     assert_eq!(populations[46], 2);
+    assert_eq!(populations[47], 10);
     assert_eq!(
         names.len(),
         355 + 32
@@ -473,15 +480,18 @@ fn run_fixtures(group: usize) {
             + evaluation
             + quantiles
             + 9
-            + 2,
-        "47 disjoint exhaustive groups; all 46 historical groups unchanged"
+            + 2
+            + 10,
+        "48 disjoint exhaustive groups; all 47 historical groups unchanged"
     );
     let mut failures = Vec::new();
     let mut undetected = Vec::new();
     for directory in directories {
         let name = directory.file_name().unwrap().to_string_lossy();
         let legacy = fixture_match::LEGACY_FIXTURES.contains(&name.as_ref());
-        let current = if legacy {
+        let current = if fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_ref()) {
+            47
+        } else if legacy {
             0
         } else if name.starts_with("config-diff-") {
             1

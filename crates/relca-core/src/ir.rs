@@ -63,6 +63,8 @@ index!(
 /// Diagnostics here are warnings only; an error makes lower return Err instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Model {
+    /// Verification selection metadata, excluded from interpreter state identity.
+    pub contract_selection: crate::contract_scope::Selection,
     pub performances: Vec<Performance>,
     pub case_priority: Option<CasePriority>,
     pub arrival_distribution: Option<ArrivalDistribution>,
@@ -93,8 +95,8 @@ pub struct Model {
     pub state_variables: Vec<StateVariable>,
     pub people: Vec<Person>,
     pub authorities: Vec<Authority>,
-    /// ADR 0010 clauses, independent of which process is selected. Each has a
-    /// matching Contract request in verify, including inactive clauses.
+    /// Applicable clauses, including inactive clauses within the selected scope.
+    /// Each has a matching Contract request in verify and a model-wide ordinal.
     pub contracts: Vec<ContractClause>,
     /// Static ADR 0009 summary; execution does not consult it.
     pub agency: crate::agency::AgencyDerivation,

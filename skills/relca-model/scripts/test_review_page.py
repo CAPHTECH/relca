@@ -409,7 +409,7 @@ class ReviewPageTest(unittest.TestCase):
         _, data = page(self.tmp, "cmp-tamper", "--model", INV / "as-is.relca", "--check", cout, "--check-exit", ccode,
                        "--compare", bad, "--compare-exit", code, "--compare-model", INV / "configurations.relca")
         unv = [u[:3] for u in data["unverified"]]
-        self.assertIn(["compare 案 ToBeA", "verdict の畳み込み", "violated"], unv)
+        self.assertIn(["compare 案 ToBeA", "全体の判定", "violated"], unv)
         self.assertIn(["compare 案 AsIs", "safety no_resource_overcommit", "inconclusive"], unv)
         self.assertIn(["compare 案 AsIs", "bounds", "inconclusive"], unv)
         self.assertTrue(any(a[1].startswith("compare 案 ToBeA") and "より軽い" in a[1] for a in data["alerts"]))
@@ -420,7 +420,7 @@ class ReviewPageTest(unittest.TestCase):
         cout, _, ccode = self.r["as-is-check"]
         _, data = page(self.tmp, "cmp-top", "--model", INV / "as-is.relca", "--check", cout, "--check-exit", ccode,
                        "--compare", bad, "--compare-exit", 0)
-        self.assertIn(["compare", "verdict の畳み込み", "violated"], [u[:3] for u in data["unverified"]])
+        self.assertIn(["compare", "全体の判定", "violated"], [u[:3] for u in data["unverified"]])
 
     def test_top_level_vacuous_is_unverified(self):
         src, _, _ = self.r["as-is-check"]
@@ -644,7 +644,7 @@ class ReviewPageTest(unittest.TestCase):
         self.assertFalse(data["empty"])
         self.assertNotIn("検出されたものは無い", text)
 
-    # ---------------------------------------------------------- N5: cases の畳み込み
+    # ---------------------------------------------------------- N5: cases と全体の判定
 
     def test_satisfied_property_with_violated_case_is_contradiction(self):
         src, _, code = self.r["as-is-check"]
@@ -653,8 +653,8 @@ class ReviewPageTest(unittest.TestCase):
             d["properties"][0]["cases"] = [{"case_id": 1, "verdict": "satisfied"}, {"case_id": 2, "verdict": "violated"}]
         bad = rewrite(src, Path(self.tmp) / "cases.json", f)
         _, data = page(self.tmp, "cases", "--model", INV / "as-is.relca", "--check", bad, "--check-exit", code)
-        self.assertTrue(any("畳み込みが矛盾" in a[1] for a in data["alerts"]))
-        self.assertIn(["check", "safety no_resource_overcommit の畳み込み", "violated"],
+        self.assertTrue(any("全体と案件ごとの判定が矛盾" in a[1] for a in data["alerts"]))
+        self.assertIn(["check", "safety no_resource_overcommit の全体判定", "violated"],
                       [u[:3] for u in data["unverified"]])
 
     def test_missing_loses_and_all_input_diagnostics(self):
@@ -1366,6 +1366,74 @@ class EvidenceBasisPageTest(unittest.TestCase):
                 text, data = self.build(name, altered)
                 self.assertIn("この節を生成できなかった", text)
                 self.assertTrue(any(u[0] == "review_page" and u[1] == "根拠源の証跡" for u in data["unverified"]))
+
+
+@unittest.skipUnless(RELCA.exists(), "relca の binary が無い")
+class ContractScopePageTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="relca-scope-page-", dir=ROOT / ".tmp")
+        self.addCleanup(self.temp.cleanup)
+        self.tmp = self.temp.name
+        self.model = ROOT / "examples/configuration-contracts.relca"
+        self.out, self.err, self.code = relca(self.tmp, "old", "check", self.model, "--configuration", "Old")
+        self.assertEqual(self.code, 0)
+
+    def build(self, name, out=None):
+        return page(self.tmp, name, "--model", self.model, "--check", out or self.out,
+                    "--check-exit", self.code, "--no-mermaid")
+
+    def test_real_scope_is_displayed_once_and_counted_without_folding_it(self):
+        text, data = self.build("old-page")
+        rows = [r for r in data["unverified"] if r[1] == "contract Controls #1 authority_basis"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][2], "not_applicable")
+        self.assertIn("Oldには承認画面がない", text)
+        self.assertIn("applies_to [New]", text)
+        self.assertIn("not_applicable / verdict なし", text)
+        self.assertNotIn("contract_scope", data["unread_keys"])
+        self.assertFalse(any("全体と案件ごとの判定が矛盾" in str(a) for a in data["alerts"]))
+
+    def test_applied_source_header_remains_visible_without_an_excluded_row(self):
+        out, _, code = relca(self.tmp, "new", "check", self.model, "--configuration", "New")
+        self.assertEqual(code, 0)
+        text, data = self.build("new-page", out)
+        self.assertIn("applies_to [New]", text)
+        self.assertIn("Oldには承認画面がない", text)
+        self.assertFalse(any(r[1] == "contract Controls #1 authority_basis" for r in data["unverified"]))
+
+    def test_mutate_root_scope_is_a_copy_not_an_extra_unverified_contract(self):
+        out, _, code = relca(self.tmp, "mutate", "mutate", self.model, "--configuration", "Old", "--kinds", "authority_expired")
+        self.assertEqual(code, 5)
+        text, data = page(self.tmp, "mutate-page", "--model", self.model, "--check", self.out,
+                          "--check-exit", self.code, "--mutate", out,
+                          "--mutate-exit", code, "--no-mermaid")
+        rows = [r for r in data["unverified"] if r[1] == "contract Controls #1 authority_basis" and r[0].startswith("mutate")]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "mutate original")
+        self.assertIn("not_applicable", text)
+
+    def test_compare_non_applicable_cell_is_not_an_unsupported_verdict(self):
+        out, err, code = relca(self.tmp, "compare", "compare", self.model,
+                               "--plans", "Old,New", "--mode", "exhaustive")
+        self.assertEqual(code, 0)
+        text, data = page(self.tmp, "compare-page", "--model", self.model, "--check", self.out,
+                          "--check-exit", 0, "--compare", out, "--compare-exit", code,
+                          "--compare-stderr", err, "--compare-model", self.model, "--no-mermaid")
+        self.assertIn("非適用(not_applicable、verdict なし)", text)
+        self.assertTrue(any(r[0] == "compare 案 Old" and r[2] == "not_applicable" for r in data["unverified"]))
+
+    def test_malformed_scope_rows_are_unverified_not_silently_omitted(self):
+        changes = {
+            "missing": lambda r: r.pop("reason"),
+            "status": lambda r: r.__setitem__("status", "satisfied"),
+            "mask": lambda r: r.__setitem__("masks_call", "false"),
+            "duplicate": lambda r: r.__setitem__("applies_to", ["New", "New"]),
+        }
+        for name, change in changes.items():
+            with self.subTest(name=name):
+                out = rewrite(self.out, Path(self.tmp) / (name + ".json"), lambda v: change(v["contract_scope"][0]))
+                _, data = self.build(name, out)
+                self.assertTrue(any(r[1] == "contract_scope" and r[2] == "unsupported" for r in data["unverified"]))
 
 
 if __name__ == "__main__":

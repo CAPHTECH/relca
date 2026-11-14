@@ -16,6 +16,7 @@ Relca は、業務の流れを小さなモデルに書き、起こりうる進�
 | 指摘がある場合だけ修正し、修正後の値か元の値を後続へ渡す | 値を返す `if`。`check`、`explain`、`simulate` |
 | 差し戻しや再確認を、初回を含む上限回数つきの `repeat` で書く | `check`、`explain`、`simulate` |
 | 判定に必要な根拠源を `evidence_basis` で求め、読取りの削除を検出する | `check`、`explain`、`mutate` |
+| 契約を適用する構成を `applies_to` と理由で明示し、範囲外を未検査として残す | `check`、`explain`、`simulate`、`compare`、`diff`、`mutate`、`sensitivity`、`conform` |
 | 時間、費用、品質、人の負荷を標本で見積もる | `simulate` |
 | 現行と変更案など、複数の構成を同じ条件で並べる | `compare`、`diff` |
 | 到着量や所要時間などの前提を変えて、結論が変わるかを見る | `sensitivity` |
@@ -116,6 +117,7 @@ cargo build --release
 
 - [DSL の書き方](docs/guide/dsl.md): 最小モデルと主な構文
 - [根拠源を求める例](examples/evidence-basis.relca): 引数を通じた根拠と直接の読取り。[上流の読取りを外した対](examples/evidence-basis-missing.relca)は違反になる
+- [構成ごとに契約を選ぶ例](examples/configuration-contracts.relca): Old は1分、New は2分で終了。承認の契約は New だけに適用し、Old の範囲外の契約を満たしたとは数えない
 - [結果の読み方](docs/guide/results.md): 判定、exit、JSON の主な欄
 - [保証の範囲](docs/guide/guarantees.md): 分析モード、上限、検査していない事項
 - [請求書の例](examples/invoice/README.md): 入力、手計算、実行コマンドと境界

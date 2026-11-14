@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false},"properties":[{"id":"reachable end.done","verdict":"satisfied"},{"id":"contract Controls #1 authority_basis","verdict":"violated"}],"absent_diagnostics":["W-CONF-2","W-DEADLOCK-0"]}

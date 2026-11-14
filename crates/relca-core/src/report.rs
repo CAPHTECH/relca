@@ -108,6 +108,8 @@ macro_rules! declare_report {
     };
 }
 declare_report! {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contract_scope: Vec<crate::contract_scope::Excluded>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub repetition: Option<repetition::Table>,
     #[serde(default,skip_serializing_if="Option::is_none")]
@@ -511,10 +513,22 @@ pub(crate) fn sensitivity_preflight_failure(
     if let Ok(ast) = syntax::parse(src) {
         r.model.name = Some(ast.name.value.clone());
         r.cut = Cut::parsed(&ast);
+        crate::contract_scope::attach(
+            &mut r.contract_scope,
+            &mut r.unchecked,
+            &mut r.diagnostics,
+            &crate::contract_scope::Selection::from_ast(&ast, configuration),
+        );
     }
     if let Some(m) = model
         && crate::actor_table::validate(m).is_ok()
     {
+        crate::contract_scope::attach(
+            &mut r.contract_scope,
+            &mut r.unchecked,
+            &mut r.diagnostics,
+            &m.contract_selection,
+        );
         r.model.name = Some(m.name.clone());
         r.ledger.lowered(m);
         r.ledger.execution["limits"]["state_budget"] = crate::ledger::na("no_analysis");
@@ -597,6 +611,16 @@ pub(crate) fn check_selection_using(
         execute,
     );
     report.ledger.requested(configuration, scenario);
+    if report.ledger.actor_versions["status"] != "known"
+        && let Ok(ast) = syntax::parse(src)
+    {
+        crate::contract_scope::attach(
+            &mut report.contract_scope,
+            &mut report.unchecked,
+            &mut report.diagnostics,
+            &crate::contract_scope::Selection::from_ast(&ast, configuration),
+        );
+    }
     if report.ledger.actor_versions["status"] == "known" {
         report.ledger.execution["selection"]["effective"]["configuration"] =
             configuration.map_or_else(crate::ledger::undeclared, crate::ledger::known);
@@ -722,6 +746,8 @@ fn simulation_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<&'static st
 // The decoder interns only this closed constant; it never borrows input bytes.
 type SimulationModeName = &'static str;
 declare_simulation_report! {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contract_scope: Vec<crate::contract_scope::Excluded>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub repetition: Option<repetition::Table>,
     #[serde(default,skip_serializing_if="Option::is_none")]
@@ -989,6 +1015,7 @@ fn simulation_base(mut base: Report) -> SimulationReport {
     };
     base.ledger.simulation_mode(base.model.sha256.is_none());
     SimulationReport {
+        contract_scope: base.contract_scope,
         repetition: base.repetition,
         response_recovery: None,
         response_analysis: None,
@@ -1163,7 +1190,21 @@ fn simulate_pipeline_raw(
     };
     base.model.name = Some(ast.name.value.clone());
     base.cut = Cut::parsed(&ast);
-    if scenario.is_none()
+    crate::contract_scope::attach(
+        &mut base.contract_scope,
+        &mut base.unchecked,
+        &mut base.diagnostics,
+        &crate::contract_scope::Selection::from_ast(&ast, selection),
+    );
+    // Scoped declarations must reach their static gate (including contest and
+    // zero applicable requests). Keep the legacy missing-clause early exit for
+    // sources without scope syntax; the model preflight still requires sampling
+    // settings after successful scoped lowering.
+    if !ast
+        .items
+        .iter()
+        .any(|i| matches!(i, ast::Item::Contract(c) if c.applies_to.is_some()))
+        && scenario.is_none()
         && !ast
             .items
             .iter()
@@ -1228,6 +1269,12 @@ fn simulate_pipeline_raw(
         Ok(m) => m,
         Err(ds) => return simulation_empty(finish(base, ds)),
     };
+    crate::contract_scope::attach(
+        &mut base.contract_scope,
+        &mut base.unchecked,
+        &mut base.diagnostics,
+        &model.contract_selection,
+    );
     if let Err(diagnostic) = work_profiles::attach(&mut base, &model, src) {
         return simulation_empty(finish(base, vec![diagnostic]));
     }
@@ -1286,6 +1333,12 @@ fn simulate_model_raw(
     execute: impl FnOnce(&ir::Model) -> outcome::SimulationOutcome,
 ) -> SimulationReport {
     base.uncertainty = crate::uncertainty::Uncertainty::from_model(model);
+    crate::contract_scope::attach(
+        &mut base.contract_scope,
+        &mut base.unchecked,
+        &mut base.diagnostics,
+        &model.contract_selection,
+    );
     let admission = preflight::simulation(model, scope);
     use crate::{
         outcome::{QueryTruth, SimulationTerminalKind},
@@ -2004,8 +2057,22 @@ pub(crate) fn check_selected_scenario_using(
     report.cut = Cut::parsed(&ast);
     let selected = match lower::lower_configuration_with_scenario(&ast, configuration, scenario) {
         Ok(selected) => selected,
-        Err(diagnostics) => return (finish(report, diagnostics), None),
+        Err(diagnostics) => {
+            crate::contract_scope::attach(
+                &mut report.contract_scope,
+                &mut report.unchecked,
+                &mut report.diagnostics,
+                &crate::contract_scope::Selection::from_ast(&ast, Some(configuration)),
+            );
+            return (finish(report, diagnostics), None);
+        }
     };
+    crate::contract_scope::attach(
+        &mut report.contract_scope,
+        &mut report.unchecked,
+        &mut report.diagnostics,
+        &selected.model.contract_selection,
+    );
     if let Err(diagnostic) = work_profiles::attach(&mut report, &selected.model, src) {
         return (finish(report, vec![diagnostic]), Some(selected));
     }
@@ -2059,6 +2126,14 @@ pub(crate) fn check_ast_with_selection_using(
         |a| lower::lower_with_selection(a, configuration, scenario),
         execute,
     );
+    if report.ledger.actor_versions["status"] != "known" {
+        crate::contract_scope::attach(
+            &mut report.contract_scope,
+            &mut report.unchecked,
+            &mut report.diagnostics,
+            &crate::contract_scope::Selection::from_ast(model, configuration),
+        );
+    }
     report.ledger.requested(configuration, scenario);
     if report.ledger.actor_versions["status"] == "known" {
         report.ledger.execution["selection"]["effective"]["configuration"] =
@@ -2095,6 +2170,12 @@ fn check_with(
         Ok(model) => model,
         Err(diagnostics) => return finish(report, diagnostics),
     };
+    crate::contract_scope::attach(
+        &mut report.contract_scope,
+        &mut report.unchecked,
+        &mut report.diagnostics,
+        &model.contract_selection,
+    );
     if let Err(diagnostic) = work_profiles::attach(&mut report, &model, src) {
         return finish(report, vec![diagnostic]);
     }
@@ -2106,6 +2187,12 @@ fn analyze_model(
     model: &ir::Model,
     explore: impl FnOnce(&ir::Model) -> outcome::Outcome,
 ) -> Report {
+    crate::contract_scope::attach(
+        &mut report.contract_scope,
+        &mut report.unchecked,
+        &mut report.diagnostics,
+        &model.contract_selection,
+    );
     let admission = preflight::finite(model);
     report.ledger.lowered(model);
     report.resource_time = resource_time_record(model);
@@ -2191,6 +2278,7 @@ fn empty_report(src: &str) -> Report {
         write!(sha256, "{byte:02x}").expect("writing into a String cannot fail");
     }
     Report {
+        contract_scope: Vec::new(),
         repetition: None,
         priority_policy: None,
         work_profiles: None,
@@ -2617,6 +2705,12 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
         mut_report.assumptions.push(quality_scheduler());
     }
     mut_report.unchecked = outcome.unchecked.clone();
+    crate::contract_scope::attach(
+        &mut mut_report.contract_scope,
+        &mut mut_report.unchecked,
+        &mut mut_report.diagnostics,
+        &model.contract_selection,
+    );
     if model.agency.as_derived().is_none() {
         mut_report
             .unchecked
@@ -2820,6 +2914,14 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
             mut_report.assumptions.push(Assumption { field:format!("response.{}", model.site_name(r.command)), value:format!("max_attempts={}; backoff={}; loss={:?}",r.max_attempts,r.backoff,r.loss), affects:if model.recovery().is_some(){"retry_bounded; exact modeled G finish-time query and evidence matching only; no general status query, asynchronous task, correlated channel or non-idempotent recovery inference"}else{"retry_bounded; receipt_channel; receipt_not_success; atomic server-finish channel only; no asynchronous task, status query or correlated channel inference"}.into() });
         }
     }
+    mut_report.diagnostics.extend(
+        model.contract_selection.guidance(
+            mut_report
+                .properties
+                .iter()
+                .map(|p| (p.id.as_str(), p.verdict)),
+        ),
+    );
     let mut final_report = finish(
         mut_report,
         outcome
@@ -3166,6 +3268,7 @@ mod tests {
     fn model() -> ir::Model {
         let span = diag::Span { start: 0, end: 0 };
         ir::Model {
+            contract_selection: Default::default(),
             case_priority: None,
             performances: Vec::new(),
             comparison: None,

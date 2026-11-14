@@ -22,11 +22,14 @@ pub const W_DEADLOCK_0: &str = "W-DEADLOCK-0";
 pub const W_BUDGET_0: &str = "W-BUDGET-0";
 pub const E_CONF_0: &str = "E-CONF-0";
 pub const W_CONF_0: &str = "W-CONF-0";
+pub const W_CONF_1: &str = "W-CONF-1";
+pub const W_CONF_2: &str = "W-CONF-2";
 pub const E_DIFF_0: &str = "E-DIFF-0";
 pub const W_DIFF_1: &str = "W-DIFF-1";
 pub const W_DIFF_2: &str = "W-DIFF-2";
 pub const W_DIFF_3: &str = "W-DIFF-3";
 pub const E_CMP_0: &str = "E-CMP-0";
+pub const W_CMP_1: &str = "W-CMP-1";
 pub const W_AGY_0: &str = "W-AGY-0";
 pub const W_AGY_1: &str = "W-AGY-1";
 pub const W_AGY_2: &str = "W-AGY-2";
@@ -89,11 +92,14 @@ pub const CODES: &[&str] = &[
     W_BUDGET_0,
     E_CONF_0,
     W_CONF_0,
+    W_CONF_1,
+    W_CONF_2,
     E_DIFF_0,
     W_DIFF_1,
     W_DIFF_2,
     W_DIFF_3,
     E_CMP_0,
+    W_CMP_1,
     W_AGY_0,
     W_AGY_1,
     W_AGY_2,

@@ -1,0 +1,1 @@
+{"verdict":"vacuous","bounds":{"truncated":false},"properties":[{"id":"reachable end.done","verdict":"satisfied"},{"id":"contract Controls #1 authority_basis","verdict":"vacuous"}],"diagnostics":[{"code":"W-UNREACH-0"}],"absent_diagnostics":["W-CONF-1","W-CONF-2","W-DEADLOCK-0"]}

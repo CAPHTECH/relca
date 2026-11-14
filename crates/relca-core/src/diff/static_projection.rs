@@ -460,7 +460,8 @@ pub(super) fn differences(src: &str, from: &ir::Model, to: &ir::Model) -> Vec<Di
             Kind::Meaning => DiffValue::Meaning(false),
             Kind::Visibility => DiffValue::Readers(vec![]),
             Kind::Contest => DiffValue::Contests(vec![]),
-            Kind::Actor
+            Kind::ContractScope
+            | Kind::Actor
             | Kind::Relation
             | Kind::Authority
             | Kind::Resource

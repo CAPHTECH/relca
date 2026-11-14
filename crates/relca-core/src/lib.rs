@@ -10,6 +10,7 @@ pub mod compare;
 mod comparison_projection;
 pub mod conformance;
 pub mod contest;
+pub mod contract_scope;
 mod degradation;
 pub mod diag;
 pub mod diff;

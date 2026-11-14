@@ -1,0 +1,17 @@
+model ScopedApproval version "0.2" {
+  type T = enum { ok }
+  people [clerk,boss]
+  actor Desk { executors [clerk]; capability pay() -> T { duration fixed 1min; result nondet { ok } } }
+  actor Screen { executors [boss]; capability approve() -> T { duration fixed 1min; result nondet { ok } } }
+  permit clerk to Desk.pay
+  permit boss to Screen.approve
+  authority Mgr { basis "policy"; grants boss to Screen.approve; issued_by clerk }
+  process AsIs { p = Desk.pay(); end done }
+  process ToBe { a = Screen.approve(); p = Desk.pay(); end done }
+  cut K { include [Desk,Screen] }
+  configuration Old { cut K; process AsIs }
+  configuration New { cut K; process ToBe }
+  bounds { cases 1; live_tasks 2; clock 5min }
+  verify reachable end.done
+  contract Controls applies_to [New] reason "approval only in New" { authority_basis Screen.approve Mgr }
+}

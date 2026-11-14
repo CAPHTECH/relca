@@ -44,6 +44,7 @@ use crate::{ast, diag, ir};
 use diag::{Diagnostic, E_CANCEL_0, E_CAP_0, E_NAME_0, E_TYPE_0, Span, U_SEM_0};
 
 mod arrival_distribution;
+mod contract_scope;
 mod merge;
 mod priority;
 mod recovery;
@@ -515,7 +516,7 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
     }
 }
 
-fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
+pub(crate) fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
     for statement in block {
         match &statement.value {
             ast::Stmt::Repeat { body, on_limit, .. } => {
@@ -3953,6 +3954,7 @@ impl Lower {
         model: &ast::Model,
         selection: Option<&str>,
     ) -> Result<ir::Model, Vec<Diagnostic>> {
+        self.validate_contract_scopes(model);
         self.index_merges(model);
         self.total_cases = model
             .items
@@ -5162,6 +5164,9 @@ impl Lower {
                 }
                 for clause in &c.clauses {
                     ordinal += 1;
+                    if !crate::contract_scope::applies(c, selection) {
+                        continue;
+                    }
                     if let ast::ContractClause::Contest {
                         party,
                         target,
@@ -5326,7 +5331,7 @@ impl Lower {
                 }
             }
         }
-        self.resolve_waivers(model, &mut contracts);
+        self.resolve_waivers(model, &mut contracts, selection);
         if self
             .state_variables
             .iter()
@@ -5352,7 +5357,7 @@ impl Lower {
             && !model.items.iter().any(|i| {
                 matches!(i, ast::Item::Verify(v)
                     if matches!(v.value, ast::Property::ProbabilityReached { .. }))
-                    || matches!(i, ast::Item::Contract(c) if c.clauses.iter().any(|c| matches!(c.value, ast::ContractClause::StateInvariant { .. })))
+                    || matches!(i, ast::Item::Contract(c) if crate::contract_scope::applies(c, selection) && c.clauses.iter().any(|c| matches!(c.value, ast::ContractClause::StateInvariant { .. })))
             })
         {
             self.unsupported("at least one verification request is required", model.span);
@@ -5361,6 +5366,8 @@ impl Lower {
         let comparison = self.comparison(model, quality.as_ref());
         let (cut, cut_warnings) = self.cut(model, selected);
         warnings.extend(cut_warnings);
+        let contract_selection = crate::contract_scope::Selection::from_ast(model, selection);
+        warnings.extend(contract_selection.warnings());
         self.rule_amendments(model, selected);
         if !model.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
             warnings.push(Diagnostic {
@@ -5858,6 +5865,7 @@ impl Lower {
                 affects:"資格はPermissionと別。負荷は開始直前の同Actorの他のQueued Task数で、自分・Running・Held・未到着を含めず、stopped案件のQueuedは含む。固定した成績kernelのgivenは従来の終了時に評価する。実技能・疲労・資格の正当性は認定せず、durationを推測しない。".into() });
         }
         let mut lowered = ir::Model {
+            contract_selection,
             case_priority: None,
             arrival_distribution,
             resource_time,
@@ -5899,6 +5907,7 @@ impl Lower {
             diagnostics: warnings,
             cut,
         };
+        crate::contract_scope::resolve_calls(&mut lowered);
         priority::lower(model, &mut lowered, &self.called_actors)?;
         crate::evidence_basis::prepare(&mut lowered)?;
         work_profiles::supported(&lowered, model.span)?;
@@ -6970,7 +6979,12 @@ impl Lower {
         }
     }
 
-    fn resolve_waivers(&mut self, model: &ast::Model, contracts: &mut [ir::ContractClause]) {
+    fn resolve_waivers(
+        &mut self,
+        model: &ast::Model,
+        contracts: &mut [ir::ContractClause],
+        selection: Option<&str>,
+    ) {
         let mut labels = BTreeMap::new();
         for (i, c) in contracts.iter().enumerate() {
             if let ir::ContractKind::NamedResponse {
@@ -7006,6 +7020,9 @@ impl Lower {
                 let ast::ContractClause::Waive { response, .. } = &clause.value else {
                     continue;
                 };
+                if !crate::contract_scope::applies(decl, selection) {
+                    continue;
+                }
                 let name = if response.len() == 2 {
                     Some(response[0].value.clone())
                 } else {
@@ -8523,6 +8540,7 @@ impl Lower {
                 continue;
             }
             let resolved = match t.kind {
+                ast::DiffKind::ContractScope => model.items.iter().any(|i| matches!(i, ast::Item::Contract(c) if c.name.as_ref().is_some_and(|n| n.value == t.name()))),
                 ast::DiffKind::Rule => actor && model.items.iter().any(|i| matches!(i, ast::Item::Actor(a) if a.name.value == parts[0].value && a.items.iter().any(|i| matches!(i, ast::ActorItem::Decides(_))))),
                 ast::DiffKind::Actor | ast::DiffKind::Resource => actor,
                 ast::DiffKind::Relation => cap || binding,
@@ -8566,6 +8584,13 @@ impl Lower {
             .enumerate()
             .map(|(i, c)| c.property_id(ir::ClauseId(i)))
             .chain(metadata.contests.iter().map(|c| c.property_id()))
+            .chain(
+                crate::contract_scope::Selection::from_ast(model, None)
+                    .clauses
+                    .into_iter()
+                    .filter(|c| c.applies_to.is_some())
+                    .map(|c| c.id),
+            )
             .collect();
         for item in &model.items {
             if let ast::Item::Configuration(c) = item {
@@ -8573,7 +8598,7 @@ impl Lower {
                     if let ast::Intent::Preserve { selector, .. } = intent {
                         let found = match selector {
                             ast::PropertySelector::Contract(name) => {
-                                clauses
+                                model.items.iter().any(|i| matches!(i, ast::Item::Contract(c) if c.applies_to.is_some() && c.name.as_ref().is_some_and(|n| n.value == name.value))) || clauses
                                     .iter()
                                     .any(|c| c.name.as_deref() == Some(&name.value))
                                     || metadata

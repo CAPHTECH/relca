@@ -154,8 +154,36 @@ pub struct PropertyRow {
 #[derive(Debug, Clone, Serialize)]
 pub struct PropertyCell {
     pub configuration: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<crate::contract_scope::Applicability>,
     #[serde(flatten)]
-    pub value: PropertyValue,
+    pub value: ScopedPropertyValue,
+}
+
+/// No property value exists outside its scope. The legacy field accessor is
+/// retained for applied cells; scope-aware consumers use `as_applied`.
+#[derive(Debug, Clone)]
+pub struct ScopedPropertyValue(Option<PropertyValue>);
+impl ScopedPropertyValue {
+    pub fn as_applied(&self) -> Option<&PropertyValue> {
+        self.0.as_ref()
+    }
+}
+impl std::ops::Deref for ScopedPropertyValue {
+    type Target = PropertyValue;
+    fn deref(&self) -> &Self::Target {
+        self.as_applied()
+            .expect("non-applicable cells have no verdict")
+    }
+}
+impl Serialize for ScopedPropertyValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match &self.0 {
+            Some(value) => value.serialize(serializer),
+            None => serde_json::json!({"verdict":null,"reason":"configuration_scope"})
+                .serialize(serializer),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct TerminalRow {
@@ -373,6 +401,9 @@ impl CompareReport {
             self.unchecked
                 .push(projection::RECEIPT_NOT_APPLICABLE.into());
         }
+        if checked.contains("contract_scope") {
+            self.checked.push("contract_scope".into());
+        }
         if checked.contains("metric_tables") {
             self.checked.push("metric_tables".into());
             self.unchecked.retain(|s| s != "metrics");
@@ -539,7 +570,7 @@ pub fn compare_with_scenario(
             );
             return result.finish();
         }
-        if ast.has_evidence_basis() {
+        if ast.has_evidence_basis() && (!ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if c.applies_to.is_some())) || plans.iter().any(|name| ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if crate::contract_scope::applies(c, Some(name)) && c.clauses.iter().any(|c| matches!(c.value, crate::ast::ContractClause::EvidenceBasis { .. })))))) {
             let mut result = CompareReport::empty(Some(analysis));
             result.diagnostic(diag::U_SEM_0, "evidence_basis_unsupported_command");
             return result.finish();
@@ -871,6 +902,36 @@ fn compare_using(
                 result.checked.push("metric_tables".into());
             }
             result.checked.push("property_tables".into());
+            let asymmetric: Vec<_> = metadata[0]
+                .model
+                .contract_selection
+                .clauses
+                .iter()
+                .filter(|c| {
+                    metadata.iter().any(|m| {
+                        m.model
+                            .contract_selection
+                            .clauses
+                            .iter()
+                            .any(|other| other.id == c.id && other.excluded != c.excluded)
+                    })
+                })
+                .map(|c| c.id.clone())
+                .collect();
+            if !asymmetric.is_empty() {
+                result.diagnostics.push(diag::Diagnostic {
+                    code: diag::W_CMP_1.into(),
+                    severity: diag::Severity::Warning,
+                    span: None,
+                    message: format!(
+                        "contract scope differs across configurations {}: {}",
+                        plans.join(", "),
+                        asymmetric.join(", ")
+                    ),
+                });
+                result.checked.push("contract_scope".into());
+                result.assumptions.push(ir::Assumption { field: "compare.contract_scope".into(), value: "asymmetric".into(), affects: format!("Each plan is evaluated against its applicable requirements; configurations {} do not check the same contracts: {}", plans.join(", "), asymmetric.join(", ")) });
+            }
             if terminals_checked {
                 result.checked.push("terminal_tables".into());
             }
@@ -927,6 +988,21 @@ fn tables(
     metadata: &[lower::SelectedConfiguration],
     analysis: Analysis,
 ) -> projection::Result<(Tables, bool)> {
+    let scoped = metadata[0].model.contract_selection.scoped();
+    for (plan, m) in plans.iter().zip(metadata) {
+        let rows = match &plan.report {
+            SelectedReport::Exhaustive(r) => &r.contract_scope,
+            SelectedReport::Simulation(r) => &r.contract_scope,
+        };
+        if !m
+            .model
+            .contract_selection
+            .excluded()
+            .is_ok_and(|expected| rows == &expected)
+        {
+            return Err("report inventories differ");
+        }
+    }
     let views: Vec<_> = plans
         .iter()
         .zip(metadata)
@@ -935,7 +1011,14 @@ fn tables(
             | (SelectedReport::Simulation(_), Analysis::Simulation) => p.report.view(&m.model),
             _ => Err("nested report analysis differs from request"),
         })
-        .collect::<projection::Result<_>>()?;
+        .collect::<projection::Result<_>>()
+        .map_err(|e| {
+            if scoped {
+                "report inventories differ"
+            } else {
+                e
+            }
+        })?;
     let first = views.first().ok_or("empty report inventory")?;
     // CutOff rows use the first selected IR, so every plan must have the same
     // effective horizon, including its value rather than just its presence.
@@ -945,18 +1028,27 @@ fn tables(
     {
         return Err("report inventories differ");
     }
-    for v in &views {
+    for (v, m) in views.iter().zip(metadata) {
         if v.arrivals != first.arrivals
-            || !v
-                .properties
-                .iter()
-                .map(|p| &p.id)
-                .filter(|id| id.as_str() != "receipt_resolution")
-                .eq(first
-                    .properties
+            || if scoped {
+                crate::contract_scope::inventory(
+                    v.properties.iter().map(|p| p.id.as_str()),
+                    &m.model.contract_selection,
+                ) != crate::contract_scope::inventory(
+                    first.properties.iter().map(|p| p.id.as_str()),
+                    &metadata[0].model.contract_selection,
+                )
+            } else {
+                !v.properties
                     .iter()
                     .map(|p| &p.id)
-                    .filter(|id| id.as_str() != "receipt_resolution"))
+                    .filter(|id| id.as_str() != "receipt_resolution")
+                    .eq(first
+                        .properties
+                        .iter()
+                        .map(|p| &p.id)
+                        .filter(|id| id.as_str() != "receipt_resolution"))
+            }
         {
             return Err("report inventories differ");
         }
@@ -984,37 +1076,74 @@ fn tables(
         }
         tables.quality = Some(rows);
     }
-    for p in &first.properties {
+    let mut property_ids: Vec<_> = first.properties.iter().map(|p| p.id.clone()).collect();
+    if scoped {
+        for c in &metadata[0].model.contract_selection.clauses {
+            if !property_ids.contains(&c.id) {
+                property_ids.push(c.id.clone());
+            }
+        }
+    }
+    for id in &property_ids {
         // Automatic receipt resolution is applicable only to response plans.
         // Retain the side reports; do not manufacture a verdict for other plans.
-        if p.id == "receipt_resolution"
+        if id == "receipt_resolution"
             && views
                 .iter()
-                .any(|v| !v.properties.iter().any(|q| q.id == p.id))
+                .any(|v| !v.properties.iter().any(|q| &q.id == id))
         {
             continue;
         }
-        for &case_id in p.values.keys() {
+        let cases: Vec<_> = views
+            .iter()
+            .find_map(|v| v.properties.iter().find(|p| &p.id == id))
+            .map(|p| p.values.keys().copied().collect())
+            .unwrap_or_else(|| {
+                if metadata[0].model.legacy_route() {
+                    vec![None]
+                } else {
+                    first.arrivals.keys().copied().map(Some).collect()
+                }
+            });
+        for case_id in cases {
             let values = plans
                 .iter()
                 .zip(&views)
-                .map(|(plan, v)| {
+                .zip(metadata)
+                .map(|((plan, v), m)| {
+                    let excluded = m
+                        .model
+                        .contract_selection
+                        .clauses
+                        .iter()
+                        .any(|c| c.excluded && &c.id == id);
+                    let value = if excluded {
+                        None
+                    } else {
+                        Some(
+                            v.properties
+                                .iter()
+                                .find(|q| &q.id == id)
+                                .ok_or("missing property")?
+                                .values
+                                .get(&case_id)
+                                .ok_or("property case inventory differs")?
+                                .clone(),
+                        )
+                    };
                     Ok(PropertyCell {
                         configuration: plan.configuration.clone(),
-                        value: v
-                            .properties
-                            .iter()
-                            .find(|q| q.id == p.id)
-                            .ok_or("missing property")?
-                            .values
-                            .get(&case_id)
-                            .ok_or("property case inventory differs")?
-                            .clone(),
+                        status: scoped.then_some(if excluded {
+                            crate::contract_scope::Applicability::NotApplicable
+                        } else {
+                            crate::contract_scope::Applicability::Applied
+                        }),
+                        value: ScopedPropertyValue(value),
                     })
                 })
                 .collect::<projection::Result<_>>()?;
             tables.properties.push(PropertyRow {
-                id: p.id.clone(),
+                id: id.clone(),
                 case_id,
                 arrival: case_id.map(|id| first.arrivals[&id]),
                 values,

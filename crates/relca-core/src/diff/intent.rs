@@ -63,7 +63,7 @@ pub struct Preservation {
 #[serde(deny_unknown_fields)]
 pub struct PreservedProperty {
     pub id: String,
-    pub from: Verdict,
+    pub from: Option<Verdict>,
     pub to: Verdict,
 }
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,7 +111,8 @@ pub(super) fn preservation(result: &mut DiffReport, to: &lower::SelectedConfigur
     let mut properties = Vec::new();
     for p in &result.properties {
         if ids.contains(&p.id) {
-            match p.to {
+            let Some(to_verdict) = p.to else { continue };
+            match to_verdict {
                 Verdict::Satisfied => summary.satisfied += 1,
                 Verdict::Vacuous => summary.vacuous += 1,
                 Verdict::Violated => summary.violated += 1,
@@ -122,7 +123,7 @@ pub(super) fn preservation(result: &mut DiffReport, to: &lower::SelectedConfigur
             properties.push(PreservedProperty {
                 id: p.id.clone(),
                 from: p.from,
-                to: p.to,
+                to: to_verdict,
             });
         }
     }
@@ -221,6 +222,32 @@ pub(super) fn apply(
                 }
             }
             ast::Intent::Preserve { selector, on, .. } => {
+                let excluded: Vec<_> = to
+                    .model
+                    .contract_selection
+                    .clauses
+                    .iter()
+                    .filter(|c| {
+                        c.excluded
+                            && match selector {
+                                ast::PropertySelector::Contract(name) => {
+                                    c.contract.as_deref() == Some(name.value.as_str())
+                                }
+                                ast::PropertySelector::Exact(id) => c.id == id.value,
+                            }
+                    })
+                    .map(|c| c.id.clone())
+                    .collect();
+                if !excluded.is_empty() {
+                    result.diagnostic(
+                        diag::E_DIFF_0,
+                        format!(
+                            "preserved contract is outside destination configuration scope: {}",
+                            excluded.join(", ")
+                        ),
+                        Some(span),
+                    );
+                }
                 let ids = selected(selector, &to.model);
                 let properties: Vec<_> = result
                     .to
@@ -316,7 +343,11 @@ fn related(d: &Difference, m: &ir::Model) -> BTreeSet<ir::CapabilityId> {
     let shape = Shape::new(m);
     let active = shape.active(m);
     match d.kind {
-        Kind::Rule | Kind::Qualification | Kind::Performance | Kind::Degradation => BTreeSet::new(),
+        Kind::ContractScope
+        | Kind::Rule
+        | Kind::Qualification
+        | Kind::Performance
+        | Kind::Degradation => BTreeSet::new(),
         Kind::Relation | Kind::Authority | Kind::Time => active
             .into_iter()
             .filter(|c| capname(m, *c) == d.target)

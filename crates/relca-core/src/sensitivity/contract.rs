@@ -158,6 +158,7 @@ impl Contract {
             value: json!({"model_name":m.name,"language":m.version,"types":types,"state":state,"actors":actors,"capabilities":capabilities,
             "process":{"name":m.process.name,"bindings":named(m.process.bindings.iter().filter(|b| !b.name.starts_with("@response:")).map(|b|Ok((b.name.clone(),json!(n.ty(b.ty)?)))))?,"body":process},
             "queries":queries,"verify":verify,"policy":policy,"cut":n.cut()?,
+            "contract_scope":m.contract_selection.clauses.iter().filter_map(|c| c.applies_to.as_ref().map(|scope| json!({"id":c.id,"applies_to":scope.0,"reason":scope.1}))).collect::<Vec<_>>(),
             "resources":named(m.resources.iter().map(|r|Ok((r.name.clone(),json!(r.capacity)))))?,
             "admission":{"queue":n.admission(m.admission_queue.as_ref())?,"concurrent":n.admission(m.concurrent_cases.as_ref())?,"overflow_end":m.overflow_end.map(|e|n.end(e)).transpose()?},
             "simulation":m.simulation.as_ref().map(|s|json!({"replications":s.replications,"seed":s.seed,"confidence":s.confidence})),
@@ -231,6 +232,7 @@ fn supported(m: &ir::Model) -> Result<()> {
     // A new Model field must be consciously classified here, not silently left
     // out of the gate. Derived reports/assumptions are not declaration inputs.
     let ir::Model {
+        contract_selection: _,
         performances: _,
         case_priority: _,
         arrival_distribution: _,

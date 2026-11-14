@@ -17,6 +17,8 @@ use std::io::Read;
 
 #[derive(Debug, Serialize)]
 pub struct ConformanceReport {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub contract_scope: Vec<crate::contract_scope::Excluded>,
     pub ledger: crate::ledger::Ledger,
     pub uncertainty: crate::uncertainty::Uncertainty,
     pub verdict: Verdict,
@@ -138,6 +140,7 @@ impl Default for Limits {
 impl Default for ConformanceReport {
     fn default() -> Self {
         Self {
+            contract_scope: Vec::new(),
             ledger: crate::ledger::Ledger::conformance(true),
             uncertainty: crate::uncertainty::Uncertainty::not_lowered(),
             verdict: Verdict::Inconclusive,
@@ -454,6 +457,12 @@ fn conform_raw(
         }
     };
     r.model.name = Some(ast.name.value.clone());
+    crate::contract_scope::attach(
+        &mut r.contract_scope,
+        &mut r.unchecked,
+        &mut r.diagnostics,
+        &crate::contract_scope::Selection::from_ast(&ast, configuration),
+    );
     let q1_features = q1_scope::declarations(&ast);
     let m = match lower::lower_with_selection(&ast, configuration, scenario) {
         Ok(m) => m,
@@ -477,6 +486,12 @@ fn conform_raw(
         }
     };
     r.ledger.lowered(&m);
+    crate::contract_scope::attach(
+        &mut r.contract_scope,
+        &mut r.unchecked,
+        &mut r.diagnostics,
+        &m.contract_selection,
+    );
     r.ledger.execution["bounds"] = crate::ledger::known(
         json!({"cases":m.bounds.cases,"live_tasks":m.bounds.live_tasks,"clock":m.bounds.clock}),
     );

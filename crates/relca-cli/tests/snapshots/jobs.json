@@ -16048,6 +16048,104 @@
     ]
   },
   {
+    "id": "fixture-scope-a1",
+    "args": [
+      "check",
+      "fixtures/scope-a1/model.relca",
+      "--configuration",
+      "Old"
+    ]
+  },
+  {
+    "id": "fixture-scope-a1.broken-called",
+    "args": [
+      "check",
+      "fixtures/scope-a1.broken-called/model.relca",
+      "--configuration",
+      "Old"
+    ]
+  },
+  {
+    "id": "fixture-scope-a2",
+    "args": [
+      "check",
+      "fixtures/scope-a2/model.relca",
+      "--configuration",
+      "New"
+    ]
+  },
+  {
+    "id": "fixture-scope-a2.broken-grant",
+    "args": [
+      "check",
+      "fixtures/scope-a2.broken-grant/model.relca",
+      "--configuration",
+      "New"
+    ]
+  },
+  {
+    "id": "fixture-scope-a3",
+    "args": [
+      "check",
+      "fixtures/scope-a3/model.relca",
+      "--configuration",
+      "New"
+    ]
+  },
+  {
+    "id": "fixture-scope-a3.broken-outside",
+    "args": [
+      "check",
+      "fixtures/scope-a3.broken-outside/model.relca",
+      "--configuration",
+      "New"
+    ]
+  },
+  {
+    "id": "fixture-scope-a4",
+    "args": [
+      "compare",
+      "fixtures/scope-a4/model.relca",
+      "--plans",
+      "Old,New",
+      "--mode",
+      "exhaustive"
+    ]
+  },
+  {
+    "id": "fixture-scope-a4.broken-global",
+    "args": [
+      "compare",
+      "fixtures/scope-a4.broken-global/model.relca",
+      "--plans",
+      "Old,New",
+      "--mode",
+      "exhaustive"
+    ]
+  },
+  {
+    "id": "fixture-scope-a5",
+    "args": [
+      "diff",
+      "fixtures/scope-a5/model.relca",
+      "--from",
+      "New",
+      "--to",
+      "Old"
+    ]
+  },
+  {
+    "id": "fixture-scope-a5.broken-preserve",
+    "args": [
+      "diff",
+      "fixtures/scope-a5.broken-preserve/model.relca",
+      "--from",
+      "New",
+      "--to",
+      "Old"
+    ]
+  },
+  {
     "id": "fixture-serial-time",
     "args": [
       "check",

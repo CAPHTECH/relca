@@ -307,8 +307,30 @@ contract InvoiceControls {
 }
 ```
 
-JSON の性質 id は `contract <名前> #<何番目の節> <種類>`(例 `contract InvoiceControls #5 separation`)。
+JSON の性質 id は `contract <名前> #<何番目の節> <種類>`(例 `contract InvoiceControls #4 separation`)。
 `verify probability …` は `probability reached #<何番目>` になる [実]。
+
+### 契約を構成に限定する [実]
+
+省略時はすべての構成に適用する。名前付き契約にだけ、適用する構成名の並びと理由を書ける。
+
+```relca
+contract Controls applies_to [New] reason "Oldには承認画面がない" {
+  authority_basis Screen.approve Mgr
+}
+```
+
+[全文例](../../../examples/configuration-contracts.relca)は Old の check が1分、New が2分で、どちらも satisfied / exit 0。
+Old の契約は満たしたのでなく未検査で、`contract_scope` と `unchecked` に残る。
+範囲内で活性化しなければ vacuous / exit 5 のまま。到達しない枝を自動で範囲外にしない。
+適用先の未知名・空・重複、configuration の無い模型、理由の欠落は拒否する。
+匿名契約への指定と、contest を含む契約への指定も拒否する。
+waive の範囲は参照する response の範囲の部分集合にする。
+verify は全域のままで、適用する要求が0件なら unsupported / exit 4。
+対象を手順・異議経路・復旧などから呼ぶ構成で契約を外すと W-CONF-2（state invariant も警告）。
+空の reason は Cut の除外理由と同様に構文上は受理するが、理由を記入して使う。
+全構成の列挙は受理し、警告しない。
+詳しい構文・診断・保持宣言との関係は[利用ガイド](../../../docs/guide/dsl.md#契約を適用する構成を選ぶ)を参照。
 
 ## 宣言させないもの
 

@@ -763,6 +763,9 @@ fn all_old_models_migration_148dirs_179inputs_160lower_80complete_80nondet_19sta
         .filter(|p| p.is_dir() && !p.file_name().unwrap().to_str().unwrap().starts_with("sim-"))
         .filter(|p| {
             let name = p.file_name().unwrap().to_str().unwrap();
+            if relca_test_support::fixture_match::contract_scope_fixture(name) {
+                return false;
+            }
             if scenario_population::fixture(name)
                 || (include!("support/waits_names.rs") as &[&str]).contains(&name)
             {

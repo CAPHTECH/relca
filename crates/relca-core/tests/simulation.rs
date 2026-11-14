@@ -512,6 +512,9 @@ fn s_check_ignored_all_148_old_inputs_check_and_diff_json_keys_and_assumptions()
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
+        if relca_test_support::fixture_match::contract_scope_fixture(&name) {
+            continue;
+        }
         if scenario_population::fixture(&name)
             || (include!("support/waits_names.rs") as &[&str]).contains(&name.as_str())
         {

@@ -39,6 +39,7 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 | `cut`, `cut_context` | 宣言した範囲と、除外・保留・未宣言事項 |
 | `bounds` | 案件数、同時 Task 数、clock、`truncated` |
 | `properties[]` | 各性質の `verdict`、確率境界、根拠や注記 |
+| `contract_scope[]` | 選んだ構成では範囲外にした契約、その適用先と理由。検査済みの性質ではない |
 | `terminals[]` | 到達先別の時間・work の範囲。平均とは限らない |
 | `diagnostics[]` | code、severity、message、入力内のバイト位置 span |
 | `assumptions[]` | 既定値や分析で置いた前提 |
@@ -52,6 +53,62 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 null は 0 ではありません。`not_configured`、`undetermined`、`truncated` などの理由を
 値と一緒に扱ってください。`per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
 simulate の `basis` は性質や中断の有無で異なり、`properties[].cases[]` の `basis: statistical` は網羅探索の確率ではなく標本推定を表します。
+
+## 契約の適用範囲
+
+`applies_to` で選んだ構成を範囲外にした契約は、`properties` には入りません。
+節の id は範囲内の構成と同じで、他の節の通し番号も変わりません。
+[構文の全文例](../../examples/configuration-contracts.relca)の Old では次の行が出ます。
+
+```json
+{"id":"contract Controls #1 authority_basis","contract":"Controls","applies_to":["New"],"reason":"Oldには承認画面がない","status":"not_applicable","masks_call":false}
+```
+
+この行は `contract_scope[]` の要素です。
+`unchecked` にも `contract.scope.contract Controls #1 authority_basis` が残ります。
+**not_applicable は verdict ではありません。** satisfied として数えず、全体の判定や exit を決めるときも数えません。
+適用される要求が0件になれば、範囲外の宣言を要求に数えず unsupported / exit 4 で止まります。
+
+| 警告 | 読み方 |
+|---|---|
+| W-CONF-1 | 複数の構成があるモデルで、適用中の契約が vacuous であり、選んだ process に対象の字句上の呼出しも無い。統制が設計上無いなら applies_to の指定を検討する。verdict は vacuous のまま |
+| W-CONF-2 | 範囲外の契約の対象が、選んだ構成の手順や異議の経路から呼ばれうる。`masks_call: true`。到達しない枝、応答喪失からの復旧、再送、縮退の代替も数える。Capability を参照しない節も true。違反が起きないという意味ではない |
+| W-CMP-1 | 比較した案で契約の適用範囲が異なる。同じ統制を問う比較として扱わない |
+
+compare の `tables.properties` は契約の行を落とさず、範囲外のセルを次の形にします。
+
+```json
+{"configuration":"Old","status":"not_applicable","verdict":null,"reason":"configuration_scope"}
+```
+
+適用側の status は `applied` です。applies_to を使うモデルでは、共通の verify のセルにも `applied` が付きます。
+使わないモデルには新しい status 欄を出しません。
+非対称な比較では `checked` に `contract_scope`、仮定に `compare.contract_scope: asymmetric` が付きます。
+hard と目的の宣言評価は、各案に適用される要求で採否を決めます。仮定の行で対象の契約と案を確認してください。
+最初の案で非適用の契約は、性質表の末尾に加わることがあります。行の位置ではなく id で対応させてください。
+
+diff の性質行は、適用範囲を使うモデルだけ `from_status` / `to_status` を持ちます。
+範囲外の側の from / to は null です。`differences` の `kind: contract_scope` は、
+統制が加わる向きを `added`、外れる向きを `removed` と示します。
+差分に対応する intent が無ければ W-DIFF-1、保持・上書き・保守・loses の注記も無ければ W-DIFF-3 が出ます。
+たとえば行き先の intent に `retire contract_scope Controls reason "承認を使わない" loses "承認の根拠を求める契約"` と書けば、
+Controls を外す差分へ理由と失うものを添えられます。追加は `add contract_scope Controls reason "承認を追加する"`、
+変更の説明は `change contract_scope Controls reason "適用先を見直す"` の形です。
+行き先で preserve した契約が範囲外なら E-DIFF-0 / invalid / exit 3 です。
+非適用を preservation の satisfied に混ぜません。
+
+explain は `explanation.omitted` に `verdict: null`、
+`reason: not_applicable_configuration_scope` の行を残します。
+mutate は範囲外の authority_basis から期限切れ候補を作りません。
+mutate の最上位の `contract_scope` は、`original.contract_scope` と同じ内容です。
+最上位の `unchecked` にも同じ契約の未検査を残します。変異体ごとに検査した結果ではありません。
+全文例の Old は元の check が satisfied でも、authority_expired だけを選ぶと候補0件で vacuous / exit 5 です。
+sensitivity は適用先の宣言も同じ問いの検査に含め、点ごとに違えば `sensitivity_contract_mismatch` で拒否します。
+conform も適用範囲外の契約は照合しません。いずれも、その範囲を検査済みとして報告しないでください。
+
+確認用ページは source の適用先と理由、および各 report の範囲外の契約を表示します。
+範囲外の契約は出所と id ごとに未確認の件数に数えます。verdict の再計算には混ぜません。
+mutate の最上位と original は同じ元の検査の情報なので、確認用ページでは original の1件だけを数えます。
 
 ## 合流の出力
 
@@ -131,13 +188,14 @@ Task ではないので `actor`、`capability`、`executor` はいずれも null
 契約が悪化しても、同時に割当てた系譜の行が消えて照合できなくなった場合は、
 `inconclusive / assigned_check_unavailable` のままです。契約の変化だけで `detected` に置き換えません。
 
-この契約を含む `compare`、`diff`、`sensitivity` は、対応外の比較として exit 4 で拒否します。
+選んだ構成にこの契約が適用される `compare`、`diff`、`sensitivity` は、対応外の比較として exit 4 で拒否します。
 diff の個別 check が `violated` でも、最上位の `unsupported` は比較していないという意味です。
 個別の違反を、比較の拒否で打ち消さないでください。
 異議経路を対象にした契約は `evidence_basis_contest_route` で未対応にします。
 通常の呼出しとして追跡できない対象を `vacuous` として隠さず、他の性質の結果は残します。
 `conform` は `U-LOG-1` で拒否し、`not_checked` に契約を `unsupported_request` として、
 `unchecked` に `evidence_basis` を残します。読取りを観測しないログから満たしたとは判定しません。
+契約が範囲外なら、未対応要求ではなく `contract_scope` に残します。
 
 ## 繰り返しの出力
 

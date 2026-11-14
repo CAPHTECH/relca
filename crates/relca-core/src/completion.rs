@@ -6,6 +6,50 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
+/// Syntactic execution sites, not a reachability proof. The lowered tree keeps
+/// dead arms, recovery handlers, retries, repeat expansions and alternatives.
+/// Contest routes are the only additional Task source outside that tree.
+/// Merge copies, receipt resolution, waits and cancellation do not create Tasks.
+pub(crate) fn lexical_capabilities(m: &ir::Model) -> BTreeSet<ir::CapabilityId> {
+    fn block(body: &ir::Block, out: &mut BTreeSet<ir::CapabilityId>) {
+        for s in body {
+            match &s.kind {
+                ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => {
+                    out.insert(c.capability);
+                }
+                ir::Stmt::Response(c, r) => {
+                    out.insert(c.capability);
+                    if let Some(handler) = &r.recovery {
+                        block(handler, out);
+                    }
+                }
+                ir::Stmt::Fork { branches, .. } => {
+                    out.extend(branches.iter().map(|c| c.capability));
+                }
+                ir::Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    block(then_body, out);
+                    block(else_body, out);
+                }
+                ir::Stmt::LoopControl(_)
+                | ir::Stmt::MergeCopy { .. }
+                | ir::Stmt::Wait(_)
+                | ir::Stmt::WaitUntil(_)
+                | ir::Stmt::ResolveEffect { .. }
+                | ir::Stmt::StopReceiptUnknown
+                | ir::Stmt::End(_) => {}
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    block(&m.process.body, &mut out);
+    out.extend(m.contests().iter().map(|c| c.route));
+    out
+}
+
 pub(crate) const EDGE_LIMIT: usize = 2_000_000;
 #[cfg(test)]
 pub(crate) const FIXTURES: [&str; 24] = [
@@ -395,14 +439,13 @@ impl Observed {
         self.ends.extend(&other.ends);
     }
     pub fn warnings(&self, m: &ir::Model) -> Vec<diag::Diagnostic> {
-        let mut calls = BTreeSet::new();
+        let calls = lexical_capabilities(m);
         let mut arms = Vec::new();
         let mut ends = Vec::new();
         fn lexical(
             m: &ir::Model,
             b: &ir::Block,
             prefix: &[usize],
-            calls: &mut BTreeSet<ir::CapabilityId>,
             arms: &mut Vec<(Vec<usize>, diag::Span)>,
             ends: &mut Vec<(ir::EndId, diag::Span)>,
         ) {
@@ -415,11 +458,8 @@ impl Observed {
                     | ir::Stmt::WaitUntil(_)
                     | ir::Stmt::ResolveEffect { .. }
                     | ir::Stmt::StopReceiptUnknown => {}
-                    ir::Stmt::Call(c) | ir::Stmt::Query(c, _) | ir::Stmt::Response(c, _) => {
-                        calls.insert(c.capability);
-                    }
-                    ir::Stmt::Fork { branches, join, .. } => {
-                        calls.extend(branches.iter().map(|c| c.capability));
+                    ir::Stmt::Call(_) | ir::Stmt::Query(_, _) | ir::Stmt::Response(_, _) => {}
+                    ir::Stmt::Fork { join, .. } => {
                         if let ir::Join::Any { if_none, .. } = join {
                             ends.push((*if_none, s.span));
                         }
@@ -434,17 +474,16 @@ impl Observed {
                         }
                         let mut child = path.clone();
                         child.push(0);
-                        lexical(m, then_body, &child, calls, arms, ends);
+                        lexical(m, then_body, &child, arms, ends);
                         let mut child = path;
                         child.push(1);
-                        lexical(m, else_body, &child, calls, arms, ends);
+                        lexical(m, else_body, &child, arms, ends);
                     }
                     ir::Stmt::End(e) => ends.push((*e, s.span)),
                 }
             }
         }
-        lexical(m, &m.process.body, &[], &mut calls, &mut arms, &mut ends);
-        calls.extend(m.contests().iter().map(|c| c.route));
+        lexical(m, &m.process.body, &[], &mut arms, &mut ends);
         let included = |a: ir::ActorId| m.cut.as_ref().is_none_or(|c| c.include.contains(&a));
         let mut out = Vec::new();
         let mut warn = |code: &str, span, detail: String| {
