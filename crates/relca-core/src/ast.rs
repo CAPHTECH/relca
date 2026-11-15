@@ -423,6 +423,10 @@ pub struct ContestRates {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractClause {
+    SameVersion {
+        first: (CapabilityPath, Ident),
+        second: (CapabilityPath, Ident),
+    },
     Excludes {
         before: Event,
         start: Event,
@@ -900,6 +904,7 @@ pub enum CapItem {
     Writes(Vec<StateTarget>),
     Finish(Vec<Assignment>),
     Reads(Vec<Ident>),
+    Registers(Vec<Ident>),
     Commits,
     DurationFixed(Duration),
     DurationDistribution(Vec<DurationEntry>),

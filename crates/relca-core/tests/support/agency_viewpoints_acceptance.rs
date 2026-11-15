@@ -56,7 +56,7 @@ pub fn replace(s: &str, from: &str, to: &str) -> String {
 }
 /// Preserve the frozen O/F/P/L oracle; C5 checks effects/version separately.
 pub fn legacy_viewpoints(v: &Value) -> Value {
-    let mut v = v.clone();
+    let mut v = relca_test_support::stage_projection::current(v);
     if v["rules"] == "agency-viewpoints-p1-2" {
         v["rules"] = Value::String("agency-viewpoints-p1-1".into());
         v.as_object_mut().unwrap().remove("effects");

@@ -16,6 +16,9 @@ Relca は、業務の流れを小さなモデルに書き、起こりうる進�
 | 指摘がある場合だけ修正し、修正後の値か元の値を後続へ渡す | 値を返す `if`。`check`、`explain`、`simulate` |
 | 差し戻しや再確認を、初回を含む上限回数つきの `repeat` で書く | `check`、`explain`、`simulate` |
 | 判定に必要な根拠源を `evidence_basis` で求め、読取りの削除を検出する | `check`、`explain`、`mutate` |
+| 同じ人が前の操作で根拠源を読み、後の操作では生成物だけを見る形を区別する | `check`、`explain`、`simulate` の段ごとの観測と責務。読取りの削除は `mutate` |
+| 知識を記録へ登録し、後の読取りへ由来を引き継ぐ | `registers [Notes]` と `reads [Notes]`。`check`、`explain`、`simulate`、`mutate` |
+| 確かめた値と使う値が同じ版であることを `same_version` で求める | `check`、`explain`、`mutate`。`simulate` は標本中の違反だけ |
 | 契約を適用する構成を `applies_to` と理由で明示し、範囲外を未検査として残す | `check`、`explain`、`simulate`、`compare`、`diff`、`mutate`、`sensitivity`、`conform` |
 | 判断の所在や行使回数の導出に使う計算量を増やす | `check`、`simulate`、`explain` の `--agency-limit-scale N`(既定1、最大1000) |
 | 時間、費用、品質、人の負荷を標本で見積もる | `simulate` |
@@ -119,6 +122,9 @@ cargo build --release
 
 - [DSL の書き方](docs/guide/dsl.md): 最小モデルと主な構文
 - [根拠源を求める例](examples/evidence-basis.relca): 引数を通じた根拠と直接の読取り。[上流の読取りを外した対](examples/evidence-basis-missing.relca)は違反になる
+- [段ごとの観測の例](examples/stage-observation.relca): 入力時には請求書を読むが、確認時には入力結果だけを受け取る。確認の段に W-RESP-3 が出るが、警告だけで exit は変わらない
+- [知識を記録へ登録する例](examples/record-provenance.relca): 最後に正常終了した登録の由来を引き継ぐ。記録経由の到達は、原本を直接読んだことや独立した根拠源の追加とは区別する
+- [確かめた版を承認する例](examples/same-version.relca): 正常終了した最後の確認の引数と照合する。[別の呼出しの結果を承認する対](examples/same-version-reused.relca)は、値が同じでも違反になる
 - [構成ごとに契約を選ぶ例](examples/configuration-contracts.relca): Old は1分、New は2分で終了。承認の契約は New だけに適用し、Old の範囲外の契約を満たしたとは数えない
 - [相手ごとに差し替えの理由を書く例](examples/capability-replacement.relca): A→B と C→B の各10行をそれぞれの宣言で説明する。compare は理由を照合せず、未検査に残す
 - [結果の読み方](docs/guide/results.md): 判定、exit、JSON の主な欄

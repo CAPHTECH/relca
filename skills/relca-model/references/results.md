@@ -73,7 +73,7 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `actors[]` | Actor の各欄と `status: declared / default` | `default` は省略時既定。業務の人に確かめてもらう対象 |
 | `diagnostics[]` | `code / severity / message / span{start,end}` | span はモデルの **バイト位置**(lexer が byte span) |
 | `agency` | origin・lineage・refusal・common_causes・viewpoints | 入力構成から導出する欄で、自己申告の値は受けない。実運用の効果を測定した値ではない |
-| `responsibilities[]` | 人・対象・原本への到達・拒否の到達 | W-RESP-1(観測が無い)・W-RESP-2(拒否が効果に届かない) |
+| `responsibilities[]` | 人・対象・案件全体と各段の根拠源の読取り・拒否の到達 | W-RESP-1(案件全体で観測が無い)・W-RESP-2(拒否が効果に届かない)・W-RESP-3(別の段でだけ直接読む) |
 | `metrics` | 時間・費用・件数。`rates` に単価、`not_configured` は未設定 | 単価未設定は 0 円ではない |
 | `uncertainty` | aleatory / estimation / model の三区分 | モデル不確実性に Cut と系譜の仮定が入る |
 | `ledger.producer.version` | relca の版(現在 `0.0.0`、出所 `cargo_package`、build identity は未記録) | `relca --version` は無い |
@@ -84,6 +84,61 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+## 呼出し位置ごとの観測
+
+`agency.viewpoints.observation.stages` は call / actor / capability / people / unattributed と、
+直接の source Actor の `direct`、生成物経由だけの `via_outputs` を出す。
+源と人は名前順、段は呼出し位置順。生成物経由は観測に数えず、観測変数の辺を含む上近似として読む。
+実行者の人は executors の宣言で、資格やPermissionの成立や実行された人を認定しない。
+合流依存のviaは null / not_derived / merge_control。directは残す。
+repeatと有限再送は元の位置へまとめる。枝の行があっても実行した記録ではない。
+同じ源の再読はlineageや独立根拠数に足さない。source record の由来は推測せず、登録を明示した記録は次の別欄で読む。版の一致は観測の表だけでは判断しない。
+
+責務の `observation.stages` は本人の対象の各 call の required / direct / missing。
+人全体のdirectにあって当該段に無い源があればW-RESP-3を行ごとに1件出す。
+人全体で直接にも確定した記録経由にも届かない同じ源はW-RESP-1だけ。記録を使わない模型の行全体statusと時間・拒否の判定は変えない。
+stages_statusはderived / not_derived / not_applicable。未導出・対象外はstages=nullでstages_reasonを読む。
+maintenanceと、対象操作のexecutorsに本人が含まれないperson_not_executorだけが対象外。
+fallback_path / contest_path / target_not_called / no_person_stage / merge_control / no_source_identified / derivation_limitは未導出。
+責務のrequiredは引数と自身のreadsだけで、Oのviaが含む観測変数の辺を含まない。
+必要源が特定できなければ責務の未導出とuncheckedを残し、空の成功にしない。
+
+縮退・異議経路の段は未検査。Ruleのdecides値を条件で評価する働きは独立した段にしないが、Rule ActorのCapabilityの明示呼出しは普通の段として出す。
+diff/compareの段の対応づけも未検査として最上位uncheckedへ残す。
+original_access_removedは段だけの欠落増加とW-RESP-3の出現を悪化として数え、旧missing_sourcesと同じ源は重ねない。
+確認用ページは、段が無い旧JSONを「段ごとの記録なし」と表示する。
+[全文例と値](../../../docs/guide/results.md#呼出し位置ごとの観測)を参照。
+
+## 記録経由の到達
+
+登録を使う模型だけ、origin、人の normal、観測の段、責務の行と段に via_records を出す。
+
+```json
+[{"record":"Notes","registrars":[{"call":"r","people":["p1"]}],"sources":[{"source":"Know","route":"registrar_direct"}]}]
+```
+
+record は名前順、registrars は呼出し位置順、sources は源の名前順。
+registrar_direct は登録者自身の source reads、relayed は引数・観測変数・記録からの中継。
+人の配列が空なら補わない。登録者の候補が複数なら、全候補が運ぶ源だけを確定とする。
+may だけの源は indirect に残し、専用配列も via_records の観測も作らない。
+空配列は確定到達無し、旧JSONで欄が無い場合は記録経由を調べた結果とは読まない。
+
+direct へは加えず、記録自身を source や independent_sources にしない。
+via_outputs は引数・観測変数の上近似で、即時の記録辺は via_records で読む。
+暗黙知が新しい源として W-LIN-2 を抑止する場合も wlin2_tacit を開示する。may の登録だけでは抑止しない。
+
+責務の required_sources は従来どおり。must の記録で必要源が届けば missing_sources から外し、
+直接だけでは満たせなかった行を present_via_record とする。
+段の missing は required−direct のままで、記録の到達は段の別欄に出す。
+別段で同じ人が直接見た源なら W-RESP-3 を消さない。
+記録だけの到達で直接の時間経路が無ければ、時間の証跡は no_reachability_path で未検査になる。
+記録は値を持たず、潜在の値を読めるようにするものでも、版の一致を保証するものでもない。
+
+[実行できる全文](../../../examples/record-provenance.relca)は satisfied/exit0、3分。
+q1 の行は present_via_record、段 b は direct=[] / missing=[Know] と上の経路を持つ。
+conform は unchecked 配列に registration_provenance を残す。ログで由来を照合していない印として読む。
+[詳しい読み方](../../../docs/guide/results.md#記録経由の到達を読む)を参照。
 
 ## 差し替えと相手別の理由
 
@@ -186,6 +241,33 @@ cellsは累計の計数で、最大常駐メモリの上限ではない。倍率
 未解析のno_analysisを倍率1と読まない。compare/diff/mutate/sensitivity/conform/verifyではこのflagを受理しない。
 確認用ページは倍率とblockの上限記録を表示するが、記録が無い旧出力では未記録とし、1を補わない。
 詳しくは[利用ガイド](../../../docs/guide/results.md#agency-の導出の上限)を参照。
+
+## 値の版と証跡
+
+same_versionのcheck行はid/verdictと必要時cases。番号は模型全体の契約の項の通し順。
+explainの違反反例だけにversionを足し、binding/capability/parameter/versionで使う側を、
+examinedの同じ4欄で開始前の最後の確認を示す。確認が無ければexamined=null。
+[取り違えた例](../../../examples/same-version-reused.relca)はp/Approver.approve/d/d_dup、確認はk/Checker.check/d/dで、違反は4分。
+合流ならyield元の呼出し名を示す。結果は独立参照で再生したモデル上の経路で、実物の内容の認定ではない。
+確認用ページも使う版と確認した版を分け、証跡の欠落や不正な形を未確認に残す。
+
+| 版の語 | 対象 |
+|---|---|
+| version_check | 操作中に他から状態が書かれたかを見る、状態の書込みの版 |
+| via model | 経由モデルの版の宣言。同じモデル版でも呼出しの結果の版は別 |
+| same_version | どの呼出しの実行が値を作ったか。enumの等しさ、祖先の包含ではない |
+
+vacuous/切断を成功にしない。simulateの反例なしも全経路の安全性ではない。
+Agency・責務・via_model_pathsはこの契約で補わない。
+conformはU-LOG-1、not_checkedにunsupported_request、uncheckedにsame_version。
+[詳しいJSONと境界](../../../docs/guide/results.md#版の要求と証跡)を参照。
+
+summary_reusedの系譜の検査は、同じ根拠を独立検証として二重計上しないというRelcaの規則の検査。
+この検査のno_assigned_checkはモデルの弱さの印ではなく、その系譜の比較を割り当てられなかった印。
+same_versionの行があれば、その悪化も検出へ数える。何が変わったかはassigned_changesを読む。
+independence_creditedなら契約の悪化があってもundetectedのまま、悪化はassigned_changesへ残す。
+未照合の系譜を、契約が不変だっただけで完了にも変換しない。
+詳細は[mutateの二つの意味](../../../docs/guide/results.md#summary_reused-と-no_assigned_check)を参照。
 
 ## 根拠源の要求と証跡
 

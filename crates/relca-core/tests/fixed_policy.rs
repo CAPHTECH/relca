@@ -889,8 +889,8 @@ fn bijective_same_width_names_and_grain_preserve_the_entire_report_except_source
         t = h::edit(&t, old, new);
     }
     assert_eq!(s.len(), t.len());
-    let mut expected = h::checked(&s, None);
-    let mut actual = h::checked(&t, None);
+    let mut expected = relca_test_support::stage_projection::current(&h::checked(&s, None));
+    let mut actual = relca_test_support::stage_projection::current(&h::checked(&t, None));
     assert_ne!(expected["model"]["sha256"], actual["model"]["sha256"]);
     expected["model"].as_object_mut().unwrap().remove("sha256");
     actual["model"].as_object_mut().unwrap().remove("sha256");

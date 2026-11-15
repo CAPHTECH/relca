@@ -271,6 +271,13 @@ pub fn comparison_completed(report: &Value) -> bool {
 /// Independent test-side scalar/set/count transport (the retained C2/C5
 /// oracle), not the production mutation comparator.
 pub fn typed_changes(before: &Value, after: &Value, check: &str) -> Vec<Value> {
+    let projected = (check == "agency").then(|| {
+        (
+            relca_test_support::stage_projection::current(before),
+            relca_test_support::stage_projection::current(after),
+        )
+    });
+    let (before, after) = projected.as_ref().map_or((before, after), |(a, b)| (a, b));
     fn leaves(v: &Value, path: &str, out: &mut BTreeMap<String, Value>) {
         match v {
             Value::Object(o) => {

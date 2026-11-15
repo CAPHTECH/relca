@@ -1,6 +1,7 @@
 //! Replay-checked examples of structural violations (ADR 0021).
 use crate::{Verdict, diag, ir, report};
 use serde::Serialize;
+mod version;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ExplainReport {
@@ -114,6 +115,8 @@ pub struct Omitted {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct Counterexample {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<Version>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub degradation_routes: Vec<DegradationTrace>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,6 +142,21 @@ pub struct Evidence {
     pub sources: Vec<String>,
     pub missing: Vec<String>,
     pub excluded_edges: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Version {
+    #[serde(flatten)]
+    pub used: VersionValue,
+    pub examined: Option<VersionValue>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VersionValue {
+    pub binding: String,
+    pub capability: String,
+    pub parameter: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -753,6 +771,7 @@ fn add_counterexample(
     .err();
     let mapped_evidence = evidence_for(model, id, &steps);
     let evidence_failure = mapped_evidence.as_ref().err().copied();
+    let mapped_version = version::for_trace(model, id, &steps);
     let reason = trace
         .failure
         .or(mapping_failure)
@@ -760,6 +779,7 @@ fn add_counterexample(
         .or(authority_mapping_failure)
         .or(state_mapping_failure)
         .or(evidence_failure)
+        .or(mapped_version.as_ref().err().copied())
         .or_else(|| {
             if steps.is_empty() {
                 Some(ReplayReason::IllegalTransition)
@@ -827,6 +847,11 @@ fn add_counterexample(
         })
         .collect();
     out.counterexamples.push(Counterexample {
+        version: if reason.is_none() {
+            mapped_version.ok().flatten()
+        } else {
+            None
+        },
         degradation_routes,
         evidence: if reason.is_none() {
             mapped_evidence.ok().flatten()

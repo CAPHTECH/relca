@@ -198,7 +198,7 @@ fn r_all_19_hand_oracles_and_raw_diff_transport() {
                 "contest_runtime_tables",
             ];
             assert_eq!(
-                v["unchecked"],
+                relca_test_support::stage_projection::unchecked(&v["unchecked"]),
                 diff_increment::migrated_unchecked(&OLD_UNCHECKED)
             );
             assert!(

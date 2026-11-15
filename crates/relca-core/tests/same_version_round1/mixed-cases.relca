@@ -1,0 +1,28 @@
+model MixedCases version "0.2" {
+  type Doc = enum { draft }
+  type Ack = enum { ok }
+  actor Writer { capacity 1
+    capability draft() -> Doc { duration fixed 1min; result nondet { draft } }
+  }
+  actor Checker { capacity 1
+    capability check(d:Doc) -> Ack { duration fixed 1min; result nondet { ok } }
+  }
+  actor Approver { capacity 1
+    capability approve(d:Doc) -> Ack { duration fixed 1min; result nondet { ok } }
+  }
+  actor Gate { capacity 1; state later: bool = false
+    capability mark() -> Ack { writes later; finish { later = true }; duration fixed 1min; result nondet { ok } }
+  }
+  process Main {
+    d = Writer.draft()
+    if Gate.later == false { k = Checker.check(d) } else {}
+    p = Approver.approve(d)
+    m = Gate.mark()
+    end done
+  }
+  cut Scope { include [Writer,Checker,Approver,Gate] }
+  arrivals fixed [0min,10min]
+  bounds { cases 2; live_tasks 2; clock 30min }
+  verify reachable end.done
+  contract V { same_version Checker.check(d), Approver.approve(d) }
+}

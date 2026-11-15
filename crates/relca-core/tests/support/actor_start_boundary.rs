@@ -330,7 +330,9 @@ pub fn unchanged(case: Case, r: &Value, exit: i32) {
         json!([])
     };
     assert_eq!(
-        r["agency"]["viewpoints"]["observation"],
+        relca_test_support::stage_projection::observation(
+            &r["agency"]["viewpoints"]["observation"]
+        ),
         json!({
             "status":"derived","sources":[{"actor":"Doc","normal":{"actors":case.observed_actors(),"people":people,"unattributed_actors":unattributed},"contest":{"actors":[],"people":[],"unattributed_actors":[],"routes":[]}}],
             "people":person_rows,"fallback":"unchecked"
@@ -648,7 +650,10 @@ impl BoundaryProbe {
         wanted.sort();
         assert_eq!(actual, wanted, "{} diagnostic multiset", self.name);
         assert_eq!(
-            report["agency"]["viewpoints"]["observation"], self.observation,
+            relca_test_support::stage_projection::observation(
+                &report["agency"]["viewpoints"]["observation"]
+            ),
+            self.observation,
             "{} O",
             self.name
         );

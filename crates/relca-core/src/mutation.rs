@@ -181,6 +181,8 @@ pub struct Site {
     pub actor: Option<String>,
     pub capability: Option<String>,
     pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<String>,
     pub affected_bindings: Vec<String>,
     pub statement_path: Option<String>,
     pub retained_branch: Option<&'static str>,
@@ -592,6 +594,22 @@ fn mutate_using_raw(
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
+    if original
+        .properties
+        .iter()
+        .any(|p| p.id.ends_with(" same_version"))
+    {
+        r.mutations[4]
+            .assigned_checks
+            .push("contracts.same_version");
+        if let Some(a) = r
+            .assumptions
+            .iter_mut()
+            .find(|a| a.field == "mutation.summary_scope")
+        {
+            a.affects.push_str("same_version の行も割り当て、その悪化を検出とする。ただし independence_credited は契約の検出で隠さない。");
+        }
+    }
     if syntax::parse(src).is_ok_and(|ast| ast.has_merges()) {
         r.verdict = Verdict::Unsupported;
         r.run.reason = Some("merge_feature_combination");
@@ -1384,6 +1402,7 @@ fn site(src: &str, span: diag::Span) -> Site {
         actor: None,
         capability: None,
         source: None,
+        record: None,
         affected_bindings: vec![],
         statement_path: None,
         retained_branch: None,
@@ -1423,6 +1442,20 @@ fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
     }
 }
 fn read_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
+    let mut records = BTreeSet::new();
+    for item in &model.items {
+        if let ast::Item::Actor(a) = item {
+            for item in &a.items {
+                if let ast::ActorItem::Capability(c) = item {
+                    for item in &c.items {
+                        if let ast::CapItem::Registers(targets) = &item.value {
+                            records.extend(targets.iter().map(|t| t.value.as_str()));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let mut all_calls = vec![];
     for item in &model.items {
         if let ast::Item::Process(p) = item
@@ -1450,7 +1483,11 @@ fn read_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candi
                                 let mut s = site(src, source.span);
                                 s.actor = Some(a.name.value.clone());
                                 s.capability = Some(c.name.value.clone());
-                                s.source = Some(source.value.clone());
+                                if records.contains(source.value.as_str()) {
+                                    s.record = Some(source.value.clone());
+                                } else {
+                                    s.source = Some(source.value.clone());
+                                }
                                 s.affected_bindings = all_calls
                                     .iter()
                                     .filter(|call| {
@@ -2022,6 +2059,73 @@ fn compare_summary(
     call: &str,
     capability: &str,
 ) -> Comparison {
+    let mut c = compare_summary_lineage(before, after, sources, call, capability);
+    // Preserve the old path byte-for-byte when no value identity is requested.
+    let rows: Vec<_> = before
+        .properties
+        .iter()
+        .filter(|p| p.id.starts_with("contract") && p.id.ends_with(" same_version"))
+        .collect();
+    if rows.is_empty() || comparison_failure(before, after, true).is_some() {
+        return c;
+    }
+    let mut unavailable = false;
+    for b in rows {
+        let Some(a) = after.properties.iter().find(|a| a.id == b.id) else {
+            unavailable = true;
+            continue;
+        };
+        property_change(&mut c.assigned, &b.id, "verdict", b.verdict, a.verdict);
+        unavailable |= matches!(a.verdict, Verdict::Inconclusive | Verdict::Unsupported);
+        for bc in b.cases.iter().flatten() {
+            if let Some(ac) = a.cases.iter().flatten().find(|a| a.case_id == bc.case_id) {
+                property_change(
+                    &mut c.assigned,
+                    &format!("{}:case:{}", b.id, bc.case_id),
+                    "verdict",
+                    bc.verdict,
+                    ac.verdict,
+                );
+                unavailable |= matches!(ac.verdict, Verdict::Inconclusive | Verdict::Unsupported);
+            } else {
+                unavailable = true;
+            }
+        }
+    }
+    let worsened = c
+        .assigned
+        .iter()
+        .any(|change| change.direction == "worsened");
+    // A failed independence rule dominates an otherwise useful business check.
+    if c.reason != Some("independence_credited") {
+        if worsened {
+            c.result = "detected";
+            c.reason = None;
+        } else if c.result != "detected" && c.result != "inconclusive" {
+            c.result = if unavailable {
+                "inconclusive"
+            } else {
+                "undetected"
+            };
+            c.reason = Some(if unavailable {
+                "assigned_check_unavailable"
+            } else {
+                "no_worsening"
+            });
+        }
+    }
+    c.other
+        .retain(|o| !c.assigned.iter().any(|a| assigned_projection(a, o)));
+    c
+}
+
+fn compare_summary_lineage(
+    before: &report::Report,
+    after: &report::Report,
+    sources: &BTreeSet<String>,
+    call: &str,
+    capability: &str,
+) -> Comparison {
     if let Some(c) = comparison_failure(before, after, true) {
         return c;
     }
@@ -2427,7 +2531,11 @@ fn compare_with_basis(
                     "observation.status",
                     Payload::Text(b.observation.status.clone()),
                     Payload::Text(a.observation.status.clone()),
-                    if b.observation.status == "present" && a.observation.status == "missing" {
+                    if matches!(
+                        b.observation.status.as_str(),
+                        "present" | "present_via_record"
+                    ) && a.observation.status == "missing"
+                    {
                         "worsened"
                     } else {
                         "changed"
@@ -2440,14 +2548,48 @@ fn compare_with_basis(
                     "warnings",
                     &b.warnings,
                     &a.warnings,
-                    if !b.warnings.iter().any(|w| w == "W-RESP-1")
-                        && a.warnings.iter().any(|w| w == "W-RESP-1")
-                    {
+                    if [diag::W_RESP_1, diag::W_RESP_3].iter().any(|code| {
+                        !b.warnings.iter().any(|w| w == code)
+                            && a.warnings.iter().any(|w| w == code)
+                    }) {
                         "worsened"
                     } else {
                         "changed"
                     },
                 );
+                if b.observation.stages_status == "derived"
+                    && a.observation.stages_status == "derived"
+                {
+                    for old in b.observation.stages.iter().flatten() {
+                        if let Some(new) = a
+                            .observation
+                            .stages
+                            .iter()
+                            .flatten()
+                            .find(|s| s.call == old.call)
+                        {
+                            let uncounted_increase = new.missing.iter().any(|source| {
+                                !old.missing.contains(source)
+                                    && !(a.observation.missing_sources.contains(source)
+                                        && !b.observation.missing_sources.contains(source))
+                            });
+                            // The old person-wide missing leaf already records
+                            // that same source once. Add only stage-specific
+                            // worsening; a disappeared root is not improvement.
+                            if uncounted_increase {
+                                set_change(
+                                    &mut assigned,
+                                    "responsibilities",
+                                    &key,
+                                    &format!("observation.stages.{}.missing", old.call),
+                                    &old.missing,
+                                    &new.missing,
+                                    "worsened",
+                                );
+                            }
+                        }
+                    }
+                }
             } else {
                 unavailable = true;
             }
@@ -2759,8 +2901,53 @@ fn other_changes(before: &report::Report, after: &report::Report, out: &mut Vec<
             }
         }
     }
-    let b = serde_json::to_value(before).expect("report serializes");
-    let a = serde_json::to_value(after).expect("report serializes");
+    // Stage observations are compared only by kind 9's assigned check. Do not
+    // turn the new analytical table into changes for the other mutation kinds.
+    fn without_stages(report: &report::Report) -> serde_json::Value {
+        let mut value = serde_json::to_value(report).expect("report serializes");
+        for pointer in ["/unchecked", "/agency/unchecked"] {
+            if let Some(words) = value
+                .pointer_mut(pointer)
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                words.retain(|word| {
+                    !word.as_str().is_some_and(|word| {
+                        matches!(
+                            word,
+                            "stage_observation(stage_correspondence_not_defined)"
+                                | "stage_observation(fallback_path)"
+                                | "stage_observation(rule)"
+                                | "responsibility_stage(contest_path)"
+                        )
+                    })
+                });
+            }
+        }
+        if let Some(o) = value
+            .pointer_mut("/agency/viewpoints/observation")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            o.remove("stages");
+        }
+        if let Some(rows) = value
+            .get_mut("responsibilities")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for row in rows {
+                if let Some(o) = row
+                    .get_mut("observation")
+                    .and_then(serde_json::Value::as_object_mut)
+                {
+                    for key in ["stages", "stages_status", "stages_reason"] {
+                        o.remove(key);
+                    }
+                }
+            }
+        }
+        value
+    }
+    let b = without_stages(before);
+    let a = without_stages(after);
     // Both projections must use the same identity even for a 2 -> 1 change.
     // Single-row fields keep their historical keys, including value changes.
     let mut repeated_assumption_fields = BTreeSet::new();
@@ -2813,10 +3000,51 @@ fn other_changes(before: &report::Report, after: &report::Report, out: &mut Vec<
 #[cfg(test)]
 #[path = "../tests/support/mutation_default_private.rs"]
 mod default_private;
+#[cfg(test)]
+#[path = "../tests/support/same_version_mutation_private.rs"]
+mod same_version_private;
 
 #[cfg(test)]
 mod default_tests {
     use super::*;
+
+    #[test]
+    fn unchanged_same_version_does_not_resolve_an_unavailable_lineage_check() {
+        let mut before = report::check(include_str!("../../../fixtures/mut2-summary/model.relca"));
+        let mut property = before.properties[0].clone();
+        property.id = "contract V #1 same_version".into();
+        property.verdict = Verdict::Satisfied;
+        property.cases = None;
+        before.properties.push(property);
+        let mut after = before.clone();
+        after
+            .agency
+            .as_mut()
+            .unwrap()
+            .as_derived_mut()
+            .unwrap()
+            .lineage_groups
+            .clear();
+        let compare = |after: &report::Report| {
+            compare_summary(
+                &before,
+                after,
+                &BTreeSet::from(["Invoice".into()]),
+                "a",
+                "Approver.approve",
+            )
+        };
+        let got = compare(&after);
+        assert_eq!(
+            (got.result, got.reason),
+            ("inconclusive", Some("assigned_check_unavailable"))
+        );
+        after.properties.last_mut().unwrap().verdict = Verdict::Violated;
+        after.verdict = Verdict::Violated;
+        let got = compare(&after);
+        assert_eq!((got.result, got.reason), ("detected", None));
+        assert!(got.assigned.iter().any(|c| c.direction == "worsened"));
+    }
 
     #[test]
     fn private_comparison_oracle() {

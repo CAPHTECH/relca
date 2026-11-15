@@ -566,7 +566,7 @@ fn a7fix_diff_unchecked_literal_inventory() {
                 let v = json!(relca_core::diff::diff(&s, "Left", "Right"));
                 assert_eq!(v["verdict"], if mismatch { "invalid" } else { "satisfied" });
                 assert_eq!(
-                    v["unchecked"],
+                    relca_test_support::stage_projection::unchecked(&v["unchecked"]),
                     i::diff_unchecked(contest, mismatch, waits),
                     "contest={contest} mismatch={mismatch} waits={waits}"
                 );
@@ -595,7 +595,10 @@ fn a7fix_diff_aborted_legacy_unchecked_places_waiting_before_terminals() {
                     .any(|d| d["code"] == "U-SEM-0")
             );
         }
-        assert_eq!(v["unchecked"], i::diff_aborted_unchecked(waits));
+        assert_eq!(
+            relca_test_support::stage_projection::unchecked(&v["unchecked"]),
+            i::diff_aborted_unchecked(waits)
+        );
     }
 }
 

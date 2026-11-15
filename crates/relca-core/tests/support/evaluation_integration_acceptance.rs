@@ -472,7 +472,10 @@ fn declared_evaluation_checked_and_unchecked_are_hand_closed() {
             "metric_ranking",
             "metric_semantic_alignment",
         ]);
-        assert_eq!(v["unchecked"], json!(unchecked));
+        assert_eq!(
+            relca_test_support::stage_projection::unchecked(&v["unchecked"]),
+            json!(unchecked)
+        );
     }
 }
 

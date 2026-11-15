@@ -1098,7 +1098,7 @@ fn s_state_guard_agency_is_projected_by_diff_without_claiming_resource_or_author
         assert!(OLD_UNCHECKED.contains(&word));
     }
     assert_eq!(
-        value["unchecked"],
+        relca_test_support::stage_projection::unchecked(&value["unchecked"]),
         diff_increment::migrated_unchecked(&OLD_UNCHECKED)
     );
     assert_eq!(

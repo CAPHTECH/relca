@@ -161,6 +161,11 @@ fn histories(m: &Model, f: &Frame<'_>, case_index: usize) -> Result<Vec<History>
             h.active = active;
             h.broken = broken;
         }
+        if let ContractKind::SameVersion { first, second } = clause.kind {
+            let (active, broken, _) = version::facts(m, &f.trace, first, second)?;
+            h.active = active;
+            h.broken = broken;
+        }
         if let ContractKind::StateInvariant { antecedent, condition } = &clause.kind {
             for (_, values) in &f.state_snapshots {
                 if match antecedent { Some(c) => snapshot_condition_at(c, &[], values, case_index)?, None => true } {
@@ -587,7 +592,10 @@ fn finished<'a>(
         Occurrence::Completion(cap, value),
         person,
     );
-    if tree.m.site_contest(binding).is_some() || evidence::present(tree.m) {
+    if tree.m.site_contest(binding).is_some()
+        || evidence::present(tree.m)
+        || crate::same_version::present(tree.m)
+    {
         next.cases[k]
             .payload_mut()
             .unwrap()
@@ -1540,7 +1548,10 @@ fn run_rep<'a>(
                     tree.notify(&mut next, k, j, &cap.start_writes);
                     append(tree, &mut next, k, Occurrence::Dispatch(cap_id), person);
                     let binding = c.frame.tasks[j].call.binding;
-                    if m.site_contest(binding).is_some() || evidence::present(m) {
+                    if m.site_contest(binding).is_some()
+                        || evidence::present(m)
+                        || crate::same_version::present(m)
+                    {
                         next.cases[k]
                             .payload_mut()
                             .unwrap()

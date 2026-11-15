@@ -57,6 +57,7 @@ pub(crate) mod evidence;
 #[path = "../tests/support/limits_population.rs"]
 pub(crate) mod limits_population;
 mod metrics;
+mod version;
 
 #[cfg(test)]
 pub(crate) fn waits_review_merge(points: Vec<crate::metrics::BusinessMetrics>) {
@@ -3381,6 +3382,7 @@ impl std::fmt::Debug for Task {
 
 #[derive(Clone, PartialEq, Eq)]
 struct State {
+    version: Option<version::History>,
     evidence: Option<evidence::History>,
     response: Option<response::History>,
     lost_updates: Vec<ir::StateVarId>,
@@ -3403,6 +3405,9 @@ struct State {
 
 impl std::hash::Hash for State {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        if let Some(version) = &self.version {
+            version.hash(h);
+        }
         if let Some(evidence) = &self.evidence {
             evidence.hash(h);
         }
@@ -3441,6 +3446,7 @@ impl std::hash::Hash for State {
 impl State {
     fn initial(model: &ir::Model, pc: usize) -> Self {
         Self {
+            version: crate::same_version::present(model).then(version::History::default),
             evidence: crate::evidence_basis::present(model).then(evidence::History::default),
             response: (!model.response_attempts().is_empty())
                 .then(|| response::History::for_model(model)),
@@ -3476,6 +3482,11 @@ impl State {
                 .iter()
                 .map(|c| {
                     let mut monitor = Monitor::default();
+                    if let ir::ContractKind::SameVersion { first, second } = c.kind
+                        && (evidence::route(model, first.0) || evidence::route(model, second.0))
+                    {
+                        monitor.evidence_issue = Some(evidence::Issue::VersionContest);
+                    }
                     if let ir::ContractKind::EvidenceBasis { capability, .. } = c.kind
                         && evidence::route(model, capability)
                     {
@@ -3826,6 +3837,7 @@ fn emit_in(
     }
     refresh_contests(state, model, state.time, false);
     evidence::event(state, bundle, binding, model);
+    version::event(state, bundle, binding, model)?;
     update_state_invariants(state, model, case_index)?;
     let ledger = update_debts(state, bundle, binding, model);
     let result = update_monitors(state, bundle, binding, model, case_index).and(ledger);
@@ -6421,6 +6433,9 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
                 }
             }
             ir::ContractKind::EvidenceBasis { .. } => {} // Independently checked above.
+            ir::ContractKind::SameVersion { first, second } => {
+                crate::same_version::validate(model, *first, *second)?;
+            }
             ir::ContractKind::Permitted { capability }
             | ir::ContractKind::AuthorityBasis { capability, .. } => {
                 let cap = model
@@ -7486,6 +7501,9 @@ fn step_observed_inner(
                     return Err("merge target already written".into());
                 }
                 *target = Some(value);
+                if let Some(h) = &mut state.version {
+                    h.adopt(*binding, *source);
+                }
                 state.pc = *next;
                 room.take(1)?;
                 return Ok(Step::Next(vec![state]));
@@ -10584,6 +10602,8 @@ mod tests {
                     performance: None,
                     version_check: None,
                     read_variables: Vec::new(),
+                    registers: Vec::new(),
+                    read_records: Vec::new(),
                     atomic: None,
                     uses: Vec::new(),
                     requires: None,

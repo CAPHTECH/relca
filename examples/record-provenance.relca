@@ -1,0 +1,31 @@
+model RegisteredKnowledge version "0.2" {
+  type V = enum { pass }
+  type Ack = enum { ok }
+  people [p1,q1]
+  actor Know { source tacit "vendor knowledge" }
+  actor Notes { }
+  actor Clerk { executors [p1]
+    capability enter() -> V {
+      reads [Know]; duration fixed 1min; result nondet { pass }
+    }
+    capability register() -> Ack {
+      reads [Know]; registers [Notes]; duration fixed 1min; result nondet { ok }
+    }
+  }
+  actor Reviewer { executors [q1]
+    capability review(e:V) -> Ack {
+      reads [Notes]; duration fixed 1min; result nondet { ok }
+    }
+  }
+  cut Scope { include [Know,Notes,Clerk,Reviewer] }
+  process Main {
+    e = Clerk.enter()
+    r = Clerk.register()
+    b = Reviewer.review(e)
+    end done
+  }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.done
+  contract Basis { evidence_basis Reviewer.review [Know] }
+  responsible q1 for Reviewer.review
+}

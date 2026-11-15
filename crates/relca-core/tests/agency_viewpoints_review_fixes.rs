@@ -33,7 +33,7 @@ fn two_readers_of_one_source_union_their_executors() {
       verify safety no_resource_overcommit
     }"#;
     assert_eq!(
-        vp(s)["observation"],
+        relca_test_support::stage_projection::observation(&vp(s)["observation"]),
         json!({"status":"derived","sources":[{"actor":"Invoice",
             "normal":{"actors":["Clerk","Auditor"],"people":["c1","u1"],"unattributed_actors":[]},
             "contest":{"actors":[],"people":[],"unattributed_actors":[],"routes":[]}}],

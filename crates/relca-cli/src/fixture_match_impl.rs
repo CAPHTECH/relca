@@ -4981,7 +4981,7 @@ mod mutation_wire_tests {
     }
     #[test]
     fn mutation_closed_wire_rejects_single_faults_at_every_object_depth() {
-        let v = generated();
+        let v = stage_projection::current(&generated());
         validate_mutation_wire(&v).unwrap();
         fn paths(v: &Value, p: String, out: &mut Vec<String>) {
             match v {
@@ -5345,6 +5345,8 @@ pub fn validate_diff_expected(expected: &Value) -> Result<(), String> {
 }
 
 pub fn compare_diff_report(expected: &Value, actual: &Value) -> Result<(), String> {
+    let projected = stage_projection::root_unchecked(actual);
+    let actual = projected.as_ref().unwrap_or(actual);
     for side in ["from", "to"] {
         validate_actor_capacity_reason(&actual["agency"][side], &actual[side]["report"]["actors"])?;
         validate_read_write_pin(
@@ -7530,6 +7532,8 @@ fn validate_compare_metric_end_inventory(v: &Value) -> Result<(), String> {
 }
 
 pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
+    let projected = stage_projection::root_unchecked(v);
+    let v = projected.as_ref().unwrap_or(v);
     for pair in v["tables"]["agency"].as_array().into_iter().flatten() {
         let actors = |side: &str| {
             v["plans"]
@@ -9410,7 +9414,10 @@ fn responsibility_schema() -> Ty {
             ]),
         ),
         ("time_frame", responsibility_time_schema()),
-        ("warnings", Arr(Box::new(Lit(&["W-RESP-1", "W-RESP-2"])))),
+        (
+            "warnings",
+            Arr(Box::new(Lit(&["W-RESP-1", "W-RESP-2", "W-RESP-3"]))),
+        ),
     ])))
 }
 
@@ -9902,7 +9909,8 @@ mod responsibility_wire_tests {
                 .is_err()
             );
         }
-        assert!(check(&json!({"code":"W-RESP-3"}), &Ty::Diagnostic, "diag").is_err());
+        assert!(check(&json!({"code":"W-RESP-999"}), &Ty::Diagnostic, "diag").is_err());
+        assert!(check(&json!({"code":"W-RESP-3","severity":"warning","message":"stage observation","span":null}), &Ty::Diagnostic, "diag").is_ok());
     }
     #[test]
     fn r_all_19_expected_schemas_are_authored_and_old_populations_unchanged() {
@@ -11559,6 +11567,12 @@ fn report_schema() -> Ty {
 }
 
 fn check(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
+    let projected = stage_projection::marked_observation(value).or_else(|| {
+        path.ends_with(".unchecked")
+            .then(|| stage_projection::marked_unchecked(value))
+            .flatten()
+    });
+    let value = projected.as_ref().unwrap_or(value);
     let bad = |what: &str| Err(format!("{path}: expected {what}, got {value}"));
     match ty {
         Ty::Ledger => ledger_shape::validate(value),
@@ -12582,7 +12596,7 @@ fn validate_wire_inner(actual: &Value) -> Result<(), String> {
     // unknown keys. Lossless round-trip also requires every nullable field to
     // be present explicitly and rejects keys outside the ADR report shape.
     let canonical = serde_json::to_value(&report).map_err(|error| format!("wire: {error}"))?;
-    if canonical != dto_shape {
+    if stage_projection::legacy_dto(&canonical, &dto_shape) != dto_shape {
         return Err("wire: missing nullable fields or unexpected report keys".into());
     }
     for diagnostic in &report.diagnostics {
@@ -13632,6 +13646,12 @@ fn validate_probability(v: &Value) -> Result<(), String> {
 }
 
 fn compare(expected: &Value, actual: &Value, path: &str) -> Result<(), String> {
+    let projected = stage_projection::marked_observation(actual).or_else(|| {
+        path.ends_with(".unchecked")
+            .then(|| stage_projection::marked_unchecked(actual))
+            .flatten()
+    });
+    let actual = projected.as_ref().unwrap_or(actual);
     match (expected, actual) {
         (Value::Array(expected), Value::Array(actual))
             if path.contains(".contest_runtime[") && path.ends_with(".alternatives") =>
@@ -17281,3 +17301,6 @@ pub const EVALUATION_FIXTURES: &[&str] =
 #[allow(dead_code)]
 pub const QUANTILE_FIXTURES: &[&str] =
     &include!("../../relca-core/tests/support/quantile_names.rs");
+#[allow(dead_code)]
+#[path = "../../relca-test-support/src/stage_projection.rs"]
+mod stage_projection;

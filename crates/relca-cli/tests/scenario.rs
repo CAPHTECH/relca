@@ -171,6 +171,8 @@ fn only_source_derived_metadata_slots_differ_not_times_probabilities_or_state_co
                 *at = Value::Null;
             }
         }
+        x = relca_test_support::stage_projection::current(&x);
+        y = relca_test_support::stage_projection::current(&y);
         assert_eq!(x, y, "{}: nonmetadata byte-value relation", row["id"]);
         let mut bad = y.clone();
         bad["bounds"]["truncated"] = json!(true);

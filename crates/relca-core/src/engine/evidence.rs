@@ -5,12 +5,14 @@ use super::*;
 pub(crate) enum Issue {
     Snapshot,
     Contest,
+    VersionContest,
 }
 impl Issue {
     pub(crate) fn reason(self) -> &'static str {
         match self {
             Self::Snapshot => "evidence_basis_conditional_snapshot",
             Self::Contest => "evidence_basis_contest_route",
+            Self::VersionContest => "same_version_contest_route",
         }
     }
 }
@@ -85,6 +87,11 @@ impl History {
             if let ir::ContractKind::EvidenceBasis { calls, .. } = &clause.kind
                 && let Some(c) = calls.iter().find(|c| c.binding == binding)
             {
+                // Records carry only the statically certain provenance. No
+                // extra executable state, timing or registration event is added.
+                if !cap.read_records.is_empty() {
+                    value.roots.extend(&c.sources);
+                }
                 value.unknown.extend(&c.conditional_sources);
             }
         }
@@ -179,6 +186,14 @@ pub(crate) fn diagnostics(
                 return None;
             }
             let clause = &m.contracts[id.0];
+            if let ir::ContractKind::SameVersion { first, second } = clause.kind {
+                return (route(m, first.0) || route(m, second.0)).then(|| diag::Diagnostic {
+                    code: diag::U_SEM_0.into(),
+                    severity: diag::Severity::Error,
+                    message: "same_version_contest_route".into(),
+                    span: Some(clause.span),
+                });
+            }
             let ir::ContractKind::EvidenceBasis {
                 capability, calls, ..
             } = &clause.kind

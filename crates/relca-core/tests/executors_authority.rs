@@ -1012,7 +1012,10 @@ fn e_agency_remains_actor_level_and_diff_does_not_claim_authority_or_resource() 
     for side in ["from", "to"] {
         let agency = &before[side]["report"]["agency"];
         assert!(agency.is_object());
-        assert_eq!(agency, &after[side]["report"]["agency"]);
+        assert_eq!(
+            relca_test_support::stage_projection::current(agency),
+            relca_test_support::stage_projection::current(&after[side]["report"]["agency"])
+        );
         // ADR 0043 (plan C03): executors leaves unchecked only when the
         // effects viewpoint is derived.
         assert_eq!(
@@ -1059,7 +1062,7 @@ fn e_agency_remains_actor_level_and_diff_does_not_claim_authority_or_resource() 
         assert!(OLD_UNCHECKED.contains(&word));
     }
     assert_eq!(
-        before["unchecked"],
+        relca_test_support::stage_projection::unchecked(&before["unchecked"]),
         diff_increment::migrated_unchecked(&OLD_UNCHECKED)
     );
     assert_eq!(

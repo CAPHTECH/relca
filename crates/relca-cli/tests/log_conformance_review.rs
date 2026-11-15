@@ -401,6 +401,8 @@ fn m2_feature_inputs_really_populate_the_named_ir_fields() {
             performance,
             version_check,
             read_variables,
+            registers,
+            read_records,
             atomic,
             uses,
             requires,
@@ -423,6 +425,7 @@ fn m2_feature_inputs_really_populate_the_named_ir_fields() {
             span,
         } = cap;
         assert!(qualified_executors.is_none());
+        assert!(registers.is_empty() && read_records.is_empty());
         assert!(performance.is_none());
         let present = match field {
             "permission" => permission.is_some(),

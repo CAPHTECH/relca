@@ -1,5 +1,6 @@
 //! Closed semantic comparison, deliberately not a recursive report/JSON diff.
 use super::*;
+mod stage_projection;
 use serde_json::{Value, json};
 mod degradation;
 mod response;
@@ -713,16 +714,16 @@ fn compare(
         b.copy(count.0)?;
         serde_json::to_value(x).map_err(|_| invalid())
     }
-    let mut a = size(a, b)?;
-    let mut z = size(z, b)?;
+    let mut a = size(&stage_projection::AgencyView(a), b)?;
+    let mut z = size(&stage_projection::AgencyView(z), b)?;
     // Work only on the already budgeted comparison copies. Child reports and
     // raw metrics, trace labels and sampler keys retain their own IR namespace.
     if let Some((from, to)) = models {
         response::normalize(&mut a, from, b)?;
         response::normalize(&mut z, to, b)?;
     }
-    let ad = size(&ad, b)?;
-    let zd = size(&zd, b)?;
+    let ad = size(&stage_projection::DutiesView(ad), b)?;
+    let zd = size(&stage_projection::DutiesView(zd), b)?;
     let mut out = Vec::new();
     let a_gaps = legacy_gaps(&a, b)?;
     let z_gaps = legacy_gaps(&z, b)?;

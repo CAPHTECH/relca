@@ -20,6 +20,8 @@ mod evidence_basis;
 #[cfg(test)]
 #[path = "../tests/support/r2_round2_inputs.rs"]
 mod r2_round2_inputs;
+mod registration;
+mod same_version;
 #[cfg(test)]
 pub(crate) mod evaluation_population {
     pub(crate) fn fixture(name: &str) -> bool {

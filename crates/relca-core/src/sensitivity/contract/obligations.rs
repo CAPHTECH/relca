@@ -246,6 +246,9 @@ impl Names<'_> {
                 K::EvidenceBasis { .. } => {
                     return Err(unsupported("evidence_basis_unsupported_command"));
                 }
+                K::SameVersion { .. } => {
+                    return Err(unsupported("same_version_unsupported_command"));
+                }
                 K::AuthorityBasis {
                     capability,
                     authority,

@@ -1,0 +1,33 @@
+model AtomicExamination version "0.2" {
+  type Doc = enum { draft }
+  type Ack = enum { accepted, duplicate }
+  actor Writer { capacity 1
+    capability draft() -> Doc { duration fixed 1min; result nondet { draft } }
+  }
+  actor Checker { capacity 1; state keys: set<CaseId>
+    capability seed(key:CaseId) -> Ack {
+      commits; writes keys; duration fixed 1min
+      atomic { if key in keys { result duplicate } else { keys += key; result accepted } }
+      cancel forbidden_after_start
+    }
+    capability check(key:CaseId, d:Doc) -> Ack {
+      commits; writes keys; duration fixed 1min
+      atomic { if key in keys { result duplicate } else { keys += key; result accepted } }
+      cancel forbidden_after_start
+    }
+  }
+  actor Approver { capacity 1
+    capability approve(d:Doc) -> Ack { duration fixed 1min; result nondet { accepted } }
+  }
+  process Main {
+    d = Writer.draft()
+    s = Checker.seed(case.id)
+    k = Checker.check(case.id,d)
+    p = Approver.approve(d)
+    end done
+  }
+  cut Scope { include [Writer,Checker,Approver] }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  verify reachable end.done
+  contract V { same_version Checker.check(d), Approver.approve(d) }
+}

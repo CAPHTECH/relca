@@ -1,0 +1,26 @@
+model StageObservation version "0.2" {
+  type V = enum { pass, fail }
+  type Ack = enum { ok }
+  people [c1]
+  actor Invoice { source document }
+  actor Clerk {
+    executors [c1]
+    capability enter() -> V { reads [Invoice]; duration fixed 1min; result nondet { pass } }
+    capability confirm(e: V) -> V { duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Ledger {
+    capacity 1
+    capability post(v: V) -> Ack { commits; duration fixed 1min; result nondet { ok } }
+  }
+  cut C { include [Invoice, Clerk, Ledger] }
+  process Flow {
+    e = Clerk.enter()
+    v = Clerk.confirm(e)
+    if v == pass {} else { end returned }
+    k = Ledger.post(v)
+    end posted
+  }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  responsible c1 for Clerk.confirm
+  verify reachable end.posted
+}

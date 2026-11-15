@@ -32,7 +32,7 @@ fn viewpoints_bytes_follow_declared_key_order_for_every_row_kind() {
         .current_dir(root())
         .output()
         .unwrap();
-    let stdout = String::from_utf8(o.stdout).unwrap();
+    let stdout = String::from_utf8(relca_test_support::stage_projection::bytes(&o.stdout)).unwrap();
     // ADR 0043: rules p1-2 (plan C01) and the effects block appended after
     // retention as the last viewpoints key (plan C02); its own key order is
     // fixed by the C5 acceptance, so only its leading tag is pinned here.
@@ -74,7 +74,7 @@ fn viewpoints_bytes(args: &[&str]) -> String {
         .current_dir(root())
         .output()
         .unwrap();
-    let stdout = String::from_utf8(o.stdout).unwrap();
+    let stdout = String::from_utf8(relca_test_support::stage_projection::bytes(&o.stdout)).unwrap();
     let start = stdout.find(r#""viewpoints":"#).expect("viewpoints");
     let tail = &stdout[start..];
     let marker = r#""actual_skill"]}"#;

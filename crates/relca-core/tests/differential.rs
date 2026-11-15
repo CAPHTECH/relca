@@ -340,6 +340,8 @@ impl Builder {
             performance: None,
             version_check: None,
             read_variables: Vec::new(),
+            registers: Vec::new(),
+            read_records: Vec::new(),
             atomic: None,
             uses: Vec::new(),
             duration_distribution: None,

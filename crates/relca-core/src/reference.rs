@@ -16,6 +16,7 @@ mod authority;
 mod evidence;
 mod evidence_scope;
 mod metrics;
+mod version;
 
 #[cfg(test)]
 pub(crate) fn waits_review_envelope(points: Vec<crate::metrics::BusinessMetrics>) {
@@ -2004,6 +2005,9 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                 ..
             } => {
                 evidence::validate(m, *capability, sources)?;
+            }
+            ContractKind::SameVersion { first, second } => {
+                require(crate::same_version::validate(m, *first, *second).is_ok())?;
             }
             ContractKind::Permitted { capability }
             | ContractKind::AuthorityBasis { capability, .. } => {
@@ -4316,6 +4320,18 @@ impl<'a> Interpreter<'a> {
                                 _ => aborted = true,
                             }
                         }
+                    }
+                }
+                ContractKind::SameVersion { first, second } => {
+                    match version::facts(self.model, &f.trace, *first, *second) {
+                        Ok((active, broken, issue)) => {
+                            facts.0 |= active;
+                            facts.1 |= broken;
+                            if issue {
+                                self.statistics.evidence_unsupported.insert(ClauseId(i));
+                            }
+                        }
+                        Err(_) => aborted = true,
                     }
                 }
                 ContractKind::EvidenceBasis {

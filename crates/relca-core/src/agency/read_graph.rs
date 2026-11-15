@@ -30,6 +30,13 @@ pub(crate) fn concurrent_read(body: &ir::Block, caps: &[ir::Capability]) -> Opti
                             w.binding != c.binding
                                 && caps.get(w.capability.0).is_some_and(|cap| writes(cap, *v))
                         })
+                    }) || cap.read_records.iter().any(|r| {
+                        branches.iter().any(|w| {
+                            w.binding != c.binding
+                                && caps
+                                    .get(w.capability.0)
+                                    .is_some_and(|cap| cap.registers.contains(r))
+                        })
                     }) {
                         return Some(c.span);
                     }
@@ -58,6 +65,56 @@ pub(super) fn read_parents(m: &ir::Model, calls: &[&ir::Call]) -> Result<Vec<Vec
 }
 
 pub(super) fn with_limits(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    limits: Limits,
+) -> Result<Vec<Vec<ir::BindingId>>> {
+    let mut parents = variable_parents(m, calls, limits)?;
+    if crate::registration::present(m) {
+        let graph = crate::evidence_basis::graph(m);
+        let mut b = viewpoints::budget(limits);
+        b.location = Location::model(m, "read_graph");
+        for (i, c) in calls.iter().enumerate() {
+            let index = if m.has_merges() { c.binding.0 } else { i };
+            for &p in &graph.record_parents[c.binding.0] {
+                b.work()?;
+                if !parents[index].contains(&p) {
+                    b.copy(1)?;
+                    parents[index].push(p);
+                }
+            }
+        }
+    }
+    Ok(parents)
+}
+
+/// Convert the legacy table's position/binding-dependent layout at its boundary.
+/// Lexical stage inventories (unlike the dense Agency inventory) must never
+/// index the no-merge table with a binding ID.
+pub(super) fn variable_parents_by_binding(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    limits: Limits,
+) -> Result<BTreeMap<ir::BindingId, Vec<ir::BindingId>>> {
+    let parents = variable_parents(m, calls, limits)?;
+    calls
+        .iter()
+        .enumerate()
+        .map(|(position, call)| {
+            let index = if m.has_merges() {
+                call.binding.0
+            } else {
+                position
+            };
+            Ok((
+                call.binding,
+                parents.get(index).ok_or_else(invalid)?.clone(),
+            ))
+        })
+        .collect()
+}
+
+pub(super) fn variable_parents(
     m: &ir::Model,
     calls: &[&ir::Call],
     limits: Limits,

@@ -398,6 +398,8 @@ impl CompareReport {
             )
             .map(|s| s.to_string())
             .collect();
+        self.unchecked
+            .push("stage_observation(stage_correspondence_not_defined)".into());
         if receipt_not_applicable {
             self.unchecked
                 .push(projection::RECEIPT_NOT_APPLICABLE.into());
@@ -566,6 +568,16 @@ pub fn compare_with_scenario(
     scenario: Option<&str>,
 ) -> CompareReport {
     if let Ok(ast) = crate::syntax::parse(src) {
+        if crate::registration::declared(&ast)
+            && plans.iter().any(|name| {
+                lower::lower_configuration_with_scenario(&ast, name, scenario)
+                    .is_ok_and(|s| crate::registration::present(&s.model))
+            })
+        {
+            let mut result = CompareReport::empty(Some(analysis));
+            result.diagnostic(diag::U_SEM_0, "registration_unsupported_command");
+            return result.finish();
+        }
         if ast.has_merges() {
             let mut result = CompareReport::empty(Some(analysis));
             result.diagnostic(
@@ -577,6 +589,12 @@ pub fn compare_with_scenario(
         if ast.has_evidence_basis() && (!ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if c.applies_to.is_some())) || plans.iter().any(|name| ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if crate::contract_scope::applies(c, Some(name)) && c.clauses.iter().any(|c| matches!(c.value, crate::ast::ContractClause::EvidenceBasis { .. })))))) {
             let mut result = CompareReport::empty(Some(analysis));
             result.diagnostic(diag::U_SEM_0, "evidence_basis_unsupported_command");
+            return result.finish();
+        }
+        if plans.iter().any(|name| ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c)
+            if crate::contract_scope::applies(c, Some(name)) && c.clauses.iter().any(|c| matches!(c.value, crate::ast::ContractClause::SameVersion { .. }))))) {
+            let mut result = CompareReport::empty(Some(analysis));
+            result.diagnostic(diag::U_SEM_0, "same_version_unsupported_command");
             return result.finish();
         }
         if ast.has_repetition() {

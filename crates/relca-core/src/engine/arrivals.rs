@@ -2162,6 +2162,9 @@ fn transition_inner(
                     return Err("merge target already written".into());
                 }
                 *target = Some(value);
+                if let Some(h) = &mut v.version {
+                    h.adopt(*binding, *source);
+                }
                 v.pc = *next;
             }
             Instruction::LoopControl { updates, next } => {

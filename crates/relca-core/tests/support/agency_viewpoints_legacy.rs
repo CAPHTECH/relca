@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 use serde_json::Value;
 pub fn agency(a: &Value) -> Value {
-    let mut a = a.clone();
+    let mut a = relca_test_support::stage_projection::current(a);
     if let Some(o) = a.as_object_mut()
         && let Some(v) = o.remove("viewpoints")
     {

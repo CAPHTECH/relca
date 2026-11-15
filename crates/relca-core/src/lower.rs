@@ -1878,6 +1878,7 @@ mod tests {
 
 #[derive(Default)]
 struct Lower {
+    registration_targets: BTreeSet<ir::ActorId>,
     agency_limit_scale: Option<usize>,
     merge_names: BTreeSet<String>,
     merge_target: Option<(ir::BindingId, usize)>,
@@ -1951,6 +1952,7 @@ struct Lower {
 }
 
 mod degradation;
+mod registration;
 mod repetition;
 mod work_profiles;
 
@@ -4390,6 +4392,7 @@ impl Lower {
         if self.errors.iter().any(|d| d.message == "q6_capacity_limit") {
             return Err(self.errors);
         }
+        self.registration_declarations(model);
         self.recovery_writers(model)?;
         for (actor_id, actor) in actor_declarations {
             let (mut contains, mut overlaps) = (None, None::<Vec<ir::ActorId>>);
@@ -5965,7 +5968,9 @@ impl Lower {
         };
         crate::contract_scope::resolve_calls(&mut lowered);
         priority::lower(model, &mut lowered, &self.called_actors)?;
+        crate::registration::supported(&lowered)?;
         crate::evidence_basis::prepare(&mut lowered)?;
+        crate::same_version::supported(&lowered)?;
         work_profiles::supported(&lowered, model.span)?;
         if !lowered.process.degradations.is_empty() {
             lowered.assumptions.push(ir::Assumption {field:"agency.retention.normal.scope".into(),value:"whole_process_paths".into(),
@@ -6544,6 +6549,21 @@ impl Lower {
             }
         }
     }
+    fn version_target(
+        &mut self,
+        target: &(ast::CapabilityPath, ast::Ident),
+    ) -> Option<(ir::CapabilityId, usize)> {
+        let cap = self.capability_path(&target.0)?;
+        let parameter = self.capabilities[cap.0]
+            .params
+            .iter()
+            .position(|p| p.name == target.1.value);
+        if parameter.is_none() {
+            self.error(E_NAME_0, "undefined parameter", target.1.span);
+        }
+        parameter.map(|p| (cap, p))
+    }
+
     fn capability_path(&mut self, path: &ast::CapabilityPath) -> Option<ir::CapabilityId> {
         let id = self
             .cap_names
@@ -7303,6 +7323,23 @@ impl Lower {
                 Some(ir::ContractKind::AuthorityBasis {
                     capability,
                     authority,
+                })
+            }
+            ast::ContractClause::SameVersion { first, second } => {
+                let a = self.version_target(first);
+                let b = self.version_target(second);
+                let (a, b) = (a?, b?);
+                if a == b {
+                    self.error(diag::E_CON_0, "same_version_same_target", first.0.span);
+                }
+                if self.capabilities[a.0.0].params[a.1].ty
+                    != self.capabilities[b.0.0].params[b.1].ty
+                {
+                    self.error(diag::E_TYPE_0, "same_version_type_mismatch", second.1.span);
+                }
+                Some(ir::ContractKind::SameVersion {
+                    first: a,
+                    second: b,
                 })
             }
             ast::ContractClause::EvidenceBasis {
@@ -9311,6 +9348,8 @@ impl Lower {
         }
         let (mut reads, mut commits) = (None, None);
         let mut read_variables = Vec::new();
+        let mut read_records = Vec::new();
+        let mut registers = None;
         self.cap_context = Some((actor, params.clone()));
         self.rejected_rule_writes.clear();
         if params.iter().any(|p| p.ty == ir::CASE_ID_TYPE)
@@ -9495,6 +9534,18 @@ impl Lower {
                 | ast::CapItem::Finish(_)
                 | ast::CapItem::OutcomesKernel(_)
                 | ast::CapItem::KernelReadsLatent(_) => {}
+                ast::CapItem::Registers(names) => {
+                    self.unique_members(names, item.span);
+                    let mut targets = Vec::new();
+                    for name in names {
+                        if let Some(&id) = self.actor_names.get(&name.value) {
+                            targets.push(id);
+                        } else {
+                            self.error(E_NAME_0, "undefined registration target", name.span);
+                        }
+                    }
+                    self.set_once(&mut registers, targets, "registers", item.span);
+                }
                 ast::CapItem::Reads(names) => {
                     self.unique_members(names, item.span);
                     let mut sources = Vec::new();
@@ -9524,6 +9575,9 @@ impl Lower {
                         }
                         match self.actor_names.get(&name.value).copied() {
                             Some(id) if self.actors[id.0].source.is_some() => sources.push(id),
+                            Some(id) if self.registration_targets.contains(&id) => {
+                                read_records.push(id)
+                            }
                             None => {
                                 let state = self.state_names.get(&name.value).copied();
                                 let param = params.iter().any(|p| p.name == name.value);
@@ -9810,6 +9864,8 @@ impl Lower {
             params,
             reads: reads.unwrap_or_default(),
             read_variables,
+            read_records,
+            registers: registers.unwrap_or_default(),
             commits: commits.unwrap_or(false),
             name: cap.name.value.clone(),
             actor,

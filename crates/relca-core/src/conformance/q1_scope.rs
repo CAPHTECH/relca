@@ -97,6 +97,7 @@ pub(super) fn declarations(model: &ast::Model) -> Vec<Feature> {
                                 | ast::CapItem::Writes(_)
                                 | ast::CapItem::Finish(_)
                                 | ast::CapItem::Reads(_)
+                                | ast::CapItem::Registers(_)
                                 | ast::CapItem::Commits
                                 | ast::CapItem::DurationFixed(_)
                                 | ast::CapItem::DurationDistribution(_)

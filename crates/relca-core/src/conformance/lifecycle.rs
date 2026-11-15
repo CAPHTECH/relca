@@ -44,6 +44,8 @@ pub fn features(c: &ir::Capability, m: &ir::Model) -> Features {
         performance,
         version_check,
         read_variables,
+        registers,
+        read_records,
         atomic,
         uses,
         requires,
@@ -76,6 +78,8 @@ pub fn features(c: &ir::Capability, m: &ir::Model) -> Features {
             ("params", !params.is_empty()),
             ("reads", !reads.is_empty()),
             ("read_variables", !read_variables.is_empty()),
+            ("registers", !registers.is_empty()),
+            ("read_records", !read_records.is_empty()),
         ]
         .into_iter()
         .filter_map(|(field, present)| present.then_some(field))

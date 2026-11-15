@@ -114,7 +114,7 @@ pub fn positive(run: impl Fn(&str, &str, &str) -> Value) {
     exact(&v, vec![row("x", "A.one", "A.two")], 1, 1);
     assert_eq!(v["differences"], json!([row("x", "A.one", "A.two")]));
     assert_eq!(
-        v["unchecked"],
+        relca_test_support::stage_projection::unchecked(&v["unchecked"]),
         json!(["relation_state_producers", "relation_binding_identity"])
     );
     assert!(

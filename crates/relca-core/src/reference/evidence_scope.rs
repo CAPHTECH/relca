@@ -89,6 +89,25 @@ fn certain_write(c: &Capability, v: StateVarId) -> bool {
                         })
                     }))))
 }
+#[derive(Clone, Copy)]
+enum Read {
+    Variable(StateVarId),
+    Record(ActorId),
+}
+impl Read {
+    fn writes(self, c: &Capability) -> bool {
+        match self {
+            Self::Variable(v) => writes(c, v),
+            Self::Record(r) => c.registers.contains(&r),
+        }
+    }
+    fn certain(self, c: &Capability) -> bool {
+        match self {
+            Self::Variable(v) => certain_write(c, v),
+            Self::Record(r) => c.registers.contains(&r),
+        }
+    }
+}
 pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
     let mut all = Vec::new();
     sites(&m.process.body, &BTreeSet::new(), &mut all);
@@ -106,7 +125,13 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
             }
         }
         let mut mask = BTreeSet::new();
-        for &v in &c.read_variables {
+        for input in c
+            .read_variables
+            .iter()
+            .copied()
+            .map(Read::Variable)
+            .chain(c.read_records.iter().copied().map(Read::Record))
+        {
             let mut last = Vec::new();
             let mut closed = false;
             for w in all[..index].iter().rev().filter(|w| w.physical) {
@@ -134,14 +159,14 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
                     continue;
                 }
                 let wc = &m.capabilities[w.call.capability.0];
-                if !writes(wc, v) {
+                if !input.writes(wc) {
                     continue;
                 }
                 last.push(w.call.binding);
                 if w.mandatory
                     && wc.requires.is_none()
                     && s.before.contains(&w.call.binding)
-                    && certain_write(wc, v)
+                    && input.certain(wc)
                 {
                     closed = true;
                     break;

@@ -151,8 +151,26 @@ pub struct Observation {
     pub required_sources: Vec<String>,
     pub direct: Vec<String>,
     pub indirect: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_records: Option<Vec<crate::agency::RecordProvenance>>,
     pub missing_sources: Vec<String>,
     pub reason: Option<String>,
+    #[serde(default)]
+    pub stages: Option<Vec<ObservationStage>>,
+    #[serde(default)]
+    pub stages_status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stages_reason: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservationStage {
+    pub call: String,
+    pub required: Vec<String>,
+    pub direct: Vec<String>,
+    pub missing: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_records: Option<Vec<crate::agency::RecordProvenance>>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -762,8 +780,12 @@ fn empty_row(m: &ir::Model, d: &Duty, id: usize) -> Responsibility {
             required_sources: vec![],
             direct: vec![],
             indirect: vec![],
+            via_records: crate::registration::present(m).then(Vec::new),
             missing_sources: vec![],
             reason: Some("derivation_limit".into()),
+            stages: None,
+            stages_status: "not_derived".into(),
+            stages_reason: Some("derivation_limit".into()),
         },
         refusal: Refusal {
             status: "not_derived".into(),
@@ -886,6 +908,7 @@ fn derive_merge_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Respo
         Err(reason) => {
             let mut row = empty_row(m, d, id);
             row.observation.reason = Some(reason.into());
+            row.observation.stages_reason = Some(reason.into());
             row.refusal.reason = Some(reason.into());
             row.time_frame = TimeFrame::unchecked(d.within, reason);
             return row;
@@ -935,10 +958,15 @@ fn derive_merge_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Respo
             required_sources: vec![],
             direct: vec![],
             indirect: vec![],
+            via_records: crate::registration::present(m).then(Vec::new),
             missing_sources: vec![],
             reason: Some("merge_control".into()),
+            stages: None,
+            stages_status: "not_derived".into(),
+            stages_reason: Some("merge_control".into()),
         };
-        row.warnings.retain(|code| code != diag::W_RESP_1);
+        row.warnings
+            .retain(|code| code != diag::W_RESP_1 && code != diag::W_RESP_3);
     }
     if refusal_depends {
         row.refusal = Refusal {
@@ -956,6 +984,9 @@ fn derive_merge_row(m: &ir::Model, d: &Duty, id: usize, limits: Limits) -> Respo
         for j in &mut e.judgements {
             j.call = p.name(m, &j.call);
         }
+    }
+    for stage in row.observation.stages.iter_mut().flatten() {
+        stage.call = p.name(m, &stage.call);
     }
     if let Some(time) = &mut row.time_frame.details {
         for path in &mut time.paths {
@@ -1063,6 +1094,16 @@ fn derive_row_into(
             budget.charge(cells, cells)?;
             direct.extend(o.direct.iter().cloned());
             indirect.extend(o.indirect.iter().cloned());
+            if let (Some(out), Some(routes)) = (&mut row.observation.via_records, &o.via_records) {
+                budget.charge(
+                    routes.len(),
+                    routes
+                        .iter()
+                        .map(|r| 1 + r.registrars.len() + r.sources.len())
+                        .sum(),
+                )?;
+                crate::registration::merge_routes(m, out, routes.clone());
+            }
         }
     }
     // Source declaration order, not alphabetic order, matches Agency.
@@ -1082,7 +1123,15 @@ fn derive_row_into(
         .observation
         .required_sources
         .iter()
-        .filter(|n| !direct.contains(*n))
+        .filter(|n| {
+            !direct.contains(*n)
+                && !row
+                    .observation
+                    .via_records
+                    .iter()
+                    .flatten()
+                    .any(|r| r.sources.iter().any(|s| s.source == **n))
+        })
         .cloned()
         .collect();
     let unused =
@@ -1097,7 +1146,16 @@ fn derive_row_into(
     row.observation.status = if row.observation.reason.is_some() {
         "not_derived"
     } else if row.observation.missing_sources.is_empty() {
-        "present"
+        if row
+            .observation
+            .required_sources
+            .iter()
+            .any(|s| !direct.contains(s))
+        {
+            "present_via_record"
+        } else {
+            "present"
+        }
     } else {
         "missing"
     }
@@ -1251,7 +1309,212 @@ fn derive_row_into(
     if matches!(row.refusal.status.as_str(), "missing" | "conditional") {
         row.warnings.push(diag::W_RESP_2.into());
     }
+    derive_stages(m, d, row, &cs, &seeds, budget)?;
     Ok(())
+}
+
+fn derive_stages(
+    m: &ir::Model,
+    d: &Duty,
+    row: &mut Responsibility,
+    cs: &BTreeMap<ir::BindingId, &ir::Call>,
+    seeds: &BTreeSet<ir::BindingId>,
+    budget: &mut Budget,
+) -> Limited<()> {
+    let observation = &mut row.observation;
+    if matches!(d.target, Target::Maintenance(_)) {
+        observation.stages_status = "not_applicable".into();
+        observation.stages_reason = Some("maintenance".into());
+        return Ok(());
+    }
+    if let Target::Capability(id) = d.target {
+        let actor = &m.actors[m.capabilities[id.0].actor.0];
+        budget.charge(actor.executors.as_ref().map_or(0, Vec::len) + 1, 0)?;
+        if !actor
+            .executors
+            .as_ref()
+            .is_some_and(|ps| ps.contains(&d.person))
+        {
+            observation.stages_status = "not_applicable".into();
+            observation.stages_reason = Some("person_not_executor".into());
+            return Ok(());
+        }
+    }
+    let mut selected = Vec::new();
+    let mut own_fallback = false;
+    for id in seeds {
+        budget.charge(1, 0)?;
+        let c = cs.get(id).ok_or(())?;
+        let actor = &m.actors[m.capabilities[c.capability.0].actor.0];
+        budget.charge(actor.executors.as_ref().map_or(0, Vec::len), 0)?;
+        if actor
+            .executors
+            .as_ref()
+            .is_some_and(|ps| ps.contains(&d.person))
+        {
+            let command = m
+                .response_attempt(c.binding)
+                .map_or(c.binding, |r| r.command);
+            let site = m.loop_alias(command).unwrap_or(command);
+            let fallback = m.process.degradations.iter().any(|route| {
+                route
+                    .degraded_calls
+                    .iter()
+                    .any(|other| other.binding == c.binding || other.binding == site)
+            });
+            if fallback {
+                own_fallback = true;
+            } else {
+                budget.charge(1, 1)?;
+                selected.push(*c);
+            }
+        }
+    }
+    if selected.is_empty() {
+        observation.stages_status = "not_derived".into();
+        let reason = if own_fallback {
+            "fallback_path"
+        } else if has_own_contest_stage(m, d, budget)? {
+            "contest_path"
+        } else if matches!(d.target, Target::Capability(_)) {
+            "target_not_called"
+        } else {
+            "no_person_stage"
+        };
+        observation.stages_reason = Some(reason.into());
+        return Ok(());
+    }
+    if observation.status == "not_derived" {
+        observation.stages_status = "not_derived".into();
+        observation.stages_reason = observation.reason.clone();
+        return Ok(());
+    }
+    // Expanded loop rounds/retries keep the original source position. Sorting
+    // those positions does not alter the legacy call map or its traversal.
+    selected.sort_by_key(|c| c.span.start);
+    let mut stages: Vec<ObservationStage> = Vec::new();
+    let record_graph = crate::registration::present(m).then(|| crate::evidence_basis::graph(m));
+    let mut indices = BTreeMap::new();
+    for c in selected {
+        let mut required = BTreeSet::new();
+        sources(
+            m,
+            cs,
+            c.binding,
+            &mut BTreeSet::new(),
+            &mut required,
+            0,
+            budget,
+        )?;
+        let cap = &m.capabilities[c.capability.0];
+        let names = |ids: &BTreeSet<ir::ActorId>| {
+            ids.iter()
+                .map(|id| m.actors[id.0].name.clone())
+                .collect::<BTreeSet<_>>()
+        };
+        budget.charge(
+            required.len() + cap.reads.len(),
+            required.len() + cap.reads.len(),
+        )?;
+        let required = names(&required);
+        let direct: BTreeSet<_> = cap
+            .reads
+            .iter()
+            .map(|id| m.actors[id.0].name.clone())
+            .collect();
+        let id = m
+            .response_attempt(c.binding)
+            .map_or(c.binding, |r| r.command);
+        let id = m.loop_alias(id).unwrap_or(id);
+        if let Some(&i) = indices.get(&id) {
+            let stage: &mut ObservationStage = &mut stages[i];
+            budget.charge(required.len(), required.len())?;
+            stage.required.extend(required);
+            stage.required.sort();
+            stage.required.dedup();
+            stage.missing = stage
+                .required
+                .iter()
+                .filter(|s| !direct.contains(*s))
+                .cloned()
+                .collect();
+        } else {
+            budget.charge(required.len() + 1, required.len() + 1)?;
+            let missing = required.difference(&direct).cloned().collect();
+            indices.insert(id, stages.len());
+            stages.push(ObservationStage {
+                call: m.site_name(id),
+                required: required.into_iter().collect(),
+                direct: direct.into_iter().collect(),
+                missing,
+                via_records: record_graph
+                    .as_ref()
+                    .map(|g| crate::registration::routes(m, g, c.binding)),
+            });
+        }
+    }
+    if stages.iter().any(|s| {
+        s.missing
+            .iter()
+            .any(|source| observation.direct.contains(source))
+    }) {
+        row.warnings.push(diag::W_RESP_3.into());
+    }
+    observation.stages = Some(stages);
+    observation.stages_status = "derived".into();
+    observation.stages_reason = None;
+    Ok(())
+}
+
+fn has_own_contest_stage(m: &ir::Model, d: &Duty, budget: &mut Budget) -> Limited<bool> {
+    if m.contests().is_empty() {
+        return Ok(false);
+    }
+    let mut vars = BTreeSet::new();
+    match &d.target {
+        Target::Condition(c) => support(c, &mut vars, budget, 0)?,
+        Target::Formula(f) => formula_support(f, &mut vars, budget, 0)?,
+        _ => {}
+    }
+    for contest in m.contests() {
+        let cap = &m.capabilities[contest.route.0];
+        let actor = &m.actors[cap.actor.0];
+        budget.charge(
+            actor.executors.as_ref().map_or(0, Vec::len) + vars.len() + 1,
+            0,
+        )?;
+        let target = match d.target {
+            Target::Capability(id) => id == contest.route,
+            _ => vars.iter().any(|v| writes(cap, *v)),
+        };
+        if target
+            && actor
+                .executors
+                .as_ref()
+                .is_some_and(|ps| ps.contains(&d.person))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn stage_warning(row: &Responsibility) -> String {
+    row.observation
+        .stages
+        .iter()
+        .flatten()
+        .filter_map(|stage| {
+            let sources: Vec<_> = stage
+                .missing
+                .iter()
+                .filter(|source| row.observation.direct.contains(source))
+                .map(String::as_str)
+                .collect();
+            (!sources.is_empty()).then(|| format!("{}: {}", stage.call, sources.join(", ")))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 #[cfg(test)]
@@ -1705,12 +1968,17 @@ pub(crate) fn derive(m: &mut ir::Model) -> Result<(), diag::Diagnostic> {
                     "{} {}: {}",
                     row.person,
                     row.target.value,
-                    if code == diag::W_RESP_1 {
-                        "責務に対応する観測が無い"
+                    if code == diag::W_RESP_3 {
+                        format!(
+                            "責務の段では根拠源を直接読まず、別の段でだけ読む ({})",
+                            stage_warning(row)
+                        )
+                    } else if code == diag::W_RESP_1 {
+                        "責務に対応する観測が無い".into()
                     } else if row.refusal.status == "conditional" {
-                        "責務に対応する拒否に迂回がある"
+                        "責務に対応する拒否に迂回がある".into()
                     } else {
-                        "責務に対応する拒否が効果へ届かない"
+                        "責務に対応する拒否が効果へ届かない".into()
                     }
                 ),
                 d.span,

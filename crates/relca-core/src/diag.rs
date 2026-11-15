@@ -40,6 +40,7 @@ pub const W_LIN_2: &str = "W-LIN-2";
 pub const W_RESP_0: &str = "W-RESP-0";
 pub const W_RESP_1: &str = "W-RESP-1";
 pub const W_RESP_2: &str = "W-RESP-2";
+pub const W_RESP_3: &str = "W-RESP-3";
 pub const W_CONTEST_0: &str = "W-CONTEST-0";
 pub const W_AUTH_0: &str = "W-AUTH-0";
 pub const W_UNREACH_0: &str = "W-UNREACH-0";
@@ -111,6 +112,7 @@ pub const CODES: &[&str] = &[
     W_RESP_0,
     W_RESP_1,
     W_RESP_2,
+    W_RESP_3,
     W_CONTEST_0,
     W_AUTH_0,
 ];

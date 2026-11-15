@@ -486,6 +486,9 @@ fn conform_raw(
         }
     };
     r.ledger.lowered(&m);
+    if crate::registration::present(&m) {
+        r.unchecked.push("registration_provenance".into());
+    }
     crate::contract_scope::attach(
         &mut r.contract_scope,
         &mut r.unchecked,
@@ -776,6 +779,11 @@ fn conform_raw(
     }
     for (i, c) in m.contracts.iter().enumerate() {
         if !monitors::supported_contract_with_q1(&c.kind, &m, &q1_capabilities) {
+            if matches!(c.kind, ir::ContractKind::SameVersion { .. })
+                && !r.unchecked.iter().any(|s| s == "same_version")
+            {
+                r.unchecked.push("same_version".into());
+            }
             if matches!(c.kind, ir::ContractKind::EvidenceBasis { .. })
                 && !r.unchecked.iter().any(|s| s == "evidence_basis")
             {

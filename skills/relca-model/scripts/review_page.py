@@ -1723,29 +1723,31 @@ class Page:
         out = [self.table(["Actor", "実行者", "容量", "制御", "原本(source)", "Capability"], rows),
                '<p class="note">%s</p>' % esc(note)]
         caprows = []
+        has_registration = False
         for n, info in src_actors.items():
             for c in info["capabilities"]:
                 cl = c["clauses"]
+                has_registration |= "registers" in cl
 
                 def j(*keys):
                     vals = []
                     for k in keys:
                         vals += cl.get(k, [])
                     return "<br>".join("<code>%s</code>" % esc(v) for v in vals) or '<span class="muted">—</span>'
-                known = {"reads", "duration", "outcomes", "result", "writes", "requires", "commits",
+                known = {"reads", "duration", "outcomes", "result", "writes", "registers", "requires", "commits",
                          "kernel_reads", "finish", "cancel", "atomic", "uses", "start"}
                 other = [v for k, vs in cl.items() if k not in known for v in vs]
                 dur = j("duration")
                 if cl.get("duration"):
                     dur += "<br>" + self.ai_status_of("%s.%s.duration" % (n, c["name"]))
                 caprows.append(["<code>%s.%s</code><br><code>%s</code>" % (esc(n), esc(c["name"]), esc(c["signature"])),
-                                j("reads"), dur, j("outcomes", "result", "atomic"), j("writes", "finish", "commits"),
+                                j("reads"), dur, j("outcomes", "result", "atomic"), j("writes", "registers", "finish", "commits"),
                                 j("requires") if cl.get("requires") else '<span class="muted">—</span>',
                                 "<br>".join("<code>%s</code>" % esc(v) for v in other) or '<span class="muted">—</span>',
                                 str(c["line"])])
         if caprows:
             out.append("<h4>操作(Capability)の中身</h4>")
-            out.append(self.table(["操作", "読むもの", "所要時間と出所", "結果の出方", "書くもの・確定", "前提", "その他", "行"], caprows))
+            out.append(self.table(["操作", "読むもの", "所要時間と出所", "結果の出方", "書くもの・登録先・確定" if has_registration else "書くもの・確定", "前提", "その他", "行"], caprows))
             out.append('<p class="note">出所: モデルの source(このページの粗い読み)。所要時間の「出所」は --assumptions の申告で、'
                        '申告が無い値は実測か仮置きか分からない。</p>')
         return "".join(out)
@@ -1777,13 +1779,21 @@ class Page:
             obs = get(r, "observation", "status")
             miss = as_list(get(r, "observation", "missing_sources"))
             ref = get(r, "refusal", "status")
+            observation = get(r, "observation")
+            record_html = self._record_routes_html(observation)
+            missing_label = ("案件内の直接・確定した記録経由では不足する根拠源がある"
+                             if isinstance(observation, dict) and "via_records" in observation else "案件内でも直接読まない根拠源がある")
             rrows.append([esc(get(r, "person")), "<code>%s</code>" % esc(get(r, "target", "value")),
-                          esc({"present": "原本に届く", "missing": "原本に届かない"}.get(obs, obs))
-                          + (" (" + esc(", ".join(map(str, miss))) + ")" if miss else ""),
+                          esc({"present": "案件内では根拠源を直接読む", "present_via_record": "案件内では記録経由で必要な根拠源に届く(直接とは別)",
+                               "missing": missing_label}.get(obs, obs))
+                          + (" (" + esc(", ".join(map(str, miss))) + ")" if miss else "")
+                          + ("<br>" + record_html if record_html else ""),
+                          self._responsibility_stages_html(get(r, "observation")),
                           esc({"present": "止められる", "missing": "止められない"}.get(ref, ref)),
                           esc(", ".join(map(str, as_list(get(r, "warnings")))))])
         out.append("<h4>責務(JSON の responsibilities)</h4>")
-        out.append(self.table(["人", "対象", "原本への到達", "拒否が効果に届くか", "警告"], rrows))
+        out.append(self.table(["人", "対象", "案件全体の読取り", "責務の段の読取り", "拒否が効果に届くか", "警告"], rrows))
+        out.append(self._observation_stages_html(get(data, "agency", "viewpoints", "observation")))
         frows = []
         for f in as_list(get(data, "agency", "refusal")):
             if not isinstance(f, dict):
@@ -1799,6 +1809,112 @@ class Page:
         out.append("<h4>確定(commit)の前にある判定(JSON の agency.refusal)</h4>")
         out.append(self.table(["確定する操作", "呼出し", "止める判定"], frows))
         out.append('<p class="note">構造から導いたもので、現実に承認者が止めているかの測定ではない。</p>')
+        return "".join(out)
+
+    def _record_routes_html(self, observation):
+        if not isinstance(observation, dict) or "via_records" not in observation:
+            return ''
+        routes = observation["via_records"]
+        if not isinstance(routes, list):
+            return '<span class="badge warn">記録経由の由来を読めない</span>'
+        rows = []
+        for route in routes:
+            if (not isinstance(route, dict) or not isinstance(route.get("record"), str)
+                    or not isinstance(route.get("registrars"), list)
+                    or not isinstance(route.get("sources"), list)
+                    or not route["registrars"] or not route["sources"]):
+                rows.append('記録経由の由来を読めない')
+                continue
+            registrars = []
+            sources = []
+            valid = True
+            for registrar in route["registrars"]:
+                if (not isinstance(registrar, dict) or not isinstance(registrar.get("call"), str)
+                        or not isinstance(registrar.get("people"), list)
+                        or not all(isinstance(p, str) for p in registrar["people"])):
+                    valid = False
+                    break
+                registrars.append('%s (%s)' % (registrar["call"], ', '.join(registrar["people"]) or '人の帰属なし'))
+            for source in route["sources"]:
+                if (not isinstance(source, dict) or not isinstance(source.get("source"), str)
+                        or source.get("route") not in ("registrar_direct", "relayed")):
+                    valid = False
+                    break
+                kind = {"registrar_direct": "登録者が直接読む", "relayed": "中継された源"}[source["route"]]
+                sources.append('%s (%s)' % (source["source"], kind))
+            rows.append('%s 経由: %s; 登録 %s' % (route["record"], ', '.join(sources), ', '.join(registrars))
+                        if valid else '記録経由の由来を読めない')
+        return '<br>'.join(esc(row) for row in rows) or '<span class="muted">確定した記録経由なし</span>'
+
+    def _responsibility_stages_html(self, observation):
+        if not isinstance(observation, dict) or "stages_status" not in observation:
+            return '<span class="muted">段ごとの記録なし</span>'
+        status = observation.get("stages_status")
+        if status != "derived":
+            label = {"not_derived": "段は未導出", "not_applicable": "段は対象外"}.get(status, "段の状態を読めない")
+            return esc("%s (%s)" % (label, observation.get("stages_reason", "理由の記録なし")))
+        stages = observation.get("stages")
+        if not isinstance(stages, list):
+            return '<span class="badge warn">段の記録を読めない</span>'
+        rows = []
+        for stage in stages:
+            if not isinstance(stage, dict) or not all(isinstance(stage.get(k), list) for k in ("required", "direct", "missing")):
+                rows.append('<span class="badge warn">段の記録を読めない</span>')
+                continue
+            missing = stage["missing"]
+            if missing:
+                record_sources = {s["source"] for r in as_list(stage.get("via_records")) if isinstance(r, dict)
+                                  for s in as_list(r.get("sources")) if isinstance(s, dict)
+                                  and isinstance(s.get("source"), str) and s.get("route") in ("registrar_direct", "relayed")}
+                via_record = [s for s in missing if s in record_sources]
+                other = [s for s in missing if s not in record_sources]
+                parts = []
+                if via_record:
+                    parts.append("%s: この段では記録経由(直接には読まない) (%s)" % (stage.get("call"), ", ".join(map(str, via_record))))
+                if other:
+                    label = ("この段で直接読まない根拠源がある" if stage["direct"] or stage.get("via_records") else "この段では生成物だけ")
+                    parts.append("%s: %s (%s)" % (stage.get("call"), label, ", ".join(map(str, other))))
+                text = "; ".join(parts)
+            elif stage["required"]:
+                text = "%s: 必要な根拠源を直接読む (%s)" % (stage.get("call"), ", ".join(map(str, stage["direct"])))
+            else:
+                text = "%s: この段の必要源の並びは空" % stage.get("call")
+            record_html = self._record_routes_html(stage)
+            rows.append(esc(text) + ('<br>' + record_html if record_html else ''))
+        return "<br>".join(rows) or '<span class="muted">対象の段の並びは空</span>'
+
+    def _observation_stages_html(self, observation):
+        out = ['<h4>呼出し位置ごとの観測(JSON の agency.viewpoints.observation.stages)</h4>']
+        if not isinstance(observation, dict) or "stages" not in observation:
+            out.append('<p class="muted">段ごとの記録なし。欠落が無いと確かめた意味ではない。</p>')
+            return "".join(out)
+        stages = observation.get("stages")
+        if observation.get("status") != "derived" or not isinstance(stages, list):
+            out.append('<p class="badge warn">段の観測は未導出: %s</p>' % esc(observation.get("reason", "記録を読めない")))
+            return "".join(out)
+        rows = []
+        has_records = any(isinstance(s, dict) and "via_records" in s for s in stages)
+        for stage in stages:
+            if not isinstance(stage, dict):
+                rows.append(["段の記録を読めない", "—", "—", "—", "—"] + (["—"] if has_records else []))
+                continue
+            people = ", ".join(map(str, as_list(stage.get("people"))))
+            if stage.get("unattributed"):
+                people = "実行者の人を特定していない"
+            via = stage.get("via_outputs")
+            if stage.get("via_outputs_status") == "derived" and isinstance(via, list):
+                via_text = ", ".join(map(str, via)) or "なし"
+            else:
+                via_text = "未導出 (%s)" % stage.get("via_outputs_reason", "記録を読めない")
+            direct = stage.get("direct")
+            direct_text = (", ".join(map(str, direct)) or "なし") if isinstance(direct, list) else "記録を読めない"
+            rows.append([esc(stage.get("call")), esc(stage.get("capability")), esc(people or "記録を読めない"),
+                         esc(direct_text), esc(via_text)] + ([self._record_routes_html(stage)] if has_records else []))
+        out.append(self.table(["呼出し", "操作", "実行しうる人", "直接読む根拠源", "生成物経由だけの根拠源(観測に数えない)"] + (["記録経由の確定した根拠源(直接とは別)"] if has_records else []), rows))
+        out.append('<p class="note">構造上の読取りで、実行された記録ではない。観測変数の辺を含む生成物経由は届くかもしれない源の上近似。'
+                   '人は Actor の executors の宣言であり、資格や授権の成立を示さない。'
+                   + ('登録を明示した記録だけ由来を別欄に出す。同じ源の再読や写しは独立した確認を増やさず、同じ版の読取りも観測の表だけでは判断しない。</p>' if has_records
+                      else '同じ源の再読は独立した確認を増やさず、記録の由来や同じ版の読取りは判断しない。</p>'))
         return "".join(out)
 
     def _cut_html(self):
@@ -2637,7 +2753,60 @@ class Page:
                 '文脈の位置 %s <code>%s</code></p>' % (esc(where), esc(short(text, 100)))
                 + self.table(["#", "時刻", "案件", "事象", "操作", "実行者", "結果(呼出し元が観測)", "行:列", "source"], rows)
                 + self.guarded("反例の応答", lambda: self._response_steps_html(cx))
-                + self.guarded("根拠源の証跡", lambda: self._evidence_html(cx)))
+                + self.guarded("根拠源の証跡", lambda: self._evidence_html(cx))
+                + self.guarded("版の証跡", lambda: self._version_html(cx)))
+
+    def _version_html(self, cx):
+        is_version = str(cx.get("id", "")).endswith(" same_version")
+        if "version" not in cx:
+            if is_version and cx.get("status") == "verified":
+                raise ValueError("検証済みの版の契約の反例に version が無い")
+            return ""
+        evidence = cx["version"]
+        keys = {"binding", "capability", "parameter", "version"}
+        if (not is_version or cx.get("status") != "verified" or not isinstance(evidence, dict)
+                or set(evidence) != keys | {"examined"}):
+            raise ValueError("version の種類・状態・鍵が対応範囲外")
+
+        def validate(row):
+            if any(not isinstance(row[k], str) or not row[k].strip() for k in keys):
+                raise ValueError("版の証跡の各欄は空でない文字列が必要")
+            parts = row["capability"].split(".")
+            if len(parts) != 2 or not all(parts):
+                raise ValueError("版の証跡の capability は Actor.Capability が必要")
+
+        validate(evidence)
+        examined = evidence["examined"]
+        if examined is not None:
+            if not isinstance(examined, dict) or set(examined) != keys:
+                raise ValueError("examined は同じ4欄または null が必要")
+            validate(examined)
+            if examined["version"] == evidence["version"]:
+                raise ValueError("違反の証跡なのに使う版と確認した版が同じ")
+        steps = cx.get("steps")
+        if not isinstance(steps, list) or not steps or not all(isinstance(s, dict) for s in steps):
+            raise ValueError("版の証跡に対応する反例の steps が無い")
+
+        def matches(s, row):
+            return (s.get("binding") == row["binding"]
+                    and "%s.%s" % (s.get("actor"), s.get("capability")) == row["capability"]
+                    and s.get("case_id") == steps[-1].get("case_id"))
+
+        if steps[-1].get("kind") != "finish" or not matches(steps[-1], evidence):
+            raise ValueError("版の証跡が反例の最後の Finish と一致しない")
+        starts = [i for i, s in enumerate(steps) if s.get("kind") == "start" and matches(s, evidence)]
+        if not starts:
+            raise ValueError("使う操作の開始が反例に無い")
+        if examined is not None and not any(s.get("kind") == "finish" and matches(s, examined)
+                                            for s in steps[:starts[-1]]):
+            raise ValueError("確認の正常終了が使う操作の開始前に無い")
+        rows = []
+        for title, row in (("使う版", evidence), ("開始前に最後に確認した版", examined)):
+            rows.append([title, "確認なし" if row is None else "<code>%s = %s(%s): %s</code>" % tuple(
+                esc(row[k]) for k in ("binding", "capability", "parameter", "version"))])
+        return ("<h5>モデルの版の証跡</h5>" + self.table(["対象", "呼出し・引数・版"], rows)
+                + '<p class="note">版は結果を作った呼出しの実行で区別する。enum の等しさや実物の内容の認定ではない。'
+                  'version_check の状態の書込みの版、via model の経由モデルの版とは別である。</p>')
 
     def _evidence_html(self, cx):
         is_basis = str(cx.get("id", "")).endswith(" evidence_basis")
@@ -2667,8 +2836,11 @@ class Page:
             raise ValueError("evidence の要求・数えた源・不足した源が整合しない")
         rows = [["呼出し", "<code>%s = %s.%s</code>" % (
             esc(evidence["binding"]), esc(evidence["actor"]), esc(evidence["capability"]))]]
+        main = getattr(self, "main", None)
+        has_records = any(isinstance(o, dict) and "via_records" in o
+                          for o in as_list(get(main.data if main else None, "agency", "origin")))
         for key, title in (("required", "要求した源"), ("sources", "照合に数えた源"),
-                           ("missing", "不足した源"), ("excluded_edges", "数えなかった観測変数の辺")):
+                            ("missing", "不足した源"), ("excluded_edges", "数えなかった読取りの辺" if has_records else "数えなかった観測変数の辺")):
             rows.append([title, "<code>%s</code>" % esc(", ".join(evidence[key]) or "(なし)")])
         return ("<h5>モデルの根拠源の証跡</h5>" + self.table(["項目", "値"], rows)
                 + '<p class="note">reads の宣言とデータの系譜の照合であり、実際の資料アクセスを観測したログではない。'
@@ -2758,7 +2930,11 @@ class Page:
             for mt in as_list(m.get("mutants")):
                 res = str(get(mt, "result"))
                 counts[res] = counts.get(res, 0) + 1
-                details.append(["<code>%s</code>" % esc(get(mt, "id")), esc(get(mt, "operator")),
+                record = get(mt, "site", "record")
+                operation = esc(get(mt, "operator"))
+                if isinstance(record, str):
+                    operation += "<br>記録の読取りの削除: " + esc(record)
+                details.append(["<code>%s</code>" % esc(get(mt, "id")), operation,
                                 '<span class="badge %s">%s</span>' % (
                                     {"detected": "ok", "undetected": "bad"}.get(res, "warn"), esc(res)),
                                 esc(get(mt, "reason") or "")])

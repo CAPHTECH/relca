@@ -7,6 +7,75 @@ const CAUSE_NOTICE: &str = "条件付き独立は given の下でだけ仮定さ
 const BASIS_NOTICE: &str = "basis は分析者の宣言であり、測定根拠の正しさは検査していない";
 const TACIT_NOTICE: &str = "tacit は分析者の宣言であり、根拠源の妥当性は検査していない";
 const CORRELATION_NOTICE: &str = "相関は先行する判定結果への条件付けであり、残余相関の推定ではない";
+
+/// Keep the legacy may graph for arguments and observed-variable edges. Only
+/// record edges use the source-wise must provenance of their registrars. A set
+/// difference from the full may graph would also erase a source independently
+/// supplied by an ordinary argument or snapshot.
+fn evidence_with_certain_records(
+    m: &ir::Model,
+    calls: &[&ir::Call],
+    b: &mut Budget,
+) -> Result<Vec<BTreeSet<ir::ActorId>>> {
+    let parents = read_graph::variable_parents_by_binding(m, calls, b.limits)?;
+    let records = crate::evidence_basis::graph(m);
+    b.copy(m.process.bindings.len())?;
+    let mut sources = vec![BTreeSet::new(); m.process.bindings.len()];
+    let mut done = BTreeSet::new();
+    while done.len() < calls.len() {
+        let mut progress = false;
+        for c in calls {
+            b.work()?;
+            if done.contains(&c.binding) {
+                continue;
+            }
+            let snapshots = parents.get(&c.binding).ok_or_else(invalid)?;
+            if !c
+                .args
+                .iter()
+                .chain(snapshots)
+                .filter(|p| **p != ir::CURRENT_CASE)
+                .all(|p| done.contains(p))
+            {
+                continue;
+            }
+            crate::evidence_basis::derive_sources(
+                c,
+                &m.capabilities[c.capability.0],
+                snapshots,
+                |input| {
+                    match input {
+                        crate::evidence_basis::SourceInput::Parent(p) => {
+                            b.copy(sources.get(p.0).ok_or_else(invalid)?.len())?;
+                            let inherited = sources[p.0].clone();
+                            for s in inherited {
+                                b.insert(&mut sources[c.binding.0], s)?;
+                            }
+                        }
+                        crate::evidence_basis::SourceInput::Direct(direct) => {
+                            for &s in direct {
+                                b.insert(&mut sources[c.binding.0], s)?;
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
+            for record in &records.records[c.binding.0] {
+                for &s in &record.sources {
+                    b.insert(&mut sources[c.binding.0], s)?;
+                }
+            }
+            b.insert(&mut done, c.binding)?;
+            progress = true;
+        }
+        if !progress {
+            return Err(invalid());
+        }
+    }
+    Ok(sources)
+}
+
 pub(super) const LIMITS: Limits = Limits {
     work: 1_000_000,
     cells: 1_000_000,
@@ -552,6 +621,11 @@ fn with_limits_mode(
             causes: rows,
         }));
     let mut items = Vec::new();
+    let record_evidence = calls
+        .iter()
+        .any(|c| !m.capabilities[c.capability.0].read_records.is_empty())
+        .then(|| evidence_with_certain_records(m, calls, &mut b))
+        .transpose()?;
     for (i, c) in calls.iter().enumerate() {
         b.work()?;
         let cap = &m.capabilities[c.capability.0];
@@ -582,7 +656,10 @@ fn with_limits_mode(
             }
             let mut new_tacit = BTreeSet::new();
             let mut new_explicit = false;
-            for s in &evidence[i] {
+            let own = record_evidence
+                .as_ref()
+                .map_or(&evidence[i], |sources| &sources[c.binding.0]);
+            for s in own {
                 b.work()?;
                 if !peer_sources.contains(s) {
                     if m.actors[s.0].source == Some(ir::SourceKind::Tacit) {

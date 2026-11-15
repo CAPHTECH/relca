@@ -282,6 +282,95 @@ body と `on_limit` で使えるのは、操作の呼出し、`if`、固定 `wai
 未宣言の Cut は警告とともに出力されます。`configuration` は Cut と process を選び、
 `intent` で構成変更の理由を添えます。複数の構成がある check には `--configuration NAME` が必要です。
 
+### 呼出しごとの読取りと責務を見る
+
+`reads [Invoice]` は、その操作が根拠源として宣言された Actor を直接読むことを表します。
+前の操作の結果を引数で受け取っても、それを直接の読取りには数えません。
+`responsible c1 for Clerk.confirm` を書くと、その人の案件全体の到達に加え、
+`Clerk.confirm` のうち本人が実行者の候補となる呼出しごとの欠落を出します。
+段の表は出力であり、新しい自己申告の宣言を書く必要はありません。
+
+[全文例](../../examples/stage-observation.relca)では、同じ c1 が次の2操作を行います。
+
+```relca
+e = Clerk.enter()
+v = Clerk.confirm(e)
+```
+
+`enter` は Invoice を読み、`confirm` は引数 e だけを受け取ります。
+
+```sh
+relca check examples/stage-observation.relca
+```
+
+結果は satisfied、exit 0。posted は3分、returned は2分です。
+責務の行全体は present ですが、段 v は Invoice を直接読まないため W-RESP-3 が1件出ます。
+Ledger の責務が未宣言なので W-RESP-0 も出ます。
+`confirm` に `reads [Invoice];` を足すと、段の欠落と W-RESP-3 は無くなります。
+同じ根拠源の再読なので、独立した確認の数は増えません。
+
+読取りを必須の性質として要求する場合は、別に
+`contract Basis { evidence_basis direct Clerk.confirm [Invoice] }` と書きます。
+上の生成物だけの例にこの契約を加えると violated、exit 1 です。
+警告と契約を混同しないでください。欄と未導出の理由は[結果の読み方](results.md#呼出し位置ごとの観測)を参照してください。
+
+### 知識を記録へ登録する
+
+操作に `registers [Notes]` を書くと、その操作の正常終了で記録へ由来を登録します。
+後の操作の `reads [Notes]` は、最後の登録が運んだ根拠源を引き継ぎます。
+由来の中身を申告する欄はありません。登録する操作の直接の読取り、引数、確定した観測変数の系譜から求めます。
+
+```relca
+actor Know { source tacit "vendor knowledge" }
+actor Notes { }
+actor Clerk { executors [p1]
+  capability register() -> Ack {
+    reads [Know]; registers [Notes]; duration fixed 1min; result nondet { ok }
+  }
+}
+```
+
+[全文例](../../examples/record-provenance.relca)は次のように実行します。
+
+```sh
+relca check examples/record-provenance.relca
+```
+
+結果は satisfied、exit 0、done は3分です。登録 r は2分、記録を読む b は3分に正常終了します。
+q1 は Know を直接読みませんが、確定した記録経由の到達があるため、責務の行は `present_via_record` です。
+段 b の `direct` は空で、必要源 Know は段の `missing` に残ります。届き方は `via_records` で読みます。
+
+- 登録先は、いずれかの `registers` に現れる Actor です。名前や grain からは決めません。
+  `source`、容量、実行者、操作、state、latent、`decides` を持てません。
+  複数先は `registers [Notes,Notes2]` と書きます。
+- 内容の値は持たず、条件式から記録を読むこともできません。
+  潜在の値や `kernel_reads latent` / `given` を、知識を観測したことに置き換えません。
+- 同じ記録への登録は上書きです。前の登録の由来を残したいときは登録先を分けます。
+  記録を読み、別の記録へ登録する写しも、同じ根拠源へまとめます。写しを独立した原本には数えません。
+- 登録が無ければ由来は空です。登録者が Know を読まず、その由来の引数も受け取らなければ、Know は運びません。
+  拒否された呼出し、取消、未完了からも登録しません。
+- 全経路で届く源だけを確定した到達に数えます。分岐や `requires` の拒否で登録・上書きが変わる場合、
+  届くかもしれない源は `indirect` に残しますが、`via_records` には入れません。
+  `evidence_basis` の要求がその経路だけに依存すると `evidence_basis_conditional_snapshot` で未対応です。
+  登録者が経路で変わっても、すべての候補が運ぶ同じ源は確定した到達になります。
+- `evidence_basis direct` では記録経由を数えません。要求できるのは source Actor だけで、Notes 自体は要求できません。
+- 正常終了の結果が複数ある登録は `registration_result_dependent` で未対応です。
+  拒否は `requires … else …`、登録しない経路は分岐で書きます。結果の名前で成功・失敗を推測しません。
+- 登録先に `instance per_case` を書けば案件ごとの記録です。印の無い先は `cases 1` だけ扱います。
+  案件をまたぐ共有の記録や、追記型の蓄積は扱いません。
+- 登録や記録の読取りを repeat 内へ置く形は `loop_feature_combination`、
+  応答喪失・再送、recovery、縮退、異議経路内の登録・読取りや start 効果との登録の併用は
+  `registration_feature_combination` で未対応です。同じ記録を fork の兄弟が登録・読取りする形も拒否します。
+- 登録先が Cut で範囲外なら、登録も読取りも `E-CUT-1` です。
+  `check`・`explain`・`simulate`・`mutate` で扱い、compare・diff・sensitivity は
+  `registration_unsupported_command` で未対応です。conform は由来を照合せず未検査に残します。
+
+従来の `source record` は、独立の根拠源の宣言のままです。自動で登録先に読み替えません。
+知識の写しを表したい場合は Notes から `source record` を外し、実際の登録操作へ `registers [Notes]` を加えます。
+登録前からある内容を含めたい場合は、別の source Actor として宣言し、読み手がそれも読む形にします。
+観測 case 変数の writes/reads で引き継ぐ既存の書き方も使えますが、記録 Actor の識別や `via_records` は付きません。
+由来は内容の版が同じことを意味しません。呼出し結果の版を揃える要求は `same_version` で別に書きます。
+
 ### 構成変更の理由を書く
 
 `diff --from A --to B` の理由は、行き先 B の構成内に書けます。
@@ -405,6 +494,70 @@ Old では承認操作を呼ばないという既存の警告も残ります。
 `simulation replications N seed S confidence P` は simulate の標本設定です。
 `policy observable fifo ...` などの方策は、実際に固定したい選択にだけ宣言します。
 非決定を消して simulate を通すためだけに追加しないでください。
+
+## 確かめた版と使う版を揃える
+
+```relca
+contract V { same_version Checker.check(d), Approver.approve(d) }
+```
+
+`d` は各 Capability の**引数名**です。process の結果名を書く場所ではありません。
+後の操作 `Approver.approve` が正常に終了するたびに、その開始時点の引数の版を、
+同じ案件で開始より前に正常終了した最後の `Checker.check` の引数の版と比べます。
+先の確認が無い場合も、版が違う場合も `violated` です。
+同じ数値時刻でも、確認の終了が承認の開始より先の事象なら数えます。
+並行して承認が先に始まる経路では、その後に確認が終わっても救済しません。
+
+版は、どの操作のどの実行が結果を作ったかで決まります。
+値が同じ enum 定数でも、別の呼出しの結果は別の版です。
+直す・組むといった変換も新しい版を作り、元の版の祖先を含むだけでは一致しません。
+値を返す `if` は新しい版を作らず、選んだ `yield` 元の版を引き継ぎます。
+
+[実行できる全文例](../../examples/same-version.relca)では、次の順に呼びます。
+
+```relca
+d = Writer.draft()
+k = Checker.check(d)
+if k == pass {} else { end rejected }
+p = Approver.approve(d,k)
+end done
+```
+
+```sh
+relca check examples/same-version.relca
+relca explain examples/same-version-reused.relca
+relca mutate examples/same-version.relca --kinds summary_reused
+```
+
+各操作は1分です。正の例は `satisfied`、exit 0。pass の経路は3分で `done`、fail は2分で `rejected`。
+[版を取り違えた対](../../examples/same-version-reused.relca)は、最初の下書きの直後に
+`d_dup = Writer.draft()` を足し、承認だけへ `d_dup` を渡します。
+両方の値は `draft` ですが、確認した版は `d`、承認する版は `d_dup` なので `violated`、exit 1。
+反例は時刻4分の承認終了までです。mutate のこの再利用も契約の悪化で `detected` になります。
+
+- 確認の結果が pass か fail かは、この契約では読みません。fail の版を使わないことは、上の `if` や `requires` で別に求めます。
+- `requires` で拒否された確認は数えず、拒否された承認は契約を発火させません。
+  一方、作る側が拒否されて返した else 値にも、その呼出しの版はあります。
+- `version_check` の reject、`atomic` の拒否、異常終了・取消・timeout・応答待ちも確認に数えず、正常終了した最後の確認を残します。後の操作も、これらの終了では契約を発火させません。
+- 後の操作が一度も正常終了しなければ `vacuous`、計算の切断で終了まで届かなければ `inconclusive`。
+  案件間で確認を流用せず、案件ごとに照合します。
+- 両引数は同じ型名でなければなりません。型名が違えば `E-TYPE-0 same_version_type_mismatch`、
+  未知の操作・引数名は `E-NAME-0`、両側が同じ操作の同じ引数なら `E-CON-0 same_version_same_target`。
+  同じ操作の別の引数は書けます。
+- `applies_to` は他の契約と同じです。契約を足しても、系譜・責務・`via_model_paths` の導出は補いません。
+
+`check`・`explain` に対応し、`simulate` は標本中の違反だけを報告します。
+合流と `fork` / `join all` は使えます。観測変数の `reads` / `writes` で渡す値の版は対象外で、
+契約には引数名だけを書けます。
+対象の引数へ `case.id` や観測 case 変数（同名の呼出し結果で書かれるものも含む）を渡す形は、
+合流を経由する場合も `same_version_feature_combination` で拒否します。定数や process の入力を直接渡す構文もありません。
+`repeat` との併用は `U-SEM-0 loop_feature_combination`。
+`join any`、応答喪失・再送・recovery・縮退経路との併用は `U-SEM-0 same_version_feature_combination`。
+異議経路の操作を対象にすると、その性質だけ `same_version_contest_route` で未対応です。
+この契約を適用する `compare`・`diff`・`sensitivity` は `same_version_unsupported_command` で未対応。
+`conform` は契約に必要な引数の版を照合せず、`U-LOG-1` で未検査に残します。
+合流・繰り返しを含むモデルの `mutate` も未対応のままです。
+`version_check`・経由モデルの版との違いは[版の要求と証跡](results.md#版の要求と証跡)を参照してください。
 
 ## 根拠源を求める契約
 

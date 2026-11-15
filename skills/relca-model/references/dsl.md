@@ -82,11 +82,44 @@ Capability の中 [実]:
 `reads [...]`、`duration fixed 3min` か `duration {3min:0.5,5min:0.5}`、`result nondet { a, b }` か `outcomes kernel K` + `kernel_reads latent [...]`、
 `writes x` / `writes [x,y]`、`finish { x = true }`、`commits`、`requires <観測条件> else <値>`、
 `cancel cooperative ack_within 1min` / `cancel forbidden_after_start`、`atomic { if key in keys { result r } else { … } }`。
+知識の記録への登録は `registers [Notes]`。後の `reads [Notes]` で由来を引き継ぐ。下の節を参照。
 
 - 正の所要時間を持つ Capability の Actor に容量も実行者も無いと invalid(`fixtures/serial-time.broken-missing-capacity/`)。
-- **判定として数えられる呼出しは、`case.id` 以外の引数を取るか、他のcallが書いた観測値の読取りを持つものだけ**([構造の出力](../../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。sourceの`reads`だけでは判定に数えない。通常モデルではcommitの効果に関わるものが対象。
+- **判定として数えられる呼出しは、`case.id` 以外の引数を取るか、他のcallが書いた観測値や登録した記録への依存を持つもの**([構造の出力](../../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。sourceの`reads`だけでは判定に数えない。通常モデルではcommitの効果に関わるものが対象。
   `review()` のように引数なしだと、後ろの `if` で止めていても「止める判定なし」(W-RESP-2)になった [試]。申請を受け取る `review(claim)` にすると「全経路で止める」になった [試]。
   **引数は、その操作が実際にデータを受け取るときだけ書く。**警告を消すために引数を足さない。足すとモデルが業務と違うものになり、警告が示していたこと(判定が効果を止めていない)が隠れる。
+
+## 知識を記録へ登録する [実]
+
+```relca
+actor Notes { }
+actor Clerk { executors [p1]
+  capability register() -> Ack {
+    reads [Know]; registers [Notes]; duration fixed 1min; result nondet { ok }
+  }
+}
+```
+
+[全文例](../../../examples/record-provenance.relca)は check が satisfied / exit0、done は3分。
+後の Reviewer.review が `reads [Notes]` で Know の由来を引き継ぐ。
+q1 の責務は present_via_record、段 b の direct は空、missing は Know のまま。
+
+- 登録先は registers の宣言で決まる。source・capacity・executors・Capability・state・latent・decides を持てない。
+  複数先は registers [Notes,Notes2]。instance per_case なら案件ごと、印無しは cases1 のみ。
+- 正常終了で最後の登録を上書きする。拒否・取消・未完了は登録しない。追記や案件間の共有は扱わない。
+- 由来は登録者の reads と、引数・確定した観測変数・別の記録から導く。条件や潜在を観測へ格上げしない。
+  記録自身は値も独立の根拠源も持たない。source record は独立の原本のままで、自動で読み替えない。
+- 全候補に共通する源だけ via_records に出す。条件付きだけの源は indirect の上近似に残す。
+  evidence_basis には must、direct 契約には source reads だけを使う。Notes 自体は要求できない。
+- 正常終了の結果が複数なら registration_result_dependent。
+  repeat 内は loop_feature_combination、応答喪失/再送/recovery/縮退/異議内や start 効果との登録の併用、
+  印の無い記録で複数案件は registration_feature_combination。同じ記録の fork 兄弟での登録/読取りも拒否する。
+- 除外した記録への登録/読取りは E-CUT-1。
+  check/explain/simulate/mutate で扱い、compare/diff/sensitivity は registration_unsupported_command。
+  conform は登録の由来を照合せず unchecked に registration_provenance を残す。
+- 記録の由来は同じ版の証明ではない。呼出し結果の版の一致は same_version で別に要求する。
+
+[構文と書き直し方](../../../docs/guide/dsl.md#知識を記録へ登録する)、[結果の欄](results.md#記録経由の到達)を参照。
 
 ## 根拠源を求める契約 [実]
 
@@ -117,6 +150,35 @@ contract Basis { evidence_basis Clerk.match_po [Invoice,PurchaseOrder] }
 original_access_removed が使うのは direct の行だけ。未検出を0件にするため全readsを転記しない。
 詳細な[構文と診断](../../../docs/guide/dsl.md#根拠源を求める契約)、
 [結果と証跡](results.md#根拠源の要求と証跡)を参照する。
+
+## 確かめた版と使う版 [実]
+
+```relca
+contract V { same_version Checker.check(d), Approver.approve(d) }
+```
+
+dは各Capabilityの引数名で、processの結果名ではない。
+後の操作が正常終了するたび、開始前に同じ案件で最後に正常終了した先の操作の引数と版を比べる。
+先の確認が無くても違反。pass/failの結果は読まないので、使う結果の条件はif/requiresで書く。
+版は呼出しの実行が作った結果の同一性であり、enumの等しさではない。変換は新しい版、合流はyield元の版。
+requiresで拒否した確認は数えず、拒否した後の操作は発火しない。正常終了なしはvacuous、切断はinconclusive。
+version_checkとatomicのreject、異常終了・取消・timeout・応答待ちも数えず、最後に正常終了した確認を維持する。通常のenum値の名前だけでは拒否と判定しない。
+
+[正の全文](../../../examples/same-version.relca)はcheckがsatisfied/exit0、done3分・rejected2分。
+[取り違えた対](../../../examples/same-version-reused.relca)はviolated/exit1、最初の違反は承認終了4分。
+値は両方draftだが、確認したdと承認するd_dupは別の版。正の例のmutate --kinds summary_reusedはこの要求で1件detected。
+
+同じ型名が必要（E-TYPE-0 same_version_type_mismatch）。未知の操作/引数はE-NAME-0、
+同じ操作の同じ引数を両側に書けばE-CON-0 same_version_same_target。同じ操作の別引数は受理する。
+applies_toは他の契約と同じ。check/explainに対応、simulateは標本中の違反だけ。
+合流・join allは利用でき、観測変数で渡す値の版は対象外。
+対象引数のcase.idと観測case変数（同名の呼出し結果やその合流を含む）はsame_version_feature_combinationで拒否する。
+定数やprocess入力を直接渡す構文も無い。対象でない別の引数のcase.idは、この契約を妨げない。
+repeatはloop_feature_combination、join any・応答喪失/再送/recovery/縮退との併用はsame_version_feature_combination。
+異議経路の対象はその性質だけsame_version_contest_route。
+compare/diff/sensitivityはsame_version_unsupported_command、conformはU-LOG-1。
+合流/繰り返しを含むmutateの範囲も広げない。
+[構文の詳細](../../../docs/guide/dsl.md#確かめた版と使う版を揃える)、[三つの版と証跡](results.md#値の版と証跡)を参照。
 
 ## process
 
@@ -347,6 +409,20 @@ contract InvoiceControls {
 
 JSON の性質 id は `contract <名前> #<何番目の節> <種類>`(例 `contract InvoiceControls #4 separation`)。
 `verify probability …` は `probability reached #<何番目>` になる [実]。
+
+### 呼出しごとの根拠源と責務 [実]
+
+`reads [Source]` はその操作自身の直接の読取り。引数や観測変数を受け取ることとは分ける。
+`responsible a1 for Approver.approve` の出力は、人の案件全体と、本人の対象呼出しの段を併記する。
+段の表を自己申告する構文は無い。O の `agency.viewpoints.observation.stages` と
+責務の `observation.stages` を読む。
+
+[全文例](../../../examples/stage-observation.relca)は e で Invoice を読み、v では e だけを受け取る。
+check は satisfied / exit0、posted 3分・returned 2分。行全体が present でも段 v は missing Invoice、
+W-RESP-3 が1件出る。`confirm` に `reads [Invoice];` を足すと段の欠落は無くなるが、独立根拠は増えない。
+必須条件にするなら `evidence_basis direct Clerk.confirm [Invoice]`。生成物だけの例では violated / exit1。
+構造の警告から実際の閲覧や正当な授権を推測しない。
+[欄と未導出の理由](../../../docs/guide/results.md#呼出し位置ごとの観測)を参照。
 
 ### 契約を構成に限定する [実]
 

@@ -862,6 +862,8 @@ fn t10_only_independently_enumerated_name_and_source_metadata_leaves_change() {
         *a = Value::Null;
         *b = Value::Null;
     }
+    original = relca_test_support::stage_projection::current(&original);
+    labelled = relca_test_support::stage_projection::current(&labelled);
     assert_eq!(
         original, labelled,
         "all numbers, verdicts, non-name text and order must agree"

@@ -154,9 +154,18 @@ pub fn arrays(v: &Value, sample: bool, waits: bool) {
             .push(json!("waiting_tables"));
     }
     assert_eq!(v["checked"], json!(checked));
-    assert_eq!(v["unchecked"], unchecked);
+    assert_eq!(
+        relca_test_support::stage_projection::unchecked(&v["unchecked"]),
+        unchecked
+    );
     if !waits {
-        assert_eq!(serde_json::to_vec(&v["unchecked"]).unwrap(), raw);
+        assert_eq!(
+            serde_json::to_vec(&relca_test_support::stage_projection::unchecked(
+                &v["unchecked"]
+            ))
+            .unwrap(),
+            raw
+        );
     }
 }
 pub fn transport(s: &str, v: &Value, sample: bool) {

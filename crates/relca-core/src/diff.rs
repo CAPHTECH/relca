@@ -891,6 +891,8 @@ impl DiffReport {
             )
             .map(String::from)
             .collect();
+        self.unchecked
+            .push("stage_observation(stage_correspondence_not_defined)".into());
         if receipt_not_applicable {
             self.unchecked
                 .push(crate::comparison_projection::RECEIPT_NOT_APPLICABLE.into());
@@ -1060,6 +1062,19 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
     if let Some(p) = pair {
         to_model.intent = p.items.clone();
     }
+    if crate::registration::present(&from_model.model)
+        || crate::registration::present(&to_model.model)
+    {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "registration_unsupported_command".into(),
+            None,
+        );
+        result.finish();
+        result.verdict = Verdict::Unsupported;
+        result.seal();
+        return result;
+    }
     if crate::evidence_basis::present(&from_model.model)
         || crate::evidence_basis::present(&to_model.model)
     {
@@ -1072,6 +1087,19 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
         // The native side checks can establish violations, but no evidence
         // comparison was performed. Retain those facts without making this
         // unsupported command look like a supported, violated comparison.
+        result.verdict = Verdict::Unsupported;
+        result.seal();
+        return result;
+    }
+    if crate::same_version::present(&from_model.model)
+        || crate::same_version::present(&to_model.model)
+    {
+        result.diagnostic(
+            diag::U_SEM_0,
+            "same_version_unsupported_command".into(),
+            None,
+        );
+        result.finish();
         result.verdict = Verdict::Unsupported;
         result.seal();
         return result;

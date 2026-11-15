@@ -65,6 +65,7 @@ fn sources(
     c: &Call,
     bound: &BTreeMap<BindingId, Provenance>,
     snapshots: &[Option<(BindingId, Provenance, bool)>],
+    records: &BTreeMap<ActorId, Provenance>,
     constraints: &BTreeMap<BindingId, BTreeSet<ActorId>>,
 ) -> Result<Provenance, StopReason> {
     let cap = &m.capabilities[c.capability.0];
@@ -81,6 +82,12 @@ fn sources(
     }
     for variable in &cap.read_variables {
         if let Some((_, value, true)) = &snapshots[variable.0] {
+            result.roots.extend(&value.roots);
+            result.unknown.extend(&value.unknown);
+        }
+    }
+    for record in &cap.read_records {
+        if let Some(value) = records.get(record) {
             result.roots.extend(&value.roots);
             result.unknown.extend(&value.unknown);
         }
@@ -109,6 +116,7 @@ pub(super) fn facts(
     let mut started = BTreeMap::new();
     let mut commands: BTreeMap<BindingId, Provenance> = BTreeMap::new();
     let mut snapshots = vec![None; m.state_variables.len()];
+    let mut records = BTreeMap::new();
     let constraints = super::evidence_scope::constraints(m);
     let mut active = false;
     let mut broken = false;
@@ -136,7 +144,7 @@ pub(super) fn facts(
                     }
                     bound.insert(binding, Provenance::default());
                 } else {
-                    let inputs = sources(m, c, &bound, &snapshots, &constraints)?;
+                    let inputs = sources(m, c, &bound, &snapshots, &records, &constraints)?;
                     for w in &m.capabilities[cap.0].start_writes {
                         snapshots[w.variable.0] = Some((binding, inputs.clone(), false));
                     }
@@ -161,6 +169,9 @@ pub(super) fn facts(
                     unsupported |= !direct && required.iter().any(|s| actual.unknown.contains(s));
                 }
                 let capability = &m.capabilities[cap.0];
+                for &record in &capability.registers {
+                    records.insert(record, actual.clone());
+                }
                 for snapshot in snapshots.iter_mut().flatten() {
                     if snapshot.0 == binding {
                         snapshot.2 = true;

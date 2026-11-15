@@ -259,6 +259,7 @@ fn targets(c: &ast::ContractClause) -> (&'static str, Vec<(&String, &String)>) {
         C::Permitted { target } => ("permitted", vec![path(target)]),
         C::AuthorityBasis { target, .. } => ("authority_basis", vec![path(target)]),
         C::EvidenceBasis { target, .. } => ("evidence_basis", vec![path(target)]),
+        C::SameVersion { first, second } => ("same_version", vec![path(&first.0), path(&second.0)]),
         C::Invariant { event: e, .. } => ("invariant", vec![event(e)]),
         C::StateInvariant { .. } => ("invariant", vec![]),
         C::AtMostOnce { event: e } => ("at_most_once", vec![event(e)]),

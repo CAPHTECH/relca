@@ -12,6 +12,56 @@ mod lexer;
 #[cfg(test)]
 #[path = "syntax/priority_tests.rs"]
 mod priority_grammar_tests;
+#[cfg(test)]
+mod registration_grammar_tests {
+    use super::*;
+
+    #[test]
+    fn registration_targets_are_contextual_names_with_spans() {
+        let source = include_str!("../tests/record_provenance/r0.relca");
+        let model = parse(source).unwrap();
+        let registrations: Vec<_> = model
+            .items
+            .iter()
+            .filter_map(|item| {
+                let Item::Actor(actor) = item else {
+                    return None;
+                };
+                Some(
+                    actor
+                        .items
+                        .iter()
+                        .filter_map(|item| {
+                            let ActorItem::Capability(cap) = item else {
+                                return None;
+                            };
+                            Some(
+                                cap.items
+                                    .iter()
+                                    .filter_map(|item| {
+                                        let CapItem::Registers(names) = &item.value else {
+                                            return None;
+                                        };
+                                        Some(names)
+                                    })
+                                    .flatten(),
+                            )
+                        })
+                        .flatten(),
+                )
+            })
+            .flatten()
+            .collect();
+        assert_eq!(registrations.len(), 1);
+        assert_eq!(registrations[0].value, "Notes");
+        assert_eq!(
+            &source[registrations[0].span.start..registrations[0].span.end],
+            "Notes"
+        );
+        assert!(parse(&source.replace("registers [Notes]", "registers Notes")).is_err());
+        assert!(parse(&source.replace("registers [Notes]", "registers [Notes, Other]")).is_ok());
+    }
+}
 use lexer::{Kind, Token, lex};
 
 type Parsed<T> = Result<T, Diagnostic>;
@@ -2748,6 +2798,9 @@ impl<'s> Parser<'s> {
                     then_branch,
                     else_branch,
                 }
+            } else if self.take("registers") {
+                self.expect("[")?;
+                CapItem::Registers(self.names("]")?)
             } else if self.take("reads") {
                 self.lines();
                 if self.current().kind == Kind::Word
@@ -4862,6 +4915,7 @@ impl<'s> Parser<'s> {
                     | "permitted"
                     | "authority_basis"
                     | "evidence_basis"
+                    | "same_version"
                     | "excludes"
                     | "waive"
                     | "contest"
@@ -5078,6 +5132,20 @@ impl<'s> Parser<'s> {
                 ContractClause::AuthorityBasis {
                     target,
                     authority: self.ident()?,
+                }
+            } else if self.take("same_version") {
+                let first_path = self.capability_path()?;
+                self.expect("(")?;
+                let first_param = self.ident()?;
+                self.expect(")")?;
+                self.expect(",")?;
+                let second_path = self.capability_path()?;
+                self.expect("(")?;
+                let second_param = self.ident()?;
+                self.expect(")")?;
+                ContractClause::SameVersion {
+                    first: (first_path, first_param),
+                    second: (second_path, second_param),
                 }
             } else if self.take("evidence_basis") {
                 // Contextual words remain legal names outside this clause.

@@ -1064,6 +1064,9 @@ pub struct Capability {
     /// Observed case snapshots used by lineage derivation and evidence contracts;
     /// they do not add business guards or executable state reads.
     pub read_variables: Vec<StateVarId>,
+    /// Value-free registration effects at normal finish, and record reads.
+    pub registers: Vec<ActorId>,
+    pub read_records: Vec<ActorId>,
     pub atomic: Option<Atomic>,
     pub uses: Vec<ResourceUse>,
     pub requires: Option<Requires>,
@@ -1797,6 +1800,7 @@ impl ContractClause {
             ContractKind::Permitted { .. } => "permitted",
             ContractKind::AuthorityBasis { .. } => "authority_basis",
             ContractKind::EvidenceBasis { .. } => "evidence_basis",
+            ContractKind::SameVersion { .. } => "same_version",
         };
         let name = self
             .name
@@ -1812,6 +1816,11 @@ impl ContractClause {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractKind {
+    /// Ordered capability/parameter indices. Result identity, not enum equality.
+    SameVersion {
+        first: (CapabilityId, usize),
+        second: (CapabilityId, usize),
+    },
     /// Index in Model::contests. Shares the source ordinal of the static row.
     ContestResponse {
         contest: usize,

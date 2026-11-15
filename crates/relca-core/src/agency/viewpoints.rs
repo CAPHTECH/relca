@@ -9,8 +9,11 @@ use super::*;
 mod enumerator_reference;
 #[path = "framing_fast.rs"]
 mod framing_fast;
+#[path = "observation_stages.rs"]
+mod observation_stages;
 #[path = "retention_fast.rs"]
 mod retention_fast;
+pub(super) use observation_stages::StageGraph;
 
 const NOTICE: &str = "行使回数から不要とは判定しない";
 
@@ -93,6 +96,8 @@ pub enum Observation {
         sources: Vec<Source>,
         people: Vec<Person>,
         fallback: String,
+        #[serde(default)]
+        stages: Vec<ObservationStage>,
     },
     NotDerived {
         reason: LimitReason,
@@ -100,6 +105,22 @@ pub enum Observation {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         limit: Option<Box<DerivationLimit>>,
     },
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservationStage {
+    pub call: String,
+    pub actor: String,
+    pub capability: String,
+    pub people: Vec<String>,
+    pub unattributed: bool,
+    pub direct: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_records: Option<Vec<RecordProvenance>>,
+    pub via_outputs: Option<Vec<String>>,
+    pub via_outputs_status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_outputs_reason: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -135,6 +156,8 @@ pub struct Person {
 pub struct PersonNormal {
     pub direct: Vec<String>,
     pub indirect: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_records: Option<Vec<RecordProvenance>>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -494,6 +517,7 @@ pub(super) fn derive(m: &ir::Model, a: &Agency) -> (Viewpoints, Vec<diag::Diagno
 fn with_limits(m: &ir::Model, a: &Agency, limits: [Limits; 3]) -> Viewpoints {
     with_limits_and_warnings(m, a, limits, DEFAULT).0
 }
+#[cfg(test)]
 pub(super) fn with_limits_and_warnings(
     m: &ir::Model,
     a: &Agency,
@@ -527,8 +551,10 @@ pub(super) fn with_limits_and_warnings_reference_shared(
         shared,
         framing_reference,
         retention_reference,
+        None,
     )
 }
+#[cfg(test)]
 pub(super) fn with_limits_and_warnings_shared(
     m: &ir::Model,
     a: &Agency,
@@ -544,8 +570,29 @@ pub(super) fn with_limits_and_warnings_shared(
         shared,
         framing_fast::derive,
         retention_shared,
+        None,
     )
 }
+pub(super) fn with_stage_graph(
+    m: &ir::Model,
+    a: &Agency,
+    limits: [Limits; 3],
+    effects_limits: Limits,
+    shared: bool,
+    graph: StageGraph<'_>,
+) -> (Viewpoints, Vec<diag::Diagnostic>) {
+    with_strategy(
+        m,
+        a,
+        limits,
+        effects_limits,
+        shared,
+        framing_fast::derive,
+        retention_shared,
+        Some(graph),
+    )
+}
+#[allow(clippy::too_many_arguments)]
 fn with_strategy(
     m: &ir::Model,
     a: &Agency,
@@ -554,6 +601,7 @@ fn with_strategy(
     shared: bool,
     framing_fn: fn(&ir::Model, &mut Budget, bool) -> Result<Framing>,
     retention_fn: fn(&ir::Model, &mut Budget, bool) -> Result<Retention>,
+    graph: Option<StageGraph<'_>>,
 ) -> (Viewpoints, Vec<diag::Diagnostic>) {
     let (effects, mut warnings) = if shared {
         effects::derive_shared(m, a, effects_limits, true)
@@ -563,7 +611,7 @@ fn with_strategy(
     let view = Viewpoints {
         rules: "agency-viewpoints-p1-2".into(),
         scope: "selected_process_lexical_calls_and_declared_contest_routes".into(),
-        observation: observation(m, a, &mut block_budget(m, limits[0], "observation"))
+        observation: observation(m, a, &mut block_budget(m, limits[0], "observation"), graph)
             .unwrap_or_else(|error| {
                 let (reason, limit) = failure(error);
                 Observation::NotDerived {
@@ -753,7 +801,12 @@ pub(crate) fn refresh_limit_warnings(
     diagnostics.splice(at..at, warnings);
 }
 
-fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation> {
+fn observation(
+    m: &ir::Model,
+    a: &Agency,
+    b: &mut Budget,
+    graph: Option<StageGraph<'_>>,
+) -> Result<Observation> {
     depth(b, 3)?;
     let routes = routes(m, b)?;
     let mut sources = Vec::new();
@@ -799,6 +852,7 @@ fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation>
         b.copy(3)?;
         let mut direct = BTreeSet::new();
         let mut indirect = BTreeSet::new();
+        let mut via_records = crate::registration::present(m).then(Vec::new);
         let mut contest = BTreeSet::new();
         for (i, actor) in m.actors.iter().enumerate() {
             b.steps(actor.executors.as_ref().map_or(0, Vec::len) + 1)?;
@@ -810,6 +864,15 @@ fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation>
                 continue;
             }
             let origin = a.origin.get(i).ok_or_else(invalid)?;
+            if let (Some(out), Some(routes)) = (&mut via_records, &origin.via_records) {
+                b.copy(
+                    routes
+                        .iter()
+                        .map(|r| 1 + r.registrars.len() + r.sources.len())
+                        .sum(),
+                )?;
+                crate::registration::merge_routes(m, out, routes.clone());
+            }
             for s in &origin.direct {
                 b.insert(&mut direct, s.as_str())?;
             }
@@ -844,6 +907,7 @@ fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation>
             normal: PersonNormal {
                 direct: ordered(&direct, b)?,
                 indirect: ordered(&indirect, b)?,
+                via_records,
             },
             contest: PersonContest {
                 direct: ordered(&contest, b)?,
@@ -854,6 +918,7 @@ fn observation(m: &ir::Model, a: &Agency, b: &mut Budget) -> Result<Observation>
         sources,
         people,
         fallback: "unchecked".into(),
+        stages: observation_stages::derive(m, graph, b)?,
     })
 }
 fn reach(m: &ir::Model, ids: &BTreeSet<ir::ActorId>, b: &mut Budget) -> Result<Reach> {
@@ -1910,6 +1975,7 @@ mod tests {
         serde_json::to_value(derive(m, m.agency.as_derived().unwrap()).0).unwrap()
     }
     fn old_four_blocks(mut v: Value) -> Value {
+        v = relca_test_support::stage_projection::current(&v);
         v.as_object_mut().unwrap().remove("effects");
         v["rules"] = json!("agency-viewpoints-p1-1");
         v

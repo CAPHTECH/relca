@@ -1,0 +1,28 @@
+model StaleExamination version "0.2" {
+  type Doc = enum { draft }
+  type Ack = enum { accepted, conflict }
+  actor Writer { capacity 2
+    capability draft() -> Doc { duration fixed 1min; result nondet { draft } }
+  }
+  actor Checker { capacity 2; state holder: bool = false
+    capability check(d:Doc) -> Ack {
+      version_check [holder] else conflict
+      writes holder; finish { holder = true }
+      duration fixed 1min; result nondet { accepted }
+    }
+  }
+  actor Approver { capacity 2
+    capability approve(d:Doc) -> Ack { duration fixed 1min; result nondet { accepted } }
+  }
+  process Main {
+    d = Writer.draft()
+    k = Checker.check(d)
+    p = Approver.approve(d)
+    end done
+  }
+  cut Scope { include [Writer,Checker,Approver] }
+  arrivals fixed [0min,0min]
+  bounds { cases 2; live_tasks 2; clock 10min }
+  verify reachable end.done
+  contract V { same_version Checker.check(d), Approver.approve(d) }
+}

@@ -194,7 +194,7 @@ fn all_thirty_hand_fixture_expectations() {
 }
 
 fn ou(v: &Value) -> Value {
-    json!({"observation":row(v)["observation"],"refusal":row(v)["refusal"],"warnings":row(v)["warnings"]})
+    json!({"observation":relca_test_support::stage_projection::observation(&row(v)["observation"]),"refusal":row(v)["refusal"],"warnings":row(v)["warnings"]})
 }
 fn known_ou(actor: &str, effect: &str, direct: bool) -> Value {
     json!({"observation":{"status":if direct {"present"} else {"missing"},"required_sources":["Record"],"direct":if direct {vec!["Record"]} else {vec![]},"indirect":["Record"],"missing_sources":if direct {vec![]} else {vec!["Record"]},"reason":null},
@@ -576,7 +576,7 @@ fn support_union_zero_mass_max_paths_repeated_calls_and_maintenance_effect_fold(
             "union" | "union-missing" => {
                 let missing = label == "union-missing";
                 assert_eq!(
-                    duty["observation"],
+                    relca_test_support::stage_projection::observation(&duty["observation"]),
                     json!({"status":if missing {"missing"} else {"present"},"required_sources":["Record","Other"],"direct":if missing {vec!["Record"]} else {vec!["Record","Other"]},"indirect":["Record","Other"],"missing_sources":if missing {vec!["Other"]} else {vec![]},"reason":null})
                 );
             }
@@ -694,7 +694,7 @@ fn reports_explain_simulate_diff_compare_and_mutate_transport_same_static_rows()
         "responsibility",
     ];
     assert_eq!(
-        d["unchecked"],
+        relca_test_support::stage_projection::unchecked(&d["unchecked"]),
         diff_increment::migrated_unchecked(&OLD_DIFF_UNCHECKED)
     );
     let m = serde_json::to_value(relca_core::mutation::mutate(&src)).unwrap();

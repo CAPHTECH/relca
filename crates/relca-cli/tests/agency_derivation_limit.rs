@@ -446,7 +446,7 @@ fn small_models_preserve_entire_stdout_stderr_and_exit() {
         ),
     ] {
         let o = run("check", &s, &options);
-        observed.insert(name.into(), json!({"stdout":String::from_utf8(o.stdout).unwrap(),"stderr":String::from_utf8(o.stderr).unwrap(),"exit":o.status.code()}));
+        observed.insert(name.into(), json!({"stdout":String::from_utf8(relca_test_support::stage_projection::bytes(&o.stdout)).unwrap(),"stderr":String::from_utf8(o.stderr).unwrap(),"exit":o.status.code()}));
     }
     if std::env::var_os("RELCA_RECORD_AGENCY_LIMIT_PRESERVATION").is_some() {
         std::fs::write(

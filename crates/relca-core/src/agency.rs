@@ -126,6 +126,28 @@ pub struct Origin {
     pub actor: String,
     pub direct: Vec<String>,
     pub indirect: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via_records: Option<Vec<RecordProvenance>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordProvenance {
+    pub record: String,
+    pub registrars: Vec<RecordRegistrar>,
+    pub sources: Vec<RecordSource>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordRegistrar {
+    pub call: String,
+    pub people: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordSource {
+    pub source: String,
+    pub route: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2196,8 +2218,26 @@ fn derive_strategy_shared(
             actor: a.name.clone(),
             direct: names(&direct[i]),
             indirect: names(&indirect[i]),
+            via_records: crate::registration::present(model).then(Vec::new),
         })
         .collect();
+    if crate::registration::present(model) {
+        let graph = crate::evidence_basis::graph(model);
+        for c in &calls {
+            let routes = crate::registration::routes(model, &graph, c.binding);
+            budget.cells(
+                routes
+                    .iter()
+                    .map(|r| 1 + r.registrars.len() + r.sources.len())
+                    .sum(),
+            )?;
+            let out = agency.origin[model.capabilities[c.capability.0].actor.0]
+                .via_records
+                .as_mut()
+                .ok_or_else(invalid)?;
+            crate::registration::merge_routes(model, out, routes);
+        }
+    }
     let mut effect_paths = BTreeMap::new();
     budget.location = Location::model(model, "path expansion");
     // Models without effects need no path expansion.
@@ -2644,17 +2684,18 @@ fn derive_strategy_shared(
     if extra.iter().any(|p| !p.is_empty()) {
         agency.rules = "agency-p1-reads-1".into();
     }
-    let (mut viewpoints, new_warnings) = if shared {
-        viewpoints::with_limits_and_warnings_shared(
-            model,
-            &agency,
-            viewpoint_limits,
-            effects_limits,
-            true,
-        )
-    } else {
-        viewpoints::with_limits_and_warnings(model, &agency, viewpoint_limits, effects_limits)
-    };
+    let (mut viewpoints, new_warnings) = viewpoints::with_stage_graph(
+        model,
+        &agency,
+        viewpoint_limits,
+        effects_limits,
+        shared,
+        viewpoints::StageGraph {
+            subjects: &subjects,
+            sources: Some(&source_sets),
+            merge_dependent: &merge_dependent,
+        },
+    );
     if has_merges {
         merge::restore(model, &mut agency, &mut viewpoints, &mut warnings)?;
     }
@@ -2680,6 +2721,19 @@ fn derive_strategy_shared(
         }
     }
     agency.viewpoints = Some(viewpoints);
+    if !model.process.degradations.is_empty() {
+        agency
+            .unchecked
+            .push("stage_observation(fallback_path)".into());
+    }
+    if model.actors.iter().any(|a| a.metadata.rule.is_some()) {
+        agency.unchecked.push("stage_observation(rule)".into());
+    }
+    if !model.contests().is_empty() {
+        agency
+            .unchecked
+            .push("responsibility_stage(contest_path)".into());
+    }
     if model.has_loops() {
         agency.rules = "agency-p2-loop-1".into();
     }

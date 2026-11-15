@@ -211,6 +211,9 @@ impl Contract {
 }
 
 fn supported(m: &ir::Model) -> Result<()> {
+    if crate::registration::present(m) {
+        return Err(unsupported("registration_unsupported_command"));
+    }
     if m.has_merges() {
         return Err(unsupported(
             "merge_feature_combination: merge sensitivity is not connected",
@@ -218,6 +221,9 @@ fn supported(m: &ir::Model) -> Result<()> {
     }
     if crate::evidence_basis::present(m) {
         return Err(unsupported("evidence_basis_unsupported_command"));
+    }
+    if crate::same_version::present(m) {
+        return Err(unsupported("same_version_unsupported_command"));
     }
     if m.has_loops() {
         return Err(unsupported(
@@ -282,6 +288,8 @@ fn supported(m: &ir::Model) -> Result<()> {
             performance: _,
             version_check: _,
             read_variables: _,
+            registers: _,
+            read_records: _,
             atomic: _,
             uses: _,
             requires: _,

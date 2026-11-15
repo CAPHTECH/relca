@@ -1,0 +1,32 @@
+model R0 version "0.2" {
+  type V = enum { pass, fail }
+  type Ack = enum { ok }
+  people [p1, q1]
+  actor Invoice { source document }
+  actor Know { source tacit "vendor knowledge of p1" }
+  actor Notes { }
+  actor Clerk { executors [p1]
+    capability enter() -> V { reads [Invoice]; duration fixed 1min; result nondet { pass } }
+    capability register() -> Ack { reads [Know]; registers [Notes]; duration fixed 1min; result nondet { ok } }
+    capability judge(e: V) -> V { reads [Know]; duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Reviewer { executors [q1]
+    capability review(e: V) -> V { reads [Notes]; duration fixed 1min; result nondet { pass, fail } }
+  }
+  actor Ledger { capacity 1
+    capability post(a: V, b: V) -> Ack { commits; duration fixed 1min; result nondet { ok } }
+  }
+  cut S { include [Invoice, Know, Notes, Clerk, Reviewer, Ledger] }
+  process Main {
+    e = Clerk.enter()
+    r = Clerk.register()
+    a = Clerk.judge(e)
+    b = Reviewer.review(e)
+    if a == pass && b == pass {} else { end returned }
+    x = Ledger.post(a, b)
+    end posted
+  }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify reachable end.posted
+  contract Basis { evidence_basis Reviewer.review [Know] }
+}

@@ -399,7 +399,13 @@ fn public_serde_accepts_new_table_but_rejects_unknown_nested_fields_and_status()
         parsed.is_ok(),
         "ADR0034 public serde viewpoints is not implemented: {parsed:?}"
     );
-    assert_eq!(serde_json::to_value(parsed.unwrap()).unwrap(), a);
+    assert_eq!(
+        relca_test_support::stage_projection::legacy_dto(
+            &serde_json::to_value(parsed.unwrap()).unwrap(),
+            &a
+        ),
+        a
+    );
     for pointer in [
         "/viewpoints",
         "/viewpoints/observation",

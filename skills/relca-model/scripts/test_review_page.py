@@ -69,6 +69,117 @@ def rewrite(src, dst, fn):
 
 @unittest.skipUnless(RELCA.exists(), "relca の binary が無い: %s(cargo build -p relca-cli)" % RELCA)
 class ReviewPageTest(unittest.TestCase):
+    def test_record_label_only_describes_missing_sources_carried_by_the_record(self):
+        reader = object.__new__(review_page.Page)
+        route = {"record": "Notes", "registrars": [{"call": "r", "people": []}],
+                 "sources": [{"source": "Invoice", "route": "relayed"}]}
+        for missing in (["Know"], ["Invoice", "Know"]):
+            with self.subTest(missing=missing):
+                text = reader._responsibility_stages_html({"stages_status": "derived", "stages": [{
+                    "call": "b", "required": missing, "direct": [], "missing": missing, "via_records": [route]}]})
+                self.assertNotIn("記録経由(直接には読まない) (Know)", text)
+                self.assertNotIn("記録経由(直接には読まない) (Invoice, Know)", text)
+                self.assertIn("この段で直接読まない根拠源がある (Know)", text)
+                if "Invoice" in missing:
+                    self.assertIn("記録経由(直接には読まない) (Invoice)", text)
+                else:
+                    self.assertNotIn("この段では記録経由", text)
+
+    def test_legacy_stage_page_does_not_add_record_provenance_columns_or_notes(self):
+        reader = object.__new__(review_page.Page)
+        observation = {"status": "derived", "stages": [{"call": "b", "actor": "A", "capability": "A.read",
+            "people": [], "unattributed": True, "direct": [], "via_outputs": ["Know"], "via_outputs_status": "derived"}]}
+        self.assertNotIn("記録経由", reader._observation_stages_html(observation))
+        self.assertNotIn("記録経由", reader._responsibility_stages_html({"stages_status": "derived", "stages": [{
+            "call": "b", "required": ["Know"], "direct": [], "missing": ["Know"]}]}))
+        out, err, code = self.r["as-is-check"]
+        text, _ = page(self.tmp, "legacy-no-record", "--model", INV / "as-is.relca", "--check", out,
+                       "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+        self.assertNotIn("記録経由", section(text, "model"))
+        self.assertIn("書くもの・確定", section(text, "model"))
+        self.assertNotIn("書くもの・登録先・確定", section(text, "model"))
+
+    def test_record_example_keeps_person_reach_and_stage_direct_access_separate(self):
+        model = ROOT / "examples/record-provenance.relca"
+        out, err, code = relca(self.tmp, "registered-knowledge", "check", model)
+        value = json.loads(out.read_text())
+        self.assertEqual((code, value["verdict"]), (0, "satisfied"))
+        self.assertEqual(value["terminals"], [{"end": "done", "elapsed": {"min": 3, "max": 3}, "work": {"min": 3, "max": 3}, "result_at": None}])
+        observation = value["responsibilities"][0]["observation"]
+        route = {"record": "Notes", "registrars": [{"call": "r", "people": ["p1"]}],
+                 "sources": [{"source": "Know", "route": "registrar_direct"}]}
+        self.assertEqual(observation["status"], "present_via_record")
+        self.assertEqual(observation["direct"], [])
+        self.assertEqual(observation["missing_sources"], [])
+        self.assertEqual(observation["via_records"], [route])
+        stage = observation["stages"][0]
+        self.assertEqual(stage, {"call": "b", "required": ["Know"], "direct": [], "missing": ["Know"], "via_records": [route]})
+        text, _ = page(self.tmp, "record-page", "--model", model, "--check", out,
+                       "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+        for part in ("registers [Notes]", "書くもの・登録先・確定", "記録経由で必要な根拠源に届く(直接とは別)",
+                     "Notes 経由: Know (登録者が直接読む); 登録 r (p1)", "この段では記録経由(直接には読まない)"):
+            self.assertIn(part, html.unescape(text))
+        mutated, stderr, exit_code = relca(self.tmp, "record-mutate", "mutate", model,
+            "--kinds", "original_access_removed,evidence_missing")
+        mutation = json.loads(mutated.read_text())
+        record_sites = [m for row in mutation["mutations"] for m in row["mutants"] if m["site"].get("record") == "Notes"]
+        self.assertEqual(len(record_sites), 2)
+        self.assertTrue(all(m["site"]["source"] is None for m in record_sites))
+        text, _ = page(self.tmp, "record-mutate-page", "--model", model, "--check", out,
+            "--check-exit", code, "--check-stderr", err, "--mutate", mutated, "--mutate-exit", exit_code,
+            "--mutate-stderr", stderr, "--no-mermaid")
+        self.assertIn("記録の読取りの削除: Notes", html.unescape(text))
+
+    def test_record_routes_escape_names_and_distinguish_empty_absent_and_invalid(self):
+        reader = object.__new__(review_page.Page)
+        self.assertEqual("", reader._record_routes_html({}))
+        self.assertIn("確定した記録経由なし", reader._record_routes_html({"via_records": []}))
+        for value in (None, {}, [None], [{"record": "Notes", "sources": [], "registrars": []}],
+                      [{"record": "Notes", "registrars": [{"call": "r", "people": []}],
+                        "sources": [{"source": "Know", "route": "unknown"}]}]):
+            with self.subTest(value=value):
+                self.assertIn("読めない", reader._record_routes_html({"via_records": value}))
+        text = reader._record_routes_html({"via_records": [{"record": "<Notes>",
+            "registrars": [{"call": "<r>", "people": []}],
+            "sources": [{"source": "<Know>", "route": "relayed"}]}]})
+        self.assertIn("人の帰属なし", text)
+        self.assertIn("中継された源", text)
+        for name in ("Notes", "r", "Know"):
+            self.assertIn("&lt;%s&gt;" % name, text)
+            self.assertNotIn("<%s>" % name, text)
+
+    def test_stage_unknown_via_is_not_displayed_as_empty_access_and_names_are_escaped(self):
+        reader = object.__new__(review_page.Page)
+        text = reader._observation_stages_html({"status": "derived", "stages": [{
+            "call": "<send>", "capability": "Office.send", "people": ["<person>"],
+            "unattributed": False, "direct": ["Invoice"], "via_outputs": None,
+            "via_outputs_status": "not_derived", "via_outputs_reason": "merge_control"}]})
+        self.assertIn("未導出 (merge_control)", text)
+        self.assertIn("Invoice", text)
+        self.assertIn("&lt;send&gt;", text)
+        self.assertIn("&lt;person&gt;", text)
+        self.assertNotIn("<send>", text)
+        self.assertIn("観測に数えない", text)
+
+    def test_responsibility_stage_unknown_inapplicable_and_legacy_are_distinct(self):
+        reader = object.__new__(review_page.Page)
+        self.assertIn("段ごとの記録なし", reader._responsibility_stages_html({"status": "present"}))
+        for status, reason, label in [("not_derived", "no_source_identified", "未導出"),
+                                      ("not_applicable", "maintenance", "対象外")]:
+            text = reader._responsibility_stages_html({"stages_status": status, "stages_reason": reason, "stages": None})
+            self.assertIn(label, text)
+            self.assertIn(reason, text)
+            self.assertNotIn("必要な根拠源を直接読む", text)
+        self.assertIn("読めない", reader._responsibility_stages_html({"stages_status": "derived", "stages": None}))
+
+    def test_responsibility_stage_partial_direct_does_not_claim_outputs_only(self):
+        reader = object.__new__(review_page.Page)
+        text = reader._responsibility_stages_html({"stages_status": "derived", "stages": [
+            {"call": "v", "required": ["Invoice", "PO"], "direct": ["PO"], "missing": ["Invoice"]}]})
+        self.assertIn("この段で直接読まない根拠源がある", text)
+        self.assertIn("Invoice", text)
+        self.assertNotIn("この段では生成物だけ", text)
+
     @classmethod
     def setUpClass(cls):
         (ROOT / ".tmp").mkdir(exist_ok=True)
@@ -88,6 +199,74 @@ class ReviewPageTest(unittest.TestCase):
         cls._tmp.cleanup()
 
     # ---------------------------------------------------------- 実出力
+
+    def test_same_version_examples_have_hand_times_and_displayed_evidence(self):
+        for filename, expected, code, done, rejected in [
+                ("same-version.relca", "satisfied", 0, 3, 2),
+                ("same-version-reused.relca", "violated", 1, 4, 3)]:
+            with self.subTest(model=filename):
+                model = ROOT / "examples" / filename
+                out, err, actual_code = relca(self.tmp, filename + "-check", "check", model)
+                value = json.loads(out.read_text())
+                self.assertEqual((actual_code, value["verdict"]), (code, expected))
+                times = {t["end"]: (t["elapsed"], t["work"]) for t in value["terminals"]}
+                self.assertEqual(times, {"done": ({"min": done, "max": done},) * 2,
+                                         "rejected": ({"min": rejected, "max": rejected},) * 2})
+                self.assertEqual(next(p["verdict"] for p in value["properties"]
+                                      if p["id"] == "contract V #1 same_version"), expected)
+        model = ROOT / "examples/same-version-reused.relca"
+        out, err, code = relca(self.tmp, "version-explain", "explain", model)
+        value = json.loads(out.read_text())
+        cx = next(c for c in value["explanation"]["counterexamples"] if c["id"].endswith(" same_version"))
+        self.assertEqual(cx["status"], "verified")
+        self.assertEqual(cx["steps"][-1]["time"], 4)
+        self.assertEqual(cx["version"], {"binding": "p", "capability": "Approver.approve", "parameter": "d",
+            "version": "d_dup", "examined": {"binding": "k", "capability": "Checker.check", "parameter": "d", "version": "d"}})
+        text, _ = page(self.tmp, "version-page", "--model", model, "--check", out,
+                       "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+        for part in ("same_version Checker.check(d), Approver.approve(d)", "モデルの版の証跡", "d_dup", "開始前に最後に確認した版"):
+            self.assertIn(part, html.unescape(text))
+        mutated, _, code = relca(self.tmp, "version-mutated", "mutate", ROOT / "examples/same-version.relca", "--kinds", "summary_reused")
+        mutation = json.loads(mutated.read_text())
+        row = next(r for r in mutation["mutations"] if r["kind"] == "summary_reused")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(row["mutants"]), 1)
+        self.assertEqual(row["mutants"][0]["result"], "detected")
+        self.assertTrue(any(c["direction"] == "worsened" and c["key"] == "contract V #1 same_version"
+                            for c in row["mutants"][0]["assigned_changes"]))
+
+    def test_same_version_page_refuses_missing_or_forged_evidence_and_allows_null(self):
+        model = ROOT / "examples/same-version-reused.relca"
+        out, err, code = relca(self.tmp, "version-validation", "explain", model)
+        reader = review_page.Page(review_page.parse_args(["--model", str(model), "--check", str(out),
+            "--check-exit", str(code), "--check-stderr", str(err), "--no-mermaid", "-o", str(Path(self.tmp)/"version.html")]))
+        original = next(c for c in json.loads(out.read_text())["explanation"]["counterexamples"] if c["id"].endswith(" same_version"))
+        self.assertIn("d_dup", reader._version_html(original))
+        for fault in ("missing", "type", "extra", "examined", "same", "binding", "order"):
+            with self.subTest(fault=fault):
+                cx = json.loads(json.dumps(original))
+                if fault == "missing":
+                    del cx["version"]
+                elif fault == "type":
+                    cx["version"] = "unknown"
+                elif fault == "extra":
+                    cx["version"]["unrecognized"] = True
+                elif fault == "examined":
+                    cx["version"]["examined"] = {}
+                elif fault == "same":
+                    cx["version"]["examined"]["version"] = "d_dup"
+                elif fault == "binding":
+                    cx["version"]["binding"] = "wrong"
+                else:
+                    cx["steps"] = [s for s in cx["steps"] if not (s["kind"] == "finish" and s.get("binding") == "k")]
+                with self.assertRaises(ValueError):
+                    reader._version_html(cx)
+                rendered = reader.guarded("版の証跡", lambda: reader._version_html(cx))
+                self.assertIn("この節を生成できなかった", rendered)
+                self.assertEqual(reader.unverified[-1][:3], ("review_page", "版の証跡", "unsupported"))
+        cx = json.loads(json.dumps(original))
+        cx["version"]["examined"] = None
+        self.assertIn("確認なし", reader._version_html(cx))
 
     def test_main_agency_limit_is_not_a_viewpoint_limit(self):
         model=Path(self.tmp)/"main-limit.relca"

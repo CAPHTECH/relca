@@ -211,6 +211,105 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
             }]);
         }
     }
+    let graph = graph(m);
+    let mut calls = Vec::new();
+    collect(&m.process.body, &BTreeSet::new(), &mut calls);
+    for clause in &m.contracts {
+        if let ir::ContractKind::EvidenceBasis { capability, .. } = &clause.kind
+            && calls
+                .iter()
+                .any(|s| s.call.capability == *capability && graph.merged[s.call.binding.0])
+        {
+            return Err(unsupported(
+                "merge_control: evidence_basis target has merged inputs",
+                clause.span,
+            ));
+        }
+    }
+    for clause in &mut m.contracts {
+        if let ir::ContractKind::EvidenceBasis {
+            capability,
+            direct,
+            calls: table,
+            ..
+        } = &mut clause.kind
+        {
+            table.clear();
+            for site in &calls {
+                let call = site.call;
+                let i = call.binding.0;
+                let direct_target = *direct && call.capability == *capability;
+                table.push(ir::EvidenceCall {
+                    binding: call.binding,
+                    sources: if direct_target {
+                        m.capabilities[capability.0]
+                            .reads
+                            .iter()
+                            .copied()
+                            .collect::<BTreeSet<_>>()
+                            .into_iter()
+                            .collect()
+                    } else {
+                        graph.must[i].iter().copied().collect()
+                    },
+                    possible_sources: if direct_target {
+                        m.capabilities[capability.0].reads.clone()
+                    } else {
+                        graph.may[i].iter().copied().collect()
+                    },
+                    conditional_sources: graph.conditional[i].iter().copied().collect(),
+                    excluded_edges: if direct_target {
+                        vec![]
+                    } else {
+                        graph.excluded[i].iter().cloned().collect()
+                    },
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Clone)]
+pub(crate) struct RecordAccess {
+    pub record: ir::ActorId,
+    pub registrars: Vec<ir::BindingId>,
+    pub sources: BTreeSet<ir::ActorId>,
+}
+
+pub(crate) struct SourceGraph {
+    pub must: Vec<BTreeSet<ir::ActorId>>,
+    pub may: Vec<BTreeSet<ir::ActorId>>,
+    conditional: Vec<BTreeSet<ir::ActorId>>,
+    excluded: Vec<BTreeSet<String>>,
+    pub merged: Vec<bool>,
+    pub records: Vec<Vec<RecordAccess>>,
+    pub record_parents: Vec<Vec<ir::BindingId>>,
+}
+
+#[derive(Clone, Copy)]
+enum ReadTarget {
+    Variable(ir::StateVarId),
+    Record(ir::ActorId),
+}
+impl ReadTarget {
+    fn writes(self, cap: &ir::Capability) -> bool {
+        match self {
+            Self::Variable(v) => writes(cap, v),
+            Self::Record(r) => cap.registers.contains(&r),
+        }
+    }
+    fn always_writes(self, cap: &ir::Capability) -> bool {
+        match self {
+            Self::Variable(v) => always_writes(cap, v),
+            Self::Record(r) => cap.registers.contains(&r),
+        }
+    }
+}
+
+/// Source-wise must intersection and last-writer may union. Used for contracts
+/// and records, not substituted for the legacy observed-variable Agency graph.
+pub(crate) fn graph(m: &ir::Model) -> SourceGraph {
     let mut calls = Vec::new();
     collect(&m.process.body, &BTreeSet::new(), &mut calls);
     // Retry Task slots are allocated after the public result bindings. Their
@@ -223,6 +322,8 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
     let mut bound_may = must.clone();
     let mut conditional = must.clone();
     let mut excluded: Vec<BTreeSet<String>> = vec![BTreeSet::new(); n];
+    let mut records = vec![Vec::new(); n];
+    let mut record_parents = vec![Vec::new(); n];
     // A merge is not an evidence-producing call. Track only whether one flows
     // into a target's inputs, never invent a union/intersection of its roots.
     // Control conditions are deliberately not evidence inputs (ADR 0070).
@@ -245,7 +346,13 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
             edges.extend(excluded[arg.0].iter().cloned());
             merge_input |= merged[arg.0];
         }
-        for &variable in &cap.read_variables {
+        for target in cap
+            .read_variables
+            .iter()
+            .copied()
+            .map(ReadTarget::Variable)
+            .chain(cap.read_records.iter().copied().map(ReadTarget::Record))
+        {
             let mut candidates = Vec::new();
             let mut guaranteed = false;
             for parent in calls[..i].iter().rev() {
@@ -257,14 +364,14 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
                 }
                 let writer = parent.call;
                 let wc = &m.capabilities[writer.capability.0];
-                if !writes(wc, variable) {
+                if !target.writes(wc) {
                     continue;
                 }
                 candidates.push(writer.binding);
                 if prefix.contains(&writer.binding)
                     && parent.kind == SiteKind::Call
                     && wc.requires.is_none()
-                    && always_writes(wc, variable)
+                    && target.always_writes(wc)
                 {
                     guaranteed = true;
                     break;
@@ -295,6 +402,22 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
                 }
             }
             certain.extend(&shared);
+            if let ReadTarget::Record(record) = target {
+                for &writer in &candidates {
+                    if !record_parents[call.binding.0].contains(&writer) {
+                        record_parents[call.binding.0].push(writer);
+                    }
+                }
+                if !shared.is_empty() {
+                    let mut registrars = candidates.clone();
+                    registrars.reverse();
+                    records[call.binding.0].push(RecordAccess {
+                        record,
+                        registrars,
+                        sources: shared,
+                    });
+                }
+            }
             possible.extend(all);
         }
         uncertain.retain(|s| !certain.contains(s));
@@ -310,54 +433,15 @@ pub(crate) fn prepare(m: &mut ir::Model) -> Result<(), Vec<diag::Diagnostic>> {
         excluded[call.binding.0] = edges;
         merged[call.binding.0] = merge_input;
     }
-    for clause in &m.contracts {
-        if let ir::ContractKind::EvidenceBasis { capability, .. } = &clause.kind
-            && calls
-                .iter()
-                .any(|s| s.call.capability == *capability && merged[s.call.binding.0])
-        {
-            return Err(unsupported(
-                "merge_control: evidence_basis target has merged inputs",
-                clause.span,
-            ));
-        }
+    SourceGraph {
+        must,
+        may,
+        conditional,
+        excluded,
+        merged,
+        records,
+        record_parents,
     }
-    for clause in &mut m.contracts {
-        if let ir::ContractKind::EvidenceBasis {
-            capability,
-            direct,
-            calls: table,
-            ..
-        } = &mut clause.kind
-        {
-            table.clear();
-            for site in &calls {
-                let call = site.call;
-                let direct_target = *direct && call.capability == *capability;
-                let actual = if direct_target {
-                    m.capabilities[capability.0].reads.iter().copied().collect()
-                } else {
-                    must[call.binding.0].clone()
-                };
-                table.push(ir::EvidenceCall {
-                    binding: call.binding,
-                    sources: actual.into_iter().collect(),
-                    possible_sources: if direct_target {
-                        m.capabilities[capability.0].reads.clone()
-                    } else {
-                        may[call.binding.0].iter().copied().collect()
-                    },
-                    conditional_sources: conditional[call.binding.0].iter().copied().collect(),
-                    excluded_edges: if direct_target {
-                        vec![]
-                    } else {
-                        excluded[call.binding.0].iter().cloned().collect()
-                    },
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Execution must not trust a forged public-IR proof table. Ordinary models

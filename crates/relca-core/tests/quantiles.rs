@@ -411,6 +411,9 @@ fn relabeling_only_changes_independently_enumerated_old_and_quantile_name_positi
             *values[i].pointer_mut(path).unwrap() = Value::Null;
         }
     }
+    for value in &mut values {
+        *value = relca_test_support::stage_projection::current(value);
+    }
     assert_eq!(
         values[0], values[1],
         "all numbers,reasons,order,verdict,counters and unregistered fields unchanged"

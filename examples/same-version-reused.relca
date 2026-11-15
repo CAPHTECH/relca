@@ -1,0 +1,34 @@
+model SameVersion version "0.2" {
+  type Doc = enum { draft }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { filed }
+  people [w1,c1,a1]
+  actor Request { source document }
+  actor Writer { executors [w1]; via model "draft@v1"
+    capability draft() -> Doc {
+      reads [Request]; duration fixed 1min; result nondet { draft }
+    }
+  }
+  actor Checker { executors [c1]
+    capability check(d:Doc) -> Verdict {
+      reads [Request]; duration fixed 1min; result nondet { pass, fail }
+    }
+  }
+  actor Approver { executors [a1]
+    capability approve(d:Doc, k:Verdict) -> Ack {
+      commits; duration fixed 1min; result nondet { filed }
+    }
+  }
+  process Main {
+    d = Writer.draft()
+    d_dup = Writer.draft()
+    k = Checker.check(d)
+    if k == pass {} else { end rejected }
+    p = Approver.approve(d_dup,k)
+    end done
+  }
+  cut Scope { include [Request,Writer,Checker,Approver] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  verify reachable end.done
+  contract V { same_version Checker.check(d), Approver.approve(d) }
+}

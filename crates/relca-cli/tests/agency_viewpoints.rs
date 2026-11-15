@@ -410,8 +410,12 @@ fn mutate_reports_every_viewpoint_delta_only_as_other_changes_not_detection() {
                 reports += 1;
                 viewpoints(&m["report"]);
                 let want = projection::changes(
-                    &v["original"]["agency"]["viewpoints"],
-                    &m["report"]["agency"]["viewpoints"],
+                    &relca_test_support::stage_projection::current(
+                        &v["original"]["agency"]["viewpoints"],
+                    ),
+                    &relca_test_support::stage_projection::current(
+                        &m["report"]["agency"]["viewpoints"],
+                    ),
                 );
                 let actual: Vec<_> = m["other_changes"]
                     .as_array()
