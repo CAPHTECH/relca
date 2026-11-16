@@ -69,9 +69,13 @@ pub fn assert_report(name: &str, actual: &Value) {
         actual["verdict"], e["verdict"],
         "{name} must lower before viewpoints assertions: {actual}"
     );
-    let mut got: Vec<_> = actual["diagnostics"]
-        .as_array()
-        .unwrap()
+    let diagnostics = relca_test_support::fixture_match::legacy_defer_diagnostics(
+        actual,
+        &source(name),
+        name.starts_with("agy-invoice").then_some("AsIs"),
+    )
+    .unwrap();
+    let mut got: Vec<_> = diagnostics
         .iter()
         .map(|d| d["code"].as_str().unwrap())
         .collect();

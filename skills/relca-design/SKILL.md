@@ -119,8 +119,12 @@ Relca は良い設計を自動では出さない。できるのは三つであ�
 
 - `verify` は予約語で、Capability の名前にすると `E-SYN-0`(exit 3)になる。
 - `same_version` の引数に、観測変数と同じ名前の束縛を渡すと `U-SEM-0 same_version_feature_combination` で拒否される。束縛名を変える。
-- `examples/invoice/phase1.relca` の時間・費用は `not_configured` である。時間を比べるなら `configurations.relca` の `compare` を使った。
-- 繁忙日の `simulate` は、誰が入力するかの非決定が残るため `unsupported` になる。負荷の評価には方策の宣言が要る。
+- `examples/invoice/phase1.relca` では、`metrics` と `quality` の値(作業量、費用、待ち、誤登録の件数など)がすべて `not_configured` になる。最上位の `terminals` の経過時間は出る。
+  - 原因は `defer Resubmission` と `defer Vendor.contest_rate` である。どちらも Actor にも `Actor.capability` にも当たらないので、relca は影響範囲が分からないとして値を全部取り下げる。
+  - stderr の `W-CUT-2` に原因の `defer` が1行ずつ出る。JSON では `cut.defer_effects` に、取り下げの範囲(`withdraws`)と理由(`because`)が出る。
+  - 値が要るなら、その段をモデルに書くか、`defer` を実在する Actor か `Actor.capability` に直す。関係のない操作の名前で代用しない。外した前提が隠れる。
+  - 時間を比べるときは `configurations.relca` の `compare` を使った。
+- 繁忙日の `simulate` は、方策(`policy`)を宣言しても `unsupported` になった。別の案件の出来事が同じ分に重なると、どれを先に処理するかが決まらないためである。今の構文では、業務の意味を変えずに負荷を評価する方法が見つかっていない。
 
 ## 報告
 

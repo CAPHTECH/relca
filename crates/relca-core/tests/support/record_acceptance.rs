@@ -91,6 +91,10 @@ pub fn report_oracle(name: &str, actual: &Value) {
 }
 pub fn report_oracle_for_source(name: &str, source: &str, actual: &Value) {
     let mut actual = actual.clone();
+    actual["diagnostics"] = json!(
+        relca_test_support::fixture_match::legacy_defer_diagnostics(&actual, source, None,)
+            .unwrap()
+    );
     let diagnostics = actual["diagnostics"].as_array_mut().unwrap();
     let concentration: Vec<_> = diagnostics
         .iter()

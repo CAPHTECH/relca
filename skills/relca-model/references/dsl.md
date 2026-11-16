@@ -340,7 +340,7 @@ pay = Psp.charge_keyed(case.id) response_loss nondet retry max_attempts 2 when r
 
 - `exhausted end` へ進むのは、最後の試行が**既知の失敗**のときだけ。最後まで unknown なら exhausted End にも後続の End にも進まず、Receipt unknown で止まる([複数案とその他の出力](../../../docs/guide/results.md#複数案とその他の出力))。`when receipt unknown` だけなら exhausted End に到達せず、W-UNREACH-2 が出ることがある [試](試行の途中版)。
 - **process で `unknown` を分岐に書けない。**`if ack == unknown { … }` は E-TYPE-0「unknown is not a member of Ack」、exit 3 [試]。unknown は戻り値の enum 値ではない。
-- **結果不明の後の段は書けない。**後ろに呼出しを書くことはできるが、最後の応答が unknown の経路では実行されない。`[unknown, unknown]` にすると後ろの呼出しは `W-UNREACH-0 … never_started`、案件は `receipt_unknown` で止まり、`receipt_resolution` が inconclusive・exit 2 [試]。人が照会して進める・返金する段は今は書けないので、Cut の `defer` に `loses` を付けて外す(SKILL.md「再送を含むモデル」)。
+- **結果不明の後の段は書けない。**後ろに呼出しを書くことはできるが、最後の応答が unknown の経路では実行されない。`[unknown, unknown]` にすると後ろの呼出しは `W-UNREACH-0 … never_started`、案件は `receipt_unknown` で止まり、`receipt_resolution` が inconclusive・exit 2 [試]。人が照会して進める・返金する段は今は書けないので、その段の名前で例えば `defer ReceiptFollowup` とし、reason と loses を付ける。Actor や操作に解決しない opaque な defer による全体撤回と W-CUT-2 は意図した結果として報告する。無関係な操作の部分撤回で代用しない(SKILL.md「再送を含むモデル」)。
 - 再送を含むモデルは compare・diff・待ちの分解・分位点・contest と組めない(U-SEM-0 `retry_feature_combination`)。`references/unsupported.md`。
 - fork の枝そのものへの retry、`version_check` 付き Capability への retry は U-SEM-0 `retry_feature_combination`(`response_loss_inputs.rs` の `fork-retry`・`version-retry`)[U]。
 
@@ -379,9 +379,10 @@ intent from C to B {
 ```relca
 cut InvoiceCut {
   question "One receipt of one invoice"
-  include [Invoice,PurchaseOrder,Clerk,Approver,Ledger,Vendor]
+  include [Invoice,PurchaseOrder,ReceiptRecord,Clerk,Extractor,Approver,Ledger,Vendor]
   exclude Payment reason "separate payment domain" loses "payment errors"
-  defer Vendor.contest_rate reason "structure only" loses "frequency and effort"
+  exclude VendorMaster reason "master data out of scope" loses "master data correlation"
+  defer Clerk.recheck reason "recheck route is deferred; process indicators are withdrawn" loses "process time, cost and quality estimates"
   externality [Vendor.dispute_effort]
   reentry [contest Vendor -> Clerk.recheck, review cut quarterly by cfo]
   horizon receipt..resolution within 60min
@@ -390,6 +391,18 @@ cut InvoiceCut {
 
 [実]。Cut を書かなくても check は exit 0 を返し、`cut: "undeclared"` と W-CUT-0 だけが残る [試]。**exit 0 でも範囲は不明**なので、必ず書く。
 include にも exclude にも無い Actor はエラー(`fixtures/cut-declared.broken-missing-member/`)。
+この Cut の例は、請求書の as-is モデルの Cut を上の block 全体で置き換えて実行したもの。
+そのモデルでは `contest Vendor on end.returned route Clerk.recheck` があるため、
+`cut.defer_effects.process` は true、Clerk.recheck の withdraws は process、
+because は `[{"kind":"contest_route","capability":"Clerk.recheck"}]`。check は exit 0、W-CUT-2 は0行 [試]。
+reentry は再入経路の宣言であり、それだけで route を実行する指定ではない。全体撤回の根拠は上の contest 契約。
+宣言済み Actor 名か Actor.capability を対象にするのは、実際にモデルに持つ層の指標を保留するときだけ。
+モデルにできない段はその段の名前で defer する。Actor や操作に解決しない名前は opaque となり、
+対象 report の時間・費用・品質などを全体で撤回して W-CUT-2 が出る。これは欠けた段を含まない値を使わないための意図した扱い。
+無関係な宣言済み操作の defer に変えて値を出させない。
+正しく解決しても、本文の字句上の呼出し（死枝を含む）か起動しうる異議の route なら全体へ広がる。
+`cut.defer_effects` の process・各行の because・scope を読む。指標が無い report と conform にはこの欄・警告は出ない。
+保留は実行を削除する指定ではない。実際にモデル外へ置く範囲は、理由と失うものも合わせて記録する。
 
 ## 契約・権限・責務 [実]
 

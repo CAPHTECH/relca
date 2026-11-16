@@ -247,6 +247,7 @@ pub fn validate_rule_diff_cell_wire(v: &Value) -> Result<(), String> {
 mod evaluation_wire;
 include!("../tests/support/quantile_fixture_table.rs");
 include!("../tests/support/deferred_wire.rs");
+include!("../tests/support/defer_warning_projection.rs");
 
 /// ADR0039 appended closed population; unknown lim names are not ignored.
 #[allow(dead_code)]
@@ -6362,6 +6363,23 @@ fn metric_tree(v: &Value, sim: bool, status: &str, r: u64) -> Result<(), String>
 fn without_metrics(v: &Value) -> Value {
     let mut old = v.clone();
     old.as_object_mut().unwrap().remove("metrics");
+    // The original report is validated before this private legacy projection.
+    // Resource names cannot be rechecked once their inventory has left with
+    // metrics. Project only those names, preserving the required key and all
+    // other defer explanations/diagnostics in the copy.
+    if let Some(entries) = old
+        .pointer_mut("/cut/defer_effects/entries")
+        .and_then(Value::as_array_mut)
+    {
+        for entry in entries {
+            if let Some(resources) = entry
+                .pointer_mut("/scope/resources")
+                .and_then(Value::as_array_mut)
+            {
+                resources.clear();
+            }
+        }
+    }
     if let Some(a) = old["assumptions"].as_array_mut() {
         a.retain(|a| {
             !a["field"]
@@ -7213,6 +7231,13 @@ fn without_metric_comparison(v: &Value, compare: bool) -> Result<Value, String> 
     } else {
         vec![&v["from"]["report"], &v["to"]["report"]]
     };
+    for report in &reports {
+        if compare && v["analysis"] == "simulation" {
+            validate_simulation_wire(report)?;
+        } else {
+            validate_wire(report)?;
+        }
+    }
     let waits = reports
         .iter()
         .any(|r| r["metrics"]["overall"].get("queue_wait_observed").is_some());
@@ -7576,13 +7601,8 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
         validate_compare_wire(&old)?;
         check(v, &compare_schema(), "compare metrics wire")?;
         complete(v, &compare_schema(), "compare metrics wire")?;
-        for p in v["plans"].as_array().ok_or("plans")? {
-            if v["analysis"] == "simulation" {
-                validate_simulation_wire(&p["report"])?;
-            } else {
-                validate_wire(&p["report"])?;
-            }
-        }
+        // without_metric_comparison checked the original children completely
+        // before projecting their resource inventory and scope resource names.
         return Ok(());
     }
     if v["verdict"] != "invalid"
@@ -11472,6 +11492,10 @@ fn report_schema() -> Ty {
                     ("reentry", strings()),
                     ("checked", strings()),
                     ("unchecked", strings()),
+                    (
+                        "defer_effects",
+                        OptionalField(Box::new(defer_effects_schema())),
+                    ),
                 ]),
             ]),
         ),

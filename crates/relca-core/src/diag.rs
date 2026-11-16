@@ -18,6 +18,7 @@ pub const E_CON_0: &str = "E-CON-0";
 pub const E_CUT_1: &str = "E-CUT-1";
 pub const W_CUT_0: &str = "W-CUT-0";
 pub const W_CUT_1: &str = "W-CUT-1";
+pub const W_CUT_2: &str = "W-CUT-2";
 pub const W_DEADLOCK_0: &str = "W-DEADLOCK-0";
 pub const W_BUDGET_0: &str = "W-BUDGET-0";
 pub const E_CONF_0: &str = "E-CONF-0";
@@ -90,6 +91,7 @@ pub const CODES: &[&str] = &[
     E_CUT_1,
     W_CUT_0,
     W_CUT_1,
+    W_CUT_2,
     W_DEADLOCK_0,
     W_BUDGET_0,
     E_CONF_0,

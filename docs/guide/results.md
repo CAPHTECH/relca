@@ -37,6 +37,7 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 |---|---|
 | `model.sha256` | 分析した入力の識別子 |
 | `cut`, `cut_context` | 宣言した範囲と、除外・保留・未宣言事項 |
+| `cut.defer_effects` | defer の解決先と、指標を撤回した範囲・原因。対象の指標がある report だけに出る |
 | `bounds` | 案件数、同時 Task 数、clock、`truncated` |
 | `properties[]` | 各性質の `verdict`、確率境界、根拠や注記 |
 | `contract_scope[]` | 選んだ構成では範囲外にした契約、その適用先と理由。検査済みの性質ではない |
@@ -51,8 +52,61 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 
 最上位が violated でも、別の性質は vacuous や inconclusive のままの場合があります。
 null は 0 ではありません。`not_configured`、`undetermined`、`truncated` などの理由を
-値と一緒に扱ってください。`per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
+値と一緒に扱ってください。`not_configured` は単価などの未設定だけでなく、defer による値の撤回でも出ます。
+`per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
 simulate の `basis` は性質や中断の有無で異なり、`properties[].cases[]` の `basis: statistical` は網羅探索の確率ではなく標本推定を表します。
+
+## defer による指標の撤回
+
+Cut の `defer` は、手順を実行対象から消す指定ではありません。
+保留した範囲に依存する時間・work・費用などの量と、品質・cohort・quantile の数値を撤回します。
+撤回した数値は null になり、ほかの理由がまだ無い値には `not_configured` が付きます。
+すでに `aborted` や `truncated` などの理由がある場合、その理由は保ちます。
+件数、開始回数、品質の試行数などの構造的な記録は残ることがあり、それを撤回された数値の代わりに使ってはいけません。
+
+解決は名前の完全一致です。Actor 名ならその Actor の全 Capability、`Actor.capability` ならその一つが対象です。
+それ以外の名前は `opaque` となり、指標を process 全体で撤回します。
+モデルにできない段をその段の名前で defer した場合、この全体撤回は意図した扱いです。
+その段を含まない値を使わないため、W-CUT-2 と撤回を報告に残してください。
+宣言済み Actor や操作の defer は、その層を実際にモデルに持つ場合に使います。
+無関係な操作を代わりに指定して、欠けた段があるまま値を出させてはいけません。
+正しく解決した対象でも、選んだ process の本文で呼ぶか、起動しうる異議経路の route なら、撤回は全体へ広がります。
+本文の呼出しは、到達しない枝も含めて字句上で数えます。
+交差しない対象は、対応する Actor・Capability・実行者・資源の行だけを撤回します。
+この説明のために、新しい指標の行を作ることはありません。
+
+`cut.defer_effects` は、defer があり、metrics または quality を持つ対象 report に付きます。
+この対象では `cut.checked` に `deferred_metrics` が入ります。
+`entries[i]` は宣言の `cut.defer[i]` と同じ行であり、同名の defer が複数あっても統合しません。
+
+| 欄 | 読み方 |
+|---|---|
+| `process` | どれかの行が全体を撤回したか。true なら、ほかの行が scoped でも全体の数値は戻らない |
+| `entries[].target` | 宣言した対象の綴り |
+| `resolution` | `actor` / `capability` / `opaque` |
+| `capabilities` | その行から解決した操作名。名前順 |
+| `withdraws` | `process` は全体、`scoped` は scope の行、`none` は対象操作が無い Actor |
+| `because` | 全体へ広がった原因。`opaque`、本文の `call`、異議経路の `contest_route`。後二つは操作名付き |
+| `scope` | scoped のときの `actors` / `capabilities` / `people` / `resources`。モデル上の名前であり、実際に指標の行があるとは限らない。それ以外は null |
+
+例えば本文で呼ばない `R.y` を保留し、その操作の実行者が q、使用資源が Desk なら、次の形です。
+
+```json
+{"process":false,"entries":[{"target":"R.y","resolution":"capability","capabilities":["R.y"],"withdraws":"scoped","because":[],"scope":{"actors":["R"],"capabilities":["R.y"],"people":["q"],"resources":["Desk"]}}]}
+```
+
+値側に原因の欄は追加しません。`not_configured` を見たら、まずこの表の process と scope を読み、
+費用なら `metrics.rates` の単価、`reason`、`required` も併読してください。
+defer によって撤回した品質の hard や目的を、残っている試行数から再計算して採否・順位を決めることはできません。
+
+**W-CUT-2** は、Actor にも Actor.capability にも解決しない defer ごとの警告です。
+message に対象名を出し、先頭が宣言済み Actor なら存在しない Capability 名も示します。
+警告自体は verdict と exit を変えませんが、数値を使う前に綴りと保留する範囲を確認してください。
+正しく解決した対象には、全体を撤回する場合でも W-CUT-2 は出ません。その場合の原因は `because` を読みます。
+
+この欄と警告は check・explain・simulate、compare の各案、diff の両側、mutate の元と変異体、
+sensitivity の各点に同じ規則で付きます。defer が無い場合、metrics も quality も無い場合、
+入力検査で拒否された場合など、指標を持たない report には出ません。conform も対象外です。
 
 ## 契約の適用範囲
 

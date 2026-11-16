@@ -173,6 +173,21 @@ fn defer_never_changes_core_terminal_work_contract_or_exploration_result() {
             } else {
                 engine::explore(&m)
             };
+            let diagnostics = if independent {
+                &out.diagnostics
+            } else {
+                &m.diagnostics
+            };
+            relca_test_support::fixture_match::legacy_defer_diagnostics(
+                &json!({"diagnostics":diagnostics}),
+                &s,
+                None,
+            )
+            .unwrap();
+            if !independent {
+                assert!(!out.diagnostics.iter().any(|d| d.code == "W-CUT-2"));
+            }
+            out.diagnostics.retain(|d| d.code != "W-CUT-2");
             out.metrics = None;
             out.quality = None;
             runs.push(out);

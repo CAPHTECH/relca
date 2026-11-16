@@ -23,14 +23,14 @@ Relca は業務フローを DSL で書き、検査・比較・標本推定する
   `--assumptions` は AI(自分)が書く申告である。`confirmed` や `measured` と書いても、ページは確認済み・実測とは見せず、「AI の申告: 確認済み(confirmed_by X)。人が未確認」「AI の申告: 実測(出典 X)。人が未確認」と出し、冒頭に「人が確かめる必要のある AI 申告」として集める。申告を確かめるのは人間で、AI は確認者や出典を書くだけ。報告でも「確認済み」「実測」と断定しない。
 - **Agency と O/F/P/J/U/E/L は宣言しない。**relca が構成から導く。書くのは Actor・Capability(操作契約)・process・Cut・契約。
 - **Actor の名前や種別(`grain`)に意味を持たせない。**「AI だから独立」「監査だから原本を見る」と名前で決めない。原本に届くかは `reads` と `source` で書く。
-- **Cut を必ず書く。**モデルから外したものは `exclude` / `defer` に理由と `loses` を付ける。Cut が無くても exit 0 になるので、exit だけを見て安心しない。
+- **Cut を必ず書く。**モデルから外したものは `exclude` / `defer` に理由と `loses` を付ける。モデルにできない段はその段の名前で defer する。Actor にも操作にも解決しない opaque な defer は指標を全体で撤回し、W-CUT-2 が出る。欠けた段があるときは意図した保守的な扱いなので、警告と撤回を報告する。宣言済み Actor 名か Actor.capability を対象にするのは、その層が実際にモデルにあり、その指標を保留したいときだけ。無関係な操作を対象にして値を出させない。Cut が無くても exit 0 になるので、exit だけを見て安心しない。
 - モデル作成では規範文書や crates を編集しない。対応範囲を広げる必要があれば変更を別に提案する。
 
 ## 書く
 
 1. **業務の説明を表にする。**誰が(人・部署・システム・文書・台帳・取引先)、何を、どの順で、何を見て、誰の承認で、どこで確定するか。説明に無いものは空欄のまま「業務の人に聞く」列に入れる。
 2. **最小から始める。**`references/minimal.relca` を写し、主経路だけ(受付 → 判定 → 確定)を書いて `relca check` を通す。通ってから分岐・並行・確率・指標・契約を一つずつ足し、足すたびに回す。
-   主経路だけにした間も、**外した分岐と例外経路(差戻し・再提出・取消・障害など)は Cut の `exclude` か `defer` に理由と `loses` を付けて書く。**黙って省くと Silent Cut になる。
+   主経路だけにした間も、**外した分岐と例外経路(差戻し・再提出・取消・障害など)は Cut の `exclude` か `defer` に理由と `loses` を付けて書く。**モデルにできない段の defer はその段の名前で書き、opaque による全体撤回と W-CUT-2 を報告する。黙って省いたり、関係の無い操作の defer で代用したりしない。
 3. **Actor を宣言する。**人が担う Actor は `executors [..]` を書く(匿名だと職務分離・権限は unsupported)。原本は `source document` / `source record`。取引先などの当事者は `control party`。
 4. **Capability を書く。**`reads`(何を見るか)、`duration`、結果(`result nondet {..}` か根拠のある `outcomes kernel`)、`writes`、確定なら `commits`。引数は、その操作が実際にデータを受け取るときだけ書く(`review(claim)` は申請を受け取って判定する)。**警告(W-RESP-2 等)を消すために引数を足さない。**`case.id` 以外の引数も追加の読取りも無い呼出しは判定と数えられない([構造の出力](../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。警告が業務の実態(判定が本当に止めていない)を示していれば、そのまま報告する。
 5. **process を書く。**`x = Actor.cap(args)`、`fork … join all`、`if … {} else { end … }`。分岐の条件に潜在(真値)を書かない(E-POL-LATENT)。
@@ -83,7 +83,7 @@ compare と diff の拒否では、全体の verdict は unsupported でも、�
 
 **結果不明の後の段は書けない。**最後の応答が unknown の経路で、案件は Receipt unknown のまま止まり、後ろの呼出しを実行しない。「CS が管理画面で確かめて、進めるか返金するかを決める」のような段は今の構文では表せない(状態照会は response_analysis の unchecked に `general_status_query` として残る)。
 
-- その段は Cut に `defer <名前> reason "…" loses "誰が結果不明を判断するか、負担、期限"` で外す。黙って省かない。
+- その段を黙って省かず、その段の名前で、例えば `defer ReceiptFollowup reason "結果不明の後の照会と判断はモデルにできない" loses "誰が結果不明を判断するか、負担、期限"` と書く。ReceiptFollowup を Actor や操作として持たないこの場合は opaque となり、対象 report の指標を全体で撤回し W-CUT-2 が出る。これは意図どおりで、報告には W-CUT-2 と撤回の範囲を残す。関係の無い Clerk.recheck などを代わりに defer して値を出させない。実際にモデルに持つ層の指標を保留するときだけ、その Actor や操作を対象にし、`cut.defer_effects` で範囲を確認する。
 - 論点表には、判定を「判定不能 / 未対応」として 1 行置く。根拠の欄に `receipt_resolution` の inconclusive、`case_outcomes` の `kind: receipt_unknown` の行(`observed_until`)、`response_receipts` の unknown の行、Cut の defer 名を書く。「要件として決めること」に、誰が(担当・権限)、何を見て(管理画面・照会 API)、いつまでに、どちらへ(進める・返金)決めるかを書く。
 - `response` 契約(`… otherwise unresolved`)だけで結果不明の案件が閉じるとは限らない。[上限と未完了](../../docs/guide/guarantees.md#上限と未完了) と `receipt_resolution` を併読する。「response 契約が satisfied なので必ず閉じる」と書かない。
 

@@ -74,7 +74,8 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `diagnostics[]` | `code / severity / message / span{start,end}` | span はモデルの **バイト位置**(lexer が byte span) |
 | `agency` | origin・lineage・refusal・common_causes・viewpoints | 入力構成から導出する欄で、自己申告の値は受けない。実運用の効果を測定した値ではない |
 | `responsibilities[]` | 人・対象・案件全体と各段の根拠源の読取り・拒否の到達 | W-RESP-1(案件全体で観測が無い)・W-RESP-2(拒否が効果に届かない)・W-RESP-3(別の段でだけ直接読む) |
-| `metrics` | 時間・費用・件数。`rates` に単価、`not_configured` は未設定 | 単価未設定は 0 円ではない |
+| `metrics` | 時間・費用・件数。`rates` に単価、`not_configured` は未設定または defer による撤回 | 単価未設定も撤回も 0 円ではない |
+| `cut.defer_effects` | 指標がある対象 report の defer の解決・撤回範囲・原因 | entries[i] は cut.defer[i]。同名の重複も行ごとに読む |
 | `uncertainty` | aleatory / estimation / model の三区分 | モデル不確実性に Cut と系譜の仮定が入る |
 | `ledger.producer.version` | relca の版(現在 `0.0.0`、出所 `cargo_package`、build identity は未記録) | `relca --version` は無い |
 | `ledger.execution.selection.effective.process` | 実際に選ばれた process | 複数 process のモデルで確かめる |
@@ -84,6 +85,26 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+### defer で値が撤回された場合
+
+`cut.defer_effects.process` が true なら、時間・work・費用と品質の数値は全体で撤回される。
+件数や開始回数、品質の試行数などの記録が残っていても、そこから撤回された数値を復元しない。
+false なら各行の scope にある Actor・Capability・人・資源が対象。指標に無い行を新設したという意味ではない。
+entries の resolution は actor / capability / opaque、capabilities は解決した操作の名前順。
+withdraws は process / scoped / none（操作が無い Actor）。because は opaque、call、contest_route で、
+後二つには操作名が付く。call は死枝も含む字句上の呼出し。scoped だけ scope を持ち、ほかは null。
+全体の process が true でも、別の行が scoped であることはある。
+撤回した数値は null、理由がまだ無ければ not_configured。既存の aborted / truncated などの理由は残る。
+費用の not_configured は scope と rates の単価・reason・required を併読して判断する。
+
+W-CUT-2 は Actor 名にも Actor.capability にも完全一致しない defer の警告で、対象名と位置を示す。
+モデルにできない段をその名前で defer した場合は、opaque による全体撤回が意図した結果。警告と撤回を報告に残す。
+宣言済みの層の指標だけを保留する場合と区別し、無関係な操作の部分撤回で値を出させない。
+先頭が既知の Actor なら、無い Capability 名も message に出る。警告だけで verdict / exit は変わらない。
+正しく解決した操作でも本文・異議経路から全体へ広がるため、警告が無くても because を読む。
+check / explain / simulate、compare 各案、diff 両側、mutate 元と変異体、sensitivity 各点で同じ欄を読む。
+defer が無い、指標が無い、入力検査で拒否されて指標を持たない report、および conform には欄も警告も出ない。
 
 ## 呼出し位置ごとの観測
 

@@ -426,9 +426,9 @@ fn t17_scenario_reads_selected_policy_not_scenario_label() {
                 let (v, o) = invoke(&[command, path.to_str().unwrap(), "--scenario", name]);
                 assert_eq!(o.status.code(), Some(exit), "{command} {name}: {v}");
                 hand::subset(want, &v, &format!("{command} {name}"));
-                let got: Vec<_> = v["diagnostics"]
-                    .as_array()
-                    .unwrap()
+                let diagnostics =
+                    fixture_match::legacy_defer_diagnostics(&v, &source, None).unwrap();
+                let got: Vec<_> = diagnostics
                     .iter()
                     .map(|d| d["code"].as_str().unwrap())
                     .collect();

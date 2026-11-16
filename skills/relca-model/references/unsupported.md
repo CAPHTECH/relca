@@ -27,6 +27,6 @@ EC 試行は電子商取引の注文・決済を有限再送つきで記述し�
 | 重複拒否の機構も `effect_scope modeled` も無い Capability を再送 | U-SEM-0 `response_loss_resend_mechanism_unmodeled`、exit 4 | 機構をモデル化していない外部 commit の再送は判定しない | 取引先が重複を拒むなら G の形、拒まないなら `effect_scope modeled` と具体的な counter。業務の事実で選ぶ | 観測・`response_loss_inputs.rs` の `r-resend` |
 | `idempotency key` を書いたが atomic の重複拒否の形でない | U-SEM-0 `idempotency_mechanism_unmodeled` | 宣言だけでは一回性を認めない | dsl.md の G の形に揃える | `response_loss_inputs.rs` の `idempotency-without-atomic`。ここでは回していない |
 | `retry` の `exhausted end` を省いた | E-SYN-0「expected exhausted」、exit 3 | 最後の失敗先は必須 | `exhausted end <End>` を書く | 観測 |
-| `if x == unknown` | E-TYPE-0「unknown is not a member of …」、exit 3 | unknown は戻り値の値ではない。結果不明の後で分岐できない | 分岐せず、結果不明の後の段は Cut の defer に置く(SKILL.md「再送を含むモデル」) | 観測 |
+| `if x == unknown` | E-TYPE-0「unknown is not a member of …」、exit 3 | unknown は戻り値の値ではない。結果不明の後で分岐できない | 分岐せず、結果不明の後の段をその名前で defer し、opaque による全体撤回と W-CUT-2 を報告する。無関係な操作の部分撤回で代用しない(SKILL.md「再送を含むモデル」) | 観測 |
 | 最後の応答が unknown になりうる | `receipt_resolution` inconclusive、exit 2(他に違反があれば exit 1) | 未完了を成功・失敗へ変換しない。`truncated` は false のまま | 合格扱いにしない。論点表に「判定不能」で残す | 観測・[上限と未完了](../../../docs/guide/guarantees.md#上限と未完了) |
 | ループ・公平性・部分観測方策・実行中の規則改定 | unsupported | 範囲外 | 範囲外として報告 | [対応範囲](../../../docs/guide/guarantees.md#対応範囲を確認する) |

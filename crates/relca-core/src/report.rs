@@ -267,7 +267,14 @@ pub struct DeclaredCut {
     /// The v0.2 §6.2 detections applied, and those Phase 0 cannot apply.
     pub checked: Vec<String>,
     pub unchecked: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defer_effects: Option<DeferEffects>,
 }
+
+mod defer_effects;
+pub use defer_effects::{
+    DeferBecause, DeferEffect, DeferEffects, DeferResolution, DeferScope, DeferWithdrawal,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -327,6 +334,7 @@ pub(crate) fn declared_cut(model: &ir::Model, cut: &ir::Cut) -> DeclaredCut {
             .filter(|v| *v != "deferred_metrics" || model.deferred_metrics().is_none())
             .map(String::from)
             .collect(),
+        defer_effects: DeferEffects::from_model(model),
     }
 }
 
@@ -3140,6 +3148,11 @@ fn computational_assumption_last(rows: &mut Vec<ir::Assumption>) {
 }
 
 pub fn seal_simulation(mut report: SimulationReport) -> SimulationReport {
+    retain_defer_effects(
+        &mut report.cut,
+        &mut report.diagnostics,
+        report.metrics.is_some() || report.quality.is_some(),
+    );
     computational_assumption_last(&mut report.assumptions);
     crate::agency::viewpoints::refresh_limit_warnings(
         report.agency.as_ref(),
@@ -3163,6 +3176,11 @@ pub fn seal_simulation(mut report: SimulationReport) -> SimulationReport {
 
 /// Finish provenance without touching the model, analysis, or existing evidence.
 pub fn seal(mut report: Report) -> Report {
+    retain_defer_effects(
+        &mut report.cut,
+        &mut report.diagnostics,
+        report.metrics.is_some() || report.quality.is_some(),
+    );
     computational_assumption_last(&mut report.assumptions);
     crate::agency::viewpoints::refresh_limit_warnings(
         report.agency.as_ref(),
@@ -3181,6 +3199,15 @@ pub fn seal(mut report: Report) -> Report {
     drop(timer);
     crate::perf::flush();
     report
+}
+
+fn retain_defer_effects(cut: &mut Cut, diagnostics: &mut Vec<diag::Diagnostic>, has_values: bool) {
+    if !has_values {
+        if let Cut::Declared(cut) = cut {
+            cut.defer_effects = None;
+        }
+        diagnostics.retain(|d| d.code != diag::W_CUT_2);
+    }
 }
 
 /// ADR 0002 precedence; warnings are neutral and an empty property set is unsupported.

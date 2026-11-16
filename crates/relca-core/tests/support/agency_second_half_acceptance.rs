@@ -94,6 +94,12 @@ pub fn subset(want: &Value, actual: &Value, at: &str) {
 }
 pub fn assert_report(row: &Value, actual: &Value) {
     let name = row["name"].as_str().unwrap();
+    let diagnostics = relca_test_support::fixture_match::legacy_defer_diagnostics(
+        actual,
+        &source(name),
+        row["invocation"]["configuration"].as_str(),
+    )
+    .unwrap();
     let want = expected(name);
     subset(&want, actual, name);
     if let Some(codes) = row["codes"].as_array() {
@@ -120,9 +126,7 @@ pub fn assert_report(row: &Value, actual: &Value) {
                 std::iter::repeat_n("W-RESP-0", responsibilities.len()),
             );
         }
-        let got: Vec<_> = actual["diagnostics"]
-            .as_array()
-            .unwrap()
+        let got: Vec<_> = diagnostics
             .iter()
             .map(|x| x["code"].as_str().unwrap())
             .collect();

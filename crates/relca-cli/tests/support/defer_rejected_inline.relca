@@ -1,0 +1,10 @@
+model RejectedDefer version "0.2" {
+  type V = enum { pass, fail }
+  latent case { hidden: bool = false }
+  actor A { capacity 1; capability x() -> V { duration fixed 1min; result nondet { pass } } }
+  cut C { include [A]; defer Ghost reason "later" loses "load" }
+  process P { a = A.x(); if hidden == true { end wrong } else { end done } }
+  metrics { window 5min; currency "JPY" }
+  bounds { cases 1; live_tasks 1; clock 5min }
+  verify reachable end.done
+}

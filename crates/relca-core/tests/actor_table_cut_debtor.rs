@@ -153,7 +153,11 @@ fn skeleton_diagnostics_match(src: &str, actual: &Value) -> bool {
         .as_ref()
         .map(|m| json!(responsibility_oracle::expected(m)))
         .unwrap_or_else(|| json!([]));
-    let diagnostics = actual["diagnostics"].as_array().unwrap();
+    let Ok(diagnostics) =
+        relca_test_support::fixture_match::legacy_defer_diagnostics(actual, src, None)
+    else {
+        return false;
+    };
     let got: Vec<_> = diagnostics
         .iter()
         .filter(|d| d["code"] == "W-RESP-0")

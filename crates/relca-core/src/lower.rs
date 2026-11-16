@@ -190,6 +190,20 @@ pub fn lower_with_agency_limit(
     scenario: Option<&str>,
     agency_limit_scale: Option<usize>,
 ) -> Result<ir::Model, Vec<Diagnostic>> {
+    lower_selected(model, configuration, scenario, agency_limit_scale).map_err(|mut diagnostics| {
+        // A rejected model has no analyst values to withdraw. Keep every old
+        // error/warning, but do not transport a successful-Cut explanation.
+        diagnostics.retain(|d| d.code != diag::W_CUT_2);
+        diagnostics
+    })
+}
+
+fn lower_selected(
+    model: &ast::Model,
+    configuration: Option<&str>,
+    scenario: Option<&str>,
+    agency_limit_scale: Option<usize>,
+) -> Result<ir::Model, Vec<Diagnostic>> {
     if agency_limit_scale.is_some_and(|n| !(1..=crate::agency::MAX_LIMIT_SCALE).contains(&n)) {
         return Err(vec![Diagnostic {
             code: diag::E_SYN_0.into(),
@@ -7793,7 +7807,7 @@ impl Lower {
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            let (cut, warnings) = self.cut_decl(decl, &processes, model);
+            let (cut, warnings) = self.cut_decl(decl, &processes, model, true);
             return (cut.filter(|_| cuts.len() == 1), warnings);
         }
         let mut chosen = None;
@@ -7818,7 +7832,8 @@ impl Lower {
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            let (cut, cut_warnings) = self.cut_decl(decl, &processes, model);
+            let is_selected = selected.is_some_and(|c| c.cut.value == decl.name.value);
+            let (cut, cut_warnings) = self.cut_decl(decl, &processes, model, is_selected);
             warnings.extend(cut_warnings);
             if selected.is_some_and(|c| c.cut.value == decl.name.value) {
                 chosen = cut;
@@ -7832,6 +7847,7 @@ impl Lower {
         decl: &ast::CutDecl,
         processes: &[&ast::Process],
         model: &ast::Model,
+        selected: bool,
     ) -> (Option<ir::Cut>, Vec<Diagnostic>) {
         let mut warnings = Vec::new();
         let errors_before = self.errors.len();
@@ -7918,8 +7934,31 @@ impl Lower {
                     cut.exclude.push(e);
                 }
                 ast::CutItem::Defer(e) => {
-                    let e = entry(self, e, &mut warnings);
-                    cut.defer.push(e);
+                    let lowered = entry(self, e, &mut warnings);
+                    if selected
+                        && model.items.iter().any(|i| {
+                            matches!(i, ast::Item::Metrics(_) | ast::Item::QualityProperty(_))
+                        })
+                        && ir::resolve_defer(&lowered.target, &self.actors, &self.capabilities)
+                            .opaque
+                    {
+                        let target = text(&e.target);
+                        let hint = target
+                            .split_once('.')
+                            .and_then(|(actor, capability)| {
+                                self.actor_names.contains_key(actor).then(|| {
+                                    format!(" (Actor {actor} has no capability {capability})")
+                                })
+                            })
+                            .unwrap_or_default();
+                        warnings.push(Diagnostic {
+                            code: diag::W_CUT_2.into(),
+                            severity: diag::Severity::Warning,
+                            message: format!("defer {target} matches no Actor or Actor.capability{hint}: every metrics and quality value is withdrawn as not_configured"),
+                            span: Some(e.target.span),
+                        });
+                    }
+                    cut.defer.push(lowered);
                 }
                 ast::CutItem::Externality(paths) => cut.externality.extend(paths.iter().map(text)),
                 ast::CutItem::Reentry(entries) => {

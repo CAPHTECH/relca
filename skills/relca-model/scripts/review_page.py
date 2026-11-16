@@ -961,6 +961,7 @@ class Page:
         self.case_view = []       # case_outcomes の案件ごとの読み
         self.repetitions = []     # (出所, repetition, Source)。全 report を同じ規則で読む。
         self.contract_scopes = []  # (出所, 範囲外の契約)。verdict には混ぜない。
+        self.defer_effects = []  # (出所, 派生欄)。解決や数値の再計算はしない。
         self.runs = []
         self.model_path = args.model
         self.model_sha = None
@@ -1293,6 +1294,7 @@ class Page:
             elif isinstance(cut, str):
                 self.unv(origin, "Cut", cut, "Cut を解決できていない。モデルが通っていない可能性(%s)。%s" % (self._reason_of(data), warning_note))
             elif isinstance(cut, dict):
+                self._scan_defer_effects(origin, cut)
                 for k in ("exclude", "defer"):
                     for e in as_list(cut.get(k)):
                         if not get(e, "loses"):
@@ -1354,6 +1356,13 @@ class Page:
                     self.unv(origin, m.get("name"), status,
                              "この種の変異は作られていない(%s)。この種で検査の効きは確かめていない" % (m.get("reason") or "理由なし"))
                 for mt in as_list(m.get("mutants")):
+                    report = get(mt, "report")
+                    if isinstance(report, dict):
+                        child_origin = "mutate 変異体 %s" % get(mt, "id")
+                        self._scan_defer_effects(child_origin, report.get("cut"))
+                        for d in as_list(report.get("diagnostics")):
+                            if get(d, "code") == "W-CUT-2":
+                                self.relca_diags.append((child_origin, d, self.src))
                     res = get(mt, "result")
                     if res not in ("detected", "undetected"):
                         self.unv(origin, get(mt, "id"), res, "検出にも未検出にも数えない(%s)" % (get(mt, "reason") or "理由なし"))
@@ -1375,6 +1384,47 @@ class Page:
         for k in data:
             if k not in read:
                 self.unread.setdefault(str(k), []).append(origin)
+
+    def _scan_defer_effects(self, origin, cut):
+        if not isinstance(cut, dict) or "defer_effects" not in cut:
+            return
+        effects = cut["defer_effects"]
+        def names(value):
+            return (isinstance(value, list) and all(isinstance(n, str) for n in value)
+                    and value == sorted(set(value)))
+        def entry(e):
+            if (not isinstance(e, dict) or set(e) != {"target", "resolution", "capabilities", "withdraws", "because", "scope"}
+                    or not isinstance(e["target"], str) or e["resolution"] not in ("actor", "capability", "opaque")
+                    or not names(e["capabilities"]) or e["withdraws"] not in ("process", "scoped", "none")
+                    or not isinstance(e["because"], list)):
+                return False
+            if e["withdraws"] == "process":
+                if e["scope"] is not None or not e["because"]:
+                    return False
+                if e["resolution"] == "opaque":
+                    return e["capabilities"] == [] and e["because"] == [{"kind": "opaque"}]
+                return all(isinstance(c, dict) and set(c) == {"kind", "capability"}
+                           and c["kind"] in ("call", "contest_route") and c["capability"] in e["capabilities"]
+                           for c in e["because"])
+            if e["because"]:
+                return False
+            if e["withdraws"] == "none":
+                return e["resolution"] == "actor" and e["capabilities"] == [] and e["scope"] is None
+            scope = e["scope"]
+            return (e["resolution"] != "opaque" and bool(e["capabilities"]) and isinstance(scope, dict)
+                    and set(scope) == {"actors", "capabilities", "people", "resources"}
+                    and all(names(v) for v in scope.values()) and scope["capabilities"] == e["capabilities"])
+        valid = (isinstance(effects, dict) and set(effects) == {"process", "entries"}
+                 and type(effects["process"]) is bool and isinstance(effects["entries"], list)
+                 and isinstance(cut.get("defer"), list) and len(effects["entries"]) == len(cut["defer"])
+                 and all(entry(e) for e in effects["entries"])
+                 and all(e["target"] == get(d, "target") for e, d in zip(effects["entries"], cut["defer"]))
+                 and effects["process"] == any(e["withdraws"] == "process" for e in effects["entries"]))
+        if not valid:
+            self.unv(origin, "cut.defer_effects", "unsupported", "defer の派生欄の形・宣言との対応を読めない")
+            self.alert("error", "%s: cut.defer_effects を読めない。撤回の範囲を確かめていない" % origin)
+            return
+        self.defer_effects.append((origin, effects))
 
     def _scan_contract_scopes(self, origin, rows):
         keys = {"id", "contract", "applies_to", "reason", "status", "masks_call"}
@@ -1922,7 +1972,7 @@ class Page:
         cut = get(data, "cut")
         if not isinstance(cut, dict):
             return ('<div class="alert error">Cut: %s。何を外したかを確かめられていない(理由は冒頭の一覧)。</div>'
-                    % esc(short(cut, 80)))
+                    % esc(short(cut, 80))) + self._defer_effects_html()
         out = [self.table(["項目", "値"], [
             ["名前", esc(cut.get("name"))],
             ["問い", esc(cut.get("question"))],
@@ -1947,7 +1997,24 @@ class Page:
             out.append("<ul>" + "".join("<li>%s</li>" % esc(n) for n in notes) + "</ul>")
         if cut.get("unchecked"):
             out.append('<p class="note">Cut について relca が未検査: %s</p>' % esc(", ".join(map(str, as_list(cut.get("unchecked"))))))
+        out.append(self._defer_effects_html())
         return "".join(out)
+
+    def _defer_effects_html(self):
+        if not self.defer_effects:
+            return ""
+        rows = []
+        for origin, effects in self.defer_effects:
+            for i, e in enumerate(effects["entries"]):
+                causes = "; ".join(c["kind"] + (" " + c["capability"] if "capability" in c else "") for c in e["because"])
+                scope = "; ".join(k + ": " + ", ".join(v) for k, v in e["scope"].items()) if e["scope"] is not None else "—"
+                rows.append([esc(origin), esc("cut.defer[%d]" % i), esc(e["target"]), esc(e["resolution"]),
+                             esc(", ".join(e["capabilities"]) or "—"), esc(e["withdraws"]),
+                             esc("true" if effects["process"] else "false"), esc(causes or "—"), esc(scope)])
+        return ('<h4>defer による指標の撤回</h4><p class="note">process が true なら時間・work・費用と品質の数値は全体で撤回。'
+                'false なら scope の行が対象。not_configured は未設定のほか撤回でも出る。件数などの記録から数値を復元せず、'
+                '費用は rates も併読する。このページは relca の派生欄を表示し、解決や判定を再計算しない。</p>'
+                + self.table(["出所", "宣言の行", "対象", "resolution", "操作", "withdraws", "process", "because", "scope"], rows))
 
     def _assumptions_html(self):
         data = self.main.data if self.main else None

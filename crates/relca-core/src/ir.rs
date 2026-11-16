@@ -679,70 +679,114 @@ impl Model {
     /// ADR 0053: declaration-only projection, never part of a runtime state or
     /// scheduler. Exact Actor.Capability labels retain their historical wire.
     pub(crate) fn deferred_metrics(&self) -> Option<DeferredMetrics> {
+        let mut layers = DeferredMetrics::default();
+        for entry in self.deferred_entries()? {
+            layers.opaque |= entry.opaque;
+            layers.process |= entry.process;
+            layers.capabilities.extend(entry.capabilities);
+        }
+        Some(layers)
+    }
+
+    /// Keep the per-declaration causes separate even when another entry
+    /// withdraws the whole process. Both the projection and wire use these rows.
+    pub(crate) fn deferred_entries(&self) -> Option<Vec<DeferredMetrics>> {
         let cut = self.cut.as_ref()?;
         if cut.defer.is_empty() || self.metrics.is_none() && self.quality.is_none() {
             return None;
         }
-        let mut layers = DeferredMetrics::default();
-        for entry in &cut.defer {
-            match &entry.target {
-                CutTarget::Actor(actor) => layers.capabilities.extend(
-                    self.capabilities
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, c)| c.actor == *actor)
-                        .map(|(i, _)| CapabilityId(i)),
-                ),
-                CutTarget::Label(label) => {
-                    let cap = self.capabilities.iter().enumerate().find(|(_, c)| {
-                        self.actors
-                            .get(c.actor.0)
-                            .is_some_and(|a| label == &format!("{}.{}", a.name, c.name))
-                    });
-                    if let Some((i, _)) = cap {
-                        layers.capabilities.insert(CapabilityId(i));
-                    } else {
-                        layers.opaque = true;
+        fn calls(b: &Block, out: &mut std::collections::BTreeSet<CapabilityId>) {
+            for s in b {
+                match &s.kind {
+                    Stmt::Call(c) | Stmt::Query(c, _) => {
+                        out.insert(c.capability);
                     }
+                    Stmt::Response(c, r) => {
+                        out.insert(c.capability);
+                        if let Some(b) = &r.recovery {
+                            calls(b, out);
+                        }
+                    }
+                    Stmt::Fork { branches, .. } => {
+                        out.extend(branches.iter().map(|c| c.capability))
+                    }
+                    Stmt::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        calls(then_body, out);
+                        calls(else_body, out);
+                    }
+                    Stmt::Wait(_)
+                    | Stmt::WaitUntil(_)
+                    | Stmt::End(_)
+                    | Stmt::ResolveEffect { .. }
+                    | Stmt::StopReceiptUnknown
+                    | Stmt::LoopControl(_)
+                    | Stmt::MergeCopy { .. } => {}
                 }
             }
         }
-        fn intersects(b: &Block, d: &DeferredMetrics) -> bool {
-            b.iter().any(|s| match &s.kind {
-                Stmt::Call(c) | Stmt::Query(c, _) => d.capability(c.capability),
-                Stmt::Response(c, r) => {
-                    d.capability(c.capability)
-                        || r.recovery.as_ref().is_some_and(|b| intersects(b, d))
-                }
-                Stmt::Fork { branches, .. } => branches.iter().any(|c| d.capability(c.capability)),
-                Stmt::If {
-                    then_body,
-                    else_body,
-                    ..
-                } => intersects(then_body, d) || intersects(else_body, d),
-                Stmt::Wait(_)
-                | Stmt::WaitUntil(_)
-                | Stmt::End(_)
-                | Stmt::ResolveEffect { .. }
-                | Stmt::StopReceiptUnknown
-                | Stmt::LoopControl(_)
-                | Stmt::MergeCopy { .. } => false,
-            })
-        }
-        layers.process = layers.opaque
-            || intersects(&self.process.body, &layers)
-            || self
-                .contests()
+        let mut normal = std::collections::BTreeSet::new();
+        calls(&self.process.body, &mut normal);
+        let routes: std::collections::BTreeSet<_> = self
+            .contests()
+            .iter()
+            .filter(|c| c.target.active(self))
+            .map(|c| c.route)
+            .collect();
+        Some(
+            cut.defer
                 .iter()
-                .any(|c| c.target.active(self) && layers.capability(c.route));
-        Some(layers)
+                .map(|entry| {
+                    let mut d = resolve_defer(&entry.target, &self.actors, &self.capabilities);
+                    d.calls = d.capabilities.intersection(&normal).copied().collect();
+                    d.contest_routes = d.capabilities.intersection(&routes).copied().collect();
+                    d.process = d.opaque || !d.calls.is_empty() || !d.contest_routes.is_empty();
+                    d
+                })
+                .collect(),
+        )
     }
+}
+
+/// The single exact-name resolver shared by lowering, withdrawal and reporting.
+pub(crate) fn resolve_defer(
+    target: &CutTarget,
+    actors: &[Actor],
+    capabilities: &[Capability],
+) -> DeferredMetrics {
+    let mut resolved = DeferredMetrics::default();
+    match target {
+        CutTarget::Actor(actor) => resolved.capabilities.extend(
+            capabilities
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.actor == *actor)
+                .map(|(i, _)| CapabilityId(i)),
+        ),
+        CutTarget::Label(label) => {
+            if let Some((i, _)) = capabilities.iter().enumerate().find(|(_, c)| {
+                actors
+                    .get(c.actor.0)
+                    .is_some_and(|a| label == &format!("{}.{}", a.name, c.name))
+            }) {
+                resolved.capabilities.insert(CapabilityId(i));
+            } else {
+                resolved.opaque = true;
+            }
+        }
+    }
+    resolved
 }
 
 #[derive(Default)]
 pub(crate) struct DeferredMetrics {
-    opaque: bool,
-    capabilities: std::collections::BTreeSet<CapabilityId>,
+    pub(crate) opaque: bool,
+    pub(crate) capabilities: std::collections::BTreeSet<CapabilityId>,
+    pub(crate) calls: std::collections::BTreeSet<CapabilityId>,
+    pub(crate) contest_routes: std::collections::BTreeSet<CapabilityId>,
     pub process: bool,
 }
 impl DeferredMetrics {

@@ -184,5 +184,45 @@ class Repair(unittest.TestCase):
         self.assertIn("E-SYN-0", err)
 
 
+@unittest.skipUnless(RELCA.exists(), f"relca binary not found: {RELCA}")
+class Pitfalls(unittest.TestCase):
+    """引っかかりやすい点: 当たらない defer が値を全部取り下げ、原因が W-CUT-2 で分かる。"""
+
+    OPAQUE = (
+        "    defer Resubmission reason \"one receipt only\" loses \"ultimate settlement\"\n",
+        "    defer Vendor.contest_rate reason \"fixed recheck duration is not measured\" loses \"frequency and effort\"\n",
+    )
+
+    def test_opaque_defer_withdraws_and_names_cause(self):
+        code, r, err = run("check", INV / "phase1.relca", "--configuration", "AsIs")
+        self.assertEqual(code, 0, err)
+        lines = [l for l in err.splitlines() if l.startswith("W-CUT-2:")]
+        self.assertEqual(len(lines), 2)
+        self.assertIn("defer Resubmission ", lines[0])
+        self.assertIn("defer Vendor.contest_rate ", lines[1])
+        fx = r["cut"]["defer_effects"]
+        self.assertIs(fx["process"], True)
+        self.assertEqual(
+            [(e["target"], e["resolution"], e["withdraws"]) for e in fx["entries"]],
+            [("Resubmission", "opaque", "process"), ("Vendor.contest_rate", "opaque", "process")],
+        )
+        self.assertEqual(r["metrics"]["overall"]["work"]["reason"], "not_configured")
+        ends = {t["end"]: t for t in r["terminals"]}
+        self.assertEqual(ends["posted"]["elapsed"], {"min": 17, "max": 17})
+
+    def test_without_opaque_defer_values_return(self):
+        # 2行を外すと取り下げが無くなり、作業量が出る(値の正しさは見ない。取り下げの有無だけ)
+        text = (INV / "phase1.relca").read_text()
+        for line in self.OPAQUE:
+            self.assertEqual(text.count(line), 1, line)
+            text = text.replace(line, "")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "nodefer.relca"
+            path.write_text(text)
+            code, r, err = run("check", path, "--configuration", "AsIs")
+        self.assertNotIn("W-CUT-2", err)
+        self.assertIsNone(r["metrics"]["overall"]["work"]["reason"], err)
+
+
 if __name__ == "__main__":
     unittest.main()

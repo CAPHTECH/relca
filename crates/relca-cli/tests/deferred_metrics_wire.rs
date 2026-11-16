@@ -18,7 +18,7 @@ fn wire() -> Value {
         {"name":"A","capability":{"value":["x"]},"executors":{"value":{"ids":["p"]}}},
         {"name":"R","capability":{"value":["y"]},"executors":{"value":{"ids":["q"]}}}],
       "agency":{"lineage":[{"capability":"A.x"},{"capability":"R.y"}]},
-      "cut":{"defer":[{"target":"R","actor":true,"reason":"later","loses":"load"}],"checked":["actor_membership","deferred_metrics"],"unchecked":[]},
+      "cut":{"defer":[{"target":"R","actor":true,"reason":"later","loses":"load"}],"checked":["actor_membership","deferred_metrics"],"unchecked":[],"defer_effects":{"process":true,"entries":[{"target":"R","resolution":"actor","capabilities":["R.y"],"withdraws":"process","because":[{"kind":"call","capability":"R.y"}],"scope":null}]}},
       "metrics":{
         "rates":{"actors":[{"actor":"A","per_minute":10,"reason":null,"required":true},{"actor":"R","per_minute":20,"reason":null,"required":true}],
           "capabilities":[{"capability":"A.x","per_start":1,"reason":null,"required":true},{"capability":"R.y","per_start":2,"reason":null,"required":true}]},
@@ -129,6 +129,7 @@ fn deferred_wire_quality_only_and_no_indicator_checked_boundary() {
     assert!(fixture_match::validate_deferred_metrics_wire(&v).is_err());
     v["cut"]["checked"] = json!(["actor_membership"]);
     v["cut"]["unchecked"] = json!(["deferred_metrics"]);
+    v["cut"].as_object_mut().unwrap().remove("defer_effects");
     fixture_match::validate_deferred_metrics_wire(&v).unwrap();
 }
 #[test]

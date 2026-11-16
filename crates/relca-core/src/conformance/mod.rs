@@ -468,7 +468,11 @@ fn conform_raw(
         Ok(m) => m,
         Err(ds) => {
             r.verdict = report::fold_verdict(&[], &ds);
-            r.diagnostics = ds.into_iter().map(Into::into).collect();
+            r.diagnostics = ds
+                .into_iter()
+                .filter(|d| d.code != diag::W_CUT_2)
+                .map(Into::into)
+                .collect();
             for f in &q1_features {
                 r.diagnostics.push(diagnostic(
                     diag::U_LOG_1,
@@ -568,10 +572,20 @@ fn conform_raw(
     }
     let (q1_features, q1_capabilities) = q1_scope::selected(q1_features, &m);
     r.cut = m.cut.as_ref().map_or(report::Cut::UNDECLARED, |c| {
-        report::Cut::Declared(Box::new(report::declared_cut(&m, c)))
+        // Conformance has its own defer contract, not the analyst's metrics
+        // withdrawal. Preserve its existing Cut inventory without that overlay.
+        let mut declared = report::declared_cut(&m, c);
+        declared.defer_effects = None;
+        report::Cut::Declared(Box::new(declared))
     });
     r.cut_context = report::CutContext::resolved(&m);
-    r.diagnostics = m.diagnostics.iter().cloned().map(Into::into).collect();
+    r.diagnostics = m
+        .diagnostics
+        .iter()
+        .filter(|d| d.code != diag::W_CUT_2)
+        .cloned()
+        .map(Into::into)
+        .collect();
     r.assumptions = m
         .assumptions
         .iter()

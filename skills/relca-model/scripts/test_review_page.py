@@ -69,6 +69,63 @@ def rewrite(src, dst, fn):
 
 @unittest.skipUnless(RELCA.exists(), "relca の binary が無い: %s(cargo build -p relca-cli)" % RELCA)
 class ReviewPageTest(unittest.TestCase):
+    def test_defer_effects_and_warnings_are_shown_for_main_plans_and_mutants(self):
+        check, check_err, check_exit = self.r["as-is-check"]
+        compare, compare_err, compare_exit = self.r["compare-exhaustive"]
+        mutate, mutate_err, mutate_exit = self.r["as-is-mutate"]
+        before = Path(check).read_bytes()
+        text, _ = page(self.tmp, "defer-effects", "--model", INV / "as-is.relca",
+            "--check", check, "--check-exit", check_exit, "--check-stderr", check_err,
+            "--compare-model", INV / "configurations.relca", "--compare", compare,
+            "--compare-exit", compare_exit, "--compare-stderr", compare_err,
+            "--mutate", mutate, "--mutate-exit", mutate_exit, "--mutate-stderr", mutate_err, "--no-mermaid")
+        model = html.unescape(section(text, "model"))
+        for phrase in ("defer による指標の撤回", "cut.defer[0]", "cut.defer[1]", "opaque",
+                       "Resubmission", "Vendor.contest_rate", "compare 案 AsIs", "mutate original",
+                       "mutate 変異体", "W-CUT-2", "not_configured", "再計算しない"):
+            self.assertIn(phrase, model)
+        self.assertEqual(Path(check).read_bytes(), before)
+        self.assertEqual(json.loads(before)["verdict"], "satisfied")
+
+    def test_defer_effects_scopes_escaping_and_unreadable_payloads(self):
+        opaque = {"target": "<Ghost>", "resolution": "opaque", "capabilities": [],
+                  "withdraws": "process", "because": [{"kind": "opaque"}], "scope": None}
+        scoped = {"target": "<R.y>", "resolution": "capability", "capabilities": ["<R.y>"],
+                  "withdraws": "scoped", "because": [], "scope": {"actors": ["<R>"],
+                  "capabilities": ["<R.y>"], "people": ["<q>"], "resources": ["<Desk>"]}}
+        empty = {"target": "Empty", "resolution": "actor", "capabilities": [],
+                 "withdraws": "none", "because": [], "scope": None}
+        cut = {"defer": [{"target": e["target"]} for e in (opaque, scoped, empty)],
+               "defer_effects": {"process": True, "entries": [opaque, scoped, empty]}}
+        def reader():
+            p = object.__new__(review_page.Page)
+            p.defer_effects, p.alerts, p.unverified = [], [], []
+            return p
+        p = reader()
+        p._scan_defer_effects("hand", cut)
+        self.assertEqual(p.defer_effects, [("hand", cut["defer_effects"])])
+        text = p._defer_effects_html()
+        self.assertIn("scoped", text)
+        self.assertIn("none", text)
+        for name in ("Ghost", "R.y", "R", "q", "Desk"):
+            self.assertIn("&lt;%s&gt;" % name, text)
+            self.assertNotIn("<%s>" % name, text)
+        for corrupt in (lambda c: c["defer_effects"].__setitem__("process", False),
+                        lambda c: c["defer_effects"].__setitem__("entries", None),
+                        lambda c: c["defer_effects"]["entries"][1].__setitem__("resolution", "unknown"),
+                        lambda c: c["defer_effects"]["entries"][1]["scope"].__setitem__("people", None),
+                        lambda c: c["defer"][0].__setitem__("target", "Other")):
+            bad = json.loads(json.dumps(cut))
+            corrupt(bad)
+            p = reader()
+            p._scan_defer_effects("fault", bad)
+            self.assertEqual(p.defer_effects, [])
+            self.assertTrue(any("cut.defer_effects" in str(row) for row in p.unverified))
+        p = reader()
+        p._scan_defer_effects("legacy", {"defer": []})
+        self.assertEqual(p._defer_effects_html(), "")
+        self.assertEqual(p.unverified, [])
+
     def test_record_label_only_describes_missing_sources_carried_by_the_record(self):
         reader = object.__new__(review_page.Page)
         route = {"record": "Notes", "registrars": [{"call": "r", "people": []}],

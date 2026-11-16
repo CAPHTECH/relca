@@ -1,5 +1,218 @@
 // ADR0053 independent acceptance wire rules. Included only by fixture_match.
 // Never calls production suppression, lower, engine, or a production DTO.
+fn defer_effects_schema() -> Ty {
+    use Ty::*;
+    let strings = || Arr(Box::new(Str));
+    Obj(vec![
+        ("process", Bool),
+        (
+            "entries",
+            Arr(Box::new(Obj(vec![
+                ("target", Str),
+                ("resolution", Lit(&["actor", "capability", "opaque"])),
+                ("capabilities", strings()),
+                ("withdraws", Lit(&["process", "scoped", "none"])),
+                (
+                    "because",
+                    Arr(Box::new(OneOf(vec![
+                        Obj(vec![("kind", Lit(&["opaque"]))]),
+                        Obj(vec![
+                            ("kind", Lit(&["call", "contest_route"])),
+                            ("capability", Str),
+                        ]),
+                    ]))),
+                ),
+                (
+                    "scope",
+                    Null(Box::new(Obj(vec![
+                        ("actors", strings()),
+                        ("capabilities", strings()),
+                        ("people", strings()),
+                        ("resources", strings()),
+                    ]))),
+                ),
+            ]))),
+        ),
+    ])
+}
+
+fn deferred_sorted_names(v: &Value) -> Result<Vec<String>, String> {
+    let names = v
+        .as_array()
+        .ok_or("defer_effects name array")?
+        .iter()
+        .map(|x| {
+            x.as_str()
+                .map(str::to_owned)
+                .ok_or("defer_effects name".into())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if names.windows(2).any(|w| w[0] >= w[1]) {
+        return Err("defer_effects names must be sorted and unique".into());
+    }
+    Ok(names)
+}
+
+fn validate_defer_effects(
+    v: &Value,
+    s: &DeferredWireScope,
+    uses: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<String>>>,
+) -> Result<(), String> {
+    let field = v["cut"].get("defer_effects");
+    if !s.applied {
+        return if field.is_none() {
+            Ok(())
+        } else {
+            Err("inapplicable defer_effects".into())
+        };
+    }
+    let effects = field.ok_or("missing defer_effects")?;
+    check(effects, &defer_effects_schema(), "defer_effects")?;
+    complete(effects, &defer_effects_schema(), "defer_effects")?;
+    let declarations = v["cut"]["defer"].as_array().ok_or("defer declarations")?;
+    let entries = effects["entries"]
+        .as_array()
+        .ok_or("defer_effects entries")?;
+    if entries.len() != declarations.len() {
+        return Err("defer_effects entry multiplicity".into());
+    }
+    let actors = v["actors"]
+        .as_array()
+        .ok_or("defer_effects Actor inventory")?;
+    let all_caps: std::collections::BTreeSet<String> = actors
+        .iter()
+        .flat_map(|a| {
+            a["capability"]["value"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|c| Some(format!("{}.{}", a["name"].as_str()?, c.as_str()?)))
+        })
+        .collect();
+    let mut process = false;
+    for (e, decl) in entries.iter().zip(declarations) {
+        let target = decl["target"].as_str().ok_or("defer target")?;
+        let (resolution, caps) = if decl["actor"] == true {
+            (
+                "actor",
+                all_caps
+                    .iter()
+                    .filter(|c| c.split_once('.').is_some_and(|(a, _)| a == target))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+        } else if all_caps.contains(target) {
+            ("capability", vec![target.to_owned()])
+        } else {
+            ("opaque", vec![])
+        };
+        if e["target"] != target
+            || e["resolution"] != resolution
+            || deferred_sorted_names(&e["capabilities"])? != caps
+        {
+            return Err("defer_effects exact resolution".into());
+        }
+        let because = e["because"].as_array().ok_or("defer_effects because")?;
+        match e["withdraws"].as_str() {
+            Some("process") => {
+                process = true;
+                if !e["scope"].is_null() || because.is_empty() {
+                    return Err("process defer requires causes and no scope".into());
+                }
+                if resolution == "opaque" {
+                    if e["because"] != serde_json::json!([{"kind":"opaque"}]) {
+                        return Err("opaque defer cause".into());
+                    }
+                } else {
+                    let mut seen = std::collections::BTreeSet::new();
+                    for cause in because {
+                        let kind = cause["kind"].as_str().ok_or("defer cause kind")?;
+                        let c = cause["capability"]
+                            .as_str()
+                            .ok_or("defer cause capability")?;
+                        if !["call", "contest_route"].contains(&kind)
+                            || !caps.iter().any(|x| x == c)
+                            || !seen.insert((kind, c))
+                        {
+                            return Err(
+                                "defer cause outside resolved capabilities or duplicate".into()
+                            );
+                        }
+                    }
+                }
+            }
+            Some("scoped") if resolution != "opaque" && !caps.is_empty() => {
+                if !because.is_empty() || e["scope"]["capabilities"] != e["capabilities"] {
+                    return Err(
+                        "scoped defer has no process cause and retains its capabilities".into(),
+                    );
+                }
+                let names: std::collections::BTreeSet<_> = caps
+                    .iter()
+                    .map(|c| c.split_once('.').unwrap().0.to_owned())
+                    .collect();
+                let people: std::collections::BTreeSet<_> = actors
+                    .iter()
+                    .filter(|a| a["name"].as_str().is_some_and(|n| names.contains(n)))
+                    .flat_map(|a| {
+                        a["executors"]["value"]["ids"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                    })
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect();
+                if deferred_sorted_names(&e["scope"]["actors"])?
+                    != names.into_iter().collect::<Vec<_>>()
+                    || deferred_sorted_names(&e["scope"]["people"])?
+                        != people.into_iter().collect::<Vec<_>>()
+                {
+                    return Err("scoped defer Actor/executor inventory".into());
+                }
+                let resources = deferred_sorted_names(&e["scope"]["resources"])?;
+                if let Some(uses) = uses {
+                    let expected: std::collections::BTreeSet<_> = caps
+                        .iter()
+                        .flat_map(|c| uses.get(c).into_iter().flatten().cloned())
+                        .collect();
+                    if resources != expected.into_iter().collect::<Vec<_>>() {
+                        return Err("scoped defer source resource inventory".into());
+                    }
+                } else if v["metrics"].is_object() {
+                    // The JSON inventory names resources, but carries no
+                    // Capability -> uses relation. Exact attribution is checked
+                    // above only with independently parsed source context.
+                    // A metrics object omits `resources` only when the model
+                    // has none, so a missing key there is an empty inventory.
+                    // Without metrics (quality-only reports) the inventory is
+                    // unknown: retain the sorted/unique shape checks but
+                    // require source to establish resource names.
+                    let known: std::collections::BTreeSet<_> = v["metrics"]["resources"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|r| r["resource"].as_str())
+                        .collect();
+                    if resources.iter().any(|r| !known.contains(r.as_str())) {
+                        return Err("scoped defer resource is absent from report inventory".into());
+                    }
+                }
+            }
+            Some("none") if resolution == "actor" && caps.is_empty() => {
+                if !because.is_empty() || !e["scope"].is_null() {
+                    return Err("empty Actor defer has neither causes nor scope".into());
+                }
+            }
+            _ => return Err("defer withdrawal/resolution mismatch".into()),
+        }
+    }
+    if effects["process"] != process || process != s.business {
+        return Err("defer_effects process must equal the entry disjunction and withdrawal".into());
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct DeferredWireScope {
     applied: bool,
@@ -107,6 +320,7 @@ fn deferred_is_new(v: &Value) -> bool {
 fn validate_deferred_quantity_positions(v: &Value) -> Result<(), String> {
     let mut s = deferred_wire_scope(v)?;
     if s.checked {
+        validate_defer_effects(v, &s, None)?;
         return deferred_validate_scope(v, &s);
     }
     // Historical projectors first validate the NEW wire/cells and restore OLD
@@ -231,6 +445,7 @@ fn deferred_business_missing_rate(m: &Value) -> Result<bool, String> {
 #[allow(dead_code)]
 pub fn validate_deferred_metrics_wire(v: &Value) -> Result<(), String> {
     let s = deferred_wire_scope(v)?;
+    validate_defer_effects(v, &s, None)?;
     deferred_validate_scope(v, &s)
 }
 // The deferred state is independent of a prior quality reason or retained hits.
@@ -643,8 +858,12 @@ pub fn validate_deferred_metrics_with_source(
         };
         for stmt in b {
             match &stmt.value {
-                ast::Stmt::Merge { .. } | ast::Stmt::Yield(_) => panic!("merge control is outside this oracle"),
-                ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => panic!("bounded repetition is outside this oracle"),
+                ast::Stmt::Merge { .. } | ast::Stmt::Yield(_) => {
+                    panic!("merge control is outside this oracle")
+                }
+                ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {
+                    panic!("bounded repetition is outside this oracle")
+                }
                 ast::Stmt::ResolveEffect { .. } | ast::Stmt::StopReceiptUnknown => {
                     panic!("receipt recovery is outside this oracle")
                 }
@@ -690,6 +909,7 @@ pub fn validate_deferred_metrics_with_source(
     // Synthetic contest tasks are not process statements. Resolve activation
     // from the selected process's end/commit inventory, never all declarations.
     let normal = b.clone();
+    let mut routes = BTreeSet::new();
     for item in &parsed.items {
         if let ast::Item::Contract(c) = item {
             for clause in &c.clauses {
@@ -701,13 +921,73 @@ pub fn validate_deferred_metrics_with_source(
                         }
                     };
                     if enabled {
-                        b.insert(format!("{}.{}", route.actor.value, route.capability.value));
+                        let name = format!("{}.{}", route.actor.value, route.capability.value);
+                        b.insert(name.clone());
+                        routes.insert(name);
                     }
                 }
             }
         }
     }
     s.business = s.global || !s.capabilities.is_disjoint(&b);
+    validate_defer_effects(v, &s, Some(&uses))?;
+    if s.applied {
+        let mut effects = Vec::new();
+        for e in &expected {
+            let target = e["target"].as_str().ok_or("source defer target")?;
+            let (resolution, selected): (&str, BTreeSet<String>) = if e["actor"] == true {
+                ("actor", caps[target].iter().cloned().collect())
+            } else if uses.contains_key(target) {
+                ("capability", BTreeSet::from([target.to_owned()]))
+            } else {
+                ("opaque", BTreeSet::new())
+            };
+            let mut because = Vec::new();
+            if resolution == "opaque" {
+                because.push(serde_json::json!({"kind":"opaque"}));
+            } else {
+                because.extend(
+                    selected
+                        .intersection(&normal)
+                        .map(|c| serde_json::json!({"kind":"call","capability":c})),
+                );
+                because.extend(
+                    selected
+                        .intersection(&routes)
+                        .map(|c| serde_json::json!({"kind":"contest_route","capability":c})),
+                );
+            }
+            let withdraws = if !because.is_empty() {
+                "process"
+            } else if selected.is_empty() {
+                "none"
+            } else {
+                "scoped"
+            };
+            let scope = if withdraws == "scoped" {
+                let actors: BTreeSet<_> = selected
+                    .iter()
+                    .map(|c| c.split_once('.').unwrap().0.to_owned())
+                    .collect();
+                let ps: BTreeSet<_> = actors
+                    .iter()
+                    .flat_map(|a| people.get(a).into_iter().flatten())
+                    .collect();
+                let resources: BTreeSet<_> = selected
+                    .iter()
+                    .flat_map(|c| uses.get(c).into_iter().flatten())
+                    .collect();
+                serde_json::json!({"actors":actors,"capabilities":selected,"people":ps,"resources":resources})
+            } else {
+                Value::Null
+            };
+            effects.push(serde_json::json!({"target":target,"resolution":resolution,"capabilities":selected,"withdraws":withdraws,"because":because,"scope":scope}));
+        }
+        if v["cut"]["defer_effects"] != serde_json::json!({"process":s.business,"entries":effects})
+        {
+            return Err("source defer_effects exact causes/scope".into());
+        }
+    }
     deferred_validate_scope(v, &s)?;
     let resources: BTreeSet<_> = s
         .capabilities
