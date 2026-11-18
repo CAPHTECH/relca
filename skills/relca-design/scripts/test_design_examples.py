@@ -224,5 +224,97 @@ class Pitfalls(unittest.TestCase):
         self.assertIsNone(r["metrics"]["overall"]["work"]["reason"], err)
 
 
+SPLIT = EX / "split-first.relca"
+SPLIT_REPEAT = EX / "split-first-repeat.relca"
+AT_END = EX / "check-at-end.relca"
+
+
+def ends(report):
+    return {
+        t["end"]: (Fraction(t["probability"]["min"]), t["elapsed"], t["work"]) for t in report["terminals"]
+    }
+
+
+@unittest.skipUnless(RELCA.exists(), f"relca binary not found: {RELCA}")
+class Unrolling(unittest.TestCase):
+    """並行を含むやり直しを書き下して比べる(references/rework-unrolling.md の手計算)。"""
+
+    def test_split_first(self):
+        code, r, err = run("check", SPLIT)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(prob(r), (Fraction(93, 12500),) * 2)
+        e = ends(r)
+        self.assertEqual(e["delivered"], (Fraction("0.83204"), {"min": 131, "max": 171}, {"min": 191, "max": 231}))
+        self.assertEqual(e["late_fail"][0], Fraction("0.11036"))
+        self.assertEqual(e["escalated"], (Fraction("0.0576"), {"min": 80, "max": 80}, {"min": 80, "max": 80}))
+        kinds = [p["verdict"] for i, p in props(r).items() if "evidence_basis" in i or "same_version" in i]
+        self.assertEqual(kinds, ["satisfied"] * 3)
+
+    def test_unrolled_matches_repeat(self):
+        _, a, _ = run("check", SPLIT)
+        code, b, err = run("check", SPLIT_REPEAT)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(ends(a), ends(b))
+        self.assertEqual(prob(a), prob(b))
+
+    def test_check_at_end(self):
+        code, r, err = run("check", AT_END)
+        self.assertEqual(code, 1, err)
+        self.assertEqual(prob(r), (Fraction(783, 20000),) * 2)
+        e = ends(r)
+        self.assertEqual(e["delivered"], (Fraction("0.906975"), {"min": 121, "max": 241}, {"min": 181, "max": 361}))
+        self.assertEqual(e["escalated"], (Fraction("0.093025"), {"min": 240, "max": 240}, {"min": 360, "max": 360}))
+        kinds = [p["verdict"] for i, p in props(r).items() if "evidence_basis" in i or "same_version" in i]
+        self.assertEqual(kinds, ["satisfied"] * 3)
+
+    def test_stale_plan_breaks_same_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = edited(tmp, AT_END, "stale.relca", "v2 = Reviewer.check(p2,x2)", "v2 = Reviewer.check(p1,x2)")
+            code, r, _ = run("check", bad)
+        self.assertEqual(code, 1)
+        sv = [p["verdict"] for i, p in props(r).items() if "same_version" in i]
+        self.assertEqual(sv, ["violated", "violated"])
+
+    def test_repeat_refuses_fork_and_contracts(self):
+        contracts = (
+            "    evidence_basis direct Reviewer.check [Spec]\n"
+            "    same_version Dev.refine_a(p), Reviewer.check(p)\n"
+        )
+        anchor = "    separation Lead.split.finish, Reviewer.check.finish\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            with_contracts = edited(tmp, SPLIT_REPEAT, "eb.relca", anchor, anchor + contracts)
+            code, _, err = run("check", with_contracts)
+            self.assertEqual(code, 4)
+            self.assertIn("loop_feature_combination", err)
+            text = SPLIT_REPEAT.read_text()
+            start = text.index("    repeat planning")
+            body = (
+                "    repeat rounds at_most 2 {\n"
+                "      p = Lead.split()\n"
+                "      fork w { a = Dev.refine_a(p); b = Dev.refine_b(p) }\n"
+                "      join all w\n"
+                "      x = Lead.integrate(a,b)\n"
+                "      v = Reviewer.check(p,x)\n"
+                "      if v == pass { r = Lead.release(x); end delivered } else { again }\n"
+                "    } on_limit { end escalated }\n"
+                "  }\n"
+            )
+            end = text.index("  cut SplitCut")
+            fork_in_repeat = Path(tmp) / "fork.relca"
+            fork_in_repeat.write_text(text[:start] + body + text[end:])
+            code, _, err = run("check", fork_in_repeat)
+        self.assertEqual(code, 4)
+        self.assertIn("loop_feature_combination", err)
+
+    def test_mutate_runs_only_when_unrolled(self):
+        code, r, _ = run("mutate", AT_END)
+        self.assertEqual(code, 4)
+        results = [mu["result"] for m in r["mutations"] for mu in m["mutants"]]
+        self.assertEqual((results.count("detected"), results.count("undetected")), (11, 11))
+        code, _, err = run("mutate", SPLIT_REPEAT)
+        self.assertEqual(code, 4)
+        self.assertIn("loop_feature_combination", err)
+
+
 if __name__ == "__main__":
     unittest.main()

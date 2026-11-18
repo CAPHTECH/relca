@@ -1,0 +1,69 @@
+model CheckAtEnd version "0.2" {
+  type Plan = enum { drafted }
+  type Part = enum { done }
+  type Verdict = enum { pass, fail }
+  type Ack = enum { ok }
+  type Kind = enum { usual }
+  people [lead,rev,d1,d2]
+  observed case { plan: optional<Plan>; plan_check, final_check: optional<Verdict>; delivered: bool = false }
+  latent case { plan_sound: bool = false }
+  actor Spec { source document; latent kind: Kind ~ { usual: 1 } }
+  kernel split_quality given [Spec.kind] {
+    usual -> { 0.7: drafted with plan_sound = true; 0.3: drafted with plan_sound = false }
+  }
+  kernel plan_review given [plan_sound] {
+    true -> { 1: pass }
+    false -> { 0.2: pass; 0.8: fail }
+  }
+  kernel final_review given [plan_sound] {
+    true -> { 0.95: pass; 0.05: fail }
+    false -> { 0.1: pass; 0.9: fail }
+  }
+  actor Lead { executors [lead]
+    capability split() -> Plan { reads [Spec]; duration fixed 30min; outcomes kernel split_quality; kernel_reads latent [Spec.kind]; writes [plan,plan_sound] }
+    capability integrate(a:Part,b:Part) -> Part { duration fixed 20min; result nondet { done } }
+    capability release(x:Part) -> Ack { commits; duration fixed 1min; result nondet { ok }; writes delivered; finish { delivered = true } }
+  }
+  actor Dev { executors [d1,d2]
+    capability refine_a(p:Plan) -> Part { reads [Spec]; duration fixed 60min; result nondet { done } }
+    capability refine_b(p:Plan) -> Part { reads [Spec]; duration fixed 60min; result nondet { done } }
+  }
+  actor Reviewer { executors [rev]
+    capability check_plan(p:Plan) -> Verdict { reads [Spec]; duration fixed 10min; outcomes kernel plan_review; kernel_reads latent [plan_sound]; writes plan_check }
+    capability check(p:Plan,x:Part) -> Verdict { reads [Spec]; duration fixed 10min; outcomes kernel final_review; kernel_reads latent [plan_sound]; writes final_check }
+  }
+  process CheckAtEnd {
+    p1 = Lead.split()
+    fork w1 { a1 = Dev.refine_a(p1); b1 = Dev.refine_b(p1) }
+      join all w1
+      x1 = Lead.integrate(a1,b1)
+      v1 = Reviewer.check(p1,x1)
+    if v1 == pass {
+      r1 = Lead.release(x1)
+        end delivered
+    } else {
+      p2 = Lead.split()
+      fork w2 { a2 = Dev.refine_a(p2); b2 = Dev.refine_b(p2) }
+      join all w2
+      x2 = Lead.integrate(a2,b2)
+      v2 = Reviewer.check(p2,x2)
+      if v2 == pass {
+        r2 = Lead.release(x2)
+        end delivered
+      } else { end escalated }
+    }
+  }
+  cut SplitCut {
+    question "One design task split between two people"
+    include [Spec,Lead,Dev,Reviewer]
+  }
+  bounds { cases 1; live_tasks 2; clock 400min }
+  verify probability reached delivered == true && plan_sound == false <= 0.01
+  contract Controls {
+    invariant Lead.release.commit -> final_check == pass
+    separation Lead.split.finish, Reviewer.check.finish
+    evidence_basis direct Reviewer.check [Spec]
+    same_version Dev.refine_a(p), Reviewer.check(p)
+    same_version Dev.refine_b(p), Reviewer.check(p)
+  }
+}

@@ -124,6 +124,10 @@ Relca は良い設計を自動では出さない。できるのは三つであ�
   - stderr の `W-CUT-2` に原因の `defer` が1行ずつ出る。JSON では `cut.defer_effects` に、取り下げの範囲(`withdraws`)と理由(`because`)が出る。
   - 値が要るなら、その段をモデルに書くか、`defer` を実在する Actor か `Actor.capability` に直す。関係のない操作の名前で代用しない。外した前提が隠れる。
   - 時間を比べるときは `configurations.relca` の `compare` を使った。
+- 並行(`fork`/`join`)を含むやり直しは `repeat` で書けない(`loop_feature_combination`)。`evidence_basis`・`same_version`・`mutate` も、`repeat` を含むモデルでは使えない。
+  - 上限の回数が小さければ、回ごとに `if` で書き下して比べる。書き下した版では、並行も、これらの契約も、`mutate` も使えた。
+  - 代償は、回数に比例してモデルが長くなること、回ごとに束縛の名前を変えること、回をまたいで値を更新できないこと。
+  - 記録は [references/rework-unrolling.md](references/rework-unrolling.md)。
 - 繁忙日の `simulate` は、方策(`policy`)を宣言しても `unsupported` になった。別の案件の出来事が同じ分に重なると、どれを先に処理するかが決まらないためである。今の構文では、業務の意味を変えずに負荷を評価する方法が見つかっていない。
 
 ## 報告

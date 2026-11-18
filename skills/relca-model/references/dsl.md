@@ -251,6 +251,11 @@ repeatや応答喪失・再送・recoveryの公開結果をyieldする形も未�
 body の fork/join、条件待ち、縮退経路、response_loss/retry/recovery、
 入れ子、`over`、再到着、無限反復は未対応。繰り返しモデルの
 compare/diff/sensitivity/mutate/conform、およびcontest宣言・quantile指標との併用も閉じる。
+
+上限の回数が小さければ、repeat を使わず、回ごとに `if` で書き下せる。最後の `else` が `on_limit` に当たる。
+書き下した版には repeat が無いので、body に fork/join を置けるし、evidence_basis・same_version・mutate も使える。
+回数に比例してモデルが長くなる、回ごとに束縛の名前を変える、回をまたいで値を更新できない、が代償である。
+例と、repeat 版と値が一致することの確認は [relca-design の記録](../../relca-design/references/rework-unrolling.md)。
 短い全入力と、code/reasonの一覧は[利用ガイド](../../../docs/guide/dsl.md#利用できる範囲と診断)を参照。
 主なreasonは次のとおり。messageに含まれる識別語で、独立のJSON欄とは限らない。
 
