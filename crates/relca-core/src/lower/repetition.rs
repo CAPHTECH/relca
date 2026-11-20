@@ -12,6 +12,23 @@ pub(super) struct LoopContext {
     pub agains: Vec<Flow>,
 }
 
+impl LoopContext {
+    pub(super) fn transfer_count(&self) -> usize {
+        self.leaves.len() + self.agains.len()
+    }
+
+    pub(super) fn guard_continuing(&self, statement: ir::Statement) -> ir::Statement {
+        ir::Statement {
+            span: statement.span,
+            kind: ir::Stmt::If {
+                condition: active_condition(self.continuing),
+                then_body: vec![statement],
+                else_body: vec![],
+            },
+        }
+    }
+}
+
 impl Lower {
     pub(super) fn loop_round_in_scope(&self, id: ir::StateVarId) -> bool {
         self.loop_context

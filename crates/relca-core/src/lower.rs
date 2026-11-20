@@ -10351,6 +10351,10 @@ impl Lower {
 
     fn block(&mut self, block: &ast::Block, flow: &mut Flow) -> ir::Block {
         self.block_depth += 1;
+        let transfers_on_entry = self
+            .loop_context
+            .as_ref()
+            .map(repetition::LoopContext::transfer_count);
         let mut resolved = Vec::new();
         for stmt in block {
             let kind = match &stmt.value {
@@ -10382,6 +10386,11 @@ impl Lower {
                 ast::Stmt::Again | ast::Stmt::Leave => {
                     let leave = matches!(stmt.value, ast::Stmt::Leave);
                     if let Some(context) = &mut self.loop_context {
+                        // The enclosing guard guarantees continuing=1 at block entry.
+                        // An earlier sibling can record a round transfer in a nested
+                        // branch; on that path even this block's final control must
+                        // be skipped (in particular, leave must not override again).
+                        let needs_guard = transfers_on_entry != Some(context.transfer_count());
                         if leave {
                             context.leaves.push(flow.clone());
                         } else {
@@ -10393,9 +10402,14 @@ impl Lower {
                             updates.push((context.active, ir::StateValue::Integer(0)));
                         }
                         let kind = ir::Stmt::LoopControl(updates.into());
-                        resolved.push(ir::Statement {
+                        let statement = ir::Statement {
                             kind,
                             span: stmt.span,
+                        };
+                        resolved.push(if needs_guard {
+                            context.guard_continuing(statement)
+                        } else {
+                            statement
                         });
                     } else {
                         self.error(diag::E_CON_0, "loop control outside repeat", stmt.span);
@@ -10586,18 +10600,7 @@ impl Lower {
                     span: stmt.span,
                 };
                 if let Some(context) = &self.loop_context {
-                    resolved.push(ir::Statement {
-                        kind: ir::Stmt::If {
-                            condition: ir::Cond::IntCompare {
-                                variable: context.continuing,
-                                operator: ir::IntComparison::Eq,
-                                value: 1,
-                            },
-                            then_body: vec![statement],
-                            else_body: vec![],
-                        },
-                        span: stmt.span,
-                    });
+                    resolved.push(context.guard_continuing(statement));
                 } else {
                     resolved.push(statement);
                 }
