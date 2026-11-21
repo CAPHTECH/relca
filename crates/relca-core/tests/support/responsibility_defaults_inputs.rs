@@ -111,8 +111,8 @@ verify safety no_resource_overcommit
 /// Poster starts after lines of 28 + 23 bytes and occupies 108 bytes.
 pub fn mixed_expected() -> serde_json::Value {
     serde_json::json!([
-        {"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared: all declared Actors are included; exclusions are unknown","span":null},
-        {"code":"W-RESP-0","severity":"warning","message":"Poster has no declared responsibility","span":{"start":51,"end":159}}
+        {"code":"W-CUT-0","severity":"warning","message":"Cut is undeclared: all declared Actors are included; exclusions are unknown","span":null,"location":null,"detail":null},
+        {"code":"W-RESP-0","severity":"warning","message":"Poster has no declared responsibility","span":{"start":51,"end":159},"location":{"line":3,"column":1,"end_line":3,"end_column":109},"detail":null}
     ])
 }
 pub const MIXED_STDERR: &str = "W-CUT-0: Cut is undeclared: all declared Actors are included; exclusions are unknown\nW-RESP-0: Poster has no declared responsibility\n";

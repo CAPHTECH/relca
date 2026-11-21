@@ -140,7 +140,7 @@ fn all_pairs_exit_diagnostic_multiplicity_and_complete_hand_effects_together() {
                     })
                     .collect();
                 assert_eq!(
-                    o.stderr,
+                    relca_test_support::diagnostic::stderr_facts(&o.stderr, &v),
                     lines.as_bytes(),
                     "stderr preserves exact ordered diagnostic sequence {name}"
                 );

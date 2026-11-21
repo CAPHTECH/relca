@@ -136,8 +136,6 @@ struct Tail {
     extra: (u64, u64),
 }
 
-// This release refuses `fork` and `wait until` in a repeat body or on_limit
-// (loop_feature_combination), so those tails are not part of the matrix.
 const TAILS: &[Tail] = &[
     Tail {
         name: "call",
@@ -150,6 +148,18 @@ const TAILS: &[Tail] = &[
         work: "wait 4min;",
         exit: Exit::Leave,
         extra: (4, 0),
+    },
+    Tail {
+        name: "wait until",
+        work: "wait until r# == pass;",
+        exit: Exit::Leave,
+        extra: (0, 0),
+    },
+    Tail {
+        name: "fork",
+        work: "fork f# { a# = A.work(); b# = B.work() } join all f#;",
+        exit: Exit::Leave,
+        extra: (3, 5),
     },
     Tail {
         name: "if",
@@ -370,12 +380,19 @@ fn three_round_probability_and_work() {
         let src = model(process, &expected)
             .replace("actor A", "observed case { coin: bool = true }\n kernel K given [coin] { true -> { 0.75: pass; 0.25: fail }; false -> { 1: pass } }\n actor A")
             .replace("result nondet { pass, fail }", "outcomes kernel K")
-            .replace("verify reachable end.limit", "verify reachable end.limit\n verify probability reached end.done within 9min >= 0.984375\n verify probability reached end.limit within 9min >= 0.015625");
+            .replace("verify reachable end.limit", "verify reachable end.limit\n verify probability reached end.done within 1min >= 0.75\n verify probability reached end.done within 4min >= 0.9375\n verify probability reached end.done within 7min >= 0.984375\n verify probability reached end.limit within 9min >= 0.015625");
         backends(kind, &src, |backend, m, o| {
             assert_eq!(observe(m, o), expected, "{kind}/{backend}");
             assert!(!o.truncated);
-            assert_eq!(o.properties.len(), 5);
+            assert_eq!(o.properties.len(), 7);
             assert!(o.properties.iter().all(|p| p.verdict == Verdict::Satisfied));
+            let at: Vec<_> = o
+                .properties
+                .iter()
+                .filter_map(|p| p.probability.as_ref())
+                .collect();
+            assert_eq!((&at[1].min.0 - &at[0].min.0).to_string(), "3/16");
+            assert_eq!((&at[2].min.0 - &at[1].min.0).to_string(), "3/64");
             let fractions: Vec<_> = o
                 .properties
                 .iter()
@@ -385,11 +402,137 @@ fn three_round_probability_and_work() {
             assert_eq!(
                 fractions,
                 [
+                    ("3/4".into(), "3/4".into()),
+                    ("15/16".into(), "15/16".into()),
                     ("63/64".into(), "63/64".into()),
                     ("1/64".into(), "1/64".into())
                 ],
                 "{kind}/{backend}"
             );
         });
+    }
+}
+
+#[test]
+fn explain_marks_the_skipped_again_as_a_branch() {
+    let source = include_str!("bounded_repetition/models/M3.relca")
+        .replace(
+            "if r == pass { leave } else { f = Clerk.fix(); again }",
+            "if r == pass { leave } else {}; f = Clerk.fix(); again",
+        )
+        .replace("commit -> reviewed == pass", "commit -> reviewed == fail");
+    let report = serde_json::to_value(relca_core::explain::explain(&source)).unwrap();
+    assert_eq!(report["verdict"], "violated");
+    let traces = report["explanation"]["counterexamples"].as_array().unwrap();
+    let trace = traces
+        .iter()
+        .find(|t| t["property"] == "contract Guard #1 invariant")
+        .unwrap_or(&traces[0]);
+    assert_eq!(trace["replay"]["status"], "verified");
+    let start = source.find("; again").unwrap() + 2;
+    let span = serde_json::json!({"start": start, "end": start + "again".len()});
+    let steps = trace["steps"].as_array().unwrap();
+    let at_again: Vec<_> = steps
+        .iter()
+        .filter(|s| s["location"]["span"] == span)
+        .collect();
+    assert_eq!(at_again.len(), 1);
+    assert_eq!(at_again[0]["kind"], "branch");
+    assert_eq!(at_again[0]["time"], 2); // entry and the first passing review cost a minute each
+    assert_eq!(
+        steps.last().unwrap()["violation"]["id"],
+        "contract Guard #1 invariant"
+    );
+}
+
+#[test]
+fn nested_control_with_inner_suffix_and_probabilities() {
+    let base = r#"model F version "0.2" {
+        type V = enum { pass, fail }
+        kernel K34 { * -> { 0.75: pass; 0.25: fail } }
+        kernel K12 { * -> { 0.5: pass; 0.5: fail } }
+        actor Rev { capacity 1
+            capability review() -> V { duration fixed 1min; outcomes kernel K34 }
+            capability second() -> V { duration fixed 2min; outcomes kernel K12 }
+            capability third() -> V { duration fixed 4min; outcomes kernel K12 }
+        }
+        actor Clerk { capacity 1
+            capability fix() -> V { duration fixed 4min; result nondet { pass } }
+            capability note() -> V { duration fixed 8min; result nondet { pass } }
+        }
+        process P { $PROCESS }
+        cut C { include [Rev, Clerk] }
+        bounds { cases 1; live_tasks 1; clock 60min }
+        $VERIFY
+    }"#;
+    let a = |i: usize, next: &str| {
+        format!(
+            "r{i} = Rev.review(); if r{i} == pass {{ end done }} else {{ s{i} = Rev.second(); if s{i} == pass {{ n{i} = Clerk.note(); end done }} else {{ f{i} = Clerk.fix(); {next} }} }}"
+        )
+    };
+    let b = |i: &str, short: &str, long: &str| {
+        format!(
+            "r{i} = Rev.review(); if r{i} == fail {{ s{i} = Rev.second(); if s{i} == pass {{ end done }} else {{ {short} }} }} else {{ t{i} = Rev.third(); if t{i} == pass {{ end early }} else {{ f{i} = Clerk.fix(); {long} }} }}"
+        )
+    };
+    let c = "wait 1min; wait 1min; r = Rev.review(); if r == pass { end limit } else { s = Rev.second(); if s == fail { m1 = Clerk.fix(); end done } else { n = Clerk.note(); m2 = Clerk.fix(); end done } }";
+    let a_loop = "repeat rw at_most 2 { r = Rev.review(); if r == fail { s = Rev.second(); if s == fail { f = Clerk.fix(); again } else {}; n = Clerk.note() } else {}; leave } on_limit { end limit }; end done";
+    let b_loop = "repeat rw at_most 2 { r = Rev.review(); if r == fail { s = Rev.second(); if s == fail { again } else {}; leave } else { t = Rev.third(); if t == fail { f = Clerk.fix(); again } else { end early }; n = Clerk.note() }; again } on_limit { end limit }; end done";
+    let c_loop = "repeat rw at_most 2 { wait 1min; again } on_limit { r = Rev.review(); if r == fail { s = Rev.second(); if s == fail { leave } else {}; n = Clerk.note(); leave } else {}; end limit }; m = Clerk.fix(); end done";
+    for (label, loop_dsl, hand, expected, fractions) in [
+        (
+            "A",
+            a_loop,
+            a(1, &a(2, "end limit")),
+            vec![("done", (1, 18), (1, 18)), exact("limit", 14, 14)],
+            vec!["63/64", "1/64"],
+        ),
+        (
+            "B",
+            b_loop,
+            b(
+                "1",
+                &b("2s", "end limit", "end limit"),
+                &b("2l", "end limit", "end limit"),
+            ),
+            vec![
+                ("done", (3, 12), (3, 12)),
+                ("early", (5, 14), (5, 14)),
+                ("limit", (6, 18), (6, 18)),
+            ],
+            vec!["3/16", "9/16", "1/4"],
+        ),
+        (
+            "C",
+            c_loop,
+            c.into(),
+            vec![("done", (9, 17), (7, 15)), exact("limit", 3, 1)],
+            vec!["1/4", "3/4"],
+        ),
+    ] {
+        let verify = expected
+            .iter()
+            .map(|(end, _, _)| format!("verify probability reached end.{end} >= 0"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for process in [&hand, loop_dsl] {
+            backends(
+                label,
+                &base
+                    .replace("$VERIFY", &verify)
+                    .replace("$PROCESS", process),
+                |backend, m, o| {
+                    assert!(!o.truncated, "{label}/{backend}");
+                    assert_eq!(observe(m, o), expected, "{label}/{backend}");
+                    assert_eq!(o.properties.len(), fractions.len());
+                    for (property, fraction) in o.properties.iter().zip(&fractions) {
+                        assert_eq!(property.verdict, Verdict::Satisfied);
+                        let p = property.probability.as_ref().unwrap();
+                        assert_eq!(p.min.to_string(), *fraction, "{label}/{backend}");
+                        assert_eq!(p.max.to_string(), *fraction, "{label}/{backend}");
+                    }
+                },
+            );
+        }
     }
 }

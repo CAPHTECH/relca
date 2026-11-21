@@ -9,14 +9,18 @@ use crate::outcome::{
     SimulationOutcome, SimulationTerminal, SimulationTerminalKind,
 };
 use num_bigint::BigInt;
+use num_rational::BigRational;
 use sha2::{Digest, Sha256};
 
+#[derive(Clone)]
 struct Random {
     priority_tie: bool,
     seed: u64,
     replication: u64,
     audit: Vec<SimulationDraw>,
     origins: Vec<(usize, String, diag::Span)>,
+    same_time: bool,
+    ordering_limit: bool,
 }
 impl Random {
     fn origin(&mut self, m: &Model, case: usize, binding: BindingId, join: bool) {
@@ -195,6 +199,7 @@ struct TaskSignature {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CaseSignature {
+    executors: Vec<(BindingId, PersonId)>,
     condition_waits: Vec<(Tick, Option<Tick>)>,
     channel_history: Vec<(BindingId, u64, ValueId, crate::ast::Receipt, bool)>,
     slot: u8,
@@ -303,6 +308,11 @@ fn signature(m: &Model, w: &World<'_>) -> Result<Signature, StopReason> {
                     })
                     .collect();
                 SlotSignature::Case(Box::new(CaseSignature {
+                    executors: f
+                        .tasks
+                        .iter()
+                        .filter_map(|t| t.person.map(|p| (t.call.binding, p)))
+                        .collect(),
                     channel_history: f
                         .trace
                         .iter()
@@ -400,6 +410,8 @@ pub(super) fn observe_corrupt_sample<'a>(tree: &mut Tree<'a>, w: World<'a>) -> (
         replication: 1,
         audit: vec![],
         origins: vec![],
+        same_time: false,
+        ordering_limit: false,
     };
     let result = run_rep(tree, w, &mut random, &mut false, &mut 4);
     (result.is_err(), random.audit.len())
@@ -442,54 +454,58 @@ impl<'a> From<Action<'a>> for Enabled<'a> {
         Self::Concrete(action)
     }
 }
-fn keep<'a>(
-    m: &Model,
-    first: &mut Option<Enabled<'a>>,
-    action: impl Into<Enabled<'a>>,
-    nondet: &mut bool,
-) -> Execution {
-    let action = action.into();
-    if let Some(old) = first {
-        // All candidates are offers from the same immutable World. A kernel
-        // factor is identified by its unique lexical call and case. Equal
-        // factors therefore have the same given values, IR row, ordered
-        // intervals and effects without materializing their children.
-        let same = match (&*old, &action) {
-            (
-                Enabled::Response {
-                    case: a,
-                    task: i,
-                    value: x,
-                },
-                Enabled::Response {
-                    case: b,
-                    task: j,
-                    value: y,
-                },
-            ) => a == b && i == j && x == y,
-            (Enabled::Concrete(a), Enabled::Concrete(b)) => same_action(m, a, b),
-            (
-                Enabled::Kernel {
-                    case: a,
-                    task: i,
-                    site: s,
-                },
-                Enabled::Kernel {
-                    case: b,
-                    task: j,
-                    site: t,
-                },
-            ) => a == b && i == j && s == t,
-            _ => false,
-        };
-        if !same {
-            *nondet = true;
-            return Err(StopReason::SemanticAbort);
-        }
-    } else {
-        *first = Some(action);
+fn same_enabled(m: &Model, old: &Enabled<'_>, action: &Enabled<'_>) -> bool {
+    // All candidates are offers from the same immutable World. A kernel
+    // factor is identified by its unique lexical call and case. Equal
+    // factors therefore have the same given values, IR row, ordered
+    // intervals and effects without materializing their children.
+    match (old, action) {
+        (
+            Enabled::Response {
+                case: a,
+                task: i,
+                value: x,
+            },
+            Enabled::Response {
+                case: b,
+                task: j,
+                value: y,
+            },
+        ) => a == b && i == j && x == y,
+        (Enabled::Concrete(a), Enabled::Concrete(b)) => same_action(m, a, b),
+        (
+            Enabled::Kernel {
+                case: a,
+                task: i,
+                site: s,
+            },
+            Enabled::Kernel {
+                case: b,
+                task: j,
+                site: t,
+            },
+        ) => a == b && i == j && s == t,
+        _ => false,
     }
-    Ok(())
+}
+
+type OfferConflict = (Vec<(usize, String, diag::Span)>, bool);
+
+struct EnabledSet<'a> {
+    offers: Vec<Enabled<'a>>,
+    conflict: Option<OfferConflict>,
+}
+
+impl<'a> EnabledSet<'a> {
+    fn add(&mut self, m: &Model, random: &Random, offer: impl Into<Enabled<'a>>) {
+        let offer = offer.into();
+        if !self.offers.iter().any(|old| same_enabled(m, old, &offer)) {
+            self.offers.push(offer);
+            if self.offers.len() == 2 {
+                self.conflict = Some((random.origins.clone(), random.priority_tie));
+            }
+        }
+    }
 }
 
 fn append<'a>(
@@ -629,7 +645,7 @@ fn finish_kernel<'a>(
             row.values
                 .iter()
                 .zip(&kernel.given)
-                .all(|(x, id)| *x == values[id.0])
+                .all(|(x, id)| values.get(id.0) == Some(x))
         })
         .ok_or(StopReason::SemanticAbort)?;
     #[cfg(test)]
@@ -818,6 +834,10 @@ fn sample_contest_management<'a>(
             continue;
         }
         if let Some(id) = c.frame.contest_pending(tree.m) {
+            if tree.m.contest_not_filed(id) {
+                append(tree, w, k, Occurrence::ContestChoice(id, false), None);
+                return Ok(true);
+            }
             let d = &tree.m.contests()[id];
             let Some(rates) = &d.rates else {
                 *nondet = true;
@@ -859,6 +879,247 @@ fn sample_contest_management<'a>(
     Ok(false)
 }
 
+enum SampleProgress<'a> {
+    Offers(World<'a>, Vec<Enabled<'a>>),
+    Closed(SampledLeaf<'a>),
+    Duplicate,
+}
+
+const ORDER_LIMIT: usize = 4096;
+#[cfg(test)]
+thread_local! {
+    static TEST_ORDER_LIMIT: std::cell::Cell<usize> = const { std::cell::Cell::new(ORDER_LIMIT) };
+}
+
+fn order_limit() -> usize {
+    #[cfg(test)]
+    {
+        TEST_ORDER_LIMIT.get()
+    }
+    #[cfg(not(test))]
+    {
+        ORDER_LIMIT
+    }
+}
+
+#[derive(PartialEq, Eq)]
+struct ReferenceObservation {
+    mean_hits: Vec<Vec<Option<Rational>>>,
+    overcommit: bool,
+    violations: Vec<Vec<bool>>,
+    lost_updates: Vec<BTreeSet<StateVarId>>,
+    refusals: Vec<BTreeMap<BindingId, crate::outcome::CapabilityRefusal>>,
+    ranges: Vec<Vec<crate::outcome::StateRangeViolation>>,
+    first: Vec<Vec<Option<u128>>>,
+    first_closed: Vec<Vec<bool>>,
+    query: Vec<Vec<QueryTruth>>,
+    quality: Vec<Vec<bool>>,
+    keys: BTreeSet<String>,
+}
+
+fn reference_observation(
+    tree: &Tree<'_>,
+    w: &World<'_>,
+    random: &Random,
+    audit_start: usize,
+) -> Result<ReferenceObservation, StopReason> {
+    let mut query = Vec::new();
+    let mut quality = Vec::new();
+    for (k, slot) in w.cases.iter().enumerate() {
+        let at = QueryAt {
+            arrival: tree.times[k],
+            now: w.now,
+            clock: tree.m.bounds.clock,
+            cut: None,
+            stopped: false,
+        };
+        query.push(
+            tree.m
+                .probability_queries
+                .iter()
+                .map(|q| {
+                    query_truth(slot, q, &at).map(|q| {
+                        if q == QueryTruth::Hit {
+                            q
+                        } else {
+                            QueryTruth::Unknown
+                        }
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+        );
+        if let Some(spec) = &tree.m.quality {
+            quality.push(
+                spec.properties
+                    .iter()
+                    .map(|p| {
+                        quality_truth(tree.m, p, slot, k, tree.times[k], w.now, ReferenceCut::None)
+                            .map(|b| b.endpoints[0] == Rational::one())
+                    })
+                    .collect::<Result<_, _>>()?,
+            );
+        }
+    }
+    Ok(ReferenceObservation {
+        mean_hits: tree.mean_hits.clone(),
+        overcommit: tree.overcommit,
+        violations: tree
+            .cases
+            .iter()
+            .map(|i| i.contract_facts.iter().map(|(_, v)| *v).collect())
+            .collect(),
+        lost_updates: tree
+            .cases
+            .iter()
+            .map(|i| i.evidence.lost_updates.clone())
+            .collect(),
+        refusals: tree
+            .cases
+            .iter()
+            .map(|i| i.statistics.refusals.clone())
+            .collect(),
+        ranges: tree
+            .cases
+            .iter()
+            .map(|i| i.statistics.ranges.clone())
+            .collect(),
+        first: tree.first_hits.clone(),
+        first_closed: tree.first_closed.clone(),
+        query,
+        quality,
+        keys: random.audit[audit_start..]
+            .iter()
+            .map(|d| d.key.clone())
+            .collect(),
+    })
+}
+
+struct OrderSearch {
+    tick: Tick,
+    audit_start: usize,
+    seen: Vec<(Signature, Vec<ReferenceObservation>)>,
+    ancestors: Vec<usize>,
+    limit: bool,
+    cycle: bool,
+}
+
+impl OrderSearch {
+    fn visit(
+        &mut self,
+        tree: &Tree<'_>,
+        w: &World<'_>,
+        random: &Random,
+    ) -> Result<bool, StopReason> {
+        let sig = signature(tree.m, w)?;
+        let at = self.seen.iter().position(|(old, _)| *old == sig);
+        let id = at.unwrap_or(self.seen.len());
+        if self.ancestors.contains(&id) {
+            self.cycle = true;
+            return Err(StopReason::SemanticAbort);
+        }
+        let obs = reference_observation(tree, w, random, self.audit_start)?;
+        if let Some(i) = at {
+            if self.seen[i].1.contains(&obs) {
+                return Ok(false);
+            }
+            self.seen[i].1.push(obs);
+        } else {
+            if self.seen.len() == order_limit() {
+                self.limit = true;
+                return Err(StopReason::EnumerationLimit);
+            }
+            self.seen.push((sig, vec![obs]));
+        }
+        self.ancestors.push(id);
+        Ok(true)
+    }
+}
+
+fn fork_sample_tree<'a>(tree: &Tree<'a>) -> Tree<'a> {
+    debug_assert!(tree.walk_work.is_none() && tree.first_trees.is_empty());
+    Tree {
+        walk_work: None,
+        recovery_paths: tree.recovery_paths.clone(),
+        response_exercise: tree.response_exercise.clone(),
+        response_receipts: tree.response_receipts.clone(),
+        first_hits: tree.first_hits.clone(),
+        mean_hits: tree.mean_hits.clone(),
+        first_closed: tree.first_closed.clone(),
+        first_trees: Vec::new(),
+        #[cfg(test)]
+        resource_worlds: tree.resource_worlds.clone(),
+        depth: tree.depth,
+        m: tree.m,
+        limits: tree.limits,
+        times: tree.times.clone(),
+        cases: tree.cases.iter().map(Interpreter::fork_sample).collect(),
+        terminals: tree.terminals.clone(),
+        unresolved: tree.unresolved.clone(),
+        stats: tree.stats.clone(),
+        truncated: tree.truncated,
+        numeric: tree.numeric,
+        deadlock: tree.deadlock,
+        overcommit: tree.overcommit,
+        chance: tree.chance,
+        scheduler: tree.scheduler,
+        policy_unresolved: tree.policy_unresolved,
+        rejects: tree.rejects,
+        overflows: tree.overflows,
+        external_peaks: tree.external_peaks,
+        admissions: tree.admissions.clone(),
+        unadmitted: tree.unadmitted.clone(),
+        #[cfg(test)]
+        initial_leaves: tree.initial_leaves.clone(),
+        #[cfg(test)]
+        receipts: tree.receipts.clone(),
+        #[cfg(test)]
+        duration_leaves: tree.duration_leaves.clone(),
+    }
+}
+
+fn execute_offer<'a>(
+    tree: &mut Tree<'a>,
+    w: &World<'a>,
+    offer: Enabled<'a>,
+    random: &mut Random,
+) -> Result<World<'a>, StopReason> {
+    match offer {
+        Enabled::Response { case, task, value } => sampled_receipt(
+            tree,
+            finished(tree, w, case, task, value, &[]),
+            case,
+            task,
+            value,
+            random,
+        ),
+        Enabled::Kernel { case, task, site } => finish_kernel(tree, w, case, task, site, random),
+        Enabled::Concrete((tag, choices)) => {
+            let i = if let Some((case, site)) = tag {
+                random.pick(
+                    case,
+                    site,
+                    1,
+                    &choices.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
+                )?
+            } else {
+                0
+            };
+            Ok(choices
+                .into_iter()
+                .nth(i)
+                .ok_or(StopReason::SemanticAbort)?
+                .1)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum OrderFailure {
+    Limit,
+    Divergence,
+    Common(StopReason),
+}
+
 fn run_rep<'a>(
     tree: &mut Tree<'a>,
     mut w: World<'a>,
@@ -866,10 +1127,156 @@ fn run_rep<'a>(
     nondet: &mut bool,
     observed_time: &mut Tick,
 ) -> Result<SampledLeaf<'a>, StopReason> {
+    loop {
+        match run_rep_until(tree, w, random, nondet, observed_time, None)? {
+            SampleProgress::Closed(leaf) => return Ok(leaf),
+            SampleProgress::Duplicate => unreachable!("no order search"),
+            SampleProgress::Offers(root, offers) => {
+                let result = check_orders(tree, &root, offers, random);
+                let (leaf, representative, mut audit) = match result {
+                    Ok(out) => out,
+                    Err(OrderFailure::Limit) => {
+                        random.ordering_limit = true;
+                        return Err(StopReason::EnumerationLimit);
+                    }
+                    Err(OrderFailure::Divergence) => {
+                        *nondet = true;
+                        return Err(StopReason::SemanticAbort);
+                    }
+                    Err(OrderFailure::Common(reason)) => return Err(reason),
+                };
+                audit.same_time = true;
+                *random = audit;
+                *tree = representative;
+                if leaf.0.now == root.now {
+                    return Ok(leaf);
+                }
+                w = leaf.0;
+            }
+        }
+    }
+}
+
+fn check_orders<'a>(
+    tree: &Tree<'a>,
+    root: &World<'a>,
+    offers: Vec<Enabled<'a>>,
+    random: &Random,
+) -> Result<(SampledLeaf<'a>, Tree<'a>, Random), OrderFailure> {
+    let mut search = OrderSearch {
+        tick: root.now,
+        audit_start: random.audit.len(),
+        seen: Vec::new(),
+        ancestors: Vec::new(),
+        limit: false,
+        cycle: false,
+    };
+    search
+        .visit(tree, root, random)
+        .map_err(OrderFailure::Common)?;
+    let mut frontier = Vec::new();
+    let add = |frontier: &mut Vec<_>,
+               w: &World<'a>,
+               tree: &Tree<'a>,
+               offers: Vec<_>,
+               rng: &Random,
+               ancestors: &[usize]| {
+        for offer in offers.into_iter().rev() {
+            let mut next_tree = fork_sample_tree(tree);
+            let mut next_rng = rng.clone();
+            let next = execute_offer(&mut next_tree, w, offer, &mut next_rng);
+            frontier.push((next, next_tree, next_rng, ancestors.to_owned()));
+        }
+    };
+    add(&mut frontier, root, tree, offers, random, &search.ancestors);
+    let mut first = None;
+    let mut closed = None;
+    let mut failed = None;
+    while let Some((w, mut tree, mut rng, ancestors)) = frontier.pop() {
+        search.ancestors = ancestors;
+        let mut nondet = false;
+        let mut time = root.now;
+        let progress = match w.and_then(|w| {
+            run_rep_until(
+                &mut tree,
+                w,
+                &mut rng,
+                &mut nondet,
+                &mut time,
+                Some(&mut search),
+            )
+        }) {
+            Ok(progress) => progress,
+            Err(_) if search.limit => return Err(OrderFailure::Limit),
+            Err(_) if search.cycle || nondet => return Err(OrderFailure::Divergence),
+            Err(reason) => {
+                if closed.is_some() || failed.is_some_and(|other| other != reason) {
+                    return Err(OrderFailure::Divergence);
+                }
+                failed = Some(reason);
+                continue;
+            }
+        };
+        match progress {
+            SampleProgress::Offers(w, offers) => {
+                add(&mut frontier, &w, &tree, offers, &rng, &search.ancestors);
+            }
+            SampleProgress::Duplicate => (),
+            SampleProgress::Closed(leaf) => {
+                if failed.is_some() {
+                    return Err(OrderFailure::Divergence);
+                }
+                // A terminal or cut has no subsequent visit to collect its observations.
+                if leaf.0.now == root.now {
+                    tree.observe(&leaf.0)
+                        .map_err(|_| OrderFailure::Divergence)?;
+                }
+                let key = (
+                    signature(tree.m, &leaf.0).map_err(|_| OrderFailure::Divergence)?,
+                    reference_observation(&tree, &leaf.0, &rng, search.audit_start)
+                        .map_err(|_| OrderFailure::Divergence)?,
+                    leaf.1,
+                    leaf.2.clone(),
+                );
+                if let Some(old) = &closed {
+                    if *old != key {
+                        return Err(OrderFailure::Divergence);
+                    }
+                } else {
+                    closed = Some(key);
+                    first = Some((leaf, tree, rng));
+                }
+            }
+        }
+    }
+    if let Some(reason) = failed {
+        return Err(OrderFailure::Common(reason));
+    }
+    first.ok_or(OrderFailure::Divergence)
+}
+
+fn run_rep_until<'a>(
+    tree: &mut Tree<'a>,
+    mut w: World<'a>,
+    random: &mut Random,
+    nondet: &mut bool,
+    observed_time: &mut Tick,
+    mut search: Option<&mut OrderSearch>,
+) -> Result<SampleProgress<'a>, StopReason> {
     let m = tree.m;
     let mut cut = None;
     let mut dead = vec![None; w.cases.len()];
     'path: loop {
+        if let Some(agenda) = &mut search {
+            if agenda.tick != w.now {
+                // Do not interpret even deterministic business actions at the next tick.
+                agenda.visit(tree, &w, random)?;
+                break;
+            }
+            if !agenda.visit(tree, &w, random)? {
+                return Ok(SampleProgress::Duplicate);
+            }
+        }
         random.priority_tie = false;
         *observed_time = w.now;
         w.steps += 1;
@@ -1147,9 +1554,10 @@ fn run_rep<'a>(
                         );
                     }
                     Stmt::LoopControl(control) => {
-                        for (id, x) in &control.updates {
-                            c.frame.state_values[id.0] = *x;
-                        }
+                        require(
+                            m.apply_loop_updates(&mut c.frame.state_values, &control.updates)
+                                .is_ok(),
+                        )?;
                     }
                     Stmt::ResolveEffect { command, evidence } => {
                         let event =
@@ -1226,7 +1634,10 @@ fn run_rep<'a>(
             continue;
         }
         random.origins.clear();
-        let mut first = None;
+        let mut enabled = EnabledSet {
+            offers: Vec::new(),
+            conflict: None,
+        };
         let mut priority_task_choices = 0usize;
         for k in 0..w.cases.len() {
             let CaseSlot::Here(c) = &w.cases[k] else {
@@ -1246,7 +1657,7 @@ fn run_rep<'a>(
                 if let CaseSlot::Here(c) = &mut next.cases[k] {
                     c.frame.condition_pass()?;
                 }
-                keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                enabled.add(m, random, (None, vec![(Rational::one(), next)]));
             }
             if c.frame.waiting.is_none()
                 && c.frame.sleep().is_none()
@@ -1276,7 +1687,7 @@ fn run_rep<'a>(
                     *block = &block[1..];
                     c.frame.control.push(branch);
                 }
-                keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                enabled.add(m, random, (None, vec![(Rational::one(), next)]));
             }
             let due: Vec<_> = c
                 .frame
@@ -1312,16 +1723,15 @@ fn run_rep<'a>(
                         continue;
                     }
                     if kernel.is_some() {
-                        keep(
+                        enabled.add(
                             m,
-                            &mut first,
+                            random,
                             Enabled::Kernel {
                                 case: k,
                                 task: *j,
                                 site: response_site(m, t.call.binding, "kernel"),
                             },
-                            nondet,
-                        )?;
+                        );
                     } else {
                         let selected = if reference_stale(t, cap) {
                             vec![cap.version_check.as_ref().unwrap().reject]
@@ -1342,40 +1752,37 @@ fn run_rep<'a>(
                                     *nondet = true;
                                     return Err(StopReason::SemanticAbort);
                                 }
-                                keep(
+                                enabled.add(
                                     m,
-                                    &mut first,
+                                    random,
                                     Enabled::Response {
                                         case: k,
                                         task: *j,
                                         value: *x,
                                     },
-                                    nondet,
-                                )?;
+                                );
                                 continue;
                             }
                             if cap.receipt_query.is_some() {
-                                keep(
+                                enabled.add(
                                     m,
-                                    &mut first,
+                                    random,
                                     Enabled::Response {
                                         case: k,
                                         task: *j,
                                         value: *x,
                                     },
-                                    nondet,
-                                )?;
+                                );
                                 continue;
                             }
-                            keep(
+                            enabled.add(
                                 m,
-                                &mut first,
+                                random,
                                 (
                                     None,
                                     vec![(Rational::one(), finished(tree, &w, k, *j, *x, &[]))],
                                 ),
-                                nondet,
-                            )?;
+                            );
                         }
                     }
                 }
@@ -1394,7 +1801,7 @@ fn run_rep<'a>(
                             t.person,
                         );
                     }
-                    keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                    enabled.add(m, random, (None, vec![(Rational::one(), next)]));
                 }
             }
             if due.is_empty()
@@ -1462,7 +1869,7 @@ fn run_rep<'a>(
                             }
                         }
                     }
-                    keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                    enabled.add(m, random, (None, vec![(Rational::one(), next)]));
                 }
             }
             for j in 0..c.frame.tasks.len() {
@@ -1496,7 +1903,7 @@ fn run_rep<'a>(
                             None,
                             (false, Some(binding)),
                         )?;
-                        keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                        enabled.add(m, random, (None, vec![(Rational::one(), next)]));
                         break;
                     }
                     let mut frame = c.frame.clone();
@@ -1561,56 +1968,49 @@ fn run_rep<'a>(
                             .unwrap()
                             .binding = Some(binding);
                     }
-                    keep(m, &mut first, (None, vec![(Rational::one(), next)]), nondet)?;
+                    enabled.add(m, random, (None, vec![(Rational::one(), next)]));
                 }
             }
         }
         if tree.cases.iter().any(|i| !i.statistics.ranges.is_empty()) {
-            if first.is_some() {
+            if !enabled.offers.is_empty() {
                 *nondet = true;
                 return Err(StopReason::SemanticAbort);
             }
             break 'path;
         }
-        if let Some(Enabled::Response { case, task, value }) = first {
-            w = sampled_receipt(
-                tree,
-                finished(tree, &w, case, task, value, &[]),
-                case,
-                task,
-                value,
-                random,
-            )?;
-            continue;
-        }
-        if let Some(Enabled::Kernel { case, task, site }) = first {
-            w = finish_kernel(tree, &w, case, task, site, random)?;
-            continue;
-        }
-        if let Some(Enabled::Concrete((tag, choices))) = first {
-            let i = if let Some((case, site)) = tag {
-                random.pick(
-                    case,
-                    site,
-                    1,
-                    &choices.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
-                )?
-            } else {
-                0
-            };
-            w = choices
-                .into_iter()
-                .nth(i)
-                .ok_or(StopReason::SemanticAbort)?
-                .1;
-            continue;
+        match enabled.offers.len() {
+            0 => (),
+            1 => {
+                w = execute_offer(tree, &w, enabled.offers.pop().unwrap(), random)?;
+                continue;
+            }
+            _ => {
+                if let Some((origins, priority)) = enabled.conflict {
+                    random.origins = origins;
+                    random.priority_tie = priority;
+                }
+                return Ok(SampleProgress::Offers(w, enabled.offers));
+            }
         }
         if m.external_priority().is_some() {
             let admissions = tree.priority_admissions(&w);
             if admissions.len() > 1 {
+                random.origins.clear();
                 random.priority_tie = true;
-                *nondet = true;
-                return Err(StopReason::SemanticAbort);
+                let mut offers = Vec::with_capacity(admissions.len());
+                for k in admissions {
+                    let mut next = w.clone();
+                    let CaseSlot::Held(c) =
+                        std::mem::replace(&mut next.cases[k], CaseSlot::NotHere)
+                    else {
+                        unreachable!()
+                    };
+                    next.cases[k] = CaseSlot::Here(c);
+                    append(tree, &mut next, k, Occurrence::Admission, None);
+                    offers.push(Enabled::Concrete((None, vec![(Rational::one(), next)])));
+                }
+                return Ok(SampleProgress::Offers(w, offers));
             }
             if let Some(&k) = admissions.first() {
                 let CaseSlot::Held(c) = std::mem::replace(&mut w.cases[k], CaseSlot::NotHere)
@@ -1683,7 +2083,7 @@ fn run_rep<'a>(
             }
         }
     }
-    Ok((w, cut, dead))
+    Ok(SampleProgress::Closed((w, cut, dead)))
 }
 
 struct QueryAt {
@@ -1732,6 +2132,7 @@ fn observation_abort(
     time: Tick,
 ) -> SimulationRun {
     out.diagnostics = vec![diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::U_SEM_0.into(),
         severity: diag::Severity::Error,
         message: format!("reference observation failed: replication {replication}, time {time}"),
@@ -1756,7 +2157,7 @@ fn sampled_contests(
             .contests()
             .iter()
             .enumerate()
-            .filter(|(_, d)| d.rates.is_some())
+            .filter(|(id, d)| d.rates.is_some() || m.contest_not_filed(*id))
         {
             let c = slot.payload();
             let target_at = c.and_then(|c| c.frame.contest_target(m, id)).map(|o| o.at);
@@ -1813,6 +2214,53 @@ fn sampled_contests(
     records
 }
 
+#[derive(Default)]
+struct MeanTotal {
+    amount: BigRational,
+    count: u64,
+    missed: bool,
+    unavailable: bool,
+}
+
+fn record_means(tree: &Tree<'_>, w: &World<'_>, totals: &mut [MeanTotal]) {
+    let m = tree.m;
+    for (i, (decl, row)) in m
+        .quality
+        .as_ref()
+        .unwrap()
+        .means
+        .iter()
+        .zip(totals)
+        .enumerate()
+    {
+        for (k, slot) in w.cases.iter().enumerate() {
+            let hit = decl.property.and_then(|p| tree.first_hits[p][k]);
+            if decl.property.is_some() && hit.is_none() {
+                row.missed = true;
+                continue;
+            }
+            let amount = if decl.measure == MeanMeasure::Elapsed {
+                hit.map(|t| Rational(BigRational::from_integer(t.into())))
+            } else if decl.property.is_none() && tree.mean_hits[i][k].is_none() {
+                metrics::mean_amount(
+                    m,
+                    slot.payload().map_or(&[], |c| &c.frame.tasks),
+                    w.now,
+                    decl.measure,
+                )
+            } else {
+                tree.mean_hits[i][k].clone()
+            };
+            if let Some(amount) = amount {
+                row.amount += amount.0;
+                row.count += 1;
+            } else {
+                row.unavailable = true;
+            }
+        }
+    }
+}
+
 pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
     let mut out = SimulationOutcome {
         stochastic_arrivals: m.arrival_distribution.is_some(),
@@ -1823,6 +2271,7 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
         stop: StopReason::SemanticAbort,
         outcome: SimulationOutcome {
             diagnostics: vec![diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: if m.unsupported_stochastic_arrival_combination() {
@@ -1905,10 +2354,24 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
     }
     out.capability_refusals = m.has_requires().then(Vec::new);
     let mut quality_observations = Vec::new();
+    let mut mean_totals: Vec<_> = m
+        .quality
+        .iter()
+        .flat_map(|q| &q.means)
+        .map(|c| MeanTotal {
+            unavailable: c.measure != MeanMeasure::Elapsed
+                && metrics::mean_amount(m, &[], 0, c.measure).is_none(),
+            ..MeanTotal::default()
+        })
+        .collect();
+    let mut mean_censored = 0;
+    let mut mean_truncated = false;
     for replication in 1..=spec.replications {
         out.attempted_replications = replication;
         let mut random = Random {
             priority_tie: false,
+            same_time: false,
+            ordering_limit: false,
             seed: spec.seed,
             replication,
             audit: Vec::new(),
@@ -1929,28 +2392,16 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
             realized.arrivals = Some(times.clone());
         }
         let m = &realized;
+        let first = m.quality.as_ref().map_or(0, QualitySpec::first_hit_count);
         let mut tree = Tree {
             walk_work: None,
             recovery_paths: Vec::new(),
             response_exercise: BTreeMap::new(),
             response_receipts: Vec::new(),
-            first_closed: vec![
-                vec![false; n];
-                m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                    0
-                } else {
-                    q.properties.len()
-                })
-            ],
-            first_hits: vec![
-                vec![None; n];
-                m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                    0
-                } else {
-                    q.properties.len()
-                })
-            ],
+            first_closed: vec![vec![false; n]; first],
+            first_hits: vec![vec![None; n]; first],
             first_trees: Vec::new(),
+            mean_hits: vec![vec![None; n]; mean_totals.len()],
             #[cfg(test)]
             resource_worlds: None,
             depth: 0,
@@ -2027,10 +2478,15 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
                 // diagnostics or formatting helper participates in this path.
                 let at = observed_time;
                 out.diagnostics = vec![diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::U_SEM_0.into(),
                     severity: diag::Severity::Error,
                     span: Some(span),
-                    message: if nondet {
+                    message: if random.ordering_limit {
+                        format!(
+                            "simulation exceeded the same-time ordering limit: replication {replication}, time {at}; more than {ORDER_LIMIT} states without closing the instant"
+                        )
+                    } else if nondet {
                         let label = if random.priority_tie {
                             "unresolved simulation nondeterminism: priority_tie_remaining"
                         } else {
@@ -2062,6 +2518,7 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
                 };
             }
         };
+        out.same_time |= random.same_time;
         if tree.observe(&w).is_err() {
             return observation_abort(out, m, replication, w.now);
         }
@@ -2077,6 +2534,15 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
                 }
                 None => ReferenceCut::None,
             };
+            if !mean_totals.is_empty() {
+                if cut_kind == ReferenceCut::None {
+                    record_means(&tree, &w, &mut mean_totals);
+                } else {
+                    mean_censored += n as u64;
+                    mean_truncated |= cut_kind != ReferenceCut::Horizon
+                        || tree.cases.iter().any(|i| !i.statistics.ranges.is_empty());
+                }
+            }
             let mut truths = Vec::new();
             for p in &q.properties {
                 let mut row = Vec::new();
@@ -2231,6 +2697,7 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
         ] {
             if yes && !out.diagnostics.iter().any(|d| d.code == code) {
                 out.diagnostics.push(diag::Diagnostic {
+                    presentation: Default::default(),
                     code: code.into(),
                     severity: diag::Severity::Warning,
                     message: message.into(),
@@ -2384,10 +2851,38 @@ pub(in crate::reference) fn simulate(m: &Model) -> SimulationRun {
             crate::recovery::Coverage::Sampled,
         ));
     }
-    out.quality = m
-        .quality
-        .as_ref()
-        .map(|_| super::super::quality::simulation(m, &quality_observations, false));
+    out.quality = m.quality.as_ref().map(|spec| {
+        let mut q = super::super::quality::simulation(m, &quality_observations, false);
+        if !mean_totals.is_empty() && !m.actors.iter().any(|a| a.metadata.rule.is_some()) {
+            q.means = Some(
+                spec.means
+                    .iter()
+                    .zip(mean_totals)
+                    .map(|(d, t)| {
+                        let reason = match (
+                            mean_truncated,
+                            mean_censored,
+                            t.unavailable,
+                            t.missed && !d.given_reached,
+                            t.count,
+                        ) {
+                            (true, _, _, _, _) => Some("truncated"),
+                            (_, 1.., _, _, _) => Some("undetermined"),
+                            (_, _, true, _, _) => Some("not_configured"),
+                            (_, _, _, true, _) => Some("beyond_reached_mass"),
+                            (_, _, _, _, 0) => Some("zero_denominator"),
+                            _ => None,
+                        };
+                        let point = reason
+                            .is_none()
+                            .then(|| (t.amount / BigInt::from(t.count)).to_string());
+                        crate::quality::sample_mean_row(m, d, point, t.count, mean_censored, reason)
+                    })
+                    .collect(),
+            );
+        }
+        q
+    });
     SimulationRun {
         stop: StopReason::Complete,
         outcome: out,
@@ -2451,6 +2946,7 @@ mod simulation_tests {
             first_hits: Vec::new(),
             first_closed: Vec::new(),
             first_trees: Vec::new(),
+            mean_hits: Vec::new(),
             resource_worlds: None,
             depth: 0,
             m,
@@ -2497,10 +2993,96 @@ mod simulation_tests {
     fn random() -> Random {
         Random {
             priority_tie: false,
+            same_time: false,
+            ordering_limit: false,
             seed: 0,
             replication: 1,
             audit: Vec::new(),
             origins: Vec::new(),
+        }
+    }
+    #[test]
+    fn ld_reference_cycle_is_not_a_leaf() {
+        let m = model("ld-legacy-fork");
+        let (tree, root) = setup(&m);
+        let staying = Enabled::Concrete((None, vec![(Rational::one(), root.clone())]));
+        let mut closed = root.clone();
+        closed.now += 1;
+        let leaving = Enabled::Concrete((None, vec![(Rational::one(), closed)]));
+        assert!(matches!(
+            check_orders(&tree, &root, vec![leaving, staying], &random()),
+            Err(OrderFailure::Divergence)
+        ));
+    }
+    #[test]
+    fn ld_reference_diamond_join_is_not_an_ancestor() {
+        let m = model("ld-legacy-fork");
+        let (tree, mut w) = setup(&m);
+        let random = random();
+        let mut search = OrderSearch {
+            tick: w.now,
+            audit_start: 0,
+            seen: Vec::new(),
+            ancestors: Vec::new(),
+            limit: false,
+            cycle: false,
+        };
+        assert!(search.visit(&tree, &w, &random).unwrap());
+        let root = search.ancestors.clone();
+        w.boundary = Boundary::Admit;
+        assert!(search.visit(&tree, &w, &random).unwrap());
+        w.boundary = Boundary::Run;
+        assert!(search.visit(&tree, &w, &random).unwrap());
+        search.ancestors = root;
+        w.boundary = Boundary::Draw;
+        assert!(search.visit(&tree, &w, &random).unwrap());
+        w.boundary = Boundary::Run;
+        assert!(!search.visit(&tree, &w, &random).unwrap());
+        assert!(!search.cycle);
+    }
+    #[test]
+    fn ld_reference_shared_step_limit_is_not_a_nondeterminism_refusal() {
+        let m = model("ld-legacy-fork");
+        let (tree, root) = setup(&m);
+        for same in [true, false] {
+            let branch = |next| {
+                let mut w = root.clone();
+                w.next = next;
+                w.steps = tree.limits.steps_per_path;
+                if !same && next == 2 {
+                    w.now = root.now + 1;
+                }
+                Enabled::Concrete((None, vec![(Rational::one(), w)]))
+            };
+            let result = check_orders(&tree, &root, vec![branch(1), branch(2)], &random());
+            assert_eq!(
+                result.err().unwrap(),
+                if same {
+                    OrderFailure::Common(StopReason::EnumerationLimit)
+                } else {
+                    OrderFailure::Divergence
+                }
+            );
+        }
+    }
+    #[test]
+    fn ld_limit_from_reference_driver() {
+        for name in ["ld-legacy-fork", "ld-confluent"] {
+            let m = model(name);
+            let old = TEST_ORDER_LIMIT.replace(1);
+            let run = crate::reference::simulate(&m);
+            TEST_ORDER_LIMIT.set(old);
+            assert_eq!(run.stop, StopReason::EnumerationLimit, "{name}");
+            assert_eq!(run.outcome.completed_replications, 0);
+            let d = &run.outcome.diagnostics[0];
+            assert_eq!(d.code, diag::U_SEM_0);
+            assert!(
+                d.message.starts_with(
+                    "simulation exceeded the same-time ordering limit: replication 1,"
+                ),
+                "{}",
+                d.message
+            );
         }
     }
     #[test]
@@ -2810,11 +3392,16 @@ mod simulation_tests {
         b.0 = a.0.clone();
         b.1.reverse();
         assert!(!same_action(&m, &a, &b));
-        let mut candidate = None;
-        let mut nondet = false;
-        keep(&m, &mut candidate, one(w.clone()), &mut nondet).unwrap();
-        keep(&m, &mut candidate, one(w.clone()), &mut nondet).unwrap();
-        assert!(keep(&m, &mut candidate, one(t), &mut nondet).is_err());
+        let mut enabled = EnabledSet {
+            offers: Vec::new(),
+            conflict: None,
+        };
+        let rng = random();
+        enabled.add(&m, &rng, one(w.clone()));
+        enabled.add(&m, &rng, one(w.clone()));
+        assert_eq!(enabled.offers.len(), 1);
+        enabled.add(&m, &rng, one(t));
+        assert_eq!(enabled.offers.len(), 2);
         let (tree, mut s) = setup(&m);
         s.cases[0] = CaseSlot::Here(active(&m));
         s.next = 1;

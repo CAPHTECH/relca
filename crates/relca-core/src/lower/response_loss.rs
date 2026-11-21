@@ -51,8 +51,33 @@ impl Lower {
                 for result in &r.results {
                     self.value(ty, result);
                 }
-                if self.capabilities[cap.0].version_check.is_some() {
-                    self.unsupported("retry_feature_combination: version_check retry", r.span);
+                if let Some(check) = &self.capabilities[cap.0].version_check {
+                    let blockers = vec![
+                        diag::Blocker::at(
+                            "feature",
+                            Some(format!("{}.{}", call.actor.value, call.capability.value)),
+                            Some(check.span),
+                        ),
+                        diag::Blocker::at(
+                            "call",
+                            Some(call.binding.value.clone()),
+                            Some(call.span),
+                        ),
+                    ];
+                    self.errors.push(
+                        Diagnostic {
+                            presentation: Default::default(),
+                            code: U_SEM_0.into(),
+                            severity: diag::Severity::Error,
+                            message: "retry_feature_combination: version_check retry".into(),
+                            span: Some(r.span),
+                        }
+                        .unconnected(
+                            "retry_feature_combination",
+                            "version_check",
+                            blockers,
+                        ),
+                    );
                 }
             }
         }

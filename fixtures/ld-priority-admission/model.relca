@@ -1,0 +1,14 @@
+model TiedArrival version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 2; capability work() -> T { duration fixed 2min; result nondet { ok } } }
+  process P { call = A.work(); end done }
+  cut C { include [A] }
+  metrics { window 20min; currency "JPY" }
+  arrivals fixed [0min,0min,1min,1min]
+  bounds { cases 4; live_tasks 1; clock 20min }
+  case_priority fixed [0,0,1,1]
+  policy fifo tie_by case_id then call_order
+  concurrent cases 2 on_overflow wait_external priority descending
+  simulation replications 2 seed 1 confidence 0.5
+  verify reachable end.done
+}

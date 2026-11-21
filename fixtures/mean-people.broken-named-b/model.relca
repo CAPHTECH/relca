@@ -1,0 +1,15 @@
+model MeanPeople version "0.2" {
+  type T = enum { ok }
+  people [p1,p2,p3]
+  actor A { executors [p1,p2]; capability run() -> T { duration fixed 2min; result nondet { ok } } }
+  actor B { executors [p3]; capability fix() -> T { duration fixed 3min; result nondet { ok } } }
+  process P { a = A.run(); b = B.fix(); end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  metrics { window 10min; currency "JPY"; rate A per_minute 10; rate A.run per_start 1; rate B per_minute 20; rate B.fix per_start 2 }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric mean.People = mean(named_people_work)
+  metric mean.Work = mean(work)
+  metric mean.Cost = mean(cost, case.Done)
+}

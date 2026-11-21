@@ -1,0 +1,17 @@
+model FirstHitFork version "0.2" {
+  type T = enum { ok }
+  type Flag = enum { off,on }
+  people [a,b]
+  actor A { executors [a]; state flag: Flag = off
+    capability run() -> T { duration fixed 2min; result nondet { ok }; writes flag; finish { flag=on } } }
+  actor B { executors [b]; capability run() -> T { duration fixed 10min; result nondet { ok } } }
+  process P { fork both { x=A.run(); y=B.run() } join all both; end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 2; clock 1min }
+  metrics { window 10min; currency "JPY"; rate A per_minute 2; rate A.run per_start 1; rate B per_minute 3; rate B.run per_start 2 }
+  verify safety no_resource_overcommit
+  property case.Early = reached(A.flag == on)
+  metric mean.Work = mean(work, case.Early)
+  metric mean.People = mean(named_people_work, case.Early)
+  metric mean.Cost = mean(cost, case.Early)
+}

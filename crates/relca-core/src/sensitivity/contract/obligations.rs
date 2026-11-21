@@ -243,11 +243,28 @@ impl Names<'_> {
                     json!(["separation", self.event(*left)?, self.event(*right)?])
                 }
                 K::Permitted { capability } => json!(["permitted", self.capability(*capability)?]),
-                K::EvidenceBasis { .. } => {
-                    return Err(unsupported("evidence_basis_unsupported_command"));
-                }
-                K::SameVersion { .. } => {
-                    return Err(unsupported("same_version_unsupported_command"));
+                K::EvidenceBasis {
+                    capability,
+                    direct,
+                    sources,
+                    ..
+                } => json!([
+                    "evidence_basis",
+                    self.capability(*capability)?,
+                    direct,
+                    super::canonical_names(sources.iter().map(|a| self.actor(*a)))?,
+                ]),
+                K::SameVersion { first, second } => {
+                    let parameter = |(id, index): (ir::CapabilityId, usize)| -> Result<Value> {
+                        let cap = self.capability(id)?;
+                        let name = &self.0.capabilities[id.0]
+                            .params
+                            .get(index)
+                            .ok_or_else(|| unsupported("invalid contract parameter"))?
+                            .name;
+                        Ok(json!([cap, name]))
+                    };
+                    json!(["same_version", parameter(*first)?, parameter(*second)?])
                 }
                 K::AuthorityBasis {
                     capability,

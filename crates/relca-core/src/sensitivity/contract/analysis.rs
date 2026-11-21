@@ -21,6 +21,14 @@ impl Names<'_> {
             .map(|p| p.name.clone())
             .ok_or_else(|| unsupported("cohort reference"))
     }
+    fn mean(&self, id: usize) -> Result<&str> {
+        self.0
+            .quality
+            .as_ref()
+            .and_then(|q| q.means.get(id))
+            .map(|m| m.name.as_str())
+            .ok_or_else(|| unsupported("mean reference"))
+    }
     pub fn quality(&self) -> Result<Value> {
         let Some(q) = &self.0.quality else {
             return Ok(Value::Null);
@@ -73,7 +81,17 @@ impl Names<'_> {
         let hard = s
             .hard
             .iter()
-            .map(|h| Ok(json!({"cohort":self.cohort(h.cohort)?,"op":h.op.text(),"bound":h.bound})))
+            .map(|h| {
+                let c = &h.constraint;
+                Ok(match c.target {
+                    ir::MetricRef::Cohort(i) => {
+                        json!({"cohort":self.cohort(i)?,"op":c.op.text(),"bound":c.bound})
+                    }
+                    ir::MetricRef::Mean(i) => {
+                        json!({"mean":self.mean(i)?,"op":c.op.text(),"bound":c.bound})
+                    }
+                })
+            })
             .collect::<Result<Vec<_>>>()?;
         let objectives = s
             .objectives
@@ -91,6 +109,7 @@ impl Names<'_> {
                             .name
                     ]),
                     ir::ObjectiveRef::Overall(x) => json!(["overall", x.text()]),
+                    ir::ObjectiveRef::Mean(i) => json!(["mean", self.mean(i)?]),
                 };
                 Ok(json!({"direction":o.direction,"target":target}))
             })

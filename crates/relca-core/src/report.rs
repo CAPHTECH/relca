@@ -131,6 +131,8 @@ declare_report! {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quality: Option<crate::quality::Quality>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub metric_checks: Vec<crate::evaluation::MetricCheck>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub state_range_violations: Vec<outcome::StateRangeViolation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capability_refusals: Option<Vec<outcome::CapabilityRefusal>>,
@@ -176,7 +178,7 @@ pub mod priority;
 #[cfg(test)]
 #[path = "report/q4_review_tests.rs"]
 mod q4_review_tests;
-mod repetition;
+pub mod repetition;
 mod response;
 pub mod work_profiles;
 pub use response::{ResponseAnalysis, ResponseCoverage};
@@ -249,6 +251,22 @@ impl CutContext {
         if let Some(cut) = &model.cut {
             context.reentry = cut.reentry.clone();
             context.horizon = cut.horizon.clone();
+        }
+        if model.cut.is_none()
+            && let Some(s) = &model.scenario
+        {
+            for &i in s.contests_not_filed.keys() {
+                let Some(c) = model.contests().get(i) else {
+                    continue;
+                };
+                let cap = &model.capabilities[c.route.0];
+                let party = &model.actors[c.party.0].name;
+                let actor = &model.actors[cap.actor.0].name;
+                context.reentry.push(format!(
+                    "contest {party} -> {actor}.{} (not filed in scenario {})",
+                    cap.name, s.name
+                ));
+            }
         }
         context
     }
@@ -363,6 +381,8 @@ pub struct Bounds {
 /// id is exactly safety no_resource_overcommit or reachable end.<name>.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Property {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<PropertyExclusion>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -375,6 +395,70 @@ pub struct Property {
     pub probability: Option<crate::probability::ProbabilityRange>,
     pub id: String,
     pub verdict: Verdict,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PropertyExclusion {
+    ScenarioContestNotFiled,
+}
+
+fn mark_contest_routes(model: &ir::Model, metrics: &mut crate::metrics::BusinessMetrics) {
+    fn process_calls(body: &ir::Block, target: ir::CapabilityId) -> bool {
+        body.iter().any(|stmt| match &stmt.kind {
+            ir::Stmt::Call(call) | ir::Stmt::Query(call, _) => call.capability == target,
+            ir::Stmt::Response(call, spec) => {
+                call.capability == target
+                    || spec
+                        .recovery
+                        .as_ref()
+                        .is_some_and(|b| process_calls(b, target))
+            }
+            ir::Stmt::Fork { branches, .. } => {
+                branches.iter().any(|call| call.capability == target)
+            }
+            ir::Stmt::If {
+                then_body,
+                else_body,
+                ..
+            } => process_calls(then_body, target) || process_calls(else_body, target),
+            ir::Stmt::MergeCopy { .. }
+            | ir::Stmt::LoopControl(_)
+            | ir::Stmt::ResolveEffect { .. }
+            | ir::Stmt::StopReceiptUnknown
+            | ir::Stmt::WaitUntil(_)
+            | ir::Stmt::Wait(_)
+            | ir::Stmt::End(_) => false,
+        })
+    }
+    for (_, contest) in model
+        .contests()
+        .iter()
+        .enumerate()
+        .filter(|(id, _)| model.contest_not_filed(*id))
+    {
+        // A capability row is an aggregate, not an occurrence of this route.
+        // For a mixed capability, the route-specific mark remains in reentry
+        // and in the contest response property, not on the whole aggregate.
+        if process_calls(&model.process.body, contest.route)
+            || model.contests().iter().enumerate().any(|(id, other)| {
+                other.route == contest.route
+                    && !model.contest_not_filed(id)
+                    && other.target.active(model)
+            })
+        {
+            continue;
+        }
+        let cap = &model.capabilities[contest.route.0];
+        let name = format!("{}.{}", model.actors[cap.actor.0].name, cap.name);
+        if let Some(row) = metrics
+            .capabilities
+            .iter_mut()
+            .find(|m| m.capability == name)
+        {
+            row.excluded = Some(PropertyExclusion::ScenarioContestNotFiled);
+        }
+    }
 }
 
 pub(crate) fn deserialize_notes<'de, D: serde::Deserializer<'de>>(
@@ -579,7 +663,9 @@ pub(crate) fn sensitivity_preflight_failure(
             r.cut = Cut::Declared(Box::new(declared_cut(m, cut)));
         }
     }
-    finish(r, diagnostics)
+    let mut r = finish(r, diagnostics);
+    diag::locate(src, &mut r.diagnostics);
+    r
 }
 
 pub(crate) fn sensitivity_simulation_preflight_failure(
@@ -661,7 +747,9 @@ pub(crate) fn check_selection_with_agency_limit_using(
         report.ledger.execution["selection"]["effective"]["configuration"] =
             configuration.map_or_else(crate::ledger::undeclared, crate::ledger::known);
     }
-    seal(report)
+    let mut report = seal(report);
+    diag::locate(src, &mut report.diagnostics);
+    report
 }
 
 pub(crate) fn scenario_record(
@@ -803,6 +891,8 @@ declare_simulation_report! {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quality: Option<crate::quality::Quality>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub metric_checks: Vec<crate::evaluation::MetricCheck>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub state_range_violations: Vec<outcome::StateRangeViolation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capability_refusals: Option<Vec<outcome::CapabilityRefusal>>,
@@ -871,7 +961,7 @@ pub fn simulate_with_agency_limit(
         None,
         scale,
     );
-    simulation_driver(simulation_selection(report, configuration, scenario))
+    simulation_driver(simulation_selection(src, report, configuration, scenario))
 }
 
 /// The ordinary simulation pipeline with a frozen, pre-execution family. The
@@ -890,7 +980,7 @@ pub fn simulate_with_multiplicity(
         &mut None,
         Some(scope),
     );
-    simulation_driver(simulation_selection(report, configuration, scenario))
+    simulation_driver(simulation_selection(src, report, configuration, scenario))
 }
 
 fn sampled_arrival(
@@ -1080,6 +1170,7 @@ fn simulation_base(mut base: Report) -> SimulationReport {
         uncertainty: base.uncertainty,
         scenario: base.scenario,
         quality: base.quality,
+        metric_checks: base.metric_checks,
         state_range_violations: Vec::new(),
         capability_refusals: None,
         actors: base.actors,
@@ -1117,6 +1208,7 @@ pub fn simulation_input_failure(message: &str) -> SimulationReport {
     seal_simulation(simulation_empty(finish(
         base,
         vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::E_SYN_0.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -1133,6 +1225,7 @@ pub(crate) fn comparison_input_failure(message: &str) -> Report {
     finish(
         report,
         vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::E_SYN_0.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -1213,10 +1306,11 @@ fn simulate_pipeline(
     selected: &mut Option<lower::SelectedConfiguration>,
 ) -> SimulationReport {
     let report = simulate_pipeline_raw(src, selection, scenario, execute, selected, None);
-    simulation_selection(report, selection, scenario)
+    simulation_selection(src, report, selection, scenario)
 }
 
 fn simulation_selection(
+    src: &str,
     mut report: SimulationReport,
     selection: Option<&str>,
     scenario: Option<&str>,
@@ -1226,7 +1320,9 @@ fn simulation_selection(
         report.ledger.execution["selection"]["effective"]["configuration"] =
             selection.map_or_else(crate::ledger::undeclared, crate::ledger::known);
     }
-    seal_simulation(report)
+    let mut report = seal_simulation(report);
+    diag::locate(src, &mut report.diagnostics);
+    report
 }
 
 fn simulate_pipeline_raw(
@@ -1289,6 +1385,7 @@ fn simulate_pipeline_raw_with_agency_limit(
                 ast::Item::QualityProperty(_)
                     | ast::Item::CohortMetric(_)
                     | ast::Item::QuantileMetric(_)
+                    | ast::Item::MeanMetric(_)
             )
         }) {
             let model = if scale.is_some() {
@@ -1324,6 +1421,7 @@ fn simulate_pipeline_raw_with_agency_limit(
         return simulation_empty(finish(
             base,
             vec![diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::E_SIM_0.into(),
                 severity: diag::Severity::Error,
                 message: "simulation requires an explicit simulation clause".into(),
@@ -1490,7 +1588,12 @@ fn simulate_model_raw(
     let n = spec.replications;
     let times = m.arrivals.clone().unwrap_or_else(|| vec![0]);
     let rows = num_bigint::BigInt::from(effective_rows);
-    let alpha_before = (!m.probability_queries.is_empty()).then(|| {
+    let alpha_before = (effective_rows != 0
+        && (!m.probability_queries.is_empty()
+            || m.metric_checks
+                .iter()
+                .any(|h| matches!(h.target, ir::MetricRef::Cohort(_)))))
+    .then(|| {
         Rational((Rational::one().0 - &spec.confidence.0) / BigRational::from_integer(2.into()))
     });
     let alpha_after = alpha_before
@@ -1507,6 +1610,7 @@ fn simulate_model_raw(
         .map(|m| m.responsibilities.clone());
     base.contest_paths = m.responsibility.as_ref().map(|m| m.contest_paths.clone());
     base.assumptions = m.assumptions.clone();
+    sampled_mean_assumption(&mut base.assumptions);
     if let Some(c) = &m.cut {
         base.cut = Cut::Declared(Box::new(declared_cut(m, c)));
     }
@@ -1557,6 +1661,7 @@ fn simulate_model_raw(
         repetition::metrics(m, metrics);
     }
     if let Some(metrics) = &mut out.metrics {
+        mark_contest_routes(m, metrics);
         match crate::metrics::contests::summarize(m, &sampled, aborted) {
             Ok(table) => {
                 metrics.contests = table.map(Box::new);
@@ -1568,6 +1673,7 @@ fn simulate_model_raw(
             }
             Err(message) => {
                 out.diagnostics.push(diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::U_SEM_0.into(),
                     severity: diag::Severity::Error,
                     message,
@@ -1652,6 +1758,7 @@ fn simulate_model_raw(
         }
         if !deadlocks.is_empty() && !out.diagnostics.iter().any(|d| d.code == diag::W_DEADLOCK_0) {
             out.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_DEADLOCK_0.into(),
                 severity: diag::Severity::Warning,
                 message: "a sampled nonterminal state has no enabled transition".into(),
@@ -1665,6 +1772,7 @@ fn simulate_model_raw(
                 .any(|r| r.cut == Some(outcome::SimulationCut::Numeric))
         {
             out.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_BUDGET_0.into(),
                 severity: diag::Severity::Warning,
                 message: "probability denominator exceeded the exact arithmetic limit".into(),
@@ -1738,7 +1846,14 @@ fn simulate_model_raw(
             } else {
                 format!("bonferroni; rows={rows}; alpha_before={a}; alpha_after={b}")
             },
-            "two one-sided Clopper-Pearson errors are allocated to each probability-query case row; the reported confidence is simultaneous across these rows",
+            if m.metric_checks
+                .iter()
+                .any(|h| matches!(h.target, ir::MetricRef::Cohort(_)))
+            {
+                "two one-sided Clopper-Pearson errors are allocated to each probability-query and cohort component case row; the reported confidence is simultaneous across these rows"
+            } else {
+                "two one-sided Clopper-Pearson errors are allocated to each probability-query case row; the reported confidence is simultaneous across these rows"
+            },
         ),
         (
             "simulation.nondeterminism",
@@ -1755,6 +1870,13 @@ fn simulate_model_raw(
             field: field.into(),
             value,
             affects: affects.into(),
+        });
+    }
+    if sampled.same_time {
+        out.assumptions.push(Assumption {
+            field: "simulation.same_time".into(),
+            value: "instant_confluence(max_states=4096)".into(),
+            affects: "同じ時刻に残った行動の順序を全部試し、時刻を閉じた状態と観測が一致した時刻だけ進めた。順序を選んだのではない。他の標本経路と全スケジュールの安全性は確かめていない。".into(),
         });
     }
     if m.scenario.is_some()
@@ -1835,9 +1957,15 @@ fn simulate_model_raw(
             verdicts.push(verdict);
             continue;
         }
+        let excluded = m.contest_response_excluded(verify.property);
         let mut cases = Vec::new();
         let mut cv = Vec::new();
         for (k, arrival) in times.iter().enumerate() {
+            if excluded && !aborted {
+                cases.push(json!({"case_id":k+1,"arrival":arrival,"verdict":"inconclusive","basis":"sample","witness":null}));
+                cv.push(Verdict::Inconclusive);
+                continue;
+            }
             if aborted {
                 cases.push(json!({"case_id":k+1,"arrival":arrival,"verdict":"unsupported","basis":"sample","witness":null}));
                 cv.push(Verdict::Unsupported);
@@ -1901,6 +2029,10 @@ fn simulate_model_raw(
             .unwrap_or(Verdict::Unsupported);
         out.properties
             .push(json!({"id":id,"verdict":verdict,"cases":cases}));
+        if excluded {
+            out.properties.last_mut().unwrap()["excluded"] =
+                json!(PropertyExclusion::ScenarioContestNotFiled);
+        }
         if let Some(notes) = property_notes(m, verify.property) {
             out.properties.last_mut().unwrap()["notes"] = json!(notes);
         }
@@ -2046,6 +2178,9 @@ fn simulate_model_raw(
         out.diagnostics.push(recovery_transport_pending(m));
         verdicts.push(Verdict::Unsupported);
     }
+    out.metric_checks =
+        crate::evaluation::metric_checks(m, out.quality.as_ref(), true, alpha_after.as_ref());
+    verdicts.extend(out.metric_checks.iter().map(|c| c.verdict));
     out.verdict = if aborted && m.responsibility.is_none() {
         Verdict::Unsupported
     } else {
@@ -2083,6 +2218,9 @@ mod simulation_tests {
     }
 }
 
+#[cfg(test)]
+mod metric_check_tests;
+
 /// ADR 0008 selection; the source hash and ADR 0002 wire stay unchanged.
 pub fn check_configuration(src: &str, configuration: &str) -> Report {
     check_selected(src, configuration).0
@@ -2108,6 +2246,17 @@ pub(crate) fn check_selected_using(
 }
 
 pub(crate) fn check_selected_scenario_using(
+    src: &str,
+    configuration: &str,
+    scenario: Option<&str>,
+    execute: impl FnOnce(&ir::Model) -> outcome::Outcome,
+) -> (Report, Option<lower::SelectedConfiguration>) {
+    let (mut report, selected) = check_selected_raw(src, configuration, scenario, execute);
+    diag::locate(src, &mut report.diagnostics);
+    (report, selected)
+}
+
+fn check_selected_raw(
     src: &str,
     configuration: &str,
     scenario: Option<&str>,
@@ -2217,11 +2366,24 @@ pub(crate) fn check_ast_with_selection_using(
         report.ledger.execution["selection"]["effective"]["configuration"] =
             configuration.map_or_else(crate::ledger::undeclared, crate::ledger::known);
     }
-    seal(report)
+    let mut report = seal(report);
+    diag::locate(src, &mut report.diagnostics);
+    report
 }
 
 // Private injection seam keeps the pipeline tests independent of other components.
 fn check_with(
+    src: &str,
+    parse: impl FnOnce(&str) -> Result<ast::Model, Vec<diag::Diagnostic>>,
+    lower: impl FnOnce(&ast::Model) -> Result<ir::Model, Vec<diag::Diagnostic>>,
+    explore: impl FnOnce(&ir::Model) -> outcome::Outcome,
+) -> Report {
+    let mut report = check_raw(src, parse, lower, explore);
+    diag::locate(src, &mut report.diagnostics);
+    report
+}
+
+fn check_raw(
     src: &str,
     parse: impl FnOnce(&str) -> Result<ast::Model, Vec<diag::Diagnostic>>,
     lower: impl FnOnce(&ast::Model) -> Result<ir::Model, Vec<diag::Diagnostic>>,
@@ -2368,6 +2530,7 @@ fn empty_report(src: &str) -> Report {
         response_analysis: None,
         scenario: None,
         quality: None,
+        metric_checks: Vec::new(),
         state_range_violations: Vec::new(),
         capability_refusals: None,
         unchecked: Vec::new(),
@@ -2576,7 +2739,15 @@ fn quality_refusal_rows(rows: &mut Vec<Assumption>, m: &ir::Model) {
             .cloned(),
     );
     rows.push(quality_estimation());
+    sampled_mean_assumption(rows);
     place_quality_assumptions(rows);
+}
+
+fn sampled_mean_assumption(rows: &mut [Assumption]) {
+    if let Some(mean) = rows.iter_mut().find(|a| a.field == "quality.mean") {
+        mean.value = "pooled-case-sample-mean".into();
+        mean.affects = "反復をまたいで案件をまとめた標本平均。打切りがあれば点推定は出さない。統計的な区間は計算しない。".into();
+    }
 }
 
 fn simulation_refusal(
@@ -2588,6 +2759,7 @@ fn simulation_refusal(
         base.quality = Some(crate::quality::simulation(model, &[], true));
         quality_refusal_rows(&mut base.assumptions, model);
     }
+    base.metric_checks = crate::evaluation::metric_checks(model, base.quality.as_ref(), true, None);
     simulation_empty(finish(base, diagnostics))
 }
 
@@ -2633,6 +2805,8 @@ fn analysis_refusal(
         report.assumptions.push(quality_scheduler());
     }
     place_output_assumptions(&mut report.assumptions, report.quality.is_some(), false);
+    report.metric_checks =
+        crate::evaluation::metric_checks(model, report.quality.as_ref(), false, None);
     finish(report, diagnostics)
 }
 
@@ -2711,8 +2885,12 @@ fn read_write_anchor(rows: &[Assumption], model: &ir::Model) -> usize {
 fn place_quality_assumptions(rows: &mut Vec<Assumption>) {
     let mut quality = Vec::new();
     let mut quantile = Vec::new();
+    let mut mean = Vec::new();
     rows.retain(|row| {
-        if row.field == "quality.quantile" {
+        if row.field == "quality.mean" {
+            mean.push(row.clone());
+            false
+        } else if row.field == "quality.quantile" {
             quantile.push(row.clone());
             false
         } else if row.field.starts_with("quality.") {
@@ -2734,6 +2912,11 @@ fn place_quality_assumptions(rows: &mut Vec<Assumption>) {
         .position(|row| row.field == "probability.scheduler")
         .unwrap_or(rows.len());
     rows.splice(position..position, quantile);
+    let position = rows
+        .iter()
+        .position(|r| r.field == "probability.scheduler")
+        .unwrap_or(rows.len());
+    rows.splice(position..position, mean);
 }
 
 fn place_waiting_assumption(rows: &mut Vec<Assumption>) {
@@ -2744,7 +2927,7 @@ fn place_waiting_assumption(rows: &mut Vec<Assumption>) {
             .position(|a| {
                 matches!(
                     a.field.as_str(),
-                    "quality.quantile" | "probability.scheduler"
+                    "quality.quantile" | "quality.mean" | "probability.scheduler"
                 )
             })
             .unwrap_or(rows.len());
@@ -2819,10 +3002,13 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
     // pass this boundary. Projection is idempotent and never alters the trace.
     if let Some(metrics) = &mut mut_report.metrics {
         metrics.apply_deferred(model);
+        mark_contest_routes(model, metrics);
     }
     if let Some(quality) = &mut mut_report.quality {
         quality.apply_deferred(model);
     }
+    mut_report.metric_checks =
+        crate::evaluation::metric_checks(model, mut_report.quality.as_ref(), false, None);
     mut_report.capability_refusals = outcome.capability_refusals.clone();
     mut_report.state_range_violations = outcome.state_range_violations.clone();
     mut_report.bounds.range_violation_stops =
@@ -2853,6 +3039,9 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
         .properties
         .into_iter()
         .map(|property| Property {
+            excluded: model
+                .contest_response_excluded(property.property)
+                .then_some(PropertyExclusion::ScenarioContestNotFiled),
             notes: property_notes(model, property.property),
             cases: property.cases.map(|cs| {
                 cs.into_iter()
@@ -2974,6 +3163,7 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
                 .as_ref()
                 .is_some_and(crate::recovery::Recovery::unsettled);
         mut_report.properties.push(Property {
+            excluded: None,
             id: "receipt_resolution".into(),
             verdict: if unresolved {
                 Verdict::Inconclusive
@@ -3029,6 +3219,7 @@ fn apply_outcome(mut mut_report: Report, model: &ir::Model, outcome: outcome::Ou
 
 fn recovery_transport_pending(model: &ir::Model) -> diag::Diagnostic {
     diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::U_SEM_0.into(),
         severity: diag::Severity::Error,
         message: "recovery_feature_combination: recovery report transport is not connected".into(),
@@ -3115,6 +3306,7 @@ fn finish(mut report: Report, diagnostics: Vec<diag::Diagnostic>) -> Report {
     });
     if undeclared && !seen_cut {
         report.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::W_CUT_0.into(),
             severity: diag::Severity::Warning,
             message: "Cut is undeclared; exclusions are unknown".into(),
@@ -3122,11 +3314,29 @@ fn finish(mut report: Report, diagnostics: Vec<diag::Diagnostic>) -> Report {
         });
     }
     report.verdict = fold_verdict(&report.properties, &report.diagnostics);
+    if let Some(v) = report
+        .metric_checks
+        .iter()
+        .map(|c| c.verdict)
+        .max_by_key(|v| precedence(*v))
+        && precedence(v) > precedence(report.verdict)
+    {
+        report.verdict = v;
+    }
     // A witnessed reachable End does not close an unfinished degradation path.
     // Keep old input verdicts byte-stable; this is the ADR 0064 whole-run gate.
     report.verdict =
         degradation_cut_verdict(report.verdict, report.bounds.truncated, &report.assumptions);
     seal(report)
+}
+
+pub(crate) fn without_metric_checks(mut report: Report) -> Report {
+    if report.metric_checks.is_empty() {
+        return report;
+    }
+    report.metric_checks.clear();
+    report.unchecked.push("metric_constraints".into());
+    finish(report, Vec::new())
 }
 
 pub(crate) fn finite_driver(mut report: Report, budget: usize) -> Report {
@@ -3357,6 +3567,7 @@ mod tests {
 
     fn diagnostic(code: &str, severity: diag::Severity) -> diag::Diagnostic {
         diag::Diagnostic {
+            presentation: Default::default(),
             code: code.into(),
             severity,
             message: code.into(),
@@ -3388,6 +3599,7 @@ mod tests {
             case_priority: None,
             performances: Vec::new(),
             comparison: None,
+            metric_checks: Vec::new(),
             concurrency_resolutions: Vec::new(),
             resource_time: None,
             arrival_distribution: None,
@@ -3409,6 +3621,7 @@ mod tests {
             initial_distributions: Vec::new(),
             probability_queries: Vec::new(),
             state_variables: Vec::new(),
+            static_loop_rounds: Vec::new(),
             people: Vec::new(),
             authorities: Vec::new(),
             contracts: Vec::new(),
@@ -3460,6 +3673,7 @@ mod tests {
             for (j, right) in ordered.iter().enumerate() {
                 let properties = [
                     Property {
+                        excluded: None,
                         notes: None,
                         cases: None,
                         probability: None,
@@ -3467,6 +3681,7 @@ mod tests {
                         verdict: *left,
                     },
                     Property {
+                        excluded: None,
                         notes: None,
                         cases: None,
                         probability: None,
@@ -3486,6 +3701,7 @@ mod tests {
     #[test]
     fn fold_classifies_diagnostics_without_promoting_warnings() {
         let properties = [Property {
+            excluded: None,
             notes: None,
             cases: None,
             probability: None,
@@ -3513,6 +3729,7 @@ mod tests {
             assert_eq!(
                 fold_verdict(
                     &[Property {
+                        excluded: None,
                         notes: None,
                         cases: None,
                         probability: None,
@@ -3538,6 +3755,7 @@ mod tests {
             Verdict::Unsupported,
         ] {
             let held = [Property {
+                excluded: None,
                 notes: None,
                 cases: None,
                 probability: None,

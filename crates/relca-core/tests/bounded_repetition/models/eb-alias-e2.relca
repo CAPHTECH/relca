@@ -1,0 +1,42 @@
+model EvidenceAliasE2 version "0.2" {
+  type V = enum { pass, fail }
+  kernel Review { * -> { 0.5: pass; 0.5: fail } }
+  observed case { brief: optional<V> }
+  actor Doc { source document }
+  actor Clerk { capacity 1
+    capability intake() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability patch() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability draft() -> V { reads [brief]; duration fixed 1min; result nondet { pass } }
+    capability review() -> V { duration fixed 1min; outcomes kernel Review }
+  }
+  actor Boss { capacity 1
+    capability use(d: V) -> V { duration fixed 1min; result nondet { pass } }
+  }
+  cut C { include [Doc, Clerk, Boss] }
+  process Repeated {
+    i = Clerk.intake()
+    repeat rework at_most 2 {
+      d = Clerk.draft()
+      c = Clerk.review()
+      if c == pass { leave } else { p = Clerk.patch(); again }
+    } on_limit { end escalated }
+    u = Boss.use(d)
+    end done
+  }
+  process Written {
+    i = Clerk.intake()
+    d1 = Clerk.draft()
+    c1 = Clerk.review()
+    if c1 == pass { u1 = Boss.use(d1); end done } else {
+      p1 = Clerk.patch()
+      d2 = Clerk.draft()
+      c2 = Clerk.review()
+      if c2 == pass { u2 = Boss.use(d2); end done } else { p2 = Clerk.patch(); end escalated }
+    }
+  }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Written }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  metrics { window 20min; currency "JPY" }
+  contract Basis { evidence_basis Boss.use [Doc] }
+}

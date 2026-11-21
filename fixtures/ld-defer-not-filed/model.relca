@@ -1,0 +1,25 @@
+model LdContestNotFiled version "0.2" {
+  type V = enum { pass, fail }
+  people [c1,a1,cfo]
+  actor Approver { executors [a1]
+    capability approve() -> V { duration fixed 2min; result nondet { fail } }
+  }
+  actor Clerk { executors [c1]
+    capability recheck() -> V { duration fixed 1min; result nondet { pass } }
+  }
+  actor Vendor { control party; standing over [end.returned] basis "invoice claim" }
+  authority G { basis "approval table"; grants a1 to Approver.approve; issued_by cfo }
+  responsible a1 for Approver.approve
+  cut C { include [Approver,Clerk,Vendor]; reentry [contest Vendor -> Clerk.recheck]; defer Clerk.recheck reason "unknown effort" loses "route work" }
+  metrics { window 20min; currency "JPY" }
+  policy observable fifo tie_by case_id then call_order assign first_idle
+  scenario Day {
+    arrivals fixed [0min,1min]
+    bounds { cases 2; live_tasks 4; clock 20min }
+    simulation replications 4 seed 0 confidence 0.5
+    contest_not_filed Vendor on end.returned reason "contest frequency unknown"
+  }
+  contract K { authority_basis Approver.approve G; contest Vendor on end.returned route Clerk.recheck reversible_by [a1] respond_by 10min }
+  process P { v = Approver.approve(); if v == pass { end ok } else { end returned } }
+  verify safety no_resource_overcommit
+}

@@ -1,0 +1,29 @@
+model ParallelPair version "0.2" {
+  type V = enum { ok, denied }
+  latent case { ordinary: bool ~ { true: 1, false: 0 } }
+  actor A { capacity 1; capability work() -> V { duration fixed 2min; result nondet { ok } } }
+  actor B { capacity 1; capability work() -> V { duration fixed 3min; result nondet { ok } } }
+  process Repeated {
+    repeat wave at_most 2 {
+      fork f { a = A.work(); b = B.work() }
+      join all f
+      again
+    } on_limit { end done }
+  }
+  process Written {
+    fork f1 { a1 = A.work(); b1 = B.work() }
+    join all f1
+    fork f2 { a2 = A.work(); b2 = B.work() }
+    join all f2
+    end done
+  }
+  cut C { include [A,B] }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Written }
+  arrivals fixed [0min]
+  policy fifo tie_by case_id then call_order
+  bounds { cases 1; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; breakdown waits }
+  simulation replications 4 seed 7 confidence 0.5
+  verify probability reached end.done <= 0.1
+}

@@ -1,0 +1,17 @@
+model LdObservation version "0.2" {
+  type T = enum { ok }
+  observed case { left: bool = false; right: bool = false }
+  actor A { capacity 1
+    capability x() -> T { duration fixed 2min; result nondet { ok }; writes left; finish { left = true } }
+  }
+  actor B { capacity 1
+    capability y() -> T { duration fixed 2min; result nondet { ok }; writes right; finish { right = true } }
+  }
+  process P { fork f { a = A.x(); b = B.y() } join all f; end done }
+  cut C { include [A,B] }
+  bounds { cases 1; live_tasks 4; clock 10min }
+  simulation replications 4 seed 0 confidence 0.5
+  verify reachable end.done
+  property case.Hit = reached(left == true && right == false)
+  metric quantile.First = quantile(1, case.Hit)
+}

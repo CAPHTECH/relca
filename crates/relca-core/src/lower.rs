@@ -206,6 +206,7 @@ fn lower_selected(
 ) -> Result<ir::Model, Vec<Diagnostic>> {
     if agency_limit_scale.is_some_and(|n| !(1..=crate::agency::MAX_LIMIT_SCALE).contains(&n)) {
         return Err(vec![Diagnostic {
+            presentation: Default::default(),
             code: diag::E_SYN_0.into(),
             severity: diag::Severity::Error,
             message: "--agency-limit-scale is outside 1..=1000".into(),
@@ -289,6 +290,7 @@ fn lower_selected(
         let mut horizons = Vec::new();
         for item in &s.items {
             let item = match item {
+                ast::ScenarioItem::ContestNotFiled(_) => continue,
                 ast::ScenarioItem::ArrivalsDistribution(a) => {
                     ast::Item::ArrivalsDistribution(a.clone())
                 }
@@ -380,7 +382,19 @@ fn lower_effective(
         scenario: scenario.map(|s| ir::ScenarioRecord {
             name: s.name.value.clone(),
             span: s.span,
+            contests_not_filed: BTreeMap::new(),
         }),
+        contest_not_filed: scenario
+            .into_iter()
+            .flat_map(|s| &s.items)
+            .filter_map(|item| {
+                if let ast::ScenarioItem::ContestNotFiled(decl) = item {
+                    Some(decl.clone())
+                } else {
+                    None
+                }
+            })
+            .collect(),
         ..Default::default()
     };
     for d in horizons {
@@ -578,6 +592,24 @@ fn collect_comparison_ends(block: &ast::Block, names: &mut BTreeSet<String>) {
             | ast::Stmt::StopReceiptUnknown => {}
         }
     }
+}
+
+fn merge_blockers(model: &ir::Model) -> Vec<diag::Blocker> {
+    model
+        .process
+        .bindings
+        .iter()
+        .filter(|b| b.merge.is_some())
+        .map(|b| diag::Blocker::at("merge_binding", Some(b.name.clone()), Some(b.span)))
+        .collect()
+}
+
+fn response_blockers(model: &ir::Model) -> Vec<diag::Blocker> {
+    model
+        .response_attempts()
+        .into_iter()
+        .map(|(call, attempt)| diag::Blocker::for_call("call", model, call, attempt.command))
+        .collect()
 }
 
 pub(crate) fn collect_calls<'a>(block: &'a ast::Block, calls: &mut Vec<&'a ast::Call>) {
@@ -1892,6 +1924,7 @@ mod tests {
 
 #[derive(Default)]
 struct Lower {
+    contest_not_filed: Vec<ast::ContestNotFiled>,
     registration_targets: BTreeSet<ir::ActorId>,
     agency_limit_scale: Option<usize>,
     merge_names: BTreeSet<String>,
@@ -1918,6 +1951,7 @@ struct Lower {
     initial_distributions: Vec<Vec<(ir::StateValue, crate::probability::Rational)>>,
     probability_queries: Vec<ir::ProbabilityQuery>,
     state_variables: Vec<ir::StateVariable>,
+    static_loop_round_start: Option<usize>,
     state_names: BTreeMap<String, ir::StateVarId>,
     local_names: BTreeMap<(ir::ActorId, String), ir::StateVarId>,
     builtin_bool: Option<ir::TypeId>,
@@ -1957,6 +1991,7 @@ struct Lower {
     calls: BTreeMap<String, ir::Call>,
     forks: Vec<String>,
     fork_names: BTreeMap<String, ir::ForkId>,
+    collecting_loop: bool,
     fork_spans: BTreeMap<String, Span>,
     ambiguous_forks: BTreeSet<String>,
     ends: Vec<String>,
@@ -3281,7 +3316,12 @@ impl Lower {
                 return None;
             };
             if self.actors[actor.0].executors.is_none() {
-                self.unsupported("executor.id requires declared executors", a.value.span);
+                self.executor_refusal(
+                    "executor.id requires declared executors",
+                    "executor_reference",
+                    *actor,
+                    a.value.span,
+                );
                 return None;
             }
             if Some(v.base) != self.builtin_person || a.operator != ast::AssignmentOp::Assign {
@@ -4005,6 +4045,7 @@ impl Lower {
 
     fn error(&mut self, code: &str, message: impl Into<String>, span: Span) {
         self.errors.push(Diagnostic {
+            presentation: Default::default(),
             code: code.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -4012,8 +4053,148 @@ impl Lower {
         });
     }
 
+    fn resolve_contest_not_filed(
+        &mut self,
+        contests: &[crate::contest::Contest],
+    ) -> Vec<Diagnostic> {
+        let mut warnings = Vec::new();
+        for declaration in std::mem::take(&mut self.contest_not_filed) {
+            if declaration.reason.value.trim().is_empty() {
+                self.error(
+                    diag::E_SYN_0,
+                    "contest_not_filed reason must not be empty",
+                    declaration.reason.span,
+                );
+                continue;
+            }
+            let candidates: Vec<_> = contests.iter().enumerate().filter(|(_, c)| {
+                self.actors[c.party.0].name == declaration.party.value
+                    && matches!(c.target, crate::contest::ContestTarget::End(e) if self.ends[e.0] == declaration.end.value)
+            }).collect();
+            let [(id, contest)] = candidates.as_slice() else {
+                if candidates.is_empty() {
+                    self.error(
+                        E_NAME_0,
+                        "no matching contest for contest_not_filed",
+                        declaration.span,
+                    );
+                } else {
+                    self.unsupported("ambiguous contest_not_filed", declaration.span);
+                }
+                continue;
+            };
+            if contest.rates.is_some() {
+                self.unsupported(
+                    "contest_not_filed conflicts with declared rates",
+                    declaration.span,
+                );
+                continue;
+            }
+            let s = self.scenario.as_mut().expect("scenario-only exclusion");
+            if s.contests_not_filed.contains_key(id) {
+                self.unsupported("duplicate contest_not_filed", declaration.span);
+                continue;
+            }
+            warnings.push(Diagnostic {
+                presentation: Default::default(),
+                code: diag::W_CONTEST_1.into(),
+                severity: diag::Severity::Warning,
+                span: Some(declaration.span),
+                message: format!("scenario {}: contest {} on end.{} is not filed (reason {:?}); contest workload and response are not evaluated", s.name, declaration.party.value, declaration.end.value, declaration.reason.value),
+            });
+            s.contests_not_filed.insert(*id, declaration.reason.value);
+        }
+        warnings
+    }
+
     fn unsupported(&mut self, message: impl Into<String>, span: Span) {
         self.error(U_SEM_0, message, span);
+    }
+
+    fn unsupported_detail(
+        &mut self,
+        message: impl Into<String>,
+        span: Span,
+        reason: &str,
+        cause: &str,
+        blockers: Vec<diag::Blocker>,
+    ) {
+        self.errors.push(
+            Diagnostic {
+                presentation: Default::default(),
+                code: U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message: message.into(),
+                span: Some(span),
+            }
+            .unconnected(reason, cause, blockers),
+        );
+    }
+
+    fn executor_refusal(&mut self, message: &str, cause: &str, actor: ir::ActorId, span: Span) {
+        let actor = &self.actors[actor.0];
+        let blockers = vec![diag::Blocker::at(
+            "feature",
+            Some(actor.name.clone()),
+            Some(actor.span),
+        )];
+        self.unsupported_detail(
+            message,
+            span,
+            "executor_identity_unavailable",
+            cause,
+            blockers,
+        );
+    }
+
+    fn call_blocker(&self, call: &ir::Call) -> diag::Blocker {
+        let binding = self.bindings.get(call.binding.0);
+        let mut blocker = diag::Blocker::at(
+            "call",
+            binding.map(|b| {
+                b.repetition
+                    .as_ref()
+                    .map_or(&b.name, |s| &s.call_site)
+                    .clone()
+            }),
+            Some(call.span),
+        );
+        blocker.rounds.extend(
+            binding
+                .and_then(|b| b.repetition.as_ref())
+                .and_then(|s| s.round),
+        );
+        blocker
+    }
+
+    fn result_refusal(
+        &mut self,
+        message: &str,
+        cause: &str,
+        reference: &ast::Ident,
+        id: ir::BindingId,
+    ) {
+        let mut blockers = vec![diag::Blocker::at(
+            "reference",
+            Some(reference.value.clone()),
+            Some(reference.span),
+        )];
+        if let Some(call) = self.calls.get(&reference.value) {
+            blockers.push(self.call_blocker(call));
+        } else if let Some(binding) = self.bindings.get(id.0) {
+            blockers.push(diag::Blocker::at(
+                "feature",
+                Some(binding.name.clone()),
+                Some(binding.span),
+            ));
+        }
+        self.unsupported_detail(
+            message,
+            reference.span,
+            "result_not_definitely_available",
+            cause,
+            blockers,
+        );
     }
 
     fn model(
@@ -4390,7 +4571,7 @@ impl Lower {
         }) {
             return Err(self.errors);
         }
-        self.loop_declarations(model);
+        self.loop_declarations(model, selection);
         for item in &model.items {
             if let ast::Item::Kernel(k) = item {
                 if self.kernel_declarations.contains_key(&k.name.value) {
@@ -4766,8 +4947,20 @@ impl Lower {
             };
             let body = self.block(&p.body, &mut flow);
             let degradations = self.degradations(p, &body);
-            if let Some(span) = crate::agency::concurrent_read(&body, &self.capabilities) {
-                self.unsupported("read variable has a concurrent writer", span);
+            if let Some((reader, writer)) =
+                crate::agency::concurrent_read(&body, &self.capabilities)
+            {
+                let blockers = [reader, writer]
+                    .into_iter()
+                    .map(|call| self.call_blocker(call))
+                    .collect();
+                self.unsupported_detail(
+                    "read variable has a concurrent writer",
+                    reader.span,
+                    "concurrent_read_write",
+                    "fork_read_write",
+                    blockers,
+                );
             }
             process = Some(ir::Process {
                 degradations,
@@ -4781,6 +4974,7 @@ impl Lower {
         for histories in self.terminal_histories.values() {
             if histories.len() > 1 {
                 self.errors.push(Diagnostic {
+                    presentation: Default::default(),
                     code: U_SEM_0.into(),
                     severity: diag::Severity::Error,
                     message: "terminal mixes paths with and without an any adoption".into(),
@@ -4911,6 +5105,9 @@ impl Lower {
                             }
                             ast::PolicyExtension::FirstIdle => {
                                 (&mut policy.assign_first_idle, "assign first_idle")
+                            }
+                            ast::PolicyExtension::AfterFinishes => {
+                                (&mut policy.dispatch_after_finishes, "dispatch")
                             }
                         };
                         if *flag {
@@ -5244,8 +5441,32 @@ impl Lower {
                         rates,
                     } = &clause.value
                     {
-                        if rates.is_some() && matches!(target, ast::StandingRef::Commit(_)) {
-                            self.unsupported("contest_rates_effect_target", clause.span);
+                        if let (Some(rates), ast::StandingRef::Commit(path)) = (rates, target) {
+                            let reason = "contest_rates_effect_target";
+                            self.errors.push(
+                                Diagnostic {
+                                    presentation: Default::default(),
+                                    code: U_SEM_0.into(),
+                                    severity: diag::Severity::Error,
+                                    message: reason.into(),
+                                    span: Some(clause.span),
+                                }
+                                .unconnected(
+                                    reason,
+                                    "commit_target",
+                                    vec![
+                                        diag::Blocker::at(
+                                            "reference",
+                                            Some(format!(
+                                                "{}.{}",
+                                                path.actor.value, path.capability.value
+                                            )),
+                                            Some(path.span),
+                                        ),
+                                        diag::Blocker::at("feature", None, Some(rates.span)),
+                                    ],
+                                ),
+                            );
                         }
                         let rates = rates.as_ref().and_then(|r| self.contest_rates(r));
                         feature = true;
@@ -5431,14 +5652,49 @@ impl Lower {
             self.unsupported("at least one verification request is required", model.span);
         }
         let quality = self.quality(model);
+        let metric_checks = model
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ast::Item::VerifyMetric(row) => self.metric_constraint(row, quality.as_ref()),
+                _ => None,
+            })
+            .collect();
         let comparison = self.comparison(model, quality.as_ref());
-        let (cut, cut_warnings) = self.cut(model, selected);
+        warnings.extend(self.resolve_contest_not_filed(&metadata.contests));
+        let (mut cut, cut_warnings) = self.cut(model, selected);
+        if let (Some(cut), Some(s)) = (&mut cut, &self.scenario) {
+            for id in s.contests_not_filed.keys() {
+                let contest = &metadata.contests[*id];
+                let route = &self.capabilities[contest.route.0];
+                let row = format!(
+                    "contest {} -> {}.{}",
+                    self.actors[contest.party.0].name, self.actors[route.actor.0].name, route.name
+                );
+                let suffix = format!(" (not filed in scenario {})", s.name);
+                let compact = |text: &str| text.split_whitespace().collect::<String>();
+                if let Some(entry) = cut
+                    .reentry
+                    .iter_mut()
+                    .find(|entry| compact(entry) == compact(&row))
+                {
+                    entry.push_str(&suffix);
+                } else if !cut
+                    .reentry
+                    .iter()
+                    .any(|entry| compact(entry) == compact(&format!("{row}{suffix}")))
+                {
+                    cut.reentry.push(format!("{row}{suffix}"));
+                }
+            }
+        }
         warnings.extend(cut_warnings);
         let contract_selection = crate::contract_scope::Selection::from_ast(model, selection);
         warnings.extend(contract_selection.warnings());
         self.rule_amendments(model, selected);
         if !model.items.iter().any(|i| matches!(i, ast::Item::Cut(_))) {
             warnings.push(Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_CUT_0.into(),
                 severity: diag::Severity::Warning,
                 message:
@@ -5456,6 +5712,7 @@ impl Lower {
         // placeholder is ever returned, even for a hand-constructed invalid AST.
         let (Some(process), Some(bounds)) = (process, bounds) else {
             return Err(vec![Diagnostic {
+                presentation: Default::default(),
                 code: U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "missing process or explicit bounds".into(),
@@ -5484,6 +5741,7 @@ impl Lower {
                     "environment" => classes.environment.push(id),
                     other => {
                         return Err(vec![Diagnostic {
+                            presentation: Default::default(),
                             code: U_SEM_0.into(),
                             severity: diag::Severity::Error,
                             message: format!("unknown Actor control {other}"),
@@ -5604,6 +5862,17 @@ impl Lower {
                 );
             }
             if let Some(p) = &start_policy {
+                let queue_affects = if p.call_order {
+                    "方策の区分の待ちを、待ちに入った時刻・案件ID・呼出しの字句の順で比較し、開始可能な最小の1件を1遷移で開始または拒否する。Actorと資源の待ちの先頭を追い越さず、人は取り置かない。通常の呼出しはprocess本体の前順、contestの合成呼出しはその後のcontest宣言順とする。環境とpartyにはActorごとのFIFOだけが掛かる。同じ時刻に後から待ちに入るTaskは比べない。"
+                } else {
+                    "each start compares only the tasks queued within the Actor at that moment, by queue-entry time then case ID; tasks entering the queue later in the same instant are not compared; ties within one case remain nondeterministic"
+                };
+                let after_finishes_affects = p.dispatch_after_finishes.then(|| {
+                    if p.call_order { queue_affects.replace(
+                            "同じ時刻に後から待ちに入るTaskは比べない。",
+                            "同じ時刻に待ちに入った Task も鍵で比べる。",
+                        ) } else { "方策の区分では、同じ時刻の終了と ack の後に、Actor の待ちに入った時刻と案件IDで比べる。同じ時刻に待ちに入った Task も鍵で比べる。同じ案件内の同着は非決定のまま残る。".into() }
+                });
                 add(
                     "policy.queue",
                     format!(
@@ -5611,11 +5880,7 @@ impl Lower {
                         if p.observable { "observable " } else { "" },
                         if p.call_order { " then call_order" } else { "" }
                     ),
-                    if p.call_order {
-                        "方策の区分の待ちを、待ちに入った時刻・案件ID・呼出しの字句の順で比較し、開始可能な最小の1件を1遷移で開始または拒否する。Actorと資源の待ちの先頭を追い越さず、人は取り置かない。通常の呼出しはprocess本体の前順、contestの合成呼出しはその後のcontest宣言順とする。環境とpartyにはActorごとのFIFOだけが掛かる。同じ時刻に後から待ちに入るTaskは比べない。"
-                    } else {
-                        "each start compares only the tasks queued within the Actor at that moment, by queue-entry time then case ID; tasks entering the queue later in the same instant are not compared; ties within one case remain nondeterministic"
-                    },
+                    after_finishes_affects.as_deref().unwrap_or(queue_affects),
                 );
                 if let Some(classes) = &p.classes {
                     let called: Vec<_> = self
@@ -5648,6 +5913,13 @@ impl Lower {
                             "policy.assign",
                             "first_idle(executors order)".into(),
                             &affects,
+                        );
+                    }
+                    if p.dispatch_after_finishes {
+                        add(
+                            "policy.dispatch",
+                            "after_finishes".into(),
+                            "方策の区分の開始は、同じ時刻の終了と ack を全部処理した後に決める。採用と開始の同時刻、環境の区分の開始、終了どうしの順は、この延長では決めない。",
                         );
                     }
                     let mut affects = "方策が解くのはpolicy区分の宣言した開始順と割当てだけである。解かない選択は非決定のまま残る。方策はmodelの規則でActorとして切っておらず、Cutのinclude/excludeとSilent Cut検出の対象外である。安全性・契約・時間の結論は、この固定方策が生む経路と環境の全選択についてであり、別の方策の順序・割当てを保証しない。".to_owned();
@@ -5819,6 +6091,17 @@ impl Lower {
                     "比較条件を固定する。scenarioの外の宣言は全scenarioに共通で、上書きしない。"
                         .into(),
             });
+            for id in s.contests_not_filed.keys() {
+                let contest = &metadata.contests[*id];
+                let crate::contest::ContestTarget::End(end) = contest.target else {
+                    unreachable!()
+                };
+                assumptions.push(ir::Assumption {
+                    field: "scenario.contest_not_filed".into(),
+                    value: format!("{} on end.{}", self.actors[contest.party.0].name, self.ends[end.0]),
+                    affects: "この scenario の時間・待ち・作業・稼働率・処理量は、この異議が起票されない条件のもとの値である。異議の頻度、再確認の作業、応答の期限は評価していない。差戻しの多い構成ほど、外した負荷は大きい。".into(),
+                });
+            }
             if let Some(d) = self.horizon {
                 assumptions.push(ir::Assumption { field: "scenario.horizon".into(), value: format!("{d}min"), affects: "業務上の打切り。未完了を成功・失敗・受付拒否・計算上の切断に数えず、継続に依る性質は未確定。指標は打切りまでの観測値であり、業務全期間の作業量・費用の下界。Cut.horizonは記録のみ。".into() });
             }
@@ -5846,6 +6129,7 @@ impl Lower {
                 {
                     if crate::agency::lexical_has_capability(&process.body, id) {
                         return Err(vec![Diagnostic {
+                            presentation: Default::default(),
                             code: diag::E_DIFF_0.into(),
                             severity: diag::Severity::Error,
                             message: "kept fallback is still called on the normal path".into(),
@@ -5923,6 +6207,12 @@ impl Lower {
                 affects: "到着から性質への初到達時間の左の最小整数値で補間しない。全流入は不達を含み、given reachedは到達した質量だけを分母にする。網羅は案件ごとのxごとのmin/maxからの区間で同時の分布ではない。simulationは反復と案件をまとめた点推定であり、案件を独立標本とせず、区間推定でも全スケジュールの検証でもない。打切りで識別できない値は理由つきnullと下界に分ける。".into(),
             });
         }
+        if quality.as_ref().is_some_and(|q| !q.means.is_empty()) {
+            assumptions.push(ir::Assumption {
+                field:"quality.mean".into(), value:"ratio-of-expected-totals; per-case-bounds".into(),
+                affects:"確率で重み付けた量の期待総量の比。非決定は案件ごとの最小・最大の和であり、案件をまたぐ同時の分布ではない。資源競合では実際の平均の範囲より広くなりうる。下界は値ではない。".into(),
+            });
+        }
         if !self.performances.is_empty()
             || self
                 .capabilities
@@ -5936,7 +6226,12 @@ impl Lower {
             assumptions.push(ir::Assumption { field:"agency.limit".into(), value:format!("computational_x{scale}"),
                 affects:"Agency導出のworkとcellsだけに掛ける計算上の倍率。業務上の上限や性質の探索予算は変えない".into() });
         }
+        let static_loop_rounds = self
+            .static_loop_round_start
+            .map(|start| self.state_variables.split_off(start))
+            .unwrap_or_default();
         let mut lowered = ir::Model {
+            static_loop_rounds,
             agency_limit_scale: self.agency_limit_scale.unwrap_or(1),
             contract_selection,
             case_priority: None,
@@ -5946,6 +6241,7 @@ impl Lower {
             performances: self.performances,
             fallback_capabilities,
             quality,
+            metric_checks,
             comparison,
             resources: self.resources,
             metrics,
@@ -5982,6 +6278,58 @@ impl Lower {
         };
         crate::contract_scope::resolve_calls(&mut lowered);
         priority::lower(model, &mut lowered, &self.called_actors)?;
+        if let Some(policy) = lowered.start_policy.as_ref().filter(|p| p.extended()) {
+            let unsupported = if lowered.has_merges() {
+                Some((
+                    "policy_feature_combination: policy ordering with merge is unsupported",
+                    "merge",
+                ))
+            } else if lowered.recovery().is_some() {
+                Some((
+                    "policy_feature_combination: policy ordering with a receipt query or recovery handler is unsupported",
+                    "recovery",
+                ))
+            } else {
+                None
+            };
+            if let Some((message, cause)) = unsupported {
+                let mut blockers = merge_blockers(&lowered);
+                blockers.extend(
+                    lowered
+                        .response_attempts()
+                        .into_iter()
+                        .filter(|(_, attempt)| attempt.recovery.is_some())
+                        .map(|(call, attempt)| {
+                            diag::Blocker::for_call("call", &lowered, call, attempt.command)
+                        }),
+                );
+                blockers.extend(model.items.iter().filter_map(|item| match item {
+                    ast::Item::Policy(p) => Some(diag::Blocker::at("feature", None, Some(p.span))),
+                    _ => None,
+                }));
+                let mut ds = lowered.diagnostics;
+                ds.push(
+                    Diagnostic {
+                        presentation: Default::default(),
+                        code: U_SEM_0.into(),
+                        severity: diag::Severity::Error,
+                        message: message.into(),
+                        span: Some(model.span),
+                    }
+                    .unconnected("policy_feature_combination", cause, blockers),
+                );
+                return Err(ds);
+            }
+            if policy.call_order && lowered.has_loops() {
+                for a in lowered
+                    .assumptions
+                    .iter_mut()
+                    .filter(|a| a.field == "policy.queue")
+                {
+                    a.affects.push_str("反復の字句順は、1回目から順に各回の呼出しを並べ、on_limit、反復の後続が続く。");
+                }
+            }
+        }
         crate::registration::supported(&lowered)?;
         crate::evidence_basis::prepare(&mut lowered)?;
         crate::same_version::supported(&lowered)?;
@@ -6005,6 +6353,7 @@ impl Lower {
             && (!lowered.contests().is_empty() || lowered.arrival_distribution.is_some())
         {
             return Err(vec![Diagnostic {
+                presentation: Default::default(),
                 code: U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "q6_feature_combination: degradation with contest or distributed arrivals"
@@ -6024,6 +6373,45 @@ impl Lower {
                 affects: "休み・勤務終了でも実行者・資源・残時間を保持し通常終了又は取消ackまで壁時計で継続する。料金時間外と予定枠超過を別量にする。現実の勤務制度は認定しない。".into(),
             });
         }
+        if lowered
+            .quality
+            .as_ref()
+            .is_some_and(|q| !q.means.is_empty())
+            && (lowered.has_merges() || !lowered.response_attempts().is_empty())
+        {
+            let mut blockers = model
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ast::Item::MeanMetric(metric) => Some(diag::Blocker::at(
+                        "feature",
+                        Some(metric.name.value.clone()),
+                        Some(metric.span),
+                    )),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let cause = if lowered.has_merges() {
+                "merge"
+            } else {
+                "response_or_retry"
+            };
+            blockers.extend(merge_blockers(&lowered));
+            blockers.extend(response_blockers(&lowered));
+            let mut ds = lowered.diagnostics;
+            ds.push(
+                Diagnostic {
+                    presentation: Default::default(),
+                    code: U_SEM_0.into(),
+                    severity: diag::Severity::Error,
+                    message: "mean_feature_combination: merge and receipt/retry are unsupported"
+                        .into(),
+                    span: Some(model.span),
+                }
+                .unconnected("mean_feature_combination", cause, blockers),
+            );
+            return Err(ds);
+        }
         if lowered.has_merges()
             && (!lowered.contests().is_empty()
                 || lowered
@@ -6031,33 +6419,80 @@ impl Lower {
                     .as_ref()
                     .is_some_and(|q| !q.quantiles.is_empty()))
         {
+            let mut blockers: Vec<_> = lowered
+                .process
+                .bindings
+                .iter()
+                .filter(|b| b.merge.is_some())
+                .map(|b| diag::Blocker::at("merge_binding", Some(b.name.clone()), Some(b.span)))
+                .collect();
+            let contests = lowered.contests();
+            let cause = if contests.is_empty() {
+                "quantile"
+            } else {
+                "contest"
+            };
+            blockers.extend(
+                contests
+                    .iter()
+                    .map(|c| diag::Blocker::at("contest", None, Some(c.span))),
+            );
+            blockers.extend(model.items.iter().filter_map(|i| match i {
+                ast::Item::QuantileMetric(q) => Some(diag::Blocker::at(
+                    "quantile",
+                    Some(q.name.value.clone()),
+                    Some(q.span),
+                )),
+                _ => None,
+            }));
             let mut ds = lowered.diagnostics;
             ds.push(Diagnostic {
+                presentation: Default::default(),
                 code: U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message:
                     "merge_feature_combination: merge with contest or quantiles is not connected"
                         .into(),
                 span: Some(model.span),
-            });
+            }.merge_detail(cause, blockers));
             return Err(ds);
         }
-        if lowered.has_loops()
-            && (!lowered.contests().is_empty()
-                || lowered
-                    .quality
-                    .as_ref()
-                    .is_some_and(|q| !q.quantiles.is_empty()))
+        if (lowered.has_loops()
+            || lowered
+                .contests()
+                .iter()
+                .any(|c| lowered.reads_static_loop_round(&lowered.capabilities[c.route.0])))
+            && !lowered.contests().is_empty()
         {
+            let repeats: Vec<_> = lowered
+                .state_variables
+                .iter()
+                .filter(|v| v.is_loop_round())
+                .map(|v| diag::Blocker::repeat_from_name(v.span))
+                .collect();
+            let contest = lowered.contests().first().map(|c| c.span);
             let mut ds = lowered.diagnostics;
-            ds.push(Diagnostic {
+            let mut diagnostic = Diagnostic {
+                presentation: Default::default(),
                 code: U_SEM_0.into(),
                 severity: diag::Severity::Error,
-                message:
-                    "loop_feature_combination: repeat with contest or quantiles is not connected"
-                        .into(),
+                message: "loop_feature_combination: repeat with contest is not connected".into(),
                 span: Some(model.span),
-            });
+            }
+            .loop_detail(
+                "contest",
+                diag::DetailKind::AnalysisNotConnected,
+                None,
+                contest,
+            );
+            diagnostic
+                .presentation
+                .detail
+                .as_mut()
+                .unwrap()
+                .blockers
+                .extend(repeats);
+            ds.push(diagnostic);
             return Err(ds);
         }
         if !lowered.response_attempts().is_empty()
@@ -6068,9 +6503,33 @@ impl Lower {
                     .is_some_and(|q| !q.quantiles.is_empty()))
         {
             let recovery = lowered.recovery().is_some();
+            let contests = lowered.contests();
+            let cause = if contests.is_empty() {
+                "quantile"
+            } else {
+                "contest"
+            };
+            let mut blockers: Vec<_> = contests
+                .iter()
+                .map(|c| diag::Blocker::at("contest", None, Some(c.span)))
+                .collect();
+            blockers.extend(model.items.iter().filter_map(|item| match item {
+                ast::Item::QuantileMetric(q) => Some(diag::Blocker::at(
+                    "quantile",
+                    Some(q.name.value.clone()),
+                    Some(q.span),
+                )),
+                _ => None,
+            }));
+            blockers.extend(response_blockers(&lowered));
+            let reason = if recovery {
+                "recovery_feature_combination"
+            } else {
+                "retry_feature_combination"
+            };
             let mut ds = lowered.diagnostics;
-            ds.push(Diagnostic {code:U_SEM_0.into(),severity:diag::Severity::Error,
-                message:if recovery{"recovery_feature_combination: contest or quantiles are unsupported"}else{"retry_feature_combination: receipt/retry with contest or quantiles is unsupported"}.into(),span:Some(model.span)});
+            ds.push(Diagnostic { presentation: Default::default(), code:U_SEM_0.into(),severity:diag::Severity::Error,
+                message:if recovery{"recovery_feature_combination: contest or quantiles are unsupported"}else{"retry_feature_combination: receipt/retry with contest or quantiles is unsupported"}.into(),span:Some(model.span)}.unconnected(reason, cause, blockers));
             return Err(ds);
         }
         if let Err(error) = crate::actor_table::validate(&lowered) {
@@ -6095,6 +6554,7 @@ impl Lower {
                 })
                 .unwrap_or(model.span);
             return Err(vec![Diagnostic {
+                presentation: Default::default(),
                 code: error.code.into(),
                 severity: diag::Severity::Error,
                 message: error.message.into(),
@@ -6117,6 +6577,7 @@ impl Lower {
                         || a.rule_grants.iter().any(|g| g.persons.contains(&p)))
                 {
                     lowered.diagnostics.push(Diagnostic {
+                        presentation: Default::default(),
                         code: diag::W_AUTH_0.into(),
                         severity: diag::Severity::Warning,
                         message: format!(
@@ -6156,6 +6617,7 @@ impl Lower {
                                 .any(|g| g.persons.contains(&amendment.by)))
                     {
                         lowered.diagnostics.push(Diagnostic {
+                            presentation: Default::default(),
                             code: diag::W_AUTH_0.into(),
                             severity: diag::Severity::Warning,
                             message: format!(
@@ -6181,6 +6643,7 @@ impl Lower {
                     };
                     if let Some(message) = message {
                         return Err(vec![Diagnostic {
+                            presentation: Default::default(),
                             code: U_SEM_0.into(),
                             severity: diag::Severity::Error,
                             message: message.into(),
@@ -6195,6 +6658,7 @@ impl Lower {
         }
         if let Some((span, name)) = crate::contest::restricted_authority_reference(&lowered) {
             return Err(vec![Diagnostic {
+                presentation: Default::default(),
                 code: U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: format!("contest cannot reference restricted Authority {name}"),
@@ -6590,11 +7054,14 @@ impl Lower {
     }
 
     fn named_target(&mut self, cap: ir::CapabilityId, span: Span) {
-        if self.actors[self.capabilities[cap.0].actor.0]
-            .executors
-            .is_none()
-        {
-            self.unsupported("executor identity is required", span);
+        let actor = self.capabilities[cap.0].actor;
+        if self.actors[actor.0].executors.is_none() {
+            self.executor_refusal(
+                "executor identity is required",
+                "contract_executor",
+                actor,
+                span,
+            );
         }
     }
 
@@ -7747,9 +8214,11 @@ impl Lower {
                     self.value(self.bindings[id.0].ty, value)
                 };
                 if available.is_some_and(|a| !a.contains(&id)) {
-                    self.unsupported(
+                    self.result_refusal(
                         "contract result is not definitely available at every call site",
-                        binding.span,
+                        "contract_result",
+                        binding,
+                        id,
                     );
                 }
                 member.map(|value| ir::Cond::Eq(ir::ResultMatch { binding: id, value }))
@@ -7876,6 +8345,7 @@ impl Lower {
         let entry = |this: &mut Self, e: &ast::Exclusion, warnings: &mut Vec<Diagnostic>| {
             if e.loses.is_none() {
                 warnings.push(Diagnostic {
+                    presentation: Default::default(),
                     code: diag::W_CUT_1.into(),
                     severity: diag::Severity::Warning,
                     message: format!(
@@ -7952,6 +8422,7 @@ impl Lower {
                             })
                             .unwrap_or_default();
                         warnings.push(Diagnostic {
+                            presentation: Default::default(),
                             code: diag::W_CUT_2.into(),
                             severity: diag::Severity::Warning,
                             message: format!("defer {target} matches no Actor or Actor.capability{hint}: every metrics and quality value is withdrawn as not_configured"),
@@ -8552,6 +9023,7 @@ impl Lower {
             };
             if let Some(name) = unused {
                 warnings.push(Diagnostic {
+                    presentation: Default::default(),
                     code: diag::W_CONF_0.into(),
                     severity: diag::Severity::Warning,
                     message: format!("{} is not referenced by any configuration", name.value),
@@ -8746,7 +9218,7 @@ impl Lower {
                 ast::DiffKind::Meaning => end,
                 ast::DiffKind::Contest => end || (parts.len() == 3 && parts[2].value == "commit" && self.cap_names.get(&(parts[0].value.clone(), parts[1].value.clone())).is_some_and(|c| self.capabilities[c.0].commits)),
                 ast::DiffKind::Visibility => actor && model.items.iter().any(|i| matches!(i, ast::Item::Actor(a) if a.name.value == parts[0].value && a.items.iter().any(|i| matches!(i, ast::ActorItem::Source(..))))),
-                ast::DiffKind::Qualification | ast::DiffKind::Performance | ast::DiffKind::Degradation => false,
+                ast::DiffKind::Qualification | ast::DiffKind::Performance | ast::DiffKind::Degradation | ast::DiffKind::Record | ast::DiffKind::Repetition => false,
             };
             if !resolved {
                 let legacy = matches!(
@@ -8839,6 +9311,78 @@ impl Lower {
         }
     }
 
+    fn metric_constraint(
+        &mut self,
+        row: &ast::MetricConstraint,
+        quality: Option<&ir::QualitySpec>,
+    ) -> Option<ir::MetricConstraint> {
+        let resolved = quality.and_then(|q| {
+            if row.mean {
+                q.means
+                    .iter()
+                    .enumerate()
+                    .find(|(_, c)| c.name == row.target.value)
+                    .map(|(i, c)| (ir::MetricRef::Mean(i), c.measure != ir::MeanMeasure::Cost))
+            } else {
+                q.metrics
+                    .iter()
+                    .position(|c| c.name == row.target.value)
+                    .map(|i| (ir::MetricRef::Cohort(i), false))
+            }
+        });
+        let Some((target, time)) = resolved else {
+            self.error(
+                diag::E_NAME_0,
+                "unknown metric in constraint",
+                row.target.span,
+            );
+            return None;
+        };
+        Some(ir::MetricConstraint {
+            target,
+            op: row.op,
+            bound: self.metric_bound(row, time)?,
+        })
+    }
+
+    fn metric_bound(
+        &mut self,
+        row: &ast::MetricConstraint,
+        time: bool,
+    ) -> Option<crate::metrics::MetricNumber> {
+        use crate::metrics::MetricNumber;
+        use crate::probability::Rational;
+        Some(match (&row.bound, time) {
+            (ast::MetricBound::Time(d), true) => MetricNumber::from(self.ticks(d)?),
+            (ast::MetricBound::Number(n), false) if !row.mean => {
+                MetricNumber(self.probability(n)?.0)
+            }
+            (ast::MetricBound::Number(n), false) => {
+                let Some(p) = Rational::decimal(&n.value).filter(|p| p >= &Rational::zero()) else {
+                    self.error(
+                        diag::E_TYPE_0,
+                        "metric threshold must be nonnegative",
+                        n.span,
+                    );
+                    return None;
+                };
+                MetricNumber(p.0)
+            }
+            _ => {
+                self.error(
+                    diag::U_SYN_0,
+                    if time {
+                        "time metric threshold requires a duration"
+                    } else {
+                        "metric threshold requires a number"
+                    },
+                    row.target.span,
+                );
+                return None;
+            }
+        })
+    }
+
     fn comparison(
         &mut self,
         model: &ast::Model,
@@ -8869,53 +9413,72 @@ impl Lower {
             {
                 self.error(E_NAME_0, "unknown cut", n.span);
             }
-            let mut resolve = |n: &ast::Ident, quantile: bool| {
-                let found = quality.and_then(|q| {
-                    if quantile {
-                        q.quantiles.iter().position(|m| m.name == n.value)
-                    } else {
-                        q.metrics.iter().position(|m| m.name == n.value)
-                    }
+            let mut resolve = |n: &ast::Ident, kind: &str| {
+                let found = quality.and_then(|q| match kind {
+                    "quantile" => q.quantiles.iter().position(|m| m.name == n.value),
+                    "mean" => q.means.iter().position(|m| m.name == n.value),
+                    _ => q.metrics.iter().position(|m| m.name == n.value),
                 });
                 if found.is_none() {
-                    if quantile {
+                    if kind == "quantile" {
                         self.error(
                             E_NAME_0,
                             format!("unknown quantile metric: {}", n.value),
                             n.span,
                         );
                     } else {
-                        self.error(E_NAME_0, "unknown cohort metric", n.span);
+                        self.error(E_NAME_0, format!("unknown {kind} metric"), n.span);
                     }
                 }
                 found
             };
-            let hard_ids: Vec<_> = c.hard.iter().map(|h| resolve(&h.cohort, false)).collect();
+            let hard_ids: Vec<_> = c
+                .hard
+                .iter()
+                .map(|h| {
+                    let row = &h.constraint;
+                    if row.mean {
+                        resolve(&row.target, "mean").map(ir::MetricRef::Mean)
+                    } else {
+                        resolve(&row.target, "cohort").map(ir::MetricRef::Cohort)
+                    }
+                })
+                .collect();
             let objective_ids: Vec<_> = c
                 .objectives
                 .iter()
                 .map(|o| match &o.target {
-                    ast::ObjectiveRef::Cohort(n) => resolve(n, false).map(ir::ObjectiveRef::Cohort),
-                    ast::ObjectiveRef::Quantile(n) => {
-                        resolve(n, true).map(ir::ObjectiveRef::Quantile)
+                    ast::ObjectiveRef::Cohort(n) => {
+                        resolve(n, "cohort").map(ir::ObjectiveRef::Cohort)
                     }
+                    ast::ObjectiveRef::Quantile(n) => {
+                        resolve(n, "quantile").map(ir::ObjectiveRef::Quantile)
+                    }
+                    ast::ObjectiveRef::Mean(n) => resolve(n, "mean").map(ir::ObjectiveRef::Mean),
                     ast::ObjectiveRef::Overall(f) => Some(ir::ObjectiveRef::Overall(*f)),
                 })
                 .collect();
             let mut hard: Vec<ir::HardConstraint> = Vec::new();
-            for (h, id) in c.hard.iter().zip(hard_ids) {
-                let bound = self.probability(&h.bound);
-                if let (Some(cohort), Some(bound)) = (id, bound) {
-                    if hard
-                        .iter()
-                        .any(|r| r.cohort == cohort && r.op == h.op && r.bound == bound)
-                    {
+            for (h, target) in c.hard.iter().zip(hard_ids) {
+                let time = match target {
+                    Some(ir::MetricRef::Mean(i)) => {
+                        quality.unwrap().means[i].measure != ir::MeanMeasure::Cost
+                    }
+                    None if h.constraint.mean => continue,
+                    _ => false,
+                };
+                let bound = self.metric_bound(&h.constraint, time);
+                if let (Some(target), Some(bound)) = (target, bound) {
+                    let constraint = ir::MetricConstraint {
+                        target,
+                        op: h.constraint.op,
+                        bound,
+                    };
+                    if hard.iter().any(|r| r.constraint == constraint) {
                         self.unsupported("duplicate hard constraint", h.span);
                     }
                     hard.push(ir::HardConstraint {
-                        cohort,
-                        op: h.op,
-                        bound,
+                        constraint,
                         span: h.span,
                     });
                 }
@@ -8993,8 +9556,30 @@ impl Lower {
         }
         let mut metrics = Vec::new();
         let mut quantiles = Vec::new();
+        let mut means = Vec::new();
         let mut metric_names = BTreeSet::new();
         for item in &model.items {
+            if let ast::Item::MeanMetric(c) = item {
+                if !metric_names.insert(c.name.value.clone()) {
+                    self.unsupported("duplicate mean metric name", c.name.span);
+                }
+                let property = c.property.as_ref().and_then(|p| {
+                    let id = names.get(&p.value).copied();
+                    if id.is_none() {
+                        self.error(E_NAME_0, "unknown quality property", p.span);
+                    }
+                    id
+                });
+                if c.property.is_none() || property.is_some() {
+                    means.push(ir::MeanMetric {
+                        name: c.name.value.clone(),
+                        measure: c.measure,
+                        property,
+                        given_reached: c.given_reached,
+                    });
+                }
+                continue;
+            }
             if let ast::Item::QuantileMetric(c) = item {
                 if !metric_names.insert(c.name.value.clone()) {
                     self.unsupported("duplicate quantile metric name", c.name.span);
@@ -9065,12 +9650,14 @@ impl Lower {
                     ast::Item::QualityProperty(_)
                         | ast::Item::CohortMetric(_)
                         | ast::Item::QuantileMetric(_)
+                        | ast::Item::MeanMetric(_)
                 )
             })
             .then_some(ir::QualitySpec {
                 properties,
                 metrics,
                 quantiles,
+                means,
             })
     }
 
@@ -10120,15 +10707,17 @@ impl Lower {
                     }
                 }
                 ast::Stmt::Fork { name, branches, .. } => {
-                    if self.fork_names.contains_key(&name.value) {
+                    if self.fork_spans.contains_key(&name.value) {
                         if self.ambiguous_forks.insert(name.value.clone()) {
                             self.unsupported("duplicate fork name", self.fork_spans[&name.value]);
                         }
                         self.unsupported("duplicate fork name", name.span);
                     } else {
-                        self.fork_names
-                            .insert(name.value.clone(), ir::ForkId(self.forks.len()));
-                        self.forks.push(name.value.clone());
+                        if !self.collecting_loop {
+                            self.fork_names
+                                .insert(name.value.clone(), ir::ForkId(self.forks.len()));
+                            self.forks.push(name.value.clone());
+                        }
                         self.fork_spans.insert(name.value.clone(), name.span);
                     }
                     if branches.is_empty() {
@@ -10141,9 +10730,31 @@ impl Lower {
                                 .as_ref()
                                 .is_some_and(|r| !matches!(r.value, ast::ResponseLoss::None))
                         {
-                            self.unsupported(
-                                "retry_feature_combination: fork response channel",
-                                call.span,
+                            self.errors.push(
+                                Diagnostic {
+                                    presentation: Default::default(),
+                                    code: U_SEM_0.into(),
+                                    severity: diag::Severity::Error,
+                                    message: "retry_feature_combination: fork response channel"
+                                        .into(),
+                                    span: Some(call.span),
+                                }
+                                .unconnected(
+                                    "retry_feature_combination",
+                                    "fork_response_channel",
+                                    vec![
+                                        diag::Blocker::at(
+                                            "feature",
+                                            Some(name.value.clone()),
+                                            Some(stmt.span),
+                                        ),
+                                        diag::Blocker::at(
+                                            "call",
+                                            Some(call.binding.value.clone()),
+                                            Some(call.span),
+                                        ),
+                                    ],
+                                ),
                             );
                         }
                         self.collect_call(call);
@@ -10501,7 +11112,16 @@ impl Lower {
                 } => {
                     let calls: Vec<_> = branches
                         .iter()
-                        .filter_map(|c| self.call_arguments(c, flow))
+                        .filter_map(|c| {
+                            if self.loop_context.is_some() {
+                                let id = self.binding_names.get(&c.binding.value)?;
+                                let mut renamed = c.clone();
+                                renamed.binding.value.clone_from(&self.bindings[id.0].name);
+                                self.call_arguments(&renamed, flow)
+                            } else {
+                                self.call_arguments(c, flow)
+                            }
+                        })
                         .collect();
                     for call in &calls {
                         self.loop_call_scope(call);
@@ -10534,17 +11154,21 @@ impl Lower {
                                         .any(|y| x == y)
                                 })
                             {
-                                self.unsupported(
+                                self.unsupported_detail(
                                     "fork siblings write the same observed variable",
                                     stmt.span,
+                                    "concurrent_writers",
+                                    "fork_shared_write",
+                                    vec![self.call_blocker(a), self.call_blocker(b)],
                                 );
                             }
                         }
                     }
                     self.check_join_branches(branches, join);
                     let join = self.join(name, &calls, join, flow);
+                    let fork = self.loop_context.as_ref().map(|c| c.fork_name(&name.value));
                     self.fork_names
-                        .get(&name.value)
+                        .get(fork.as_ref().unwrap_or(&name.value))
                         .copied()
                         .zip(join)
                         .map(|(id, join)| ir::Stmt::Fork {
@@ -10670,7 +11294,12 @@ impl Lower {
                 && !flow.available.contains(&id)
                 && (self.in_recovery_handler || !current_observed_alias)
             {
-                self.unsupported("argument result is not definitely available", arg.span);
+                self.result_refusal(
+                    "argument result is not definitely available",
+                    "argument_result",
+                    arg,
+                    id,
+                );
             }
             args.push(id);
         }
@@ -10747,7 +11376,7 @@ impl Lower {
                     None
                 };
                 if self.check_flow && !flow.available.contains(&id) {
-                    self.unsupported("result is not definitely available (not yet defined or possibly cancelled)", binding.span);
+                    self.result_refusal("result is not definitely available (not yet defined or possibly cancelled)", "condition_result", binding, id);
                 }
                 member.map(|value| ir::Cond::Eq(ir::ResultMatch { binding: id, value }))
             }
@@ -10974,13 +11603,14 @@ impl Lower {
                 "merge_feature_combination: merge_read_position",
                 result.span,
             );
+            self.describe_merge_refusal("unconnected_reference", result, result.span);
             return None;
         }
         let target = match &join.value {
             ast::Join::All { fork } | ast::Join::Any { fork, .. } => fork,
         };
         if target.value != name.value {
-            if !self.fork_names.contains_key(&target.value) {
+            if !self.fork_spans.contains_key(&target.value) {
                 self.error(E_NAME_0, "undefined fork", target.span);
             } else {
                 self.unsupported(
@@ -11367,13 +11997,36 @@ impl Lower {
                                     y.name
                                 ),
                                 y.span,
+                                vec![
+                                    diag::Blocker::at(
+                                        "reference",
+                                        Some(format!("{}.{}", self.actors[a.0].name, v.name)),
+                                        Some(v.span),
+                                    ),
+                                    diag::Blocker::at(
+                                        "feature",
+                                        Some(format!("{}.{}", self.actors[x.actor.0].name, x.name)),
+                                        Some(x.span),
+                                    ),
+                                    diag::Blocker::at(
+                                        "feature",
+                                        Some(format!("{}.{}", self.actors[y.actor.0].name, y.name)),
+                                        Some(y.span),
+                                    ),
+                                ],
                             ));
                         }
                     }
                 }
             }
-            for (message, span) in bad {
-                self.unsupported(message, span);
+            for (message, span, blockers) in bad {
+                self.unsupported_detail(
+                    message,
+                    span,
+                    "concurrent_writers",
+                    "cross_case_shared_write",
+                    blockers,
+                );
             }
         }
         let shared =
@@ -11736,6 +12389,12 @@ impl Lower {
                 .iter()
                 .map(|id| {
                     let v = &self.state_variables[id.0];
+                    if self
+                        .static_loop_round_start
+                        .is_some_and(|start| id.0 >= start)
+                    {
+                        return v.loop_round_declaration_name();
+                    }
                     match v.kind {
                         ir::StateKind::ActorLatent(a) => {
                             format!("{}.{}", self.actors[a.0].name, v.name)

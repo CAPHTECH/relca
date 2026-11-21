@@ -69,7 +69,7 @@ fn both_with(
     assert_eq!(e.case_outcomes, r.outcome.case_outcomes);
     // ADR 0054 "範囲" / "意味": only the selected IR's U/E carriers may
     // extend the closed diagnostic vector, and their full rows are required.
-    responsibility_oracle::assert_report(&m, &v);
+    responsibility_oracle::assert_report(&m, s, &v);
     let responsibility = responsibility_oracle::expected(&m);
     let mut expected = warnings.to_vec();
     expected.retain(|code| *code != "W-RESP-0");

@@ -347,7 +347,7 @@ pub fn enumerate(m: &ir::Model) -> (Value, Vec<Value>) {
     (Value::Object(agency), warnings)
 }
 
-pub fn check(report: &Value, model: &ir::Model) -> Result<(), String> {
+pub fn check(report: &Value, model: &ir::Model, source: &str) -> Result<(), String> {
     if report["agency"].is_null() {
         // A successfully lowered model normally publishes Agency. The public
         // simulation front end is the exception: a missing simulation clause
@@ -373,6 +373,10 @@ pub fn check(report: &Value, model: &ir::Model) -> Result<(), String> {
         };
     }
     let (expected, warnings) = enumerate(model);
+    let warnings: Vec<_> = warnings
+        .into_iter()
+        .map(|row| relca_test_support::diagnostic::expected_row(source, row))
+        .collect();
     for field in [
         "common_causes",
         "model_uncertainties",

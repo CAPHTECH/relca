@@ -1,0 +1,5 @@
+{"verdict":"inconclusive","quality":{"means":[
+  {"name":"Work", "measure":"work", "property":"Early", "form":"all_arrivals", "value":{"lower":"4","upper":"4","basis":"exact","reason":null}, "lower_bound":null},
+  {"name":"People", "measure":"named_people_work", "property":"Early", "form":"all_arrivals", "value":{"lower":"4","upper":"4","basis":"exact","reason":null}, "lower_bound":null},
+  {"name":"Cost", "measure":"cost", "property":"Early", "form":"all_arrivals", "value":{"lower":"13","upper":"13","basis":"exact","reason":null}, "lower_bound":null}
+]}}

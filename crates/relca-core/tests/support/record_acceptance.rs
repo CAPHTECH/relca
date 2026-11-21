@@ -33,7 +33,7 @@ pub fn expected_for_source(name: &str, source: &str) -> Value {
         .ok()
         .and_then(|ast| lower::lower(&ast).ok())
     {
-        responsibility_oracle::with_diagnostics(&model, &expected(name))
+        responsibility_oracle::with_diagnostics(&model, source, &expected(name))
     } else {
         expected(name)
     }
@@ -122,8 +122,8 @@ pub fn report_oracle_for_source(name: &str, source: &str, actual: &Value) {
     {
         // ADR 0054: original record syntax and legacy skeletons may have
         // different Actor spans, so derive from this exact source, not output.
-        responsibility_oracle::assert_report(&model, actual);
-        responsibility_oracle::with_diagnostics(&model, &expected(name))
+        responsibility_oracle::assert_report(&model, source, actual);
+        responsibility_oracle::with_diagnostics(&model, source, &expected(name))
     } else {
         expected(name)
     };

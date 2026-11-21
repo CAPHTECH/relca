@@ -50,6 +50,7 @@ fn postprocessing_limit_is_not_execution_abort_and_prior_witnesses_are_preserved
         // A real execution error still makes truncated unknown, even when the
         // same outcome also contains the unrelated postprocessing error.
         out.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "injected execution arithmetic abort".into(),

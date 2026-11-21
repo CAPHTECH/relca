@@ -80,13 +80,19 @@ pub fn run(path: &Path, mode: Mode) -> SensitivityReport {
                 return Err(InputError::new(
                     FailureKind::FeatureUnsupported,
                     "finite arrival distributions are simulation only",
-                ));
+                )
+                .projection(super::input::ProjectionDiagnostic::Unconnected(
+                    "sensitivity_exhaustive_stochastic_arrivals",
+                )));
             }
             if mode == Mode::Simulation && model.completion_requested() {
                 return Err(InputError::new(
                     FailureKind::FeatureUnsupported,
                     "structural completion is not available to simulation",
-                ));
+                )
+                .projection(super::input::ProjectionDiagnostic::Unconnected(
+                    "sensitivity_simulation_completion",
+                )));
             }
             if mode == Mode::Simulation
                 && model
@@ -127,15 +133,12 @@ pub fn run(path: &Path, mode: Mode) -> SensitivityReport {
             .iter()
             .map(|m| {
                 let model = m.as_ref().expect("all lowered after gate");
-                u64::try_from(model.probability_queries.len())
-                    .ok()
-                    .and_then(|n| n.checked_mul(model.bounds.cases))
-                    .ok_or_else(|| {
-                        InputError::new(
-                            FailureKind::CapacityLimit,
-                            "planned probability row count overflow",
-                        )
-                    })
+                crate::evaluation::simulation_rows(model).ok_or_else(|| {
+                    InputError::new(
+                        FailureKind::CapacityLimit,
+                        "planned statistical row count overflow",
+                    )
+                })
             })
             .collect::<Result<Vec<_>, _>>()
             .and_then(|rows| {
@@ -212,6 +215,7 @@ pub fn run(path: &Path, mode: Mode) -> SensitivityReport {
                     d
                 }));
             r.diagnostics.push(Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: format!(
@@ -249,7 +253,7 @@ fn refuse_model(
     s: &SourceSnapshot,
     reason: &str,
     model: Option<&crate::ir::Model>,
-    ds: Vec<Diagnostic>,
+    mut ds: Vec<Diagnostic>,
 ) {
     let p = &mut r.points[i];
     p.status = PointStatus::Refused;
@@ -267,6 +271,7 @@ fn refuse_model(
             report::sensitivity_simulation_preflight_failure(child, model),
         )),
     });
+    diag::locate(s.source(), &mut ds);
     r.diagnostics.extend(ds.into_iter().map(|mut d| {
         d.message = format!("{reason}: point {:?}: {}", s.point().id, d.message);
         d

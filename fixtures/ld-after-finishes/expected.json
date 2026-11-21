@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"satisfied","bounds":{"truncated":false},"simulation":{"status":"completed","completed_replications":4},"metrics":{"people":[{"person":"c1","work":{"mean":"8"}},{"person":"c2","work":{"mean":"7"}}]},"quality":{"quantiles":[{"name":"DoneP95","value":{"point":"7","observations":12,"censored":0}}]},"absent_diagnostics":["U-SEM-0","W-DEADLOCK-0"]}

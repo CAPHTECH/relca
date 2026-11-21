@@ -1,0 +1,1 @@
+{"verdict":"satisfied","quality":{"means":[{"name":"Lead","measure":"elapsed","property":"OnTime","form":"reached_only","value":{"lower":"16/5","upper":"16/5","basis":"exact","reason":null},"lower_bound":null}]}}

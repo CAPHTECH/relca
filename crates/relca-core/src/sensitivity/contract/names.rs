@@ -44,6 +44,14 @@ impl Names<'_> {
             .state_variables
             .get(id.0)
             .ok_or_else(|| unsupported("invalid state reference"))?;
+        if v.loop_role().is_some()
+            && let Some((name, role)) = v
+                .name
+                .strip_prefix("@loop:")
+                .and_then(|s| s.split_once(':'))
+        {
+            return Ok(format!("loop.{name}.{role}"));
+        }
         let owner = match v.kind {
             ir::StateKind::ObservedCase => "case.observed".into(),
             ir::StateKind::LatentCase => "case.latent".into(),
@@ -204,8 +212,22 @@ impl Names<'_> {
                 .map(|s| Ok(match &s.kind {
                     ir::Stmt::MergeCopy { .. } =>
                         return Err(unsupported("merge_feature_combination")),
-                    ir::Stmt::LoopControl(_) =>
-                        return Err(unsupported("loop_feature_combination")),
+                    ir::Stmt::LoopControl(control) => json!([
+                        "loop_control",
+                        control
+                            .updates
+                            .iter()
+                            .map(|(id, value)| Ok(json!([
+                                self.state(*id)?,
+                                self.state_value(*id, *value)?
+                            ])))
+                            .collect::<Result<Vec<_>>>()?,
+                        control
+                            .aliases
+                            .iter()
+                            .map(|call| self.call(call))
+                            .collect::<Result<Vec<_>>>()?,
+                    ]),
                     ir::Stmt::Call(c) => json!(["call", self.call(c)?]),
                     ir::Stmt::Query(c, command) => {
                         let source = self.0.capabilities[c.capability.0]

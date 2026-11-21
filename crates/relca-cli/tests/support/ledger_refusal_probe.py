@@ -74,6 +74,7 @@ pub fn q3_test_preexploration(src: &str, refuse: bool) -> serde_json::Value {
         if refuse {
             m.verify.clear();
             m.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(), severity: diag::Severity::Error,
                 message: "injected pre-exploration refusal".into(), span: None,
             });

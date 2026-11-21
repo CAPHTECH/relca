@@ -253,6 +253,7 @@ pub(super) fn restore(
                     .copied()
                     .unwrap_or(m.capabilities[c.0].span);
                 let warning = diag::Diagnostic {
+                    presentation: Default::default(),
                     code: if j.stops == Stops::None {
                         diag::W_AGY_0
                     } else {

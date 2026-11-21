@@ -7,7 +7,14 @@ use serde_json::{Value, json};
 
 fn warning(source: &str, target: &str) -> Value {
     let start = source.find(&format!("defer {target} reason")).unwrap() + "defer ".len();
-    json!({"code":"W-CUT-2","severity":"warning","message":hand::warning(target),"span":{"start":start,"end":start+target.len()}})
+    warning_at(source, target, start)
+}
+
+fn warning_at(source: &str, target: &str, start: usize) -> Value {
+    relca_test_support::diagnostic::expected_row(
+        source,
+        json!({"code":"W-CUT-2","severity":"warning","message":hand::warning(target),"span":{"start":start,"end":start+target.len()}}),
+    )
 }
 
 #[test]
@@ -19,7 +26,7 @@ fn source_warning_oracle_matches_the_closed_hand_table_before_removing_only_w_cu
             2 => &["A.nosuch"],
             _ => &[],
         };
-        let old = json!({"code":"W-UNREACH-0","severity":"warning","message":"old row retained literally","span":null});
+        let old = json!({"code":"W-UNREACH-0","severity":"warning","message":"old row retained literally","span":null,"location":null,"detail":null});
         let mut rows = vec![old.clone()];
         rows.extend(targets.iter().map(|t| warning(&source, t)));
         let report = json!({"diagnostics":rows});
@@ -41,9 +48,7 @@ fn source_warning_oracle_matches_the_closed_hand_table_before_removing_only_w_cu
         .replace("defer Ghost reason \"later\" loses \"load\";", "defer Ghost reason \"later\" loses \"load\"; defer Ghost reason \"later\" loses \"load\";");
     let mut rows = Vec::new();
     for (at, _) in source.match_indices("defer Ghost reason") {
-        let mut row = warning(&source, "Ghost");
-        row["span"] = json!({"start":at+6,"end":at+11});
-        rows.push(row);
+        rows.push(warning_at(&source, "Ghost", at + 6));
     }
     assert_eq!(rows.len(), 2);
     legacy_defer_diagnostics(&json!({"diagnostics":rows}), &source, None).unwrap();

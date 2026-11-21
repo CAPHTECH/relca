@@ -1,0 +1,6 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"diagnostics":[{"code":"W-CUT-2"}],"quality":{"means":[
+  {"name":"Lead","measure":"elapsed","property":"Any","form":"all_arrivals","value":{"lower":null,"upper":null,"basis":null,"reason":"not_configured"},"lower_bound":null},
+  {"name":"Done","measure":"elapsed","property":"Done","form":"reached_only","value":{"lower":null,"upper":null,"basis":null,"reason":"not_configured"},"lower_bound":null},
+  {"name":"Reworked","measure":"elapsed","property":"Reworked","form":"reached_only","value":{"lower":null,"upper":null,"basis":null,"reason":"not_configured"},"lower_bound":null},
+  {"name":"Miss","measure":"elapsed","property":"Done","form":"all_arrivals","value":{"lower":null,"upper":null,"basis":null,"reason":"not_configured"},"lower_bound":null}
+]}}

@@ -1,0 +1,18 @@
+model CompareMean version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1
+    capability quick() -> T { duration fixed 2min; result nondet { ok } }
+    capability slow() -> T { duration fixed 5min; result nondet { ok } }
+  }
+  process Quick { x=A.quick(); end done }
+  process Long { x=A.slow(); end done }
+  cut C { include [A] }
+  configuration Fast { cut C; process Quick }
+  configuration Slow { cut C; process Long }
+  bounds { cases 1; live_tasks 1; clock 4min }
+  metrics { window 10min; currency "JPY"; rate A per_minute 1; rate A.quick per_start 0; rate A.slow per_start 0 }
+  verify reachable end.done
+  property case.Done = reached(end.done)
+  metric mean.Lead = mean(elapsed, case.Done)
+  compare [Fast, Slow] cut C hard { mean.Lead <= 6min } objectives { minimize mean.Lead }
+}

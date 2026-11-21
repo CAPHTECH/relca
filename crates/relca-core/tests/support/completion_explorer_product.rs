@@ -221,8 +221,13 @@ fn message(w: &Warning) -> String {
     };
     format!("process P: {detail}")
 }
-pub fn check_report(report: &Value, m: &OwnModel, expected: &Observation) -> Result<(), String> {
-    let wanted=warnings(m,expected).iter().map(|w| json!({"code":w.code,"severity":"warning","message":message(w),"span":{"start":w.location.0,"end":w.location.1}})).collect::<Vec<_>>();
+pub fn check_report(
+    report: &Value,
+    source: &str,
+    m: &OwnModel,
+    expected: &Observation,
+) -> Result<(), String> {
+    let wanted=warnings(m,expected).iter().map(|w| relca_test_support::diagnostic::expected_row(source, json!({"code":w.code,"severity":"warning","message":message(w),"span":{"start":w.location.0,"end":w.location.1}}))).collect::<Vec<_>>();
     let mut actual = report["diagnostics"]
         .as_array()
         .ok_or("diagnostics missing")?

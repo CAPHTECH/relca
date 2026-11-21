@@ -9,6 +9,8 @@ mod completion;
 mod contract_scope_oracle;
 #[path = "support/intent_snapshot_oracle.rs"]
 mod intent_oracle;
+#[path = "support/metric_check_snapshot_oracle.rs"]
+mod metric_check_oracle;
 #[path = "support/population_oracles.rs"]
 mod oracle;
 #[path = "support/p2c_snapshot_oracle.rs"]
@@ -57,7 +59,24 @@ fn evidence_dir(root: &Path) -> std::path::PathBuf {
 // other categories remain. This is not an oracle exclusion or weaker check.
 // Round 1 adds two advancing-time fixtures: one original and one expiry
 // Report each; only the two originals enter the old graph/completion oracle.
-const CENSUS: [usize; 14] = [2537, 4273, 436, 64, 20, 8, 3551, 3551, 3151, 4, 4, 4, 4, 77];
+// ADR 0079 A and B add twelve fixture jobs, each with one state-IR
+// report checked by the state-invariant and completion oracles. None
+// introduces a completion warning, a graph unsupported for the existing
+// census, or a new injected production fault in this oracle.
+// C adds seven fixture jobs: two lowered models and five static rejections.
+// Priority/dispatch and a deferred non-filed route add four jobs (one static rejection).
+// Fifteen mean fixtures each add one flat check job/Report to the state-IR,
+// M1 and completion censuses. They declare no state writer, excluded read,
+// contract or mutation; none adds a warning site or delta/fault family.
+// Numeric mean acceptance is separately checked against authored hand values.
+// Review k2-1 adds 22 jobs: 14 single Reports and three comparisons (six
+// Reports), plus five independent consumer jobs. Completion: contest pair
+// contributes 2+4 warnings and comparison trio 2+1+2; all other new jobs 0.
+// Preserve both inventory increments, measured against their common ancestor.
+// Review k2-2 adds one consumer refusal job, outside the graph census.
+// Unit 6 adds two repeat-mean hand jobs, also outside the legacy graph census.
+// Unit 7 adds two repeat-policy jobs to the same hand-checked route.
+const CENSUS: [usize; 14] = [2605, 4334, 436, 64, 20, 8, 3606, 3606, 3162, 4, 4, 4, 4, 77];
 
 #[test]
 fn advancing_time_expiry_pair_adds_exactly_four_report_slots_and_two_graph_contexts() {
@@ -79,7 +98,7 @@ fn advancing_time_expiry_pair_adds_exactly_four_report_slots_and_two_graph_conte
         assert_eq!((proof.reports, proof.excluded, proof.changes), (2, 0, 0));
         assert_eq!(proof.models.len(), 2);
         let model = relca_core::lower::lower(&relca_core::syntax::parse(&source).unwrap()).unwrap();
-        common::check(&doc["original"], &model).unwrap();
+        common::check(&doc["original"], &model, &source).unwrap();
         assert!(
             completion::check(&doc["original"], &model, false)
                 .unwrap()
@@ -307,7 +326,7 @@ fn lowered_ir_null_agency_requires_the_specific_frontend_refusal() {
         "diagnostics":[{"code":"E-SIM-0", "severity":"error",
             "message":"simulation requires an explicit simulation clause"}]
     });
-    common::check(&report, &model).unwrap();
+    common::check(&report, &model, "").unwrap();
     for (key, value) in [
         ("code", "U-SEM-0"),
         ("message", "unrelated refusal"),
@@ -315,17 +334,17 @@ fn lowered_ir_null_agency_requires_the_specific_frontend_refusal() {
     ] {
         let mut broken = report.clone();
         broken["diagnostics"][0][key] = serde_json::json!(value);
-        assert!(common::check(&broken, &model).is_err(), "{key}");
+        assert!(common::check(&broken, &model, "").is_err(), "{key}");
     }
     report["mode"] = serde_json::json!("exhaustive");
-    assert!(common::check(&report, &model).is_err());
+    assert!(common::check(&report, &model, "").is_err());
     report["mode"] = serde_json::json!("simulation");
     let sampled = include_str!("../../../fixtures/sim-statistical/model.relca");
     let sampled = relca_core::syntax::parse(sampled).unwrap();
     model.simulation = relca_core::lower::lower(&sampled).unwrap().simulation;
     assert!(model.simulation.is_some());
     assert!(
-        common::check(&report, &model).is_err(),
+        common::check(&report, &model, "").is_err(),
         "IR has a simulation clause"
     );
 }
@@ -472,8 +491,29 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                             .output()
                             .unwrap();
                         assert!(output.status.code().is_some_and(|c| (0..=5).contains(&c)));
-                           let mut doc: Value = serde_json::from_slice(&output.stdout).unwrap();
-                           if agency_limit_oracle::name(job["id"].as_str().unwrap()).is_some() {
+                            let mut doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+                            if let Some(expected) = match job["id"].as_str().unwrap() {
+                                "fixture-mean-repeat" => Some(include_str!("../../../fixtures/mean-repeat/expected.json")),
+                                "fixture-mean-repeat.broken-no-gap" => Some(include_str!("../../../fixtures/mean-repeat.broken-no-gap/expected.json")),
+                                "fixture-mean-repeat-policy" => Some(include_str!("../../../fixtures/mean-repeat-policy/expected.json")),
+                                "fixture-mean-repeat-policy.broken-earlier-arrival" => Some(include_str!("../../../fixtures/mean-repeat-policy.broken-earlier-arrival/expected.json")),
+                                _ => None,
+                            } {
+                                assert!(fault.is_none(), "old graph faults do not apply to the repeat hand jobs");
+                                assert_eq!(output.status.code(), Some(0));
+                                assert!(doc["repetition"].is_object());
+                                let expected = serde_json::from_str(expected).unwrap();
+                                relca_test_support::fixture_match::Invocation::parse(None).unwrap().compare(&expected, &doc).unwrap();
+                                counts[0] += 1;
+                                continue;
+                            }
+                            if metric_check_oracle::IDS.contains(&job["id"].as_str().unwrap()) {
+                                assert!(fault.is_none(), "old graph faults do not apply to the metric consumer hand jobs");
+                                metric_check_oracle::check(job["id"].as_str().unwrap(), &args, &doc, output.status.code().unwrap(), &output.stderr);
+                                counts[0] += 1;
+                                continue;
+                            }
+                            if agency_limit_oracle::name(job["id"].as_str().unwrap()).is_some() {
                                assert!(fault.is_none(),"old graph faults are not Agency-limit hand jobs");
                                agency_limit_oracle::check(job["id"].as_str().unwrap(),&args,&doc,output.status.code().unwrap()).unwrap_or_else(|e|panic!("{}: {e}",job["id"]));
                                agency_limit_evidence.lock().unwrap().push(job["id"].as_str().unwrap().to_owned());
@@ -634,7 +674,7 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                                      response_reports.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                      continue;
                                  }
-                                common::check(report, &model)
+                                common::check(report, &model, source)
                                     .unwrap_or_else(|e| panic!("{} {path}: {e}", job["id"]));
                                 counts[6] += 1;
                                 let simulation = args[0] == "simulate"
@@ -650,7 +690,7 @@ fn current_population_requires_exact_independent_registered_surfaces() {
                                     let mut broken = report.clone();
                                     broken["agency"]["common_causes"]["notice"] =
                                         serde_json::json!("corrupted");
-                                    assert!(common::check(&broken, &model).is_err());
+                                    assert!(common::check(&broken, &model, source).is_err());
                                     counts[11] += 1;
                                 }
                                 if counts[12] == 0 && !warnings.is_empty() {
@@ -727,7 +767,7 @@ fn current_population_requires_exact_independent_registered_surfaces() {
     assert_eq!(totals[0], jobs.len());
     if selected.is_some() {
         assert!(fault.is_none(), "injected fault escaped all active oracles");
-        eprintln!("selected calibration input positive GREEN");
+        eprintln!("selected calibration input positive GREEN: {totals:?}");
         return;
     }
     let mut conform_checked = conform_evidence.into_inner().unwrap();

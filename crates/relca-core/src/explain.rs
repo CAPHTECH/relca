@@ -141,7 +141,29 @@ pub struct Evidence {
     pub required: Vec<String>,
     pub sources: Vec<String>,
     pub missing: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conditional_sources: Vec<String>,
     pub excluded_edges: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repetition: Option<crate::ir::LoopSite>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub repetition_exits: Vec<EvidenceExit>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EvidenceExit {
+    pub loop_name: String,
+    pub round: u64,
+    pub phase: ir::LoopPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leave_site: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ExitTrace {
+    pub exits: Vec<ir::EvidenceExit>,
+    pub sources: Vec<ir::ActorId>,
+    pub unknown: Vec<ir::ActorId>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -184,32 +206,19 @@ impl Location {
         Self::indexed(src, &Self::line_starts(src), span)
     }
     pub(crate) fn line_starts(src: &str) -> Vec<usize> {
-        std::iter::once(0)
-            .chain(
-                src.bytes()
-                    .enumerate()
-                    .filter_map(|(n, b)| (b == b'\n').then_some(n + 1)),
-            )
-            .collect()
+        diag::line_starts(src)
     }
     pub(crate) fn indexed(
         src: &str,
         starts: &[usize],
         span: diag::Span,
     ) -> Result<Self, ReplayReason> {
-        if span.start > span.end
-            || span.end > src.len()
-            || !src.is_char_boundary(span.start)
-            || !src.is_char_boundary(span.end)
-        {
-            return Err(ReplayReason::SourceMappingFailed);
-        }
-        let at = |byte| {
-            let line = starts.partition_point(|start| *start <= byte);
-            (line, src[starts[line - 1]..byte].chars().count() + 1)
-        };
-        let (line, column) = at(span.start);
-        let (end_line, end_column) = at(span.end);
+        let diag::Location {
+            line,
+            column,
+            end_line,
+            end_column,
+        } = diag::Location::indexed(src, starts, span).ok_or(ReplayReason::SourceMappingFailed)?;
         Ok(Self {
             span,
             line,
@@ -223,6 +232,8 @@ impl Location {
 pub struct Stage {
     #[serde(skip)]
     pub evidence_sources: Option<Vec<ir::ActorId>>,
+    #[serde(skip)]
+    pub(crate) evidence_exits: Option<ExitTrace>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -534,6 +545,7 @@ fn explain_selected(
         if trace.failure == Some(ReplayReason::CaptureLimit) {
             explanation.status = Status::Unsupported;
             explanation.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "capture_limit: CaptureLimit".into(),
@@ -661,6 +673,7 @@ fn explain_selected(
             verdict: None,
             reason: Omission::NotApplicableConfigurationScope,
         }));
+    diag::locate(src, &mut explanation.diagnostics);
     seal(
         ExplainReport {
             report: report::finite_driver(report, crate::engine::DEFAULT_STATE_BUDGET),
@@ -691,6 +704,7 @@ pub fn input_failure_with_selection(
     report.ledger = crate::ledger::Ledger::input_failure("exhaustive");
     report.ledger.requested(configuration, scenario);
     report.diagnostics = vec![diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::E_SYN_0.into(),
         severity: diag::Severity::Error,
         message: message.into(),
@@ -811,6 +825,7 @@ fn add_counterexample(
             }
         }
         out.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: format!("{id}: {reason:?}"),
@@ -920,25 +935,40 @@ fn evidence_for(
         names.dedup();
         Ok(names)
     };
-    let actual = if matches!(
+    let path = last.evidence_exits.as_ref();
+    let direct = matches!(
         clause.kind,
         ir::ContractKind::EvidenceBasis { direct: true, .. }
-    ) {
+    );
+    let mut actual = if direct {
         model.capabilities[capability.0].reads.clone()
+    } else if let Some(path) = path {
+        path.sources.clone()
     } else {
         last.evidence_sources
             .clone()
             .ok_or(ReplayReason::SourceMappingFailed)?
     };
+    let conditional = if !direct {
+        path.map_or(&[][..], |p| p.unknown.as_slice())
+    } else {
+        &[][..]
+    };
+    actual.retain(|s| !conditional.contains(s));
     let missing: Vec<_> = required
         .iter()
-        .filter(|s| !actual.contains(s))
+        .filter(|s| !actual.contains(s) && !conditional.contains(s))
         .copied()
         .collect();
     if missing.is_empty() {
         return Err(ReplayReason::ViolationMismatch);
     }
-    let mut excluded_edges = call.excluded_edges.clone();
+    let scope = path
+        .filter(|_| !direct && call.alias_input)
+        .and_then(|p| call.exit_scopes.iter().find(|s| s.exits == p.exits));
+    let mut excluded_edges = scope
+        .map_or(&call.excluded_edges, |s| &s.excluded_edges)
+        .clone();
     excluded_edges.sort();
     excluded_edges.dedup();
     Ok(Some(Evidence {
@@ -948,7 +978,32 @@ fn evidence_for(
         required: names(required)?,
         sources: names(&actual)?,
         missing: names(&missing)?,
+        conditional_sources: names(
+            &required
+                .iter()
+                .copied()
+                .filter(|s| conditional.contains(s))
+                .collect::<Vec<_>>(),
+        )?,
         excluded_edges,
+        repetition: model.loop_site(call.binding).cloned(),
+        repetition_exits: path
+            .into_iter()
+            .flat_map(|p| &p.exits)
+            .map(|e| EvidenceExit {
+                loop_name: model.state_variables[e.variable.0]
+                    .loop_round_declaration_name()
+                    .trim_end_matches(".round")
+                    .into(),
+                round: e.round,
+                phase: if e.on_limit {
+                    ir::LoopPhase::OnLimit
+                } else {
+                    ir::LoopPhase::Body
+                },
+                leave_site: e.leave_site,
+            })
+            .collect(),
     }))
 }
 

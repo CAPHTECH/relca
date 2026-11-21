@@ -37,6 +37,13 @@ def normalize(raw, source, labeled) -> Any:
         # lexically unused, and W-UNREACH-0 names that complete declaration.
         expected = dict(start=caps[1-index][0], end=caps[1-index][1])
         require(report['diagnostics'][0]['span'] == expected, 'source-derived unused Capability span')
+        def at(byte):
+            prefix=source.encode()[:byte].decode()
+            return prefix.count('\n') + 1, len(prefix.rsplit('\n',1)[-1]) + 1
+        line,column=at(expected['start'])
+        end_line,end_column=at(expected['end'])
+        require(report['diagnostics'][0]['location'] == dict(line=line,column=column,end_line=end_line,end_column=end_column), 'source-derived unused Capability coordinates')
+        report['diagnostics'][0]['location'] = 'source-coordinates-checked'
         report['diagnostics'][0]['span'] = dict(start='unused-capability', end='unused-capability')
     def walk(v: Any) -> Any:
         if isinstance(v, str):

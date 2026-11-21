@@ -11,6 +11,7 @@ pub(super) fn supported(m: &ir::Model, span: Span) -> Result<(), Vec<Diagnostic>
             }))
     {
         return Err(vec![Diagnostic {
+            presentation: Default::default(),
             code: U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "q6_feature_combination: unconnected arrival, contest or response control"

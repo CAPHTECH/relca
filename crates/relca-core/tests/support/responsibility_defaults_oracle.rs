@@ -90,6 +90,7 @@ pub fn expected(m: &ir::Model) -> Vec<diag::Diagnostic> {
                 })
         })
         .map(|a| diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::W_RESP_0.into(),
             severity: diag::Severity::Warning,
             message: format!("{} has no declared responsibility", a.name),
@@ -118,7 +119,7 @@ pub fn expected_disclosures(m: &ir::Model) -> Vec<String> {
 
 /// Preserve a closed, exact K4 warning/disclosure contract in older acceptance
 /// gates (ADR 0054 "範囲", "意味", and the pre-intake disclosure section).
-pub fn assert_report(m: &ir::Model, actual: &serde_json::Value) {
+pub fn assert_report(m: &ir::Model, source: &str, actual: &serde_json::Value) {
     let warnings: Vec<_> = actual["diagnostics"]
         .as_array()
         .unwrap()
@@ -127,7 +128,7 @@ pub fn assert_report(m: &ir::Model, actual: &serde_json::Value) {
         .collect();
     assert_eq!(
         json!(warnings),
-        json!(expected(m)),
+        json!(expected_wire(m, source)),
         "independent IR responsibility rows"
     );
     let notices: Vec<_> = actual["agency"]["unchecked"]
@@ -144,10 +145,23 @@ pub fn assert_report(m: &ir::Model, actual: &serde_json::Value) {
     );
 }
 
+pub fn expected_wire(m: &ir::Model, source: &str) -> Vec<diag::Diagnostic> {
+    let mut rows = expected(m);
+    for row in &mut rows {
+        row.presentation.location =
+            relca_test_support::diagnostic::location(source, row.span).map(Box::new);
+    }
+    rows
+}
+
 /// ADR 0054 changes only this selected Report's K4 diagnostic inventory. Keep
 /// the generic exact-array matcher and every non-K4 hand expectation intact.
 /// This function never receives the actual Report or reads its warning vector.
-pub fn with_diagnostics(m: &ir::Model, hand: &serde_json::Value) -> serde_json::Value {
+pub fn with_diagnostics(
+    m: &ir::Model,
+    source: &str,
+    hand: &serde_json::Value,
+) -> serde_json::Value {
     let mut hand = hand.clone();
     if let Some(rows) = hand
         .get_mut("diagnostics")
@@ -163,7 +177,10 @@ pub fn with_diagnostics(m: &ir::Model, hand: &serde_json::Value) -> serde_json::
                 code.starts_with("W-UNREACH-") || matches!(code, "W-DEADLOCK-0" | "W-BUDGET-0")
             })
             .unwrap_or(rows.len());
-        rows.splice(at..at, expected(m).into_iter().map(|row| json!(row)));
+        rows.splice(
+            at..at,
+            expected_wire(m, source).into_iter().map(|row| json!(row)),
+        );
     }
     hand
 }

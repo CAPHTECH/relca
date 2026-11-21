@@ -24,6 +24,7 @@
 各例の `.broken-*` ディレクトリが対照です。変えた入力と、検出される欄を
 `calc.md` で確認してください。Agency などの構造欄の差を検査する対は、
 故障側でも全体の verdict が satisfied の場合があります。
+`mean-mixed-family.broken-no-cohort-check` は故障の検出ではなく、条件を一本減らすと従来の補正と充足に戻ることを確かめる対照です。
 
 ## 分野別の入口
 
@@ -31,7 +32,8 @@
 - 契約・実行者・権限: `contract-*`、`exec-*`、`auth-*`、`resp-*`、`resp2-*`。
 - 確率・観測状態: `prob-*`、`state-*`、`aobs-*`、`sinv-*`、`aset-*`、`rec-*`。
 - 流入・方策・シナリオ: `arrival-*`、`pol-*`、`lim-*`、`scn-*`。
-- 指標・品質・待ち・比較: `met-*`、`qual-*`、`wait-*`、`eval-*`、`qtl-*`。
+- 指標・品質・待ち・比較: `met-*`、`qual-*`、`wait-*`、`eval-*`、`qtl-*`、`mean-*`。
+  [指標の判定](mean-metric-check/)、[期待値による比較](mean-compare/)、[反復をまとめた平均](mean-simulate/)、[標本判定の多重性](mean-mixed-family/)は、実行条件と手計算を各 fixture に置いています。
 - 構成・系譜・規則: `config-diff-*`、`diff2-*`、`agency-*`、`agy2-*`、`lin-*`、`rule-*`。
 - 契約の適用範囲: `scope-a1`〜`scope-a5` と各 `.broken-*`。非適用の開示、適用内の違反、空虚な契約、比較セル、保持宣言を、1分/2分の手計算で照合する。
 - 判断の所在と導出の上限: `agy-vp-*` の登録した5対。直列ゲートの拒否、倍率の不足、合流、反復、応答不明を、回数と所要時間の手計算で照合する。計算の未導出を業務の成功/失敗と混同しない。

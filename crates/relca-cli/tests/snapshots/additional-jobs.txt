@@ -1,4 +1,10 @@
 coverage-verify: existing fixture/invoice invocations lack verify.
+metric-check-explain: A mean threshold violation is part of the explain report verdict.
+metric-check-diff: Metric checks travel in plan reports; diff does not derive metric differences.
+metric-check-mutate: Disclose that mutation does not assign metric constraints to mutations.
+metric-check-suite: Two points share four Bernoulli intervals; mean checks have no statistical bound.
+metric-check-compare-sampled: Per-plan alpha 1/80 differs from hard alpha 1/160; the Slow plan's cohort check excludes it.
+metric-check-simulation-refusal: A missing simulation clause refuses mean sampling but retains the sampled mean assumption and shape.
 cli-refusal-00: Restore one of the sixteen hand-classified fail-closed CLI forms.
 cli-refusal-01: Restore one of the sixteen hand-classified fail-closed CLI forms.
 cli-refusal-02: Restore one of the sixteen hand-classified fail-closed CLI forms.

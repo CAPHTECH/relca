@@ -1,0 +1,10 @@
+{
+  "verdict":"satisfied", "bounds":{"truncated":false},
+  "absent_diagnostics":["W-DEADLOCK-0"],
+  "quality":{"means":[
+    {"name":"Lead","measure":"elapsed","property":"Any","form":"all_arrivals","value":{"lower":"15/4","upper":"15/4","basis":"exact","reason":null},"lower_bound":null},
+    {"name":"Done","measure":"elapsed","property":"Done","form":"reached_only","value":{"lower":"3","upper":"3","basis":"exact","reason":null},"lower_bound":null},
+    {"name":"Reworked","measure":"elapsed","property":"Reworked","form":"reached_only","value":{"lower":"6","upper":"6","basis":"exact","reason":null},"lower_bound":null},
+    {"name":"Miss","measure":"elapsed","property":"Done","form":"all_arrivals","value":{"lower":null,"upper":null,"basis":null,"reason":"beyond_reached_mass"},"lower_bound":null}
+  ]}
+}

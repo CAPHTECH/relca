@@ -1,0 +1,42 @@
+model T version "0.2" {
+  type V = enum { pass, fail }
+  kernel Review { * -> { 0.5: pass; 0.5: fail } }
+  observed case { brief: optional<V> }
+  actor Doc { source document }
+  actor Policy { source document }
+  actor Notes {}
+  actor Clerk { capacity 1
+    capability base() -> V { reads [Doc, Policy]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability patchD() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability patchP() -> V { reads [Policy]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability draft() -> V { duration fixed 1min; result nondet { pass } }
+    capability saveb() -> V { reads [brief]; registers [Notes]; duration fixed 1min; result nondet { pass } }
+    capability review() -> V { duration fixed 1min; outcomes kernel Review }
+  }
+  actor Boss { capacity 1
+    capability use(d: V) -> V { reads [Notes]; duration fixed 1min; result nondet { pass } }
+  }
+  cut C { include [Doc, Policy, Notes, Clerk, Boss] }
+  process PLoop {
+    repeat rework at_most 1 {
+      d = Clerk.draft()
+      b1 = Clerk.base()
+      c = Clerk.review()
+      if c == pass {
+        g0 = Clerk.review()
+        if g0 == pass { x1 = Clerk.patchD() } else {}
+        r = Clerk.saveb()
+        leave
+      } else { again }
+    } on_limit {
+      g = Clerk.review()
+      if g == pass { x2 = Clerk.patchP() } else {}
+      r3 = Clerk.saveb()
+      leave
+    }
+    u = Boss.use(d)
+    end done
+  }
+  bounds { cases 1; live_tasks 1; clock 60min }
+  contract Basis { evidence_basis Boss.use [Doc, Policy] }
+}

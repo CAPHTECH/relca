@@ -1,0 +1,20 @@
+{
+  "mode":"simulation",
+  "verdict":"satisfied",
+  "bounds":{"truncated":false},
+  "simulation":{"status":"completed","completed_replications":4},
+  "assumptions":[
+    {"field":"Clerk.boundary"},{"field":"Clerk.executors"},{"field":"Clerk.control"},{"field":"Clerk.permission"},{"field":"schedule"},{"field":"arrivals"},{"field":"policy.queue"},{"field":"policy.assign"},{"field":"policy.classes"},{"field":"metrics.window"},{"field":"metrics.currency"},{"field":"metrics.rates"},{"field":"metrics.lead_time"},{"field":"metrics.observation"},{"field":"simulation.random"},{"field":"simulation.replications"},{"field":"simulation.multiplicity"},{"field":"simulation.nondeterminism"},{"field":"simulation.guarantee"},{"field":"simulation.same_time","value":"instant_confluence(max_states=4096)"},{"field":"metrics.estimation"},{"field":"quality.definition"},{"field":"quality.denominator"},{"field":"quality.form"},{"field":"quality.estimation"},{"field":"metrics.waiting"},{"field":"quality.quantile"}
+  ],
+  "properties":[{"id":"reachable end.done","verdict":"satisfied"}],
+  "quality":{"quantiles":[{"name":"DoneP95","value":{"point":"7","observations":12,"censored":0}}]},
+  "metrics":{
+    "actors":[{"actor":"Clerk","work":{"mean":"15"},"utilization":{"mean":"3/8"},"peak_tasks":{"mean":"2"},"queue":{"wait_total":{"stats":{"mean":"4"}},"length_max":{"mean":"1"},"length_time_average":{"stats":{"mean":"1/2"}}}}],
+    "cases":[
+      {"case_id":1,"terminals":[{"kind":"end","end":"done","lead_time":{"mean":"5"}},{"kind":"rejected","end":null}],"tasks":[{"binding":"e","wait":{"mean":"0"}},{"binding":"k","wait":{"mean":"0"}}]},
+      {"case_id":2,"terminals":[{"kind":"end","end":"done","lead_time":{"mean":"7"}},{"kind":"rejected","end":null}],"tasks":[{"binding":"e","wait":{"mean":"0"}},{"binding":"k","wait":{"mean":"2"}}]},
+      {"case_id":3,"terminals":[{"kind":"end","end":"done","lead_time":{"mean":"7"}},{"kind":"rejected","end":null}],"tasks":[{"binding":"e","wait":{"mean":"2"}},{"binding":"k","wait":{"mean":"0"}}]}
+    ]
+  },
+  "absent_diagnostics":["U-SEM-0","W-DEADLOCK-0"]
+}

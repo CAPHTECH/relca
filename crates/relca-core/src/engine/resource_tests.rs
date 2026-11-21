@@ -95,10 +95,16 @@ fn resource_h01_h08_legacy_observer_overcommit_and_checked_actual_overflow() {
             e.ranges.push(range_witness());
             e.observe(&s, &m).unwrap();
             assert_eq!(e.outcome(&m).properties[0].verdict, Verdict::Violated);
-            let out = run_initialized(&m, true, 1000, |mut initial| {
-                initial.tasks = s.tasks.clone();
-                initial
-            });
+            let out = run_initialized(
+                &m,
+                true,
+                1000,
+                |mut initial| {
+                    initial.tasks = s.tasks.clone();
+                    initial
+                },
+                false,
+            );
             assert_eq!(out.properties[0].verdict, Verdict::Violated);
         }
     }
@@ -118,10 +124,16 @@ fn resource_h01_h08_legacy_observer_overcommit_and_checked_actual_overflow() {
         Exploration::default().observe(&s, &m),
         Err(Halt::Unsupported(_))
     ));
-    let out = run_initialized(&m, true, 1000, |mut initial| {
-        initial.tasks = s.tasks;
-        initial
-    });
+    let out = run_initialized(
+        &m,
+        true,
+        1000,
+        |mut initial| {
+            initial.tasks = s.tasks;
+            initial
+        },
+        false,
+    );
     assert!(out.diagnostics.iter().any(|d| d.code == diag::U_SEM_0));
 }
 

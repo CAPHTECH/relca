@@ -352,7 +352,7 @@ pub(super) fn working(m: &Model, person: PersonId, now: Tick) -> bool {
 }
 
 fn lexical(m: &Model) -> Result<Vec<BindingId>, StopReason> {
-    fn visit(body: &Block, result: &mut Vec<BindingId>) {
+    fn visit(body: &Block, result: &mut Vec<BindingId>, aliases: &mut Vec<BindingId>) {
         for statement in body {
             match &statement.kind {
                 Stmt::Call(call) | Stmt::Query(call, _) => result.push(call.binding),
@@ -361,28 +361,46 @@ fn lexical(m: &Model) -> Result<Vec<BindingId>, StopReason> {
                     if r.attempt == 1
                         && let Some(body) = &r.recovery
                     {
-                        visit(body, result);
+                        visit(body, result, aliases);
                     }
                 }
                 Stmt::Fork { branches, .. } => {
                     result.extend(branches.iter().map(|call| call.binding))
+                }
+                Stmt::LoopControl(control) => {
+                    aliases.extend(control.aliases.iter().map(|call| call.binding));
                 }
                 Stmt::If {
                     then_body,
                     else_body,
                     ..
                 } => {
-                    visit(then_body, result);
-                    visit(else_body, result);
+                    visit(then_body, result, aliases);
+                    visit(else_body, result, aliases);
                 }
                 _ => {}
             }
         }
     }
     let mut result = Vec::new();
-    visit(&m.process.body, &mut result);
+    let mut aliases = Vec::new();
+    visit(&m.process.body, &mut result, &mut aliases);
     let unique: BTreeSet<_> = result.iter().copied().collect();
     let mut represented = unique.clone();
+    // Validate coverage of the result slots without putting them into the
+    // sequence used to order actual pending tasks.
+    let targets: BTreeSet<_> = result
+        .iter()
+        .filter_map(|&binding| m.loop_alias(binding))
+        .collect();
+    for alias in aliases {
+        require(targets.contains(&alias) && represented.insert(alias))?;
+    }
+    require(
+        targets
+            .iter()
+            .all(|a| represented.contains(a) && !unique.contains(a)),
+    )?;
     if m.start_policy
         .as_ref()
         .is_some_and(|p| p.priority.is_some())
@@ -452,10 +470,17 @@ pub(super) fn starts(
     let mut pending = Vec::new();
     let mut occupied = vec![0u64; m.actors.len()];
     let mut people = BTreeSet::new();
+    let mut due = false;
     for (case, frame) in frames.iter().enumerate() {
         if let Some(frame) = frame {
             for (index, task) in frame.tasks.iter().enumerate() {
                 if task.phase == Phase::Running {
+                    due |= p.dispatch_after_finishes
+                        && !frame.trace.iter().any(|o| {
+                            matches!(o.event,
+                            Occurrence::ResponseStopped(id) if id.0 < m.process.bindings.len())
+                        })
+                        && (task.finish == Some(frame.now) || task.ack == Some(frame.now));
                     occupied[m.capabilities[task.call.capability.0].actor.0] += 1;
                     if let Some(person) = task.person {
                         people.insert(person);
@@ -490,6 +515,9 @@ pub(super) fn starts(
         let cap = &m.capabilities[capability.0];
         let actor = &m.actors[cap.actor.0];
         let controlled = p.controls(cap.actor);
+        if due && controlled {
+            continue;
+        }
         let now = frames[key.1].ok_or(StopReason::SemanticAbort)?.now;
         if !calendar_slots(m, cap, now, occupied[cap.actor.0], &quantities) {
             continue;
@@ -581,4 +609,33 @@ pub(super) fn starts(
         });
     }
     Ok(chosen)
+}
+
+#[cfg(test)]
+#[test]
+fn repeat_fork_lexical_sequence_covers_each_round_and_limit_once() {
+    let source = include_str!("../../tests/support/repeat_policy_fork.relca");
+    let ast = crate::syntax::parse(source).unwrap();
+    for (plan, names) in [
+        (
+            "Loop",
+            [
+                "@loop:wave:1:a",
+                "@loop:wave:1:b",
+                "@loop:wave:2:a",
+                "@loop:wave:2:b",
+                "@loop:wave:2:c",
+                "d",
+            ],
+        ),
+        ("Hand", ["a1", "b1", "a2", "b2", "c1", "d1"]),
+    ] {
+        let m = crate::lower::lower_with_selection(&ast, Some(plan), None).unwrap();
+        let order = lexical(&m).unwrap();
+        let actual: Vec<_> = order
+            .iter()
+            .map(|b| m.process.bindings[b.0].name.as_str())
+            .collect();
+        assert_eq!(actual, names, "{plan}");
+    }
 }

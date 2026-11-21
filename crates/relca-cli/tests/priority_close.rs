@@ -1,6 +1,6 @@
 //! Q5 closing acceptance; independent of the six frozen original artifacts.
 use relca_core::{Verdict, report, syntax};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 #[path = "support/ledger_shape.rs"]
@@ -160,7 +160,7 @@ fn m4_different_priority_scopes_are_refused_in_both_comparison_modes() {
         ),
         ("diff", vec!["--from", "Left", "--to", "Right"]),
     ] {
-        let (v, exit, _) = cli(&source, command, &args);
+        let (v, exit, stderr) = cli(&source, command, &args);
         assert_eq!(exit, 4, "{command}: {}", v["diagnostics"]);
         assert!(
             errors(&v).iter().any(|d| d["code"] == "U-SEM-0"
@@ -170,6 +170,41 @@ fn m4_different_priority_scopes_are_refused_in_both_comparison_modes() {
                     .contains("priority_feature_combination")),
             "{command}: {}",
             v["diagnostics"]
+        );
+        let (message, cause, suffix) = if command == "diff" {
+            (
+                "priority_feature_combination: diff requires identical priority inputs and disciplines",
+                "diff_priority_mismatch",
+                "  kind: analysis_not_connected\n  cause: diff_priority_mismatch\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
+            )
+        } else {
+            (
+                "priority_feature_combination: compare requires identical priority inputs and disciplines",
+                "compare_priority_mismatch",
+                "  kind: analysis_not_connected\n  cause: compare_priority_mismatch\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
+            )
+        };
+        let row = errors(&v)
+            .into_iter()
+            .find(|d| d["message"] == message)
+            .unwrap();
+        assert_eq!(
+            row["detail"],
+            json!({"reason":"priority_feature_combination","cause":cause,
+            "kind":"analysis_not_connected","blockers":[],"see":"docs/guide/dsl.md#解析が未接続のとき"})
+        );
+        assert!(row["location"].is_null());
+        assert_eq!(
+            stderr
+                .split_once(&format!("U-SEM-0: {message}\n"))
+                .unwrap()
+                .1,
+            suffix
+        );
+        let (control, _, stderr) = cli(&plans(false), command, &args);
+        assert!(
+            !stderr.contains("priority_feature_combination"),
+            "{control}"
         );
     }
 }

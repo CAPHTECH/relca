@@ -1,0 +1,31 @@
+model RoundOrdering version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; state ready: bool = false
+    capability short() -> T { duration fixed 1min; result nondet { ok }; writes ready; finish { ready=true } }
+    capability long() -> T { duration fixed 3min; result nondet { ok } }
+    capability close() -> T { duration fixed 1min; result nondet { ok } }
+  }
+  process Repeated {
+    repeat wave at_most 2 {
+      fork pair { a=A.short(); b=A.long() }; join all pair; again
+    } on_limit { c=A.close(); leave }
+    d=A.close(); end done
+  }
+  process Written {
+    fork first { a1=A.short(); b1=A.long() }; join all first
+    fork second { a2=A.short(); b2=A.long() }; join all second
+    c1=A.close(); d1=A.close(); end done
+  }
+  cut C { include [A] }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Written }
+  arrivals fixed [0min]
+  policy fifo tie_by case_id then call_order
+  bounds { cases 1; live_tasks 2; clock 12min }
+  simulation replications 2 seed 7 confidence 0.5
+  verify probability reached end.done >= 0
+  property case.Started = reached(A.ready == true)
+  property case.Done = reached(end.done)
+  metric mean.First = mean(elapsed, case.Started)
+  metric mean.Lead = mean(elapsed, case.Done)
+}

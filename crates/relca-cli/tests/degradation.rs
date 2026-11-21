@@ -80,7 +80,12 @@ fn invoke_source(name: &str, mode: &str, src: &str, args: &[&str]) -> (Value, i3
         _ => diagnostics(&v, ""),
     };
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
+        // The degradation oracle checks refusal, not detail (see diagnostic_details).
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         stderr,
         "diagnostic stderr mirrors JSON"
     );

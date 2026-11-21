@@ -167,6 +167,7 @@ impl Selection {
             .filter(|c| c.excluded)
             .map(|c| {
                 let invalid = |code: &str, reason: &str| diag::Diagnostic {
+                    presentation: Default::default(),
                     code: code.into(),
                     severity: diag::Severity::Error,
                     span: Some(c.span),
@@ -194,6 +195,7 @@ impl Selection {
 
     pub(crate) fn warnings(&self) -> Vec<diag::Diagnostic> {
         self.clauses.iter().filter(|c| c.excluded && c.masks_call).map(|c| diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::W_CONF_2.into(), severity: diag::Severity::Warning, span: Some(c.span),
             message: format!("{} is outside configuration scope but its target may be called in configuration {}", c.id, self.configuration.as_deref().unwrap_or_default()),
         }).collect()
@@ -211,7 +213,7 @@ impl Selection {
         };
         properties.filter(|(_, verdict)| *verdict == Verdict::Vacuous).filter_map(|(id, _)| {
             let c = self.clauses.iter().find(|c| c.id == id && !c.excluded && c.has_capability && !c.masks_call)?;
-            Some(diag::Diagnostic { code: diag::W_CONF_1.into(), severity: diag::Severity::Warning, span: Some(c.span), message: format!("{} is vacuous in configuration {configuration} whose process does not call its target; declare applies_to if the control is absent by design", c.id) })
+            Some(diag::Diagnostic { presentation: Default::default(), code: diag::W_CONF_1.into(), severity: diag::Severity::Warning, span: Some(c.span), message: format!("{} is vacuous in configuration {configuration} whose process does not call its target; declare applies_to if the control is absent by design", c.id) })
         }).collect()
     }
 }

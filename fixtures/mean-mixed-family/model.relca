@@ -1,0 +1,12 @@
+model MixedFamily version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration fixed 1min; result nondet { ok } } }
+  process Flow { x=A.run(); end done }
+  cut C { include [A] }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 37 seed 1 confidence 0.95
+  verify probability reached end.done >= 0.9
+  property case.Done = reached(end.done)
+  metric cohort.OnTime = expected(count(case.Done)) / arrivals
+  verify metric cohort.OnTime >= 0.9
+}

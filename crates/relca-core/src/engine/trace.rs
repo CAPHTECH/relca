@@ -195,6 +195,7 @@ impl Capture {
         Ok(Stage {
             source: None,
             evidence_sources: None,
+            evidence_exits: None,
             saved_key: None,
             evidence_ref: None,
             command: None,
@@ -521,6 +522,30 @@ impl Capture {
                 .as_ref()
                 .and_then(|h| h.values.get(&t.binding))
                 .map(|v| v.roots.iter().copied().collect());
+            let alias_input = crate::evidence_basis::call_table(m)
+                .iter()
+                .any(|c| c.binding == t.binding && c.alias_input);
+            let value = s.evidence.as_ref().and_then(|h| {
+                h.finished(t.binding, alias_input)
+                    .or_else(|| h.finished(t.binding, false))
+            });
+            if alias_input || value.is_some_and(|v| !v.unknown.is_empty()) {
+                stage.evidence_exits = Some(x::ExitTrace {
+                    exits: if alias_input {
+                        crate::evidence_basis::exits(m, &s.state_values)
+                    } else {
+                        vec![]
+                    },
+                    sources: value
+                        .into_iter()
+                        .flat_map(|v| v.roots.iter().copied())
+                        .collect(),
+                    unknown: value
+                        .into_iter()
+                        .flat_map(|v| v.unknown.iter().copied())
+                        .collect(),
+                });
+            }
         }
         if let Some(r) = m.response_attempt(t.binding) {
             stage.command = Some(m.site_name(r.command));
@@ -1601,11 +1626,11 @@ pub(crate) fn explore_captured(
     capture: Capture,
 ) -> (outcome::Outcome, Capture) {
     if !model.legacy_route() {
-        let (outcome, trace) = arrivals::explore_traced(model, budget, Some(capture));
+        let (outcome, trace) = arrivals::explore_traced(model, budget, Some(capture), false);
         return (outcome, trace.expect("enabled arrivals capture"));
     }
     if model.uses_probability() && model.legacy_route() {
-        let (outcome, trace) = run_probability_traced(model, budget, Some(capture));
+        let (outcome, trace) = run_probability_traced(model, budget, Some(capture), false);
         return (
             attach_legacy_quality(outcome, model, budget),
             trace.expect("enabled probability capture"),
@@ -1821,8 +1846,8 @@ mod tests {
             );
             assert_eq!(plain.census, traced.census, "generated/held/budget{budget}");
             assert_eq!(
-                run_probability(&m, budget),
-                run_probability_traced(&m, budget, Some(Capture::new(src, &m))).0,
+                run_probability_traced(&m, budget, None, false).0,
+                run_probability_traced(&m, budget, Some(Capture::new(src, &m)), false).0,
                 "budget{budget}"
             );
         }
@@ -1837,7 +1862,7 @@ mod tests {
             arrivals::trace_compatibility_at_budget(src, &m, budget);
             assert_eq!(
                 arrivals::explore(&m, budget),
-                arrivals::explore_traced(&m, budget, Some(Capture::new(src, &m))).0,
+                arrivals::explore_traced(&m, budget, Some(Capture::new(src, &m)), false).0,
                 "budget{budget}"
             );
         }

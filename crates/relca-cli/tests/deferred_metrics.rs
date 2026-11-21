@@ -145,20 +145,29 @@ fn real_invoice_and_busyday_keep_cut_and_existing_refusal_reasons_separate() {
                 "--configuration",
                 plan,
                 "--scenario",
-                "BusyDay",
+                "BusyDaySmoke",
             ])
             .current_dir(&root)
             .output()
             .unwrap();
         let v: Value = serde_json::from_slice(&o.stdout).unwrap();
-        assert_eq!(o.status.code(), Some(4));
-        assert_eq!(v["metrics"]["overall"]["work"]["reason"], "aborted");
-        assert_eq!(
-            v["cut"]["checked"].as_array().unwrap().last().unwrap(),
-            "deferred_metrics"
+        assert_eq!(o.status.code(), Some(2));
+        assert!(v["metrics"]["overall"]["work"]["mean"].is_string());
+        assert!(
+            v["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["code"] == "W-CONTEST-1")
         );
         assert!(
-            !v["cut"]["unchecked"]
+            v["cut"]["unchecked"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("deferred_metrics"))
+        );
+        assert!(
+            !v["cut"]["checked"]
                 .as_array()
                 .unwrap()
                 .contains(&serde_json::json!("deferred_metrics"))

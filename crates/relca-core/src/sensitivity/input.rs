@@ -29,6 +29,14 @@ pub struct InputError {
     pub kind: FailureKind,
     pub detail: String,
     pub point: Option<String>,
+    projection: Option<ProjectionDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ProjectionDiagnostic {
+    Repeat,
+    Merge(Vec<diag::Blocker>),
+    Unconnected(&'static str),
 }
 
 impl InputError {
@@ -37,10 +45,15 @@ impl InputError {
             kind,
             detail: detail.into(),
             point: None,
+            projection: None,
         }
     }
     pub fn at_point(mut self, id: &str) -> Self {
         self.point = Some(id.into());
+        self
+    }
+    pub(super) fn projection(mut self, projection: ProjectionDiagnostic) -> Self {
+        self.projection = Some(projection);
         self
     }
     pub fn reason(&self) -> &'static str {
@@ -77,12 +90,28 @@ impl InputError {
             .as_ref()
             .map(|id| format!(" point {id:?}:"))
             .unwrap_or_default();
-        diag::Diagnostic {
+        let d = diag::Diagnostic {
+            presentation: Default::default(),
             code: code.into(),
             severity: diag::Severity::Error,
             message: format!("{}:{context} {}", self.reason(), self.detail),
             // Manifest/point context is not an offset in an unread model.
             span: None,
+        };
+        match &self.projection {
+            Some(ProjectionDiagnostic::Repeat) => d.loop_detail(
+                "sensitivity_repeat_projection",
+                diag::DetailKind::AnalysisNotConnected,
+                None,
+                None,
+            ),
+            Some(ProjectionDiagnostic::Merge(blockers)) => {
+                d.merge_detail("sensitivity_merge_projection", blockers.clone())
+            }
+            Some(ProjectionDiagnostic::Unconnected(cause)) => {
+                d.unconnected(self.reason(), cause, Vec::new())
+            }
+            None => d,
         }
     }
 }
@@ -158,7 +187,8 @@ impl Manifest {
             return Err(InputError::new(
                 SchemaUnsupported,
                 "only relca-sensitivity/v1 enumerated_models is supported",
-            ));
+            )
+            .projection(ProjectionDiagnostic::Unconnected("manifest_schema")));
         }
         if self.scope.rationale.trim().is_empty()
             || self.points.is_empty()
@@ -204,7 +234,8 @@ impl Manifest {
                 return Err(InputError::new(
                     SchemaUnsupported,
                     "only probability_query targets are supported",
-                ));
+                )
+                .projection(ProjectionDiagnostic::Unconnected("manifest_target_kind")));
             }
             if t.id.trim().is_empty() || !targets.insert(&t.id) {
                 return Err(InputError::new(

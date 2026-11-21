@@ -1155,7 +1155,7 @@ pub(super) fn apply<'a>(
                             r.values
                                 .iter()
                                 .zip(&kernel.given)
-                                .all(|(x, v)| f.state_values[v.0] == *x)
+                                .all(|(x, v)| f.state_values.get(v.0) == Some(x))
                         })
                         .ok_or(ReplayReason::IllegalTransition)?;
                     if let Some(choice) = choice {
@@ -1412,9 +1412,10 @@ pub(super) fn apply<'a>(
             let Stmt::LoopControl(control) = &stmt.kind else {
                 return Err(ReplayReason::IllegalTransition);
             };
-            for (id, x) in &control.updates {
-                f.state_values[id.0] = *x;
-            }
+            legal(
+                m.apply_loop_updates(&mut f.state_values, &control.updates)
+                    .is_ok(),
+            )?;
         }
         Kind::Branch => {
             if let Some(wait) = &f.waiting

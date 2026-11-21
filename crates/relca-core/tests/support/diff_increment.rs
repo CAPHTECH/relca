@@ -91,12 +91,12 @@ pub fn old_diagnostics(v: &Value, expected_producers: &[Value]) -> Vec<Value> {
                     r["kind"].as_str().unwrap()
                 )
             };
-            json!({"code":"W-DIFF-1","severity":"warning","span":null,"message":message})
+            json!({"code":"W-DIFF-1","severity":"warning","span":null,"message":message,"location":null,"detail":null})
         })
         .collect();
     for r in v["differences"].as_array().unwrap() {
         if r["loses"].is_null() {
-            increments.push(json!({"code":"W-DIFF-3","severity":"warning","span":null,
+            increments.push(json!({"code":"W-DIFF-3","severity":"warning","span":null,"location":null,"detail":null,
             "message":format!("computed change for {} {} has no preserve, override, maintain or loses annotation",
                 r["kind"].as_str().unwrap(), r["target"].as_str().unwrap())}));
         }

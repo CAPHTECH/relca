@@ -1,0 +1,1 @@
+{"verdict":"satisfied","evaluation":{"objectives":[{"objective":"minimize mean.Lead","values":[{"configuration":"Fast","lower":"2","upper":"2","basis":"exact","reason":null},{"configuration":"Slow","lower":"5","upper":"5","basis":"exact","reason":null}]}],"pareto":{"non_dominated":["Fast"],"dominated":[{"configuration":"Slow","dominated_by":["Fast"]}]}}}

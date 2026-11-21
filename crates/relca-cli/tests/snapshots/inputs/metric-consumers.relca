@@ -1,0 +1,21 @@
+model MetricConsumers version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1
+    capability quick() -> T { duration fixed 2min; result nondet { ok } }
+    capability slow() -> T { duration fixed 5min; result nondet { ok } }
+  }
+  process Quick { x=A.quick(); end done }
+  process Long { x=A.slow(); end done }
+  cut C { include [A] }
+  configuration Fast { cut C; process Quick }
+  configuration Slow { cut C; process Long }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  simulation replications 37 seed 1 confidence 0.95
+  verify probability reached end.done >= 0.9
+  property case.Done = reached(end.done)
+  metric cohort.OnTime = expected(count(case.Done)) / arrivals
+  verify metric cohort.OnTime >= 0.9
+  metric mean.Lead = mean(elapsed, case.Done)
+  verify metric mean.Lead <= 3min
+  compare [Fast, Slow] cut C hard { cohort.OnTime >= 0; mean.Lead <= 6min } objectives { minimize mean.Lead }
+}

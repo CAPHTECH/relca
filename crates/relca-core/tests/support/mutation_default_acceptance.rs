@@ -101,13 +101,14 @@ pub fn check(name: &str, v: &Value) {
     let e = &all[name];
     assert!(e.is_object(), "unknown fixture {name}");
     let mut hand = e["expected"].clone();
+    let input = source(name);
     if let Some(original) = hand.get_mut("original")
-        && let Ok(ast) = syntax::parse(&source(name))
+        && let Ok(ast) = syntax::parse(&input)
         && let Ok(model) = relca_core::lower::lower(&ast)
     {
         // ADR 0054: the original is a canonical Report, not the mutation root.
-        responsibility_oracle::assert_report(&model, &v["original"]);
-        *original = responsibility_oracle::with_diagnostics(&model, original);
+        responsibility_oracle::assert_report(&model, &input, &v["original"]);
+        *original = responsibility_oracle::with_diagnostics(&model, &input, original);
     }
     partial(&hand, v, name);
     for (n, i) in [1, 4].iter().enumerate() {

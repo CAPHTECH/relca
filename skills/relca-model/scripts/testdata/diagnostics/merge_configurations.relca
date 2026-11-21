@@ -1,0 +1,26 @@
+model Merge version "0.2" {
+  type V = enum { ok, alt }
+  observed case { flag: bool = false }
+  actor Doc { source document }
+  actor Notes {}
+  actor A { capacity 2
+    capability take() -> V { reads [Doc]; duration fixed 1min; result nondet { ok, alt } }
+    capability use(x: V) -> V { duration fixed 1min; result nondet { ok } }
+    capability use2(x: V, y: V) -> V { duration fixed 1min; result nondet { ok } }
+    capability last(x: V) -> V { duration fixed 1min; result nondet { ok } }
+    capability regx(x: V) -> V { registers [Notes]; duration fixed 1min; result nondet { ok } }
+    capability rd() -> V { reads [Notes]; duration fixed 1min; result nondet { ok } }
+  }
+  cut C { include [Doc, Notes, A] }
+  process P {
+    d = A.take()
+    v = if d == ok { yield d } else { yield d }
+    u = A.use(v)
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 30min }
+  verify safety no_resource_overcommit
+  process Q { d = A.take(); u = A.use(d); end done }
+  configuration X { cut C; process P }
+  configuration Y { cut C; process Q }
+}

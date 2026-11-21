@@ -96,6 +96,10 @@ fn diff_positive_hand_values_are_not_a_cross_source_instance_comparison() {
 fn forbidden_overrides_have_exact_syntax_or_lower_diagnostics() {
     for case in hand::REJECTIONS {
         let source = case.source();
+        let mut internal = case.diagnostics();
+        for row in internal.as_array_mut().unwrap() {
+            row["location"] = Value::Null;
+        }
         // Direct entry distinguishes syntax failure from semantic lower failure.
         match syntax::parse(&source) {
             Ok(a) => {
@@ -105,15 +109,14 @@ fn forbidden_overrides_have_exact_syntax_or_lower_diagnostics() {
                         .expect("override must be rejected");
                     assert_eq!(
                         serde_json::to_value(diagnostics).unwrap(),
-                        case.diagnostics(),
+                        internal,
                         "{} {configuration}",
                         case.name()
                     );
                 }
             }
             Err(diagnostics) => {
-                let expected = case.diagnostics();
-                let errors: Vec<_> = expected
+                let errors: Vec<_> = internal
                     .as_array()
                     .unwrap()
                     .iter()

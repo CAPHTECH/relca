@@ -762,6 +762,7 @@ fn invalid() -> Error {
         at.line()
     ))
 }
+#[derive(Clone)]
 struct Budget {
     limits: Limits,
     work: usize,
@@ -1442,9 +1443,123 @@ fn collect_shared<'a>(
     Ok(())
 }
 
-// Preserve unsimplified support and lexical definitions, including on impossible
-// branches. End cuts the continuation; where guards only the fork's suffix.
+fn loop_guard_value(model: &ir::Model, condition: &ir::Cond, path: &Path<'_>) -> Option<bool> {
+    let ir::Cond::IntCompare {
+        variable,
+        operator,
+        value,
+    } = condition
+    else {
+        return None;
+    };
+    let current = match path.store.get(variable) {
+        Some(Provenance::Constant(value)) => *value,
+        // A missing entry is the original value, not an unknown write.
+        None => match model.state_variables.get(variable.0)?.initial {
+            ir::InitialValue::Fixed(value) => value,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let ir::StateValue::Integer(current) = current else {
+        return None;
+    };
+    let order = i128::from(current).cmp(value);
+    Some(match operator {
+        ir::IntComparison::Eq => order.is_eq(),
+        ir::IntComparison::Ne => order.is_ne(),
+        ir::IntComparison::Lt => order.is_lt(),
+        ir::IntComparison::Le => order.is_le(),
+        ir::IntComparison::Gt => order.is_gt(),
+        ir::IntComparison::Ge => order.is_ge(),
+    })
+}
+
+#[cfg(test)]
+mod loop_guard_tests {
+    use super::*;
+
+    #[test]
+    fn loop_guard_with_unknown_provenance_keeps_both_branches() {
+        let source = include_str!("../tests/bounded_repetition/models/round-gate-loop.relca");
+        let model = crate::lower::lower(&crate::syntax::parse(source).unwrap()).unwrap();
+        let active = ir::StateVarId(
+            model
+                .state_variables
+                .iter()
+                .position(|v| v.loop_role() == Some("active"))
+                .unwrap(),
+        );
+        let span = model.process.span;
+        let block = vec![ir::Statement {
+            span,
+            kind: ir::Stmt::If {
+                condition: ir::Cond::IntCompare {
+                    variable: active,
+                    operator: ir::IntComparison::Eq,
+                    value: 1,
+                },
+                then_body: vec![ir::Statement {
+                    span,
+                    kind: ir::Stmt::Wait(1),
+                }],
+                else_body: Vec::new(),
+            },
+        }];
+        for (stored, want) in [
+            (None, vec![true]),
+            (
+                Some(Provenance::Constant(ir::StateValue::Integer(0))),
+                vec![false],
+            ),
+            (Some(Provenance::Unknown), vec![true, false]),
+        ] {
+            let mut p = Path::default();
+            p.store.extend(stored.map(|v| (active, v)));
+            let mut budget = viewpoints::budget(DEFAULT);
+            let tail = expand_paths(
+                &block,
+                vec![p],
+                &mut BTreeMap::new(),
+                &model,
+                &mut budget,
+                None,
+                0,
+                true,
+            )
+            .unwrap();
+            let got: Vec<_> = tail
+                .iter()
+                .map(|p| match p.guards.as_slice() {
+                    [Guard::If(c, taken)] if model.is_loop_guard(c) => *taken,
+                    _ => panic!("the original state guard must survive"),
+                })
+                .collect();
+            assert_eq!(got, want);
+            assert_eq!(budget.paths, want.len() - 1);
+        }
+    }
+}
+
+// Preserve unsimplified support and lexical definitions on business branches.
+// Internal loop guards select a successor without resolving the downstream
+// state's provenance. End cuts the continuation; where guards only a fork's suffix.
 fn paths<'a>(
+    block: &'a ir::Block,
+    incoming: Vec<Path<'a>>,
+    effects: &mut BTreeMap<ir::BindingId, Vec<Path<'a>>>,
+    model: &ir::Model,
+    budget: &mut Budget,
+    recorder: Option<&mut viewpoints::Recorder<'a>>,
+    depth: usize,
+) -> Result<Vec<Path<'a>>> {
+    expand_paths(
+        block, incoming, effects, model, budget, recorder, depth, false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expand_paths<'a>(
     block: &'a ir::Block,
     mut incoming: Vec<Path<'a>>,
     effects: &mut BTreeMap<ir::BindingId, Vec<Path<'a>>>,
@@ -1452,6 +1567,7 @@ fn paths<'a>(
     budget: &mut Budget,
     mut recorder: Option<&mut viewpoints::Recorder<'a>>,
     depth: usize,
+    select_loop_guards: bool,
 ) -> Result<Vec<Path<'a>>> {
     if recorder.is_some() && depth >= budget.limits.depth {
         return Err(budget
@@ -1632,7 +1748,23 @@ fn paths<'a>(
                 }
                 let mut yes = Vec::new();
                 let mut no = Vec::new();
-                for p in incoming {
+                let loop_guard = select_loop_guards && model.is_loop_guard(condition);
+                for mut p in incoming {
+                    if loop_guard {
+                        budget.work()?;
+                        if let Some(taken) = loop_guard_value(model, condition, &p) {
+                            // Keep the state guard for analyses that cannot yet
+                            // derive judgement/refusal across a loop boundary.
+                            budget.copy(1)?;
+                            p.guards.push(Guard::If(condition, taken));
+                            if taken {
+                                yes.push(p);
+                            } else {
+                                no.push(p);
+                            }
+                            continue;
+                        }
+                    }
                     budget.path()?;
                     budget.copy(p.defined.len())?;
                     budget.copy(p.guards.len())?;
@@ -1672,24 +1804,32 @@ fn paths<'a>(
                     });
                     no.push(n);
                 }
-                incoming = paths(
-                    then_body,
-                    yes,
-                    effects,
-                    model,
-                    budget,
-                    recorder.as_deref_mut(),
-                    depth + 1,
-                )?;
-                incoming.extend(paths(
-                    else_body,
-                    no,
-                    effects,
-                    model,
-                    budget,
-                    recorder.as_deref_mut(),
-                    depth + 1,
-                )?);
+                incoming = if loop_guard && yes.is_empty() {
+                    Vec::new()
+                } else {
+                    expand_paths(
+                        then_body,
+                        yes,
+                        effects,
+                        model,
+                        budget,
+                        recorder.as_deref_mut(),
+                        depth + 1,
+                        select_loop_guards,
+                    )?
+                };
+                if !loop_guard || !no.is_empty() {
+                    incoming.extend(expand_paths(
+                        else_body,
+                        no,
+                        effects,
+                        model,
+                        budget,
+                        recorder.as_deref_mut(),
+                        depth + 1,
+                        select_loop_guards,
+                    )?);
+                }
             }
             ir::Stmt::ResolveEffect { .. } => {}
             ir::Stmt::StopReceiptUnknown => incoming.clear(),
@@ -2246,7 +2386,11 @@ fn derive_strategy_shared(
             .iter()
             .any(|c| model.capabilities[c.capability.0].commits)
     {
-        paths(
+        // Keep the legacy provenance envelope when it fits. Pruning earlier
+        // can change a downstream "unknown" into a claim of unreachability.
+        // Retry just this phase after a paths cut; graph work is not repeated.
+        let retry_budget = model.has_loops().then(|| budget.clone());
+        let result = paths(
             &model.process.body,
             vec![Path::default()],
             &mut effect_paths,
@@ -2254,7 +2398,25 @@ fn derive_strategy_shared(
             &mut budget,
             None,
             0,
-        )?;
+        );
+        if let Some(previous) = retry_budget
+            && matches!(&result, Err(Error::Limit(l)) if l.counter == "paths")
+        {
+            budget = previous;
+            effect_paths = BTreeMap::new();
+            expand_paths(
+                &model.process.body,
+                vec![Path::default()],
+                &mut effect_paths,
+                model,
+                &mut budget,
+                None,
+                0,
+                true,
+            )?;
+        } else {
+            result?;
+        }
     }
     let mut all_j: BTreeSet<ir::BindingId> = BTreeSet::new();
     let mut warnings = Vec::new();
@@ -2458,6 +2620,7 @@ fn derive_strategy_shared(
                 };
                 if stops != Stops::AllPaths {
                     warnings.push(diag::Diagnostic {
+                        presentation: Default::default(),
                         code: if stops == Stops::None {
                             diag::W_AGY_0
                         } else {
@@ -2715,7 +2878,7 @@ fn derive_strategy_shared(
                 })
             ) {
                 let cap = &model.capabilities[id.0];
-                warnings.push(diag::Diagnostic { code:diag::W_AGY_3.into(),severity:diag::Severity::Warning,
+                warnings.push(diag::Diagnostic { presentation: Default::default(), code:diag::W_AGY_3.into(),severity:diag::Severity::Warning,
                     message:format!("{}.{} は縮退のために保たれるが、通常経路での行使は 0 回/件。保持の根拠は unknown、依存する縮退経路はモデル外",model.actors[cap.actor.0].name,cap.name),span:Some(cap.span) });
             }
         }

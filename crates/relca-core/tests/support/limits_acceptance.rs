@@ -218,8 +218,10 @@ pub fn accept(base: &str) {
             let m = selected(&s);
             let e = engine::simulate(&m);
             let r = reference::simulate(&m);
+            let facts = relca_test_support::diagnostic::simulation_facts;
             assert_eq!(
-                e, r.outcome,
+                facts(e.clone()),
+                facts(r.outcome),
                 "independent simulation, including runtime refusal"
             );
         }

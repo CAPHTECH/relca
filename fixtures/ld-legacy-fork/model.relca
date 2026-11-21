@@ -1,0 +1,11 @@
+model LdLegacyFork version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability x() -> T { duration fixed 2min; result nondet { ok } } }
+  actor B { capacity 1; capability y() -> T { duration fixed 2min; result nondet { ok } } }
+  process P { fork f { a = A.x(); b = B.y() } join all f; end done }
+  cut C { include [A,B] }
+  metrics { window 10min; currency "JPY" }
+  bounds { cases 1; live_tasks 4; clock 10min }
+  simulation replications 4 seed 0 confidence 0.5
+  verify reachable end.done
+}

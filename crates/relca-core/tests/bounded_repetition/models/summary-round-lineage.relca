@@ -1,0 +1,20 @@
+model RoundLineage version "0.2" {
+  type V = enum { ok, bad }
+  actor Doc { source document }
+  actor Rules { source document }
+  actor A { capacity 1
+    capability produce() -> V { reads [Doc]; duration fixed 1min; result nondet { ok } }
+    capability consume(v: V) -> V { reads [Rules]; duration fixed 1min; result nondet { ok, bad } }
+    capability post() -> V { commits; duration fixed 1min; result nondet { ok } }
+  }
+  cut C { include [Doc,Rules,A] }
+  process P {
+    repeat wave at_most 1 {
+      a = A.produce(); b = A.consume(a); c = A.consume(a)
+      if c == ok { leave } else { again }
+    } on_limit { end rejected }
+    p = A.post(); end done
+  }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  verify reachable end.done
+}

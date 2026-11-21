@@ -1,0 +1,3 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"absent_diagnostics":["W-DEADLOCK-0"],"quality":{"means":[
+  {"name":"Lead","measure":"elapsed","property":"Done","form":"all_arrivals","value":{"lower":"9/2","upper":"9/2","basis":"exact","reason":null},"lower_bound":null}
+]}}

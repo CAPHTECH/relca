@@ -742,6 +742,7 @@ impl Viewpoints {
         let mut out = Vec::new();
         let mut add = |block: &str, limit: &DerivationLimit| {
             out.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_AGY_5.into(),
                 severity: diag::Severity::Warning,
                 message: format!("Agency viewpoint {block} not derived: {limit}"),
@@ -792,11 +793,20 @@ pub(crate) fn refresh_limit_warnings(
         .iter()
         .position(|d| d.code == diag::W_AGY_5)
         .unwrap_or(diagnostics.len());
-    diagnostics.retain(|d| d.code != diag::W_AGY_5);
-    let warnings = agency
+    let mut warnings = agency
         .and_then(AgencyDerivation::as_derived)
         .and_then(|a| a.viewpoints.as_ref())
         .map_or_else(Vec::new, Viewpoints::limit_warnings);
+    // Several output drivers reseal an already projected report. A warning
+    // recreated from the same facts still belongs to the same source span.
+    for warning in &mut warnings {
+        if let Some(previous) = diagnostics.iter().find(|d| {
+            d.code == warning.code && d.span == warning.span && d.message == warning.message
+        }) {
+            warning.presentation.clone_from(&previous.presentation);
+        }
+    }
+    diagnostics.retain(|d| d.code != diag::W_AGY_5);
     let at = at.min(diagnostics.len());
     diagnostics.splice(at..at, warnings);
 }

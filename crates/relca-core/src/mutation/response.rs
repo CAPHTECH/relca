@@ -5,7 +5,7 @@ use super::*;
 #[derive(Clone)]
 struct Candidate {
     process: usize,
-    path: Vec<(usize, bool)>,
+    path: Path,
     index: usize,
     site: Site,
     exhausted: String,
@@ -67,7 +67,7 @@ fn enumerate(src: &str, ast: &ast::Model, m: &ir::Model) -> (Vec<Candidate>, Vec
         exhausted: String,
     }
     impl Walk<'_> {
-        fn call(&mut self, c: &ast::Call, path: &[(usize, bool)], index: usize, fork: bool) {
+        fn call(&mut self, c: &ast::Call, path: &[(usize, Branch)], index: usize, fork: bool) {
             let Some(cap) = self.m.capabilities.iter().find(|cap| {
                 cap.name == c.capability.value
                     && self.m.actors[cap.actor.0].name == c.actor.value
@@ -80,8 +80,22 @@ fn enumerate(src: &str, ast: &ast::Model, m: &ir::Model) -> (Vec<Candidate>, Vec
             s.actor = Some(c.actor.value.clone());
             s.capability = Some(c.capability.value.clone());
             s.affected_bindings = vec![c.binding.value.clone()];
-            s.statement_path = Some(format!("{path:?}/{index}"));
-            let reason = if fork {
+            let inside_loop = path
+                .iter()
+                .any(|(_, b)| matches!(b, Branch::Repeat | Branch::OnLimit));
+            s.statement_path = Some(if inside_loop {
+                let mut label = "body".to_owned();
+                for (i, b) in path {
+                    label.push_str(&format!("/{i}/{}", b.label()));
+                }
+                format!("{label}/{index}")
+            } else {
+                let legacy: Vec<_> = path.iter().map(|(i, b)| (*i, *b == Branch::Then)).collect();
+                format!("{legacy:?}/{index}")
+            });
+            let reason = if inside_loop {
+                Some("loop_feature_combination")
+            } else if fork {
                 Some("fork_branch")
             } else if c.retry.is_some() {
                 Some("existing_retry")
@@ -106,7 +120,11 @@ fn enumerate(src: &str, ast: &ast::Model, m: &ir::Model) -> (Vec<Candidate>, Vec
             if let Some(reason) = reason {
                 self.skipped.push(SkippedSite {
                     cohort: None,
-                    status: "not_applicable",
+                    status: if inside_loop {
+                        "unsupported"
+                    } else {
+                        "not_applicable"
+                    },
                     reason,
                     site: Some(s),
                 });
@@ -120,7 +138,7 @@ fn enumerate(src: &str, ast: &ast::Model, m: &ir::Model) -> (Vec<Candidate>, Vec
                 });
             }
         }
-        fn block(&mut self, b: &ast::Block, path: &mut Vec<(usize, bool)>) {
+        fn block(&mut self, b: &ast::Block, path: &mut Path) {
             for (index, s) in b.iter().enumerate() {
                 match &s.value {
                     ast::Stmt::Call(c) => self.call(c, path, index, false),
@@ -134,12 +152,19 @@ fn enumerate(src: &str, ast: &ast::Model, m: &ir::Model) -> (Vec<Candidate>, Vec
                         else_body,
                         ..
                     } => {
-                        path.push((index, true));
+                        path.push((index, Branch::Then));
                         self.block(then_body, path);
                         path.pop();
-                        path.push((index, false));
+                        path.push((index, Branch::Else));
                         self.block(else_body, path);
                         path.pop();
+                    }
+                    ast::Stmt::Repeat { body, on_limit, .. } => {
+                        for (kind, child) in [(Branch::Repeat, body), (Branch::OnLimit, on_limit)] {
+                            path.push((index, kind));
+                            self.block(child, path);
+                            path.pop();
+                        }
                     }
                     _ => {}
                 }
@@ -199,6 +224,12 @@ pub(super) fn run(
             *counts.entry(s.reason.to_owned()).or_insert(0) += 1;
         }
         row.skipped_counts = Some(counts);
+        if candidates.is_empty() && skipped.iter().any(|s| s.status == "unsupported") {
+            row.candidates = None;
+            row.status = "unsupported";
+            row.reason = Some("loop_feature_combination");
+            continue;
+        }
         row.status = if candidates.is_empty() {
             "not_applicable"
         } else {

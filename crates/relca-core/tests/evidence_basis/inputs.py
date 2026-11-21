@@ -152,7 +152,7 @@ def static_cases():
 
 def combination_cases():
     source = edit(M0, 'e = Clerk.enter()', 'repeat attempt at_most 1 { e = Clerk.enter(); leave } on_limit { end returned }')
-    yield 'repeat', basis(source), 'loop_feature_combination'
+    yield 'repeat', basis(source), None  # check accepts; mutate has a separate gate
     source = edit(M0, 'a = Approver.approve(e)',
                   'degrade Manual when p == pass { a = Approver.approve(e) } else { end returned }')
     # Avoid the branch-local a escaping into Ledger.post.

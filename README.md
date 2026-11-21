@@ -14,14 +14,15 @@ Relca は、業務の流れを小さなモデルに書き、起こりうる進�
 |---|---|
 | 1 つの業務モデルで、規則の破れや詰まりを網羅的に探す | `check`、`explain` |
 | 指摘がある場合だけ修正し、修正後の値か元の値を後続へ渡す | 値を返す `if`。`check`、`explain`、`simulate` |
-| 差し戻しや再確認を、初回を含む上限回数つきの `repeat` で書く | `check`、`explain`、`simulate` |
-| 判定に必要な根拠源を `evidence_basis` で求め、読取りの削除を検出する | `check`、`explain`、`mutate` |
+| 差し戻しや再確認を、初回を含む上限回数つきの `repeat` で書く。本体に `fork` と `join all` を置ける | `check`、`explain`、`simulate`、`compare`、`diff`、`sensitivity`。`mutate` は一部の種類だけ |
+| 判定に必要な根拠源を `evidence_basis` で求め、読取りの削除を検出する | `check`、`explain`、`mutate`、`compare`、`diff`、`sensitivity` |
 | 同じ人が前の操作で根拠源を読み、後の操作では生成物だけを見る形を区別する | `check`、`explain`、`simulate` の段ごとの観測と責務。読取りの削除は `mutate` |
-| 知識を記録へ登録し、後の読取りへ由来を引き継ぐ | `registers [Notes]` と `reads [Notes]`。`check`、`explain`、`simulate`、`mutate` |
-| 確かめた値と使う値が同じ版であることを `same_version` で求める | `check`、`explain`、`mutate`。`simulate` は標本中の違反だけ |
+| 知識を記録へ登録し、後の読取りへ由来を引き継ぐ | `registers [Notes]` と `reads [Notes]`。`check`、`explain`、`simulate`、`mutate`、`compare`、`diff`、`sensitivity` |
+| 確かめた値と使う値が同じ版であることを `same_version` で求める | `check`、`explain`、`mutate`、`compare`、`diff`、`sensitivity`。`simulate` は標本中の違反だけ |
 | 契約を適用する構成を `applies_to` と理由で明示し、範囲外を未検査として残す | `check`、`explain`、`simulate`、`compare`、`diff`、`mutate`、`sensitivity`、`conform` |
 | 判断の所在や行使回数の導出に使う計算量を増やす | `check`、`simulate`、`explain` の `--agency-limit-scale N`(既定1、最大1000) |
-| 時間、費用、品質、人の負荷を標本で見積もる | `simulate` |
+| 時間、費用、品質、人の負荷を標本で見積もる。複数の案件が同じ時刻に重なる負荷も、順序が結果に効かないと確かめられれば評価する | `simulate` |
+| 経過時間・作業・費用の期待値を `metric mean.…` で求め、`verify metric` や `compare` の必須条件・目的に使う | `check`、`explain`、`compare`。`simulate` は標本の平均だけ |
 | 現行と変更案など、複数の構成を同じ条件で並べる | `compare`、`diff` |
 | 相手ごとに変更理由を書き、能力の差し替えで説明できる差分をまとめる | `intent from A to B`、`replace X.c with Y.d`。照合は `diff` |
 | 到着量や所要時間などの前提を変えて、結論が変わるかを見る | `sensitivity` |
@@ -116,6 +117,7 @@ cargo build --release
 | `mutate <path> [--set bpr-default] [--configuration NAME] [--scenario NAME] [--mutant-limit N] [--kinds k1,k2] [--sites ID1,ID2]` | 変更を生成し、検査が差を捕まえるかを調べる。受理した計算上限は既定128、最大4096。選外は明示。未対応種があれば実行0件でもexit4。未対応が無く実行0件ならvacuous/exit5 |
 | `sensitivity <manifest.json> --mode exhaustive\|simulation` | 指定した有限の点だけを分析する。連続した範囲や評価していない点は保証しない |
 | `conform <spec> --log <events.jsonl> --scope event-contracts\|approval-burden` | 観測ログの照合。欠けた記録を成功に置き換えない |
+| `estimate <model> --log <events.jsonl> --spec <estimate-spec.json> [--configuration NAME]` | ログから確率・所要時間の候補と出所を出す。モデルは書き換えない |
 | `verify <path>` | 外部の検証エンジンにはまだ接続していない。`unsupported`、exit 4 |
 
 ## 文書と例

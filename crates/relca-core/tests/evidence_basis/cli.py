@@ -493,10 +493,23 @@ def static_test(source, code, reason):
     return test
 
 
+def repeat_alias_and_mutate_gate(source):
+    def test(self):
+        out, value = invoke(source)
+        verdict(out, value, 'satisfied')
+        contract(value, 'satisfied')
+        out, value = invoke(source, 'mutate', ('--kinds', 'evidence_missing'))
+        verdict(out, value, 'unsupported')
+        assert any(d['code'] == 'U-SEM-0' and 'loop_feature_combination' in d['message']
+                   for d in value['diagnostics']), value['diagnostics']
+    return test
+
+
 for _name, _source, _code, _reason in hand.static_cases():
     setattr(Static, 'test_' + _name.replace('.', '_').replace('-', '_'), static_test(_source, _code, _reason))
 for _name, _source, _reason in hand.combination_cases():
-    setattr(Static, 'test_combination_' + _name, static_test(_source, 'U-SEM-0', _reason))
+    test = repeat_alias_and_mutate_gate(_source) if _reason is None else static_test(_source, 'U-SEM-0', _reason)
+    setattr(Static, 'test_combination_' + _name, test)
 
 
 class Gates(unittest.TestCase):
@@ -511,16 +524,28 @@ class Gates(unittest.TestCase):
         for mode in ('exhaustive', 'simulation'):
             with self.subTest(mode=mode):
                 source = hand.add(hand.configured(hand.deterministic(hand.basis(hand.M0))), 'simulation replications 4 seed 7 confidence 0.5')
-                refuse(source, 'U-SEM-0', 'evidence_basis_unsupported_command', 'compare', ('--plans', 'A,B', '--mode', mode))
+                out, value = invoke(source, 'compare', ('--plans', 'A,B', '--mode', mode))
+                expected = 'satisfied' if mode == 'exhaustive' else 'inconclusive'
+                verdict(out, value, expected)
+                row, = (r for r in value['tables']['properties'] if r['id'] == BASIS_ID)
+                assert [c['verdict'] for c in row['values']] == [expected, expected], row
+                assert 'contract_witnesses' in value['unchecked']
 
     def test_diff(self):
-        refuse(hand.configured(hand.basis(hand.M0)), 'U-SEM-0', 'evidence_basis_unsupported_command', 'diff', ('--from', 'A', '--to', 'B'))
+        out, value = invoke(hand.configured(hand.basis(hand.M0)), 'diff', ('--from', 'A', '--to', 'B'))
+        verdict(out, value, 'satisfied')
+        row = property_row(value)
+        assert row['from'] == row['to'] == 'satisfied', row
+        assert 'contract_witnesses' in value['unchecked']
 
     def test_sensitivity(self):
         source = hand.add(hand.deterministic(hand.basis(hand.M0)), 'verify probability reached end.posted >= 1\nsimulation replications 4 seed 7 confidence 0.5')
         for mode in ('exhaustive', 'simulation'):
             with self.subTest(mode=mode):
-                refuse(source, 'U-SEM-0', 'evidence_basis_unsupported_command', 'sensitivity', ('--mode', mode), manifest=hand.sensitivity_manifest(mode))
+                out, value = invoke(source, 'sensitivity', ('--mode', mode), manifest=hand.sensitivity_manifest(mode))
+                expected = 'satisfied' if mode == 'exhaustive' else 'inconclusive'
+                verdict(out, value, expected)
+                assert property_row(value['points'][0]['report'])['verdict'] == expected
 
     def test_conform_unchecked_never_satisfied_from_no_read_log(self):
         source = hand.basis(hand.M0.replace('  verify reachable end.posted\n', ''))

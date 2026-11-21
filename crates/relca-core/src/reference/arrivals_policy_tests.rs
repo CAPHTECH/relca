@@ -15,6 +15,7 @@ fn tree(m: &Model, n: usize) -> Tree<'_> {
         first_hits: Vec::new(),
         first_closed: Vec::new(),
         first_trees: Vec::new(),
+        mean_hits: Vec::new(),
         overflows: None,
         external_peaks: None,
         admissions: vec![None; n],

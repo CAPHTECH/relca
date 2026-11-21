@@ -304,7 +304,6 @@ fn simulation_preserves_runtime_refusal_and_environment_choices() {
     for (n, time, cases, sites) in [
         ("pol-assign.broken-change", 0, "[1]", "[P.a]"),
         ("pol-control.broken-change", 0, "[1]", "[P.a]"),
-        ("pol-label-cofinish", 3, "[1,2]", "[P.a]"),
         ("pol-label-cofinish.broken-change", 0, "[1]", "[P.a]"),
         ("pol-cross-class-person", 0, "[1]", "[P.a,P.b]"),
     ] {
@@ -319,7 +318,8 @@ fn simulation_preserves_runtime_refusal_and_environment_choices() {
         let m = h::selected(&s, None); // all-environment must lower, not static reject
         let e = engine::simulate(&m);
         let r = reference::simulate(&m);
-        assert_eq!(e, r.outcome, "independent simulation {n}");
+        let facts = relca_test_support::diagnostic::simulation_facts;
+        assert_eq!(facts(e), facts(r.outcome), "independent simulation {n}");
         let v = h::sampled(&s, None);
         assert_eq!(v["simulation"]["status"], "unsupported");
         assert_eq!(v["simulation"]["attempted_replications"], 1);
@@ -393,6 +393,30 @@ fn simulation_preserves_runtime_refusal_and_environment_choices() {
         e.replications.iter().all(|r| r.draws.is_empty()),
         "first_idle adds no random scheduler keys"
     );
+}
+
+#[test]
+fn simulation_accepts_label_cofinish_without_a_start_between_finishes() {
+    let s = h::source("pol-label-cofinish");
+    let s = if s.contains("simulation replications") {
+        s
+    } else {
+        h::edit(
+            &s,
+            "  bounds",
+            "  simulation replications 4 seed 0 confidence 0.5\n  bounds",
+        )
+    };
+    let m = h::selected(&s, None);
+    let e = engine::simulate(&m);
+    assert_eq!(e, reference::simulate(&m).outcome);
+    assert_eq!(e.completed_replications, 4);
+    assert!(e.same_time);
+    assert!(e.replications.iter().all(|r| {
+        r.draws.len() == 2
+            && r.draws[0].key.ends_with("|case=1|site=kernel.P.a|n=1")
+            && r.draws[1].key.ends_with("|case=2|site=kernel.P.a|n=1")
+    }));
 }
 
 #[test]

@@ -1,0 +1,18 @@
+model M version "0.2" {
+  type V = enum { ok }
+  actor A { capacity 2
+    capability make() -> V { duration fixed 1min; result nondet { ok } }
+    capability first(x: CaseId) -> V { duration fixed 1min; result nondet { ok } }
+    capability second(x: CaseId) -> V { duration fixed 1min; result nondet { ok } }
+  }
+  process P {
+    d = A.make()
+    a = A.first(case.id)
+    b = A.second(case.id)
+    e = A.make() response_loss none
+    end done
+  }
+  cut C { question "確認"; include [A] }
+  bounds { cases 1; live_tasks 2; clock 10min }
+  contract V { same_version A.first(x), A.second(x) }
+}

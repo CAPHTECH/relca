@@ -82,8 +82,11 @@ def basis(value, expected):
     assert one(value['properties'], 'id', hand.ID)['verdict'] == expected
 
 
-def evidence_shape(trace):
-    assert set(trace['evidence']) == {'binding', 'actor', 'capability', 'required', 'sources', 'missing', 'excluded_edges'}, trace['evidence']
+def evidence_shape(trace, conditional=False):
+    expected = {'binding', 'actor', 'capability', 'required', 'sources', 'missing', 'excluded_edges'}
+    if conditional:
+        expected.add('conditional_sources')
+    assert set(trace['evidence']) == expected, trace['evidence']
 
 
 def refuse(source, code, reason, command='check', args=(), manifest=None):
@@ -365,9 +368,10 @@ class Commands(unittest.TestCase):
         out, value = invoke(source, 'explain')
         verdict(out, value, 'violated')
         trace = one(value['explanation']['counterexamples'], 'id', hand.ID)
-        evidence_shape(trace)
+        evidence_shape(trace, conditional=True)
         assert trace['replay']['status'] == 'verified'
-        assert trace['evidence']['missing'] == ['Know', 'Missing']
+        assert trace['evidence']['missing'] == ['Missing']
+        assert trace['evidence']['conditional_sources'] == ['Know']
         assert trace['evidence']['sources'] == ['Invoice']
         assert trace['evidence']['excluded_edges'] == ['r -> b']
 
@@ -391,19 +395,88 @@ class Commands(unittest.TestCase):
         assert any(change['key'] == hand.ID and change['direction'] == 'worsened'
                    for change in mutant['assigned_changes']), mutant
 
-    def test_compare_and_diff_close_with_specific_command_reason(self):
+    def test_mutate_original_access_removed_keeps_the_direct_registrar_guard(self):
+        source = hand.add(hand.R0, 'contract Original { evidence_basis direct Clerk.register [Know] }')
+        out, value = invoke(source, 'mutate', ('--kinds', 'original_access_removed'))
+        verdict(out, value, 'violated')
+        kind = one(value['mutations'], 'kind', 'original_access_removed')
+        mutant = one(kind['mutants'], 'id', 'original_access_removed:Clerk.register:reads:Know')
+        assert mutant['result'] == 'detected', mutant
+        assert any(change['key'] == 'contract Original #2 evidence_basis' and change['direction'] == 'worsened'
+                   for change in mutant['assigned_changes']), mutant
+
+    def test_mutate_when_only_the_candidate_route_survives(self):
+        base = '''model Candidate version "0.2" {
+          type V = enum { pass, fail }
+          observed case { brief: optional<V> }
+          actor Doc { source document }
+          actor Notes {}
+          actor Clerk { capacity 1
+            capability intake() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+            capability patch() -> V { writes brief; duration fixed 1min; result nondet { pass } }
+            capability draft() -> V { reads [brief]; duration fixed 1min; result nondet { pass } }
+            capability review() -> V { duration fixed 1min; result nondet { pass, fail } }
+          }
+          actor Boss { capacity 1
+            capability regda(d: V) -> V { reads [Doc]; registers [Notes]; duration fixed 1min; result nondet { pass } }
+            capability use() -> V { reads [Notes]; duration fixed 1min; result nondet { pass } }
+          }
+          process P { i = Clerk.intake(); g = Clerk.review(); if g == pass { p = Clerk.patch() } else {}; d = Clerk.draft(); s = Boss.regda(d); u = Boss.use(); end done }
+          bounds { cases 1; live_tasks 1; clock 20min }
+          contract Basis { evidence_basis Boss.use [Doc] }
+        }'''
+        # m23 and an1: deleting the certain read still leaves intake → brief
+        # on the path without patch, so the candidate cannot be decided.
+        no_record = base.replace('actor Notes {}', '').replace('capability regda(d: V) -> V { reads [Doc]; registers [Notes]; duration fixed 1min; result nondet { pass } }', '').replace('use() -> V { reads [Notes];', 'use(d: V) -> V { reads [Doc];').replace('s = Boss.regda(d); u = Boss.use()', 'u = Boss.use(d)')
+        kinds = ('evidence_missing', 'original_access_removed')
+        args = ('--kinds', ','.join(kinds))
+        for source, site in [(base, 'Boss.regda'), (no_record, 'Boss.use')]:
+            out, value = invoke(source, 'mutate', args)
+            verdict(out, value, 'inconclusive')
+            assert value['original_verdict'] == 'satisfied'
+            for name in kinds:
+                kind = one(value['mutations'], 'kind', name)
+                mutant = one(kind['mutants'], 'id', f'{name}:{site}:reads:Doc')
+                assert (mutant['result'], mutant['reason']) == ('inconclusive', 'runtime_unsupported'), mutant
+
+        # m04: the second registration replaces a certain old version with a
+        # candidate-only version even before mutation. No mutants may run.
+        blocked = base.replace('reads [Doc]; registers [Notes];', 'registers [Notes];')
+        blocked = blocked.replace('actor Boss { capacity 1', 'actor Boss { capacity 1\ncapability seed() -> V { reads [Doc]; registers [Notes]; duration fixed 1min; result nondet { pass } }')
+        blocked = blocked.replace('process P { i =', 'process P { x = Boss.seed(); i =')
+        out, value = invoke(blocked, 'mutate', args)
+        verdict(out, value, 'unsupported')
+        assert value['original_verdict'] == 'unsupported'
+        assert (value['run']['completion'], value['run']['reason']) == ('blocked', 'original_not_decidable')
+        for name in kinds:
+            kind = one(value['mutations'], 'kind', name)
+            assert kind['status'] == 'blocked' and not kind['mutants'], kind
+
+    def test_compare_and_diff_keep_registered_basis_verdict(self):
         source = hand.simulated(hand.configured(hand.R0))
         for command, args in [('compare', ('--plans', 'A,B', '--mode', 'exhaustive')),
                               ('compare', ('--plans', 'A,B', '--mode', 'simulation')),
                               ('diff', ('--from', 'A', '--to', 'B'))]:
             with self.subTest(command=command, args=args):
-                refuse(source, 'U-SEM-0', 'registration_unsupported_command', command, args)
+                out, value = invoke(source, command, args)
+                expected = 'inconclusive' if args[-1] == 'simulation' else 'satisfied'
+                verdict(out, value, expected)
+                assert 'contract_witnesses' in value['unchecked']
+                if command == 'compare':
+                    row = one(value['tables']['properties'], 'id', hand.ID)
+                    assert [c['verdict'] for c in row['values']] == [expected, expected], row
+                else:
+                    row = one(value['properties'], 'id', hand.ID)
+                    assert row['from'] == row['to'] == expected, row
 
-    def test_sensitivity_closes_in_both_analysis_modes(self):
+    def test_sensitivity_registration_in_both_analysis_modes(self):
         source = hand.add(hand.simulated(hand.plain(hand.R0)), 'verify probability reached end.posted >= 1')
         for mode in ('exhaustive', 'simulation'):
             with self.subTest(mode=mode):
-                refuse(source, 'U-SEM-0', 'registration_unsupported_command', 'sensitivity', ('--mode', mode), hand.manifest(mode))
+                out, value = invoke(source, 'sensitivity', ('--mode', mode), manifest=hand.manifest(mode))
+                verdict(out, value, 'satisfied' if mode == 'exhaustive' else 'inconclusive')
+                assert len(value['points']) == 1
+                assert all(p['status'] == 'evaluated' for p in value['points'])
 
     def test_conform_does_not_certify_unobserved_registration_provenance(self):
         source = hand.add(hand.plain(hand.R0).replace('  verify reachable end.posted\n', ''),

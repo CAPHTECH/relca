@@ -1,6 +1,20 @@
 # 結果の読み方
 
 CLI は標準出力に JSON を出し、診断は標準エラーにも書きます。
+
+診断の `span` はモデルの UTF-8 バイト区間です。`location` では同じ区間を
+`line`、`column`、`end_line`、`end_column` で読めます。行と列は1から数え、列は
+バイト数ではなく Unicode の文字数で数えます。終点は区間に含みません。位置が不明なときは `null` です。
+
+`detail` がある診断は、判定を妨げたものを `blockers` に列挙します。たとえば根拠源の契約では、
+候補の源、対象の呼出し、根拠として数えなかった書き手を確認できます。
+`kind` が `rewrite` なら、示された機能を使ったまま、意味を保つ局所の書き方に直せます。
+`analysis_not_connected` は、この機能の組合せのままでは判定できないという意味です。
+機能を別の形に置き換えたモデルまで拒否する、という意味ではありません。
+`property_undecided` は、モデルは受理したがその性質だけを判定できない場合です。
+`see` は利用ガイドの該当節です。
+詳細がない診断の `detail` は `null` です。標準エラーの従来行は変わらず、
+詳細があるときだけ直後に補足を出します。
 機械的な成否は最上位 verdict に対応する exit で返します。
 
 | verdict | exit | 意味 |
@@ -42,7 +56,7 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 | `properties[]` | 各性質の `verdict`、確率境界、根拠や注記 |
 | `contract_scope[]` | 選んだ構成では範囲外にした契約、その適用先と理由。検査済みの性質ではない |
 | `terminals[]` | 到達先別の時間・work の範囲。平均とは限らない |
-| `diagnostics[]` | code、severity、message、入力内のバイト位置 span |
+| `diagnostics[]` | `code`、`severity`、`message`、入力のバイト区間 `span`、行・列 `location`、判定の補足 `detail` |
 | `assumptions[]` | 既定値や分析で置いた前提 |
 | `actors[]` | 宣言値と省略時に補った欄 |
 | `metrics`, `quality` | 要求した量と、算出できない理由 |
@@ -54,7 +68,92 @@ Cut の有無を判断できないため `cut: "unresolved"` とし、W-CUT-0 �
 null は 0 ではありません。`not_configured`、`undetermined`、`truncated` などの理由を
 値と一緒に扱ってください。`not_configured` は単価などの未設定だけでなく、defer による値の撤回でも出ます。
 `per_case_relaxation` の区間を一つの方策で実現可能な区間と読まないでください。
+
 simulate の `basis` は性質や中断の有無で異なり、`properties[].cases[]` の `basis: statistical` は網羅探索の確率ではなく標本推定を表します。
+
+[2件が競合する例](../../fixtures/mean-repeat-policy/)では、待ち始めた時刻が同じなので案件 ID が順を決めます。先に待ち始めた案件があれば、その案件が先です。`then call_order` の字句順まで使うのは、同じ案件の `fork` の枝が同時に待ちに入る場合など、最初の二つの鍵で決まらないときです。`repeat` の各回には書き下した版と同じ順を付けます。
+
+### 同時刻の順序を変えても結果が同じとき
+
+`simulate` は、同じ時刻に残った行動の順序を試します。その時刻を閉じた状態と途中で得た観測がすべて一致した場合だけ、先へ進みます。該当する実行には `assumptions` に `simulation.same_time` が出ます。状態や観測が異なる場合や、4096 状態を超えた場合は `unsupported` です。別の標本経路や全スケジュールの安全性は、この検査では確かめません。
+
+### 異議を起票しない場合の見積もり
+
+`scenario.contest_not_filed` が出た結果の時間・待ち・作業・稼働率・処理量は、その異議が起票されない場合の値です。W-CONTEST-1 と `cut_context.reentry` に対象が出ます。`contest_response` の `excluded: scenario_contest_not_filed` は応答の期限を検証していない印です。判定は `inconclusive` です。案を比べるときは、異議の対象となる終端の件数も見てください。差戻しが多い案ほど、見積もりに含めなかった負荷は大きくなります。
+
+### 業務指標で値が出ない理由
+
+`metrics` の `reason` で、測る対象がなかった場合と、結果を確かめられなかった場合を区別します。どちらも、値が `null` なら 0 として集計しません。
+集計の中断や標本不足については、[品質指標で値が出ない理由](#品質指標で値が出ない理由)も参照してください。
+
+| `reason` | 読み方 |
+|---|---|
+| `no_terminal` | この終端での完了が観測されていないため、完了案件の経過時間や費用を出せません。他の終端での完了や、観測終了時の未完了とは区別してください。 |
+| `rejected` | 受付拒否の区分では完了時間を、受付を拒否された案件では開始までの待ち時間を算出しません。終端表の受付拒否の行がこの理由でも、その案件が実際に拒否されたかは件数で確認します。 |
+| `never_created` | 操作が作られなかったため、その操作の待ち時間などは対象外です。容量超過で操作を作らなかった案件の費用も、0 円の確定値にはしません。 |
+| `cancelled_before_start` | 開始前に取り消されたため、開始までの待ち時間は算出しません。取消件数は別に読みます。 |
+| `no_task_started` | 案件は終端に着きましたが、開始した操作がないため、最初の開始までの待ち時間は出ません。 |
+| `not_refused` | 操作の開始が拒否されたときの待ち時間を集計する欄で、拒否が発生していません。 |
+| `no_capacity` | 対象に容量の設定がないため、稼働率の分母がありません。 |
+| `zero_capacity` | 稼働率の分母が 0 です。稼働率が 0 という意味ではありません。 |
+| `join_any` | 先着合流では、全枝の完了を待つ時間を定義しません。採用後に残った枝の処理を合流待ちに数えません。 |
+| `refused` | 操作の開始が拒否されたため、通常の開始までの待ち時間を出せません。拒否の件数や、拒否までの待ち時間は別の欄で確認します。 |
+| `unfinished` | 観測終了までに操作が開始しなかったなど、値を確定する出来事がまだ起きていません。未完了を成功や失敗に振り分けません。 |
+| `deadlock` | 行き詰まりで操作が開始できなかったなど、待ちの終点を観測できていません。行き詰まりの件数と待ち時間を区別してください。 |
+| `range_stopped` | 許された値域の外へ書き込む枝を止めたため、その先を含む指標は算出できません。計算上限による切断とは別の理由です。 |
+
+### 時間・作業・費用の期待値
+
+mean を宣言したモデルだけ、`quality.quantiles` に続く位置に `quality.means[]` が出ます。
+`measure` は量、`property` は到達する性質、`form` は全流入の `all_arrivals` または到達条件付きの `reached_only` です。
+網羅探索の `value.lower`・`upper` は確率で重み付けた期待値の区間で、時間は分です。
+
+`work` は占有時間で待ちを含まず、`named_people_work` は名前付きの実行者の占有だけです。匿名作業を人の作業と推定しません。
+`cost` は宣言した通貨での占有費と開始費の和です。料金時間外の単価を宣言したモデルでは、その区分も既存の費用指標と同じように使います。
+性質を省いた行は `property: null` で、到達・受付拒否・deadlockなど案件が閉じた時点までの量を、全流入数で割ります。
+`repeat` では、実行された回ごとの作業と費用を数えます。上限で `on_limit` に進んだ案件も全流入に含まれます。経過時間の性質に通常の終端と引継ぎなどの終端を両方書くと、どちらの経路の経過も平均に入ります。[手計算例](../../fixtures/mean-repeat/)では、回の間の3分の待ちを含む平均経過は `9/2` 分、占有作業は `3` 分です。
+計算の切断やhorizonで未完了の案件は閉じたことにせず、理由つきnullと下界に分けます。
+例えば [mean-chance](../../fixtures/mean-chance/) の全終端への経過は `15/4` 分、done 到達条件付きでは `3` 分です。
+非決定の選択には確率を補わず、最小・最大を取ります。端が同じなら `exact`、異なれば `per_case_relaxation` です。
+2案件が資源を取り合う [mean-contention](../../fixtures/mean-contention/) では `[3,6]` 分となりますが、
+実際の平均はどの順序でも `9/2` 分です。`quality.mean` の仮定にある通り、案件ごとの区間の和は同時の範囲より広くなりえます。
+
+到達質量が足りなければ `beyond_reached_mass`、分母が0になりうるなら `denominator_may_be_zero`、
+切断では `truncated`、horizon の未確定では `undetermined` となり、値は null です。
+`lower_bound` が付く場合も、値とは区別してください。`given reached` の未確定には下界を出しません。
+単価の必要集合は選んだprocessの `metrics` と同じです。到達条件付きの費用でも、必要な単価を0円に補いません。
+`metrics` の観測設定が無い作業・費用も `not_configured` です。経過時間はこの設定無しでも計算します。
+影響不明の process 全体の defer では mean の値と下界を撤回し、`not_configured` にします。
+`simulate` の `value.point` は、全反復の案件をまとめた標本平均です。`given reached` では到達した案件を合計し、反復ごとの平均を先に取りません。`observations` は量を観測できた案件数です。計算上の切断や horizon で止めた反復が一つでもあれば、点推定は `null` です。`censored` はその反復に含まれ、集計から除いた案件数です。標本には下界や信頼区間を出しません。
+Rule を含むモデルでも、mean は未接続として `aborted` と `unchecked` に残します。既存のcohort・分位点まで撤回する指定ではありません。
+`terminals[].elapsed` や `metrics` の経路範囲、`metrics.unchecked` の `exact_expectations` は従来どおりです。
+
+### 品質指標で値が出ない理由
+
+標本がない場合と、観測した結果から比を定義できない場合では、次に確認する箇所が異なります。
+平均の理由は[時間・作業・費用の期待値](#時間作業費用の期待値)も参照してください。
+
+| `reason` | 読み方 |
+|---|---|
+| `aborted` | 未解決の非決定で解析を中断した場合など、指標の算出を取りやめた印です。中断までに観測した分だけで結果を補わず、診断と `unchecked` を確認してください。 |
+| `no_samples` | その量の集計に使える標本がありません。例えば、指定した終端への到達時間を測れる標本がなければ、平均は出ません。 |
+| `zero_denominator` | 分母が 0 と分かっているため、比や到達条件付きの値を定義できません。分母が 0 になりうる場合とは区別し、値を 0 に置き換えません。 |
+
+### 指標の条件を満たしたか読む
+
+`verify metric` を書くと、`metric_checks` に条件ごとの判定が出ます。
+区間全体が条件を満たせば `satisfied`、全体が破れば `violated`、両方を含めば `inconclusive` です。
+下界だけの場合、`interval.upper` は `null` です。例えば条件が「30分以下」なら、下界が30分を超えれば違反です。下界が30分以下でも、上界がなければ合格とは言えません。
+値を計算できなかった理由は `reason` で確認できます。
+
+`check`・`explain`・`simulate` では、この判定も全体の `verdict` と exit に反映されます。下界で判定した行の `basis` は `lower_bound` です。
+`simulate` では cohort を信頼区間で判定します。確率の問いと cohort の成分の案件別区間を一緒に数え、片側に割り当てる誤り率を `(1 − confidence) / (2 × rows)` にします。分母も案件の性質なら分子と分母の両方を数えます。実効値は `simulation.multiplicity.alpha_after` と、区間を使った `metric_checks[].alpha` に出ます。複数案を比較しても、この割当は案内で閉じます。案をまたぐ補正は `hard` のための別枠です。
+mean には合否を決める信頼区間がないため、標本の判定は `unsupported`（`no_statistical_bound`）です。`quality.means[].value` の標本行には `point`、`observations`、`censored`、`reason` が出ます。
+
+`diff` と `sensitivity` では、構成や点ごとの指標条件は子レポートの `verdict` に反映されます。最上位の `unchecked` にある `metric_constraints` は、子レポート間で条件の違いや変化を別途検査していない、という意味です。`mutate` の同じ印は、条件を変異の検出に使わないことを示します。
+
+`compare` の hard でも同じ区間の規則で判定します。一方、目的の値に `lower_bound` は使いません。
+同じ性質を参照する mean と分位点、mean と同じ性質を分子または分母に使う cohort、`mean(cost)` と `metrics.overall.observed_cost_per_arrival` を一緒に指定すると、`compare.pareto` の仮定欄に共有する観測として表示されます。目的を合算する指定ではありません。
 
 ## defer による指標の撤回
 
@@ -278,6 +377,8 @@ observation / framing / retention / effects の `work` と `cells` の上限をN
 倍率を上げると時間やメモリが増える場合があります。
 `depth`、`paths`、`contexts` と、縮退経路の導出の予算は変わりません。
 たとえば `counter: contexts` で止まった計算は、この倍率では上限を増やせません。
+反復を含むモデルで主の Agency が経路数の上限に達した場合は、経路上で値が決まる内部条件を分岐に数えず、経路の展開をやり直します。
+利用者が `NAME.round` を条件に書いた分岐は Agency では両側を数えるため、実行時には通らない回の呼出しが系譜に載ることがあります。
 合流を含むモデルでも、独立した部分の導出が計算上限に達した場合は `derivation_limit` と
 `limit` を残し、W-AGY-5を出します。この場合は倍率で導出できるようになる可能性があります。
 `merge_control` は合流値への依存など、構造上の理由で導出しない項目です。
@@ -322,10 +423,16 @@ framing の文脈は、Or などで多くの判定をまとめると急増する
 | `binding`, `actor`, `capability` | 違反を確認した操作の正常終了。steps と同じ識別子・操作名 |
 | `required` | 契約が要求した源 |
 | `sources` | その呼出しの照合に数えた源。direct の場合は自身の reads だけ |
-| `missing` | required のうち sources に含まれなかった源 |
+| `missing` | 要求した源のうち、その呼出しでは候補にもない源 |
+| `conditional_sources` | 要求した源のうち、記録や観測変数などを経由して届く候補はあるが、到達を確かめられないもの。未要求の候補は含めない。確認用ページでは不足した源とは別の行に示し、反例が通った繰り返しの出口も記録があれば表示する |
 | `excluded_edges` | 必ず先に正常終了して最後の値を書くとは認めず、数えなかった観測変数の辺。`p -> a` のような binding 間の表記 |
 
-後半の4欄は名前の昇順の配列です。`excluded_edges` がある場合、そこを読んだはずだと補完しません。
+`required`、`sources`、`missing`、`conditional_sources`、`excluded_edges` は昇順の配列です。`excluded_edges` がある場合、そこを読んだはずだと補完しません。
+繰り返しの中の反例では `binding` が違反した回の呼出しを指し、`repetition` に元の呼出し名と回が入ります。
+繰り返しの結果を引数や観測変数を経由して使う後続操作では、`repetition_exits` に反例が通った出口が入ります。
+`loop_name` は繰り返しの名前、`round` は回、`phase` は本体での `leave` なら `body`、上限の処理での `leave` なら `on_limit` です。
+`leave` が複数ある繰り返しでは `leave_site` も出ます。本体と `on_limit` の `leave` を合わせて、ソースに書かれた順に1から数えます。
+いずれかの出口の組で要求源が確かに欠ければ `violated`、そのような出口がなくても条件付きスナップショットで確かめられない出口があれば `unsupported` です。
 反例は参照実行器で再生した経路であり、`evidence` はモデル上の系譜の証跡です。
 実際の資料アクセスを記録したログではありません。確認用ページも、この区別を付けて表示します。
 
@@ -336,10 +443,14 @@ framing の文脈は、Or などで多くの判定をまとめると急増する
 原検査の全体が `vacuous` なら、mutate は候補の実行へ進みません。
 契約が悪化しても、同時に割当てた系譜の行が消えて照合できなくなった場合は、
 `inconclusive / assigned_check_unavailable` のままです。契約の変化だけで `detected` に置き換えません。
+確かな読取りを削除しても、記録や観測変数を通じて同じ源が届く候補が残ることがあります。到達を確かめられない場合、その変異は `detected` ではなく `inconclusive / runtime_unsupported` です。
 
-選んだ構成にこの契約が適用される `compare`、`diff`、`sensitivity` は、対応外の比較として exit 4 で拒否します。
-diff の個別 check が `violated` でも、最上位の `unsupported` は比較していないという意味です。
-個別の違反を、比較の拒否で打ち消さないでください。
+`compare` と `diff` は、構成ごとの契約の判定を性質の行に載せます。呼出しや経路の対応は取らず、
+契約が適用される構成があれば `unchecked` に `contract_witnesses` を示します。根拠の証跡は各構成の `explain` で確認してください。
+`sensitivity` では、要求する根拠源を変えた点は `sensitivity_contract_mismatch` になります。
+
+登録を使う構成の `diff` では、記録 Actor ごとの登録者 `registrars` と読取り手 `readers` を `record` 行に示します。
+Agency の origin の `via_records` は、記録を経由して届く根拠の由来に変化があったときの差分です。
 異議経路を対象にした契約は `evidence_basis_contest_route` で未対応にします。
 通常の呼出しとして追跡できない対象を `vacuous` として隠さず、他の性質の結果は残します。
 `conform` は `U-LOG-1` で拒否し、`not_checked` に契約を `unsupported_request` として、
@@ -380,11 +491,14 @@ simulate で違反が見つからない場合も、全スケジュールで満�
 | `via model "draft@v1"` | 出力を生成する経由モデルとその版の宣言 | 同じモデル版の別の呼出しでも、値の版は別になる |
 | `same_version A.check(d), B.use(d)` | どの呼出しの実行が引数の結果を作ったか | enum の等しさや内容の新旧ではなく、結果の同一性を比べる |
 
-この契約を適用する compare・diff・sensitivity は `U-SEM-0 same_version_unsupported_command`。
+`compare` と `diff` は各構成の判定を載せますが、版の証跡は比較しません。`unchecked` の `contract_witnesses` でこの範囲を示します。
+`sensitivity` では、契約の操作・引数の対が異なる点を `sensitivity_contract_mismatch` で拒否します。
 conform は `U-LOG-1` とし、`not_checked` に契約を `unsupported_request`、`unchecked` に `same_version` を残します。
 範囲外なら、他の契約と同じく `contract_scope` へ残します。
 
 ## 繰り返しの出力
+
+`explain` の手順にある `values.observed` の `@loop:名前:active` は内部状態です。`1` はまだ抜けていない状態、`0` は番号を付けずに抜けた状態です。別名を受ける操作を対象にした `evidence_basis` がある場合に限り、複数ある `leave` に番号を付けます。そのときは `2` 以上の値から1を引いた番号の `leave` で抜けています。
 
 `repeat` を含むモデルには `repetition` が付きます。
 [構文と2つの例](dsl.md#繰り返し)と合わせて読んでください。
@@ -411,6 +525,7 @@ LoopSite は `loop_name`、`call_site`、`round`、`phase` を持ちます。
 この対応は `sites[].origin` に加え、metrics を要求した場合の
 `metrics.cases[].tasks[].repetition` と、explain の反例内の
 `steps[].events[].repetition` にも付きます。
+反例では、先行する分岐でその回を抜けて後続の `again` や `leave` を飛ばした位置に、`branch` のステップが出ることがあります。
 
 差し戻しの例では、`repetition.cases[0].rounds` は `{"min":1,"max":3}`、
 `on_limit` は `{"min":0,"max":1}`、`on_limit_probability` は `{"min":"1/8","max":"1/8"}` です。
@@ -432,6 +547,23 @@ clock、同時 Task 数、探索予算などで計算を切った場合、影響
 
 繰り返しを含む Agency の F/U などには、未導出の項目が残ります。
 警告が出ないことを統制の成立とはせず、`agency.unchecked` も確認してください。
+
+`compare` の `tables.repetition` では、案件 ID と繰り返し名が同じ行に各案の回数を並べます。
+その繰り返しがない案は `not_applicable`、計算の切断などで回数を算出できなかった案は `not_reported` です。
+`not_reported` の理由は `reason` が指す各案の未算出欄で確認できます。報告できたセルが一つもない場合は `unchecked` に `repetition_tables` が出ます。
+Task の指標行は `loop:呼出し名:round2` など、回ごとに分けます。上限後の呼出しには `loop:呼出し名:on_limit` を使います。
+body の並行作業では、合流と待ちの内訳も回ごとに分かれます。fork の内部名は `@loop:繰り返し名:回:fork名` です。
+手で展開した構成の通常の呼出しとは自動で対応させません。
+
+`diff` の `repetition` 行には、繰り返しの名前、上限、間隔、元の呼出し名、`on_limit` の終端が出ます。
+`relation` の生産者は元の呼出し名で示します。実際の回数や上限に達する確率を比べるには `compare` を使ってください。
+
+`sensitivity` の `effective_inputs` は、回数を条件にした kernel の変数を `loop.繰り返し名.round`、値を整数で示します。
+回数の制御に使う内部変数は、調整できる入力ではないので `initials` には出ません。
+上限や間隔が異なる点は `sensitivity_contract_mismatch` で拒否します。
+
+未対応で分析できなかった案は、その案の判定と診断で確認してください。`compare` と `diff` の全体判定では `invalid`、`violated`、`unsupported` の順に優先します。
+`compare` が `unchecked` に `record_differences` を示すときは、登録者・読取り手の差分を `diff` で確認してください。
 
 ## 確認用ページと仮定の出所
 
@@ -462,6 +594,27 @@ target の `NAME` や `Actor` は宣言名に置き換えます。宣言に対�
 `confirmed`（`confirmed_by` が必要）や `measured`（`source` が必要）も AI の申告として表示し、
 人が確かめるまで確認済み・実測済みとは扱いません。
 ほかの target は[補助資料の一覧](../../skills/relca-model/references/results.md#確認用ページの-assumptions)を参照してください。
+
+## ログから導いた候補
+
+`relca estimate <model> --log <events.jsonl> --spec <estimate-spec.json>` は、実績ログの観測窓に限って確率と所要時間の候補を出します。モデルは変更しません。`relca-estimate/v1` の JSON では、次の欄を照合してください。
+
+| 欄 | 読み方 |
+|---|---|
+| `log` / `provenance` | ログの SHA-256、時刻の窓、案件数、端点の申告、使ったイベントの行範囲。hash と端点の申告は、ログの真正性・完全性の認証ではありません |
+| `n`, `counts`, `unknown`, `censored` | 対応づけできた開始 Task の数と結果別の件数、未知、打切り。開始されなかった案件の数はこのログから分かりません |
+| `candidate` / `interval` | 厳密な候補と DSL 用の値、割合の Clopper–Pearson 区間。`multiplicity` に指定信頼水準と補正が出ます。最小標本数は既知の件数で判定します。未知ありでは割合の候補が出ても `partial` です。未観測の枝は確率 0 を提案せず、観測済みの枝が丸めで 0 になる場合は厳密値だけを残します |
+| `duration_summary` | 所要時間の経験分布とは別の記述統計（平均・中央値・最小・最大など）。平均に統計区間はありません。打切りなどで候補を出せないときも、使える完了分の要約は残します |
+| `rounds` / `occurrences_per_case` | 回に割り当てられる場合の回別の表と、回に割り当てられない場合の出現数の分布。各回の単位は案件です。回を混ぜて n を増やさず、`given [NAME.round]` の行は該当する回で読みます |
+| `declared_vs_candidate` | 宣言値が候補と一致するか、区間内か。候補の採否には使えますが、exit は変えません |
+
+exit 0 は選んだ欄を導出でき、未知・打切り・未対応がなかったという意味です。業務の適合判定ではありません。
+exit 2 では `withheld` と `reason` を確認します。入力切断では候補も件数も null です。
+exit 3 は入力不正、exit 4 は構造上導けない要求などの未対応です。未対応の欄は `not_derivable` と理由が出ます。他の欄に使える候補が残る場合があるので、欄ごとの状態も読んでください。
+
+確認用ページには `--estimate estimate.json --estimate-exit N` を渡せます。別モデルの結果は使わず、宣言値が区間から外れれば警告します。宣言値と候補が一致し、`derived`・`complete` で未知・打切りがともに0の場合に限り、ログを根拠として「出所の申告なし」から外します。一部未確定なら件数を添えて候補を表示するだけです。候補は観測窓の結果であり、別の期間や To-Be の確率ではありません。ログの真正性や代表性は人が確かめてください。
+
+指定ファイルの例と転記時の確認は、[実績ログから候補を出す](../../skills/relca-model/references/estimate.md)にあります。
 
 ## 構造の出力
 
@@ -609,6 +762,40 @@ stages が無い旧出力は「段ごとの記録なし」と表示し、欠落�
 
 [保証の範囲](guarantees.md) と [手計算](../../fixtures/README.md) も参照してください。
 
+### 比較の採否と目的を読む
+
+宣言つきの `compare` では、必須条件の判定が `evaluation.hard`、案ごとの採否が `evaluation.plans`、目的の値が `evaluation.objectives` に出ます。区間の端は次の根拠と一緒に読みます。
+
+| `basis` | 読み方 |
+|---|---|
+| `path_range` | 網羅探索で比較した目的の値です。`metrics.overall` の指標について、到達しうる経路での最小・最大をそのまま示し、平均や期待値ではありません。 |
+| `with_undetermined` | 打切りや切断で未確定の分を含めて、網羅探索の cohort の必須条件を判定した区間です。未確定を条件に有利に数えず、区間全体と閾値を比べます。 |
+
+`evaluation.plans[].status` は、案自体の検査結果 `verify_verdict` と必須条件の判定 `hard_verdict` で決まります。理由は `reasons` で確認してください。
+
+| 採否の `status` | 読み方 |
+|---|---|
+| `admissible` | 両方が `satisfied` で、比較上の採用候補です。実際の採用を決めたわけではありません。 |
+| `excluded` | どちらかが `violated` で、採用候補から外れました。性質そのものを評価対象から外したという意味ではありません。 |
+| `undetermined` | 違反で候補外とはならなかったものの、両方が `satisfied` でもないため、採否を確定できません。未対応や空虚な成立も合格には数えません。 |
+
+`evaluation.pareto` は、採用候補の中で、すべての目的で劣らず、少なくとも一つで確実に優る案があるかを調べます。目的の総合点や順位は出しません。`non_dominated` は確実に劣るとは判定されなかった案であり、最適だと証明された案ではありません。
+
+`status: not_computed` のときは優劣を計算していません。結果のリストが空でも、案が同等だとは判断しないでください。
+
+| `evaluation.pareto.reason` | 読み方 |
+|---|---|
+| `simulation_estimates` | 標本推定で比べる実行です。目的の標本値は読めますが、優劣判定には使いません。 |
+| `no_objectives` | 比べる目的が宣言されていません。必須条件の判定や採否は別に読めます。 |
+| `no_admissible_plans` | 採用候補がありません。候補外になった理由と、採否を確定できない理由は案ごとに確認します。 |
+
+網羅探索で比較を行っても、優劣を確定できない組は `undetermined_pairs` に出ます。
+
+| 組ごとの `reason` | 読み方 |
+|---|---|
+| `missing_value` | どちらかの案で目的の値が欠けています。欠けた値を 0 に補って比較しません。 |
+| `overlapping_intervals` | 目的の区間が重なり、この比較ではどちらが確実に優るかを判定できません。区間の中点で順位を付けたり、同等とみなしたりしません。 |
+
 ## mutate の範囲と実行上限
 
 ### summary_reused と no_assigned_check
@@ -673,6 +860,18 @@ relca mutate model.relca --mutant-limit 512 --kinds evidence_missing,original_ac
 選外の場所も mutant 行に残り、`result: not_selected`、`reason: not_selected`、report は null。
 `unchecked` の `mutation.site.<id>` と併読します。選外の場所は予算・検出・未検出・成功に
 数えず、それだけでは inconclusive にしません。候補数は選外の場所も含みます。
+
+種類を指定せずに `mutate` を実行すると、繰り返しの有無にかかわらず未対応の `stale_definition_write` を含むため、全体は `unsupported`（exit 4）になります。繰り返しを含む構成では、下表のとおり未対応の種類が増えます。どの変異が検出されたかは各変異の行を読んでください。対応する種類だけを回すには、`--kinds evidence_missing,hold_delayed,summary_reused,refusal_path_cut` のように選びます。
+
+| 繰り返しを含む構成での変異 | 扱い |
+|---|---|
+| `evidence_missing`、`hold_delayed`、`summary_reused`、`refusal_path_cut` | 元の呼出しや分岐を単位に作る。割り当てた検査で悪化を確認できた変異は `detected`。 |
+| `refusal_path_cut` の拒否経路 | 反復があると構成全体の拒否経路を導出しない。ほかの割当て済み検査で悪化を検出できなければ、反復の外の分岐でも `unsupported / loop_control`。未検出とは区別する。 |
+| `summary_reused` の系譜 | 対象の消費者の系譜が回ごとの内部名でしか得られず、束縛名で照合できない場合、ほかの割当て済み検査で検出されなければ `unsupported / loop_control`。 |
+| `authority_expired`、`command_resent`、`receipt_unknown`、`old_promise_denominator_removed`、`original_access_removed` | 繰り返しを含む構成では `unsupported / loop_feature_combination`。反復の外側に候補になりそうな箇所があっても、その種類全体を実行しない。 |
+| `stale_definition_write` | `unsupported / rule_version_unavailable`。 |
+
+反復の本体に `fork` がある構成の `mutate` は未対応です。`wait until`、`quantile`、`evidence_basis`、`registers`、応答喪失・再送を使う構成と反復の組合せも `loop_feature_combination` で拒否します。ほかのコマンドで解析できることと、変異の判定に使えることは別です。
 
 授権失効の変異は、全操作が0分で、切断の無い完了時刻もすべて絶対時刻0の場合、
 `not_applicable` / `no_time_elapse`、候補数0です。期限0は時刻0を含むためです。

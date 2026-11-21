@@ -361,7 +361,10 @@ pub fn sensitivity_refusal(p: &Value) {
     let id = p["id"].as_str().unwrap();
     assert_eq!(
         v["diagnostics"],
-        json!([{"code":"U-SEM-0","severity":"error","span":null,
+        json!([{"code":"U-SEM-0","severity":"error","span":null,"location":null,"detail":{
+            "reason":"sensitivity_feature_combination","cause":"sensitivity_degradation_projection",
+            "kind":"analysis_not_connected","blockers":[],"see":"docs/guide/dsl.md#解析が未接続のとき"
+        },
         "message":format!("sensitivity_feature_combination: point {id:?}: contract projection: q6_feature_combination: degradation sensitivity not connected")}])
     )
 }

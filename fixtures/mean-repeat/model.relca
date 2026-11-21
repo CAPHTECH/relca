@@ -1,0 +1,35 @@
+model MeanRepeat version "0.2" {
+  type T = enum { pass, fail }
+  kernel K { * -> { 0.5: pass; 0.5: fail } }
+  actor A { capacity 1; capability run() -> T { duration fixed 2min; outcomes kernel K } }
+  process Repeated {
+    repeat attempts at_most 2 gap fixed 3min {
+      r = A.run()
+      if r == pass { leave } else { again }
+    } on_limit { end escalated }
+    end done
+  }
+  process Unrolled {
+    r1 = A.run()
+    if r1 == pass { end done } else {
+      wait 3min
+      r2 = A.run()
+      if r2 == pass { end done } else { end escalated }
+    }
+  }
+  cut C { include [A] }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Unrolled }
+  bounds { cases 1; live_tasks 2; clock 20min }
+  metrics { window 20min; currency "JPY"; rate A per_minute 2; rate A.run per_start 1 }
+  verify reachable end.done
+  verify probability reached end.done >= 0.5
+  property case.Closed = reached(end.done || end.escalated)
+  property case.Done = reached(end.done)
+  metric mean.Lead = mean(elapsed, case.Closed)
+  metric mean.Work = mean(work)
+  metric mean.Cost = mean(cost)
+  metric mean.DoneLead = mean(elapsed, case.Done given reached)
+  verify metric mean.Lead <= 5min
+  compare [Loop, Hand] cut C hard { mean.Lead <= 5min } objectives { minimize mean.Cost }
+}

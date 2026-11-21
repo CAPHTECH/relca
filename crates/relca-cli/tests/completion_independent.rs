@@ -23,7 +23,7 @@ fn independent_population_matches_real_cli_without_snapshot_expectations() {
             .output()
             .unwrap();
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        completion_explorer_product::check_report(&report, &e.own, &wanted)
+        completion_explorer_product::check_report(&report, &e.source, &e.own, &wanted)
             .unwrap_or_else(|error| panic!("{} {error}", e.name));
         let expected_exit = completion_explorer_product::verdict(
             acceptance::completion_explorer::overall(&e.own, &wanted),

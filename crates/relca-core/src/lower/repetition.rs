@@ -3,6 +3,7 @@
 use super::*;
 
 pub(super) struct LoopContext {
+    pub name: String,
     pub round_variable: ir::StateVarId,
     pub active: ir::StateVarId,
     pub continuing: ir::StateVarId,
@@ -13,6 +14,10 @@ pub(super) struct LoopContext {
 }
 
 impl LoopContext {
+    pub(super) fn fork_name(&self, name: &str) -> String {
+        expanded_fork_name(&self.name, self.round, name)
+    }
+
     pub(super) fn transfer_count(&self) -> usize {
         self.leaves.len() + self.agains.len()
     }
@@ -29,6 +34,10 @@ impl LoopContext {
     }
 }
 
+fn expanded_fork_name(loop_name: &str, round: u64, fork: &str) -> String {
+    format!("@loop:{loop_name}:{round}:{fork}")
+}
+
 impl Lower {
     pub(super) fn loop_round_in_scope(&self, id: ir::StateVarId) -> bool {
         self.loop_context
@@ -37,29 +46,15 @@ impl Lower {
     }
 
     pub(super) fn loop_call_scope(&mut self, call: &ir::Call) {
-        fn reads(c: &ir::Cond, out: &mut Vec<ir::StateVarId>) {
-            match c {
-                ir::Cond::IntCompare { variable, .. } => out.push(*variable),
-                ir::Cond::StateEq(s) => out.push(s.variable),
-                ir::Cond::Contains { set, .. } => out.push(*set),
-                ir::Cond::And(cs) | ir::Cond::Or(cs) => {
-                    for c in cs {
-                        reads(c, out);
-                    }
-                }
-                ir::Cond::Eq(_) => {}
-            }
-        }
         let cap = &self.capabilities[call.capability.0];
-        let mut ids: Vec<_> = cap
-            .result_kernels()
-            .flat_map(|k| k.given.iter().copied())
-            .collect();
-        if let Some(r) = &cap.requires {
-            reads(&r.condition, &mut ids);
-        }
-        if ids.into_iter().any(|id| {
-            self.loop_variables.values().any(|r| *r == id) && !self.loop_round_in_scope(id)
+        if self.loop_variables.values().any(|id| {
+            // Preserve historical atomic reads of executable rounds outside
+            // their body; declaration-only rounds must never reach execution.
+            cap.reads_state_variable(
+                *id,
+                self.static_loop_round_start
+                    .is_some_and(|start| id.0 >= start),
+            ) && !self.loop_round_in_scope(*id)
         }) {
             self.unsupported("loop_round_out_of_scope", call.span);
         }
@@ -73,11 +68,16 @@ impl Lower {
             .map(ir::BindingId)
     }
 
-    pub(super) fn loop_declarations(&mut self, model: &ast::Model) {
+    pub(super) fn loop_declarations(&mut self, model: &ast::Model, selection: Option<&str>) {
         if !model.has_repetition() {
             return;
         }
-        fn walk(l: &mut Lower, block: &ast::Block, names: &mut BTreeSet<String>) {
+        fn walk(
+            l: &mut Lower,
+            block: &ast::Block,
+            names: &mut BTreeSet<String>,
+            declare: Option<bool>,
+        ) {
             for s in block {
                 match &s.value {
                     ast::Stmt::Repeat {
@@ -87,36 +87,56 @@ impl Lower {
                         on_limit,
                         ..
                     } => {
-                        if !names.insert(name.value.clone())
-                            || l.actor_names.contains_key(&name.value)
-                            || l.global_bindings.contains(&name.value)
-                            || l.end_names.contains_key(&name.value)
-                            || l.state_names.contains_key(&name.value)
+                        if declare.is_none()
+                            && (!names.insert(name.value.clone())
+                                || l.actor_names.contains_key(&name.value)
+                                || l.global_bindings.contains(&name.value)
+                                || l.end_names.contains_key(&name.value)
+                                || l.state_names.contains_key(&name.value))
                         {
                             l.error(E_NAME_0, "loop name collision", name.span);
                         }
                         let n = at_most.value;
-                        if n == 0 {
+                        if declare.is_none() && n == 0 {
                             l.error(diag::E_CON_0, "loop limit must be positive", at_most.span);
                         }
-                        if n > 32 {
+                        if declare.is_none() && n > 32 {
                             l.unsupported("loop_expansion_limit", at_most.span);
                         }
-                        // Preserve the written type domain even for an
-                        // unsupported limit; expansion itself is guarded below.
-                        let round = l.loop_variable(
-                            format!("@loop:{}:round", name.value),
-                            n.max(1),
-                            1,
-                            name.span,
-                        );
-                        l.loop_variables.insert(name.value.clone(), round);
-                        l.loop_variable(format!("@loop:{}:active", name.value), 1, 1, name.span);
-                        l.loop_variable(format!("@loop:{}:limit", name.value), 1, 0, name.span);
-                        l.loop_variable(format!("@loop:{}:continue", name.value), 1, 1, name.span);
-                        l.loop_variable(format!("@loop:{}:started", name.value), 1, 0, name.span);
-                        walk(l, body, names);
-                        walk(l, on_limit, names);
+                        if declare.is_some() {
+                            // Preserve the written type domain even for an
+                            // unsupported limit; expansion itself is guarded below.
+                            let round = l.loop_variable(
+                                format!("@loop:{}:round", name.value),
+                                n.max(1),
+                                1,
+                                name.span,
+                            );
+                            l.loop_variables.insert(name.value.clone(), round);
+                        }
+                        if declare == Some(true) {
+                            l.loop_variable(
+                                format!("@loop:{}:active", name.value),
+                                1,
+                                1,
+                                name.span,
+                            );
+                            l.loop_variable(format!("@loop:{}:limit", name.value), 1, 0, name.span);
+                            l.loop_variable(
+                                format!("@loop:{}:continue", name.value),
+                                1,
+                                1,
+                                name.span,
+                            );
+                            l.loop_variable(
+                                format!("@loop:{}:started", name.value),
+                                1,
+                                0,
+                                name.span,
+                            );
+                        }
+                        walk(l, body, names, declare);
+                        walk(l, on_limit, names, declare);
                     }
                     ast::Stmt::Merge {
                         then_body,
@@ -128,18 +148,28 @@ impl Lower {
                         else_body,
                         ..
                     } => {
-                        walk(l, then_body, names);
-                        walk(l, else_body, names);
+                        walk(l, then_body, names, declare);
+                        walk(l, else_body, names, declare);
                     }
                     ast::Stmt::Call(c) => {
                         if let Some(b) = &c.recovery {
-                            walk(l, b, names);
+                            walk(l, b, names, declare);
                         }
                     }
                     _ => {}
                 }
             }
         }
+        let configured = model
+            .items
+            .iter()
+            .any(|i| matches!(i, ast::Item::Configuration(_)));
+        let process = model.items.iter().find_map(|i| match i {
+            ast::Item::Configuration(c) if Some(c.name.value.as_str()) == selection => {
+                Some(c.process.value.as_str())
+            }
+            _ => None,
+        });
         // Forward declarations are needed before resolving a kernel's given.
         for i in &model.items {
             if let ast::Item::Process(p) = i {
@@ -153,7 +183,21 @@ impl Lower {
         let mut names = BTreeSet::new();
         for i in &model.items {
             if let ast::Item::Process(p) = i {
-                walk(self, &p.body, &mut names);
+                // Names and limit validation remain model-wide. Runtime
+                // control state belongs only to the selected executable process.
+                walk(self, &p.body, &mut names, None);
+            }
+        }
+        for executable in [true, false] {
+            if !executable {
+                self.static_loop_round_start = Some(self.state_variables.len());
+            }
+            for i in &model.items {
+                if let ast::Item::Process(p) = i
+                    && (!configured || process == Some(p.name.value.as_str())) == executable
+                {
+                    walk(self, &p.body, &mut names, Some(executable));
+                }
             }
         }
     }
@@ -188,8 +232,10 @@ impl Lower {
         body: &ast::Block,
         limit: &ast::Block,
     ) {
+        let outer = std::mem::replace(&mut self.collecting_loop, true);
         self.collect(body);
         self.collect(limit);
+        self.collecting_loop = outer;
         let n = n.value;
         if !(1..=32).contains(&n) {
             return;
@@ -197,6 +243,7 @@ impl Lower {
         let mut calls = Vec::new();
         collect_calls(body, &mut calls);
         for round in 1..=n {
+            self.collect_loop_forks(&name.value, round, body);
             for call in &calls {
                 let mut call = (*call).clone();
                 let call_site = call.binding.value.clone();
@@ -230,11 +277,74 @@ impl Lower {
         }
     }
 
+    fn collect_loop_forks(&mut self, loop_name: &str, round: u64, block: &ast::Block) {
+        for s in block {
+            match &s.value {
+                ast::Stmt::Fork { name, .. } => {
+                    let name = expanded_fork_name(loop_name, round, &name.value);
+                    if !self.fork_names.contains_key(&name) {
+                        self.fork_names
+                            .insert(name.clone(), ir::ForkId(self.forks.len()));
+                        self.forks.push(name);
+                    }
+                }
+                ast::Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    self.collect_loop_forks(loop_name, round, then_body);
+                    self.collect_loop_forks(loop_name, round, else_body);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub(super) fn loop_refusal(&mut self, cause: &str, span: Span, repeat: Option<Span>) {
+        self.unsupported("loop_feature_combination", span);
+        if let Some(last) = self.errors.last_mut() {
+            *last = last.clone().loop_detail(
+                cause,
+                diag::DetailKind::loop_cause(cause),
+                repeat,
+                Some(span),
+            );
+        }
+    }
+
+    fn loop_call_minimum(&mut self, c: &ast::Call, repeat: Span) -> u64 {
+        if c.response_loss.is_some()
+            || c.retry.is_some()
+            || c.recovery.is_some()
+            || c.query_command.is_some()
+        {
+            let cause = if c.query_command.is_some() {
+                "receipt_query"
+            } else {
+                "response_or_retry"
+            };
+            self.loop_refusal(cause, c.span, Some(repeat));
+        }
+        self.cap_names
+            .get(&(c.actor.value.clone(), c.capability.value.clone()))
+            .map(|id| &self.capabilities[id.0])
+            .filter(|cap| cap.requires.is_none())
+            .map_or(0, |cap| {
+                cap.duration_distribution
+                    .as_ref()
+                    .map_or(cap.duration, |d| {
+                        d.entries.iter().map(|e| e.0).min().unwrap_or(0)
+                    })
+            })
+    }
+
     fn loop_paths(
         &mut self,
         body: &ast::Block,
         mut paths: BTreeSet<bool>,
         limit: bool,
+        repeat: Span,
     ) -> BTreeSet<bool> {
         for (index, s) in body.iter().enumerate() {
             if matches!(s.value, ast::Stmt::Again | ast::Stmt::Leave) && index + 1 < body.len() {
@@ -246,29 +356,25 @@ impl Lower {
             }
             match &s.value {
                 ast::Stmt::Call(c) => {
-                    if c.response_loss.is_some()
-                        || c.retry.is_some()
-                        || c.recovery.is_some()
-                        || c.query_command.is_some()
-                    {
-                        self.unsupported("loop_feature_combination", c.span);
-                    }
-                    if let Some(id) = self
-                        .cap_names
-                        .get(&(c.actor.value.clone(), c.capability.value.clone()))
-                    {
-                        let cap = &self.capabilities[id.0];
-                        let min = cap
-                            .duration_distribution
-                            .as_ref()
-                            .map_or(cap.duration, |d| {
-                                d.entries.iter().map(|e| e.0).min().unwrap_or(0)
-                            });
-                        if cap.requires.is_none() && min > 0 && !paths.is_empty() {
-                            paths = BTreeSet::from([true]);
-                        }
+                    if self.loop_call_minimum(c, repeat) > 0 && !paths.is_empty() {
+                        paths = BTreeSet::from([true]);
                     }
                 }
+                ast::Stmt::Fork { branches, join, .. }
+                    if !limit && matches!(join.value, ast::Join::All { .. }) =>
+                {
+                    // All branches must complete. Even perfectly overlapping
+                    // work cannot finish before the slowest minimum.
+                    let min = branches
+                        .iter()
+                        .map(|c| self.loop_call_minimum(c, repeat))
+                        .max()
+                        .unwrap_or(0);
+                    if min > 0 && !paths.is_empty() {
+                        paths = BTreeSet::from([true]);
+                    }
+                }
+                ast::Stmt::WaitUntil(_) if !limit => {}
                 ast::Stmt::Wait(d) => {
                     if self.ticks(d).is_some_and(|n| n > 0) && !paths.is_empty() {
                         paths = BTreeSet::from([true]);
@@ -279,8 +385,8 @@ impl Lower {
                     else_body,
                     ..
                 } => {
-                    let yes = self.loop_paths(then_body, paths.clone(), limit);
-                    let no = self.loop_paths(else_body, paths, limit);
+                    let yes = self.loop_paths(then_body, paths.clone(), limit, repeat);
+                    let no = self.loop_paths(else_body, paths, limit, repeat);
                     paths = yes.union(&no).copied().collect();
                 }
                 ast::Stmt::Again => {
@@ -295,7 +401,14 @@ impl Lower {
                     paths.clear();
                 }
                 _ => {
-                    self.unsupported("loop_feature_combination", s.span);
+                    let cause = match s.value {
+                        ast::Stmt::Merge { .. } => "value_returning_if",
+                        ast::Stmt::Repeat { .. } => "nested_repeat",
+                        _ if limit => "on_limit_statement",
+                        ast::Stmt::Fork { .. } => "join_any",
+                        _ => "repeat_body_statement",
+                    };
+                    self.loop_refusal(cause, s.span, Some(repeat));
                 }
             }
         }
@@ -318,18 +431,23 @@ impl Lower {
             return vec![];
         }
         if self.loop_context.is_some() || self.in_recovery_handler {
-            self.unsupported("loop_feature_combination", span);
+            let cause = if self.in_recovery_handler {
+                "repeat_in_recovery"
+            } else {
+                "nested_repeat"
+            };
+            self.loop_refusal(cause, span, None);
             return vec![];
         }
         let gap = gap.and_then(|d| self.ticks(d)).unwrap_or(0);
         if !self
-            .loop_paths(body, BTreeSet::from([gap > 0]), false)
+            .loop_paths(body, BTreeSet::from([gap > 0]), false, span)
             .is_empty()
         {
             self.error(diag::E_CON_0, "loop_fallthrough", span);
         }
         if !self
-            .loop_paths(limit, BTreeSet::from([false]), true)
+            .loop_paths(limit, BTreeSet::from([false]), true, span)
             .is_empty()
         {
             self.error(diag::E_CON_0, "loop_fallthrough", span);
@@ -371,6 +489,7 @@ impl Lower {
                 }
             }
             self.loop_context = Some(LoopContext {
+                name: name.value.clone(),
                 round_variable,
                 active,
                 continuing,
@@ -430,6 +549,7 @@ impl Lower {
             }
         }
         self.loop_context = Some(LoopContext {
+            name: name.value.clone(),
             round_variable,
             active,
             continuing,

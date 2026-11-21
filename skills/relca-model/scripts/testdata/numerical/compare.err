@@ -1,0 +1,2 @@
+configuration Fast: W-UNREACH-0: process Quick: A.slow not_called
+configuration Slow: W-UNREACH-0: process Long: A.quick not_called

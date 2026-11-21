@@ -5,8 +5,10 @@ use crate::{ir, metrics as w};
 use num_bigint::BigInt;
 use num_rational::BigRational;
 mod calendar;
+mod mean;
 mod tariff;
 mod waits;
+pub(super) use mean::mean_amount;
 #[cfg(test)]
 mod waits_tests;
 
@@ -622,6 +624,7 @@ pub(super) fn project_with_horizon(
         .required_capabilities
         .iter()
         .map(|id| w::Capability {
+            excluded: None,
             capability: name(id.0),
             starts: amount(starts[id.0]),
             start_cost: cost(&BigInt::from(starts[id.0]), s.start_rates[id.0]),

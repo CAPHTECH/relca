@@ -1,0 +1,22 @@
+model RepeatPolicy version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1
+    capability work() -> T { duration fixed 2min; result nondet { ok } }
+    capability handover() -> T { duration fixed 1min; result nondet { ok } }
+  }
+  process Repeated {
+    repeat visits at_most 2 { a=A.work(); again } on_limit { c=A.handover(); end done }
+  }
+  process Written { a1=A.work(); a2=A.work(); c1=A.handover(); end done }
+  cut C { include [A] }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Written }
+  arrivals fixed [0min,2min]
+  policy fifo tie_by case_id then call_order
+  bounds { cases 2; live_tasks 2; clock 12min }
+  metrics { window 12min; currency "JPY"; breakdown waits }
+  simulation replications 2 seed 7 confidence 0.5
+  verify probability reached end.done >= 0
+  property case.Done = reached(end.done)
+  metric mean.Lead = mean(elapsed, case.Done)
+}

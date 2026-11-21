@@ -3,6 +3,26 @@ use super::*;
 #[cfg(test)]
 include!("recovery/round2_tests.rs");
 
+fn combination(cause: &str, call: &ast::Call, others: Vec<diag::Blocker>) -> Vec<Diagnostic> {
+    let reason = "recovery_feature_combination";
+    let mut blockers = vec![recovery_call(call)];
+    blockers.extend(others);
+    vec![
+        Diagnostic {
+            presentation: Default::default(),
+            code: U_SEM_0.into(),
+            message: reason.into(),
+            severity: diag::Severity::Error,
+            span: Some(call.span),
+        }
+        .unconnected(reason, cause, blockers),
+    ]
+}
+
+fn recovery_call(call: &ast::Call) -> diag::Blocker {
+    diag::Blocker::at("call", Some(call.binding.value.clone()), Some(call.span))
+}
+
 impl Lower {
     // Check declared writers before ordinary result-writer typing.
     pub(super) fn recovery_writers(&self, model: &ast::Model) -> Result<(), Vec<Diagnostic>> {
@@ -80,6 +100,7 @@ impl Lower {
                             .any(|v| private.contains(&v))
                         {
                             return Err(vec![Diagnostic {
+                                presentation: Default::default(),
                                 code: U_SEM_0.into(),
                                 message: "recovery_query_unmodeled".into(),
                                 severity: diag::Severity::Error,
@@ -98,6 +119,7 @@ impl Lower {
         let handlers: Vec<_> = calls.iter().filter(|c| c.recovery.is_some()).collect();
         let err = |code: &str, reason: &str, span| {
             vec![Diagnostic {
+                presentation: Default::default(),
                 code: code.into(),
                 message: reason.into(),
                 severity: diag::Severity::Error,
@@ -105,25 +127,49 @@ impl Lower {
             }]
         };
         // Validate syntax-level placement before lowering can erase suffixes.
-        fn placement(b: &ast::Block, handler: bool) -> Result<(), Failure> {
+        fn placement(b: &ast::Block, handler: bool) -> Result<(), Vec<Diagnostic>> {
             for s in b {
                 match &s.value {
                     ast::Stmt::Call(c) => {
                         if c.query_command.is_some()
                             && (!handler || c.response_loss.is_some() || c.retry.is_some())
                         {
-                            return Err((U_SEM_0, "recovery_feature_combination", c.span));
+                            let cause = if handler {
+                                "query_response_channel"
+                            } else {
+                                "query_outside_recovery"
+                            };
+                            let references = c
+                                .query_command
+                                .iter()
+                                .map(|name| {
+                                    diag::Blocker::at(
+                                        "reference",
+                                        Some(name.value.clone()),
+                                        Some(name.span),
+                                    )
+                                })
+                                .collect();
+                            return Err(combination(cause, c, references));
                         }
                         if let Some(body) = &c.recovery {
                             placement(body, true)?;
                         }
                     }
-                    ast::Stmt::Fork { branches, .. } => {
+                    ast::Stmt::Fork { name, branches, .. } => {
                         if let Some(c) = branches
                             .iter()
                             .find(|c| c.query_command.is_some() || c.recovery.is_some())
                         {
-                            return Err((U_SEM_0, "recovery_feature_combination", c.span));
+                            return Err(combination(
+                                "fork_recovery",
+                                c,
+                                vec![diag::Blocker::at(
+                                    "feature",
+                                    Some(name.value.clone()),
+                                    Some(s.span),
+                                )],
+                            ));
                         }
                     }
                     ast::Stmt::Merge {
@@ -144,7 +190,7 @@ impl Lower {
             }
             Ok(())
         }
-        placement(&p.body, false).map_err(|(code, reason, span)| err(code, reason, span))?;
+        placement(&p.body, false)?;
         if handlers.is_empty() {
             if self.capabilities.iter().any(|c| c.receipt_query.is_some()) {
                 return Err(err(U_SEM_0, "recovery_query_unmodeled", p.span));
@@ -170,7 +216,24 @@ impl Lower {
             ))
             .copied();
         let Some(cap) = cap.filter(|c| self.response_mechanism(*c, None)) else {
-            return Err(err(U_SEM_0, "recovery_feature_combination", command.span));
+            let blockers = cap
+                .iter()
+                .map(|id| {
+                    diag::Blocker::at(
+                        "feature",
+                        Some(format!(
+                            "{}.{}",
+                            command.actor.value, command.capability.value
+                        )),
+                        Some(self.capabilities[id.0].span),
+                    )
+                })
+                .collect();
+            return Err(combination(
+                "unmodeled_recovery_mechanism",
+                command,
+                blockers,
+            ));
         };
         if !self.errors.is_empty() {
             return Err(self.errors.clone());
@@ -203,7 +266,11 @@ impl Lower {
         }
         for c in &handler_calls {
             if c.response_loss.is_some() || c.retry.is_some() || c.recovery.is_some() {
-                return Err(err(U_SEM_0, "recovery_feature_combination", c.span));
+                return Err(combination(
+                    "handler_response_channel",
+                    c,
+                    vec![recovery_call(command)],
+                ));
             }
             if let Some(target) = &c.query_command {
                 if target.value != command.binding.value {

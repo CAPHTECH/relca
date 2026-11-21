@@ -178,7 +178,7 @@ fn defer_never_changes_core_terminal_work_contract_or_exploration_result() {
             } else {
                 &m.diagnostics
             };
-            relca_test_support::fixture_match::legacy_defer_diagnostics(
+            relca_test_support::fixture_match::legacy_defer_internal_diagnostics(
                 &json!({"diagnostics":diagnostics}),
                 &s,
                 None,

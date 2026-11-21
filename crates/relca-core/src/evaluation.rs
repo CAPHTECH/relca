@@ -9,7 +9,7 @@ use crate::{
 };
 use num_rational::BigRational;
 use num_traits::{One, Zero};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -36,9 +36,12 @@ pub struct Declared {
 #[derive(Debug, Clone, Serialize)]
 pub struct HardRow {
     pub constraint: String,
-    pub cohort: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cohort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mean: Option<String>,
     pub op: &'static str,
-    pub bound: Rational,
+    pub bound: MetricNumber,
     pub values: Vec<HardCell>,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -46,12 +49,82 @@ pub struct Bounds {
     pub lower: MetricNumber,
     pub upper: MetricNumber,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CheckBounds {
+    pub lower: MetricNumber,
+    pub upper: Option<MetricNumber>,
+}
+impl From<Bounds> for CheckBounds {
+    fn from(i: Bounds) -> Self {
+        Self {
+            lower: i.lower,
+            upper: Some(i.upper),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MetricCheck {
+    pub constraint: String,
+    pub verdict: Verdict,
+    #[serde(deserialize_with = "metric_check_basis")]
+    pub basis: Option<String>,
+    pub interval: Option<CheckBounds>,
+    #[serde(deserialize_with = "metric_check_reason")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alpha: Option<Rational>,
+}
+
+fn closed_check_word<'de, D: serde::Deserializer<'de>>(
+    d: D,
+    words: &[&str],
+) -> std::result::Result<Option<String>, D::Error> {
+    let word = Option::<String>::deserialize(d)?;
+    if word.as_deref().is_some_and(|s| !words.contains(&s)) {
+        return Err(serde::de::Error::custom("unknown metric check word"));
+    }
+    Ok(word)
+}
+fn metric_check_basis<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<String>, D::Error> {
+    closed_check_word(
+        d,
+        &[
+            "exact",
+            "per_case_relaxation",
+            "with_undetermined",
+            "statistical",
+            "lower_bound",
+        ],
+    )
+}
+fn metric_check_reason<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<String>, D::Error> {
+    closed_check_word(
+        d,
+        &[
+            "aborted",
+            "no_samples",
+            "no_statistical_bound",
+            "truncated",
+            "undetermined",
+            "zero_denominator",
+            "denominator_may_be_zero",
+            "beyond_reached_mass",
+            "not_configured",
+        ],
+    )
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct HardCell {
     pub configuration: String,
     pub verdict: Verdict,
     pub basis: Option<String>,
-    pub interval: Option<Bounds>,
+    pub interval: Option<CheckBounds>,
     pub reason: Option<String>,
     pub source_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -169,6 +242,14 @@ pub(crate) fn validate_ir(m: &ir::Model) -> Result<()> {
                 return Err("invalid quantile declaration");
             }
         }
+        for c in &q.means {
+            if c.property.is_some_and(|i| i >= q.properties.len())
+                || c.property.is_none()
+                    && (c.measure == ir::MeanMeasure::Elapsed || c.given_reached)
+            {
+                return Err("invalid mean declaration");
+            }
+        }
         for p in &q.properties {
             if matches!(&p.target, ir::QualityTarget::Ends(es) if es.iter().any(|e| e.0 >= m.ends.len()))
             {
@@ -202,12 +283,17 @@ pub(crate) fn validate_ir(m: &ir::Model) -> Result<()> {
         }
         let count = m.quality.as_ref().map_or(0, |q| q.metrics.len());
         let quantile_count = m.quality.as_ref().map_or(0, |q| q.quantiles.len());
+        let mean_count = m.quality.as_ref().map_or(0, |q| q.means.len());
         for (i, h) in c.hard.iter().enumerate() {
-            if h.cohort >= count
-                || !h.bound.valid()
-                || c.hard[..i]
-                    .iter()
-                    .any(|a| a.cohort == h.cohort && a.op == h.op && a.bound == h.bound)
+            let h = &h.constraint;
+            let target_valid = match h.target {
+                ir::MetricRef::Cohort(n) => n < count && h.bound.0 <= BigRational::one(),
+                ir::MetricRef::Mean(n) => n < mean_count,
+            };
+            if !target_valid
+                || h.bound.0 < BigRational::zero()
+                || h.bound.0.denom() <= &num_bigint::BigInt::zero()
+                || c.hard[..i].iter().any(|a| &a.constraint == h)
             {
                 return Err("invalid hard constraint");
             }
@@ -215,6 +301,7 @@ pub(crate) fn validate_ir(m: &ir::Model) -> Result<()> {
         for (i, o) in c.objectives.iter().enumerate() {
             if matches!(o.target, ir::ObjectiveRef::Cohort(n) if n >= count)
                 || matches!(o.target, ir::ObjectiveRef::Quantile(n) if n >= quantile_count)
+                || matches!(o.target, ir::ObjectiveRef::Mean(n) if n >= mean_count)
                 || c.objectives[..i]
                     .iter()
                     .any(|a| a.target == o.target && a.direction == o.direction)
@@ -277,9 +364,20 @@ fn text_reason(v: &Value) -> Option<String> {
     v.as_str().map(String::from)
 }
 
-fn exhaustive_cell(p: &Plan, m: &ir::Model, h: &ir::HardConstraint) -> Result<HardCell> {
-    let q = quality(p).ok_or("missing quality")?;
-    let c = q.cohort.get(h.cohort).ok_or("missing cohort")?;
+fn missing_verdict(reason: Option<&str>) -> Verdict {
+    if matches!(reason, Some("aborted" | "no_samples")) {
+        Verdict::Unsupported
+    } else {
+        Verdict::Inconclusive
+    }
+}
+
+fn cohort_cell(
+    c: &Value,
+    m: &ir::Model,
+    op: ir::HardComparison,
+    bound: &BigRational,
+) -> Result<HardCell> {
     let reason = text_reason(&c["value"]["reason"]);
     let deferred = m.deferred_metrics().is_some_and(|d| d.process);
     let mut interval = if deferred { None } else { range(&c["value"])? };
@@ -297,20 +395,14 @@ fn exhaustive_cell(p: &Plan, m: &ir::Model, h: &ir::HardConstraint) -> Result<Ha
         basis = interval.as_ref().map(|_| "with_undetermined".into());
     }
     let verdict = interval.as_ref().map_or_else(
-        || {
-            if matches!(reason.as_deref(), Some("aborted" | "no_samples")) {
-                Verdict::Unsupported
-            } else {
-                Verdict::Inconclusive
-            }
-        },
-        |i| interval_verdict(h.op, &i.lower.0, &i.upper.0, &h.bound.0),
+        || missing_verdict(reason.as_deref()),
+        |i| interval_verdict(op, &i.lower.0, &i.upper.0, bound),
     );
     Ok(HardCell {
-        configuration: p.configuration.clone(),
+        configuration: String::new(),
         verdict,
         basis: interval.as_ref().and(basis),
-        interval,
+        interval: interval.map(CheckBounds::from),
         reason,
         source_reason: None,
         point: None,
@@ -322,10 +414,14 @@ struct SimContext {
     cache: BTreeMap<(u32, u32, u32), Bounds>,
 }
 impl SimContext {
-    fn sum(&mut self, p: &Plan, m: &ir::Model, property: usize) -> Result<Bounds> {
+    fn sum(
+        &mut self,
+        q: &crate::quality::Quality,
+        m: &ir::Model,
+        property: usize,
+    ) -> Result<Bounds> {
         let sim = m.simulation.as_ref().ok_or("missing simulation clause")?;
         let r = u32::try_from(sim.replications).map_err(|_| "invalid replications")?;
-        let q = quality(p).ok_or("missing simulation quality")?;
         let cases = q
             .properties
             .get(property)
@@ -375,14 +471,24 @@ impl SimContext {
             upper: MetricNumber(u),
         })
     }
-    fn cell(&mut self, p: &Plan, m: &ir::Model, h: &ir::HardConstraint) -> Result<HardCell> {
-        let spec = m.quality.as_ref().ok_or("missing quality spec")?;
-        let metric = &spec.metrics[h.cohort];
-        let c = &quality(p).ok_or("missing quality")?.cohort[h.cohort];
+    fn cohort(
+        &mut self,
+        q: &crate::quality::Quality,
+        m: &ir::Model,
+        index: usize,
+        op: ir::HardComparison,
+        bound: &BigRational,
+    ) -> Result<HardCell> {
+        let metric = m
+            .quality
+            .as_ref()
+            .and_then(|s| s.metrics.get(index))
+            .ok_or("missing cohort spec")?;
+        let c = q.cohort.get(index).ok_or("missing cohort")?;
         let source = text_reason(&c["value"]["reason"]);
         let point = Some(nullable_quantity(&c["value"]["point"])?);
         let mut cell = HardCell {
-            configuration: p.configuration.clone(),
+            configuration: String::new(),
             verdict: Verdict::Inconclusive,
             basis: None,
             interval: None,
@@ -402,7 +508,7 @@ impl SimContext {
             cell.point = Some(None);
             return Ok(cell);
         }
-        let n = self.sum(p, m, metric.numerator)?;
+        let n = self.sum(q, m, metric.numerator)?;
         let d = match metric.denominator {
             ir::Denominator::Arrivals => {
                 let n = MetricNumber::from(m.bounds.cases);
@@ -411,7 +517,7 @@ impl SimContext {
                     upper: n,
                 }
             }
-            ir::Denominator::Property(i) => self.sum(p, m, i)?,
+            ir::Denominator::Property(i) => self.sum(q, m, i)?,
         };
         if d.lower.0.is_zero() {
             cell.reason = Some("denominator_may_be_zero".into());
@@ -423,12 +529,184 @@ impl SimContext {
                 lower: MetricNumber(n.lower.0 / d.upper.0),
                 upper: MetricNumber(n.upper.0 / d.lower.0),
             };
-            cell.verdict = interval_verdict(h.op, &i.lower.0, &i.upper.0, &h.bound.0);
+            cell.verdict = interval_verdict(op, &i.lower.0, &i.upper.0, bound);
             cell.basis = Some("statistical".into());
-            cell.interval = Some(i);
+            cell.interval = Some(i.into());
         }
         Ok(cell)
     }
+}
+
+fn validated_mean_row<'a>(
+    q: &'a crate::quality::Quality,
+    m: &ir::Model,
+    i: usize,
+) -> Result<&'a Value> {
+    let spec = m.quality.as_ref().ok_or("missing mean spec")?;
+    let def = spec.means.get(i).ok_or("invalid mean index")?;
+    let rows = q.means.as_ref().ok_or("missing means")?;
+    let row = rows.get(i).ok_or("missing mean")?;
+    if rows.len() != spec.means.len()
+        || row["name"] != def.name
+        || row["measure"] != def.measure.name()
+        || row["property"].as_str() != def.property.map(|i| spec.properties[i].name.as_str())
+        || row["form"]
+            != if def.given_reached {
+                "reached_only"
+            } else {
+                "all_arrivals"
+            }
+    {
+        return Err("mean definition differs");
+    }
+    Ok(row)
+}
+
+fn mean_check(
+    q: Option<&crate::quality::Quality>,
+    m: &ir::Model,
+    i: usize,
+    h: &ir::MetricConstraint,
+    sampled: bool,
+) -> Result<MetricCheck> {
+    let mut row = MetricCheck {
+        constraint: String::new(),
+        verdict: Verdict::Unsupported,
+        basis: None,
+        interval: None,
+        alpha: None,
+        reason: Some(
+            if sampled {
+                "no_statistical_bound"
+            } else {
+                "aborted"
+            }
+            .into(),
+        ),
+    };
+    if let Some(q) = q {
+        let source = validated_mean_row(q, m, i)?;
+        if !sampled {
+            mean_cell(&mut row, source, h)?;
+        }
+    }
+    Ok(row)
+}
+
+fn mean_cell(check: &mut MetricCheck, row: &Value, h: &ir::MetricConstraint) -> Result<()> {
+    let value = &row["value"];
+    check.reason = text_reason(&value["reason"]);
+    if let Some(i) = range(value)? {
+        check.verdict = interval_verdict(h.op, &i.lower.0, &i.upper.0, &h.bound.0);
+        check.basis = text_reason(&value["basis"]);
+        check.interval = Some(CheckBounds {
+            lower: i.lower,
+            upper: Some(i.upper),
+        });
+    } else if let Some(lb) = nullable_quantity(&row["lower_bound"])? {
+        use ir::HardComparison::*;
+        check.verdict = match h.op {
+            Le if lb > h.bound => Verdict::Violated,
+            Lt if lb >= h.bound => Verdict::Violated,
+            Ge if lb >= h.bound => Verdict::Satisfied,
+            Gt if lb > h.bound => Verdict::Satisfied,
+            _ => Verdict::Inconclusive,
+        };
+        check.basis = Some("lower_bound".into());
+        check.interval = Some(CheckBounds {
+            lower: lb,
+            upper: None,
+        });
+    } else {
+        check.verdict = missing_verdict(check.reason.as_deref());
+    }
+    Ok(())
+}
+
+/// Planned two-sided Bernoulli intervals, including a separate denominator
+/// interval for ratios whose denominator is a case property.
+pub(crate) fn simulation_rows(m: &ir::Model) -> Option<u64> {
+    let mut rows = u64::try_from(m.probability_queries.len()).ok()?;
+    for h in &m.metric_checks {
+        if let ir::MetricRef::Cohort(i) = h.target {
+            let c = m.quality.as_ref()?.metrics.get(i)?;
+            rows = rows.checked_add(if c.denominator == ir::Denominator::Arrivals {
+                1
+            } else {
+                2
+            })?;
+        }
+    }
+    rows.checked_mul(m.bounds.cases)
+}
+
+pub(crate) fn metric_checks(
+    m: &ir::Model,
+    quality: Option<&crate::quality::Quality>,
+    sampled: bool,
+    alpha: Option<&Rational>,
+) -> Vec<MetricCheck> {
+    let mut context = SimContext {
+        alpha: alpha.cloned(),
+        cache: BTreeMap::new(),
+    };
+    m.metric_checks
+        .iter()
+        .map(|h| {
+            let name = m.quality.as_ref().and_then(|q| match h.target {
+                ir::MetricRef::Cohort(i) => q.metrics.get(i).map(|c| format!("cohort.{}", c.name)),
+                ir::MetricRef::Mean(i) => q.means.get(i).map(|c| format!("mean.{}", c.name)),
+            });
+            let mut check = MetricCheck {
+                constraint: format!(
+                    "{} {} {}",
+                    name.as_deref().unwrap_or("unknown"),
+                    h.op.text(),
+                    h.bound.0
+                ),
+                verdict: Verdict::Unsupported,
+                basis: None,
+                interval: None,
+                reason: Some("aborted".into()),
+                alpha: None,
+            };
+            match h.target {
+                ir::MetricRef::Mean(i) => {
+                    if let Ok(row) = mean_check(quality, m, i, h, sampled) {
+                        check = MetricCheck {
+                            constraint: check.constraint,
+                            ..row
+                        };
+                    }
+                }
+                ir::MetricRef::Cohort(i) => {
+                    if let Some(q) = quality {
+                        let cell = if sampled {
+                            context.cohort(q, m, i, h.op, &h.bound.0)
+                        } else {
+                            q.cohort
+                                .get(i)
+                                .ok_or("missing cohort")
+                                .and_then(|row| cohort_cell(row, m, h.op, &h.bound.0))
+                        };
+                        if let Ok(c) = cell {
+                            if sampled
+                                && (c.basis.is_some()
+                                    || c.reason.as_deref() == Some("denominator_may_be_zero"))
+                            {
+                                check.alpha = alpha.cloned();
+                            }
+                            check.verdict = c.verdict;
+                            check.basis = c.basis;
+                            check.reason = c.reason;
+                            check.interval = c.interval;
+                        }
+                    }
+                }
+            }
+            check
+        })
+        .collect()
 }
 
 /// Only the declared value is an objective; censor lower bounds are not values.
@@ -441,9 +719,10 @@ fn objective_value(
     let configuration = p.configuration.clone();
     let deferred = m.deferred_metrics().is_some_and(|d| d.process);
     match target {
-        ir::ObjectiveRef::Cohort(i) | ir::ObjectiveRef::Quantile(i) => {
+        ir::ObjectiveRef::Cohort(i) | ir::ObjectiveRef::Quantile(i) | ir::ObjectiveRef::Mean(i) => {
             let q = quality(p).ok_or("missing objective quality")?;
             let c = match target {
+                ir::ObjectiveRef::Mean(_) => validated_mean_row(q, m, *i)?,
                 ir::ObjectiveRef::Quantile(_) => {
                     let spec = m.quality.as_ref().ok_or("missing objective quality spec")?;
                     let metric = spec
@@ -594,6 +873,7 @@ pub(crate) fn objective_name(m: &ir::Model, target: &ir::ObjectiveRef) -> String
                 m.quality.as_ref().unwrap().quantiles[*i].name
             )
         }
+        ir::ObjectiveRef::Mean(i) => format!("mean.{}", m.quality.as_ref().unwrap().means[*i].name),
         ir::ObjectiveRef::Overall(f) => format!("metrics.overall.{}", f.text()),
     }
 }
@@ -788,8 +1068,11 @@ pub(crate) fn evaluate(
                 return Err("simulation clauses differ");
             }
             for h in &spec.hard {
+                let ir::MetricRef::Cohort(i) = h.constraint.target else {
+                    continue;
+                };
                 let c = if matches!(
-                    sm.quality.as_ref().unwrap().metrics[h.cohort].denominator,
+                    sm.quality.as_ref().unwrap().metrics[i].denominator,
                     ir::Denominator::Property(_)
                 ) {
                     2
@@ -827,21 +1110,54 @@ pub(crate) fn evaluate(
     }
     let mut hard = Vec::new();
     for h in &spec.hard {
-        let cohort = m.quality.as_ref().unwrap().metrics[h.cohort].name.clone();
+        let h = &h.constraint;
+        let spec = m.quality.as_ref().unwrap();
+        let (cohort, mean, label) = match h.target {
+            ir::MetricRef::Cohort(i) => (
+                Some(spec.metrics[i].name.clone()),
+                None,
+                format!("cohort.{}", spec.metrics[i].name),
+            ),
+            ir::MetricRef::Mean(i) => (
+                None,
+                Some(spec.means[i].name.clone()),
+                format!("mean.{}", spec.means[i].name),
+            ),
+        };
         let values = plans
             .iter()
             .zip(metadata)
             .map(|(p, s)| {
-                if analysis == Analysis::Simulation {
-                    context.cell(p, &s.model, h)
-                } else {
-                    exhaustive_cell(p, &s.model, h)
-                }
+                let sampled = analysis == Analysis::Simulation;
+                let q = quality(p).ok_or("missing quality")?;
+                let mut cell = match h.target {
+                    ir::MetricRef::Cohort(i) if sampled => {
+                        context.cohort(q, &s.model, i, h.op, &h.bound.0)?
+                    }
+                    ir::MetricRef::Cohort(i) => {
+                        cohort_cell(&q.cohort[i], &s.model, h.op, &h.bound.0)?
+                    }
+                    ir::MetricRef::Mean(i) => {
+                        let row = mean_check(Some(q), &s.model, i, h, sampled)?;
+                        HardCell {
+                            configuration: String::new(),
+                            verdict: row.verdict,
+                            basis: row.basis,
+                            interval: row.interval,
+                            reason: row.reason,
+                            source_reason: None,
+                            point: None,
+                        }
+                    }
+                };
+                cell.configuration.clone_from(&p.configuration);
+                Ok(cell)
             })
             .collect::<Result<_>>()?;
         hard.push(HardRow {
-            constraint: format!("cohort.{cohort} {} {}", h.op.text(), h.bound),
+            constraint: format!("{label} {} {}", h.op.text(), h.bound.0),
             cohort,
+            mean,
             op: h.op.text(),
             bound: h.bound.clone(),
             values,
@@ -966,6 +1282,30 @@ pub(crate) fn shared_objectives(m: &ir::Model) -> Vec<(String, String)> {
                     let cohort = &q.metrics[*b];
                     cohort.numerator == property
                         || cohort.denominator == ir::Denominator::Property(property)
+                }
+                (ir::ObjectiveRef::Mean(a), ir::ObjectiveRef::Quantile(b))
+                | (ir::ObjectiveRef::Quantile(b), ir::ObjectiveRef::Mean(a)) => {
+                    let q = m.quality.as_ref().unwrap();
+                    q.means[*a].property == Some(q.quantiles[*b].property)
+                }
+                (ir::ObjectiveRef::Mean(a), ir::ObjectiveRef::Cohort(b))
+                | (ir::ObjectiveRef::Cohort(b), ir::ObjectiveRef::Mean(a)) => {
+                    let q = m.quality.as_ref().unwrap();
+                    q.means[*a].property.is_some_and(|p| {
+                        let c = &q.metrics[*b];
+                        c.numerator == p || c.denominator == ir::Denominator::Property(p)
+                    })
+                }
+                (
+                    ir::ObjectiveRef::Mean(i),
+                    ir::ObjectiveRef::Overall(ir::OverallObjective::ObservedCostPerArrival),
+                )
+                | (
+                    ir::ObjectiveRef::Overall(ir::OverallObjective::ObservedCostPerArrival),
+                    ir::ObjectiveRef::Mean(i),
+                ) => {
+                    let mean = &m.quality.as_ref().unwrap().means[*i];
+                    mean.measure == ir::MeanMeasure::Cost && mean.property.is_none()
                 }
                 _ => false,
             };

@@ -246,6 +246,7 @@ fn production_ledger_diagnostic_is_registered_as_error_and_folds_closed() {
         "LEDGER_DIAGNOSTIC_MISSING"
     );
     let d = diag::Diagnostic {
+        presentation: Default::default(),
         code: "U-LEDGER-0".into(),
         severity: diag::Severity::Error,
         message: "version_unavailable: missing producer version".into(),

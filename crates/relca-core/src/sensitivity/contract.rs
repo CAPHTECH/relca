@@ -22,6 +22,9 @@ fn unsupported(detail: &str) -> InputError {
         format!("contract projection: {detail}"),
     )
 }
+fn unprojected(detail: &str, cause: &'static str) -> InputError {
+    unsupported(detail).projection(super::input::ProjectionDiagnostic::Unconnected(cause))
+}
 fn named(rows: impl IntoIterator<Item = Result<(String, Value)>>) -> Result<Value> {
     let mut map = BTreeMap::new();
     for row in rows {
@@ -119,6 +122,8 @@ impl Contract {
                 "performance":c.performance.as_ref().map(|p|m.performances.get(p.profile).map(|p|p.name.clone()).ok_or_else(||unsupported("performance reference"))).transpose()?,
                 "reads":canonical_names(c.reads.iter().map(|a|n.actor(*a)))?,
                 "read_variables":canonical_names(c.read_variables.iter().map(|v|n.state(*v)))?,
+                 "registers":canonical_names(c.registers.iter().map(|a|n.actor(*a)))?,
+                 "read_records":canonical_names(c.read_records.iter().map(|a|n.actor(*a)))?,
                 "kernel_writes":canonical_names(c.kernel_writes.iter().map(|v|n.state(*v)))?,
                 "start_writes":n.writes(&c.start_writes)?,"finish_writes":n.writes(&c.writes)?,"uses":uses,"atomic":atomic,"version_check":version,
                 "parameters":c.params.iter().map(|p|Ok(json!([p.name,n.ty(p.ty)?]))).collect::<Result<Vec<_>>>()?,
@@ -139,9 +144,16 @@ impl Contract {
             .collect::<Result<Vec<_>>>()?;
         let policy = match &m.start_policy {
             None => Value::Null,
-            Some(p) => {
-                let classes = p
-                    .classes
+            Some(ir::StartPolicy {
+                priority,
+                observable,
+                call_order,
+                assign_first_idle,
+                dispatch_after_finishes,
+                classes,
+                executor_order,
+            }) => {
+                let classes = classes
                     .as_ref()
                     .map(|c| -> Result<Value> {
                         Ok(json!({
@@ -150,12 +162,15 @@ impl Contract {
                     "party":canonical_names(c.party.iter().map(|a|n.actor(*a)))?}))
                     })
                     .transpose()?;
-                json!({"priority":p.priority.map(names::queue_tie),"observable":p.observable,"call_order":p.call_order,"assign_first_idle":p.assign_first_idle,"classes":classes,
-                    "executor_order":named(p.executor_order.iter().enumerate().map(|(i,ps)|Ok((n.actor(ir::ActorId(i))?,json!(ps.as_ref().map(|ps|ps.iter().map(|p|n.person(*p)).collect::<Result<Vec<_>>>()).transpose()?)))))?})
+                let mut policy = json!({"priority":priority.map(names::queue_tie),"observable":observable,"call_order":call_order,"assign_first_idle":assign_first_idle,"classes":classes,
+                    "executor_order":named(executor_order.iter().enumerate().map(|(i,ps)|Ok((n.actor(ir::ActorId(i))?,json!(ps.as_ref().map(|ps|ps.iter().map(|p|n.person(*p)).collect::<Result<Vec<_>>>()).transpose()?)))))?});
+                if *dispatch_after_finishes {
+                    policy["dispatch_after_finishes"] = json!(true);
+                }
+                policy
             }
         };
-        Ok(Self {
-            value: json!({"model_name":m.name,"language":m.version,"types":types,"state":state,"actors":actors,"capabilities":capabilities,
+        let mut value = json!({"model_name":m.name,"language":m.version,"types":types,"state":state,"actors":actors,"capabilities":capabilities,
             "process":{"name":m.process.name,"bindings":named(m.process.bindings.iter().filter(|b| !b.name.starts_with("@response:")).map(|b|Ok((b.name.clone(),json!(n.ty(b.ty)?)))))?,"body":process},
             "queries":queries,"verify":verify,"policy":policy,"cut":n.cut()?,
             "contract_scope":m.contract_selection.clauses.iter().filter_map(|c| c.applies_to.as_ref().map(|scope| json!({"id":c.id,"applies_to":scope.0,"reason":scope.1}))).collect::<Vec<_>>(),
@@ -173,8 +188,31 @@ impl Contract {
                  Ok((p.name.clone(),json!({"load":p.queued,"rows":rows})))
              }))?,
               "quality":n.quality()?,"metrics":n.metrics()?,"comparison":n.comparison()?,"contracts":n.contracts()?,"authorities":n.authorities()?,"responsibility":n.responsibilities()?,
-            "people":named(m.people.iter().map(|p|Ok((p.name.clone(),Value::Null))))?}),
-        })
+            "people":named(m.people.iter().map(|p|Ok((p.name.clone(),Value::Null))))?});
+        if let Some(ir::ScenarioRecord {
+            name: _,
+            span: _,
+            contests_not_filed,
+        }) = &m.scenario
+            && !contests_not_filed.is_empty()
+        {
+            let mut rows = contests_not_filed
+                .iter()
+                .map(|(id, reason)| {
+                    let c = m
+                        .contests()
+                        .get(*id)
+                        .ok_or_else(|| unsupported("scenario contest reference"))?;
+                    let crate::contest::ContestTarget::End(end) = c.target else {
+                        return Err(unsupported("scenario contest target"));
+                    };
+                    Ok(json!([n.actor(c.party)?, n.end(end)?, reason]))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            rows.sort_by_key(Value::to_string);
+            value["contests_not_filed"] = json!(rows);
+        }
+        Ok(Self { value })
     }
     pub fn differences(&self, other: &Self) -> Vec<String> {
         self.value
@@ -210,34 +248,42 @@ impl Contract {
     }
 }
 
-fn supported(m: &ir::Model) -> Result<()> {
-    if crate::registration::present(m) {
-        return Err(unsupported("registration_unsupported_command"));
-    }
+pub(super) fn supported(m: &ir::Model) -> Result<()> {
     if m.has_merges() {
-        return Err(unsupported(
-            "merge_feature_combination: merge sensitivity is not connected",
-        ));
+        return Err(
+            unsupported("merge_feature_combination: merge sensitivity is not connected")
+                .projection(super::input::ProjectionDiagnostic::Merge(
+                    m.process
+                        .bindings
+                        .iter()
+                        .filter(|b| b.merge.is_some())
+                        .map(|b| {
+                            crate::diag::Blocker::at(
+                                "merge_binding",
+                                Some(b.name.clone()),
+                                Some(b.span),
+                            )
+                        })
+                        .collect(),
+                )),
+        );
     }
-    if crate::evidence_basis::present(m) {
-        return Err(unsupported("evidence_basis_unsupported_command"));
-    }
-    if crate::same_version::present(m) {
-        return Err(unsupported("same_version_unsupported_command"));
-    }
-    if m.has_loops() {
-        return Err(unsupported(
-            "loop_feature_combination: repeat sensitivity is not connected",
-        ));
+    if m.capabilities.iter().any(|c| m.reads_static_loop_round(c)) {
+        return Err(
+            unsupported("loop_feature_combination: repeat sensitivity is not connected")
+                .projection(super::input::ProjectionDiagnostic::Repeat),
+        );
     }
     if !m.process.degradations.is_empty() {
-        return Err(unsupported(
+        return Err(unprojected(
             "q6_feature_combination: degradation sensitivity not connected",
+            "sensitivity_degradation_projection",
         ));
     }
     // A new Model field must be consciously classified here, not silently left
     // out of the gate. Derived reports/assumptions are not declaration inputs.
     let ir::Model {
+        metric_checks: _,
         agency_limit_scale: _,
         contract_selection: _,
         performances: _,
@@ -264,6 +310,7 @@ fn supported(m: &ir::Model) -> Result<()> {
         initial_distributions: _,
         probability_queries: _,
         state_variables: _,
+        static_loop_rounds: _,
         people: _,
         authorities: _,
         contracts: _,
@@ -365,12 +412,23 @@ fn supported(m: &ir::Model) -> Result<()> {
         || !m.concurrency_resolutions.is_empty()
         || !m.fallback_capabilities.is_empty()
     {
-        return Err(unsupported(
+        let cause = if m.resource_time.is_some() {
+            "sensitivity_calendar_projection"
+        } else if !m.concurrency_resolutions.is_empty() {
+            "sensitivity_shared_resolution_projection"
+        } else {
+            "sensitivity_fallback_projection"
+        };
+        return Err(unprojected(
             "calendars/shared-resolution families not yet projected",
+            cause,
         ));
     }
     if !m.contests().is_empty() {
-        return Err(unsupported("contest sensitivity not projected"));
+        return Err(unprojected(
+            "contest sensitivity not projected",
+            "sensitivity_contest_projection",
+        ));
     }
     if m.diagnostics
         .iter()
@@ -515,6 +573,26 @@ mod tests {
             contract(source)
                 .differences(&contract(&changed))
                 .contains(&"/state".to_owned())
+        );
+    }
+
+    #[test]
+    fn record_read_projection_does_not_depend_on_the_other_read_lists() {
+        let src = include_str!("../../tests/record_provenance/r0.relca");
+        let a = lower::lower(&syntax::parse(src).unwrap()).unwrap();
+        let mut b = a.clone();
+        let review = b
+            .capabilities
+            .iter_mut()
+            .find(|c| c.name == "review")
+            .unwrap();
+        assert_eq!(review.read_records.len(), 1);
+        review.read_records.clear();
+        assert_eq!(
+            Contract::from_model(&a)
+                .unwrap()
+                .differences(&Contract::from_model(&b).unwrap()),
+            ["/capabilities"]
         );
     }
 }

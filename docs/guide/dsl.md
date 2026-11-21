@@ -240,17 +240,34 @@ model Poll version "0.2" {
 
 ### 利用できる範囲と診断
 
+`value_returning_if` で止まったときは、`repeat` を残したまま、合流後の処理を通常の `if` の各枝に移せます。たとえば反復の中で `v = if a == ok { yield a } else { yield b }; u = A.use(v); leave` と書いた箇所は、次の形にします。
+
+```relca
+if a == ok { u1 = A.use(a); leave }
+else { u2 = A.use(b); leave }
+```
+
+実行する呼出しはどちらも片方の枝だけで、追加の Task はありません。`end` で終わる枝には複写しません。後で使う結果も、その値を参照する続きと一緒に枝へ移します。
+
 body と `on_limit` で使えるのは、操作の呼出し、`if`、固定 `wait`、終了や繰り返しの制御です。
+body では `fork` と直後の `join all`、および `wait until` も使えます。`again` までの最短時間は、
+`join all` では各枝の最短時間のうち最も長い値を使い、`wait until` は0分として検査します。
+`compare` では、繰り返しを含む構成と含まない構成を並べられます。上限や間隔が異なる案も比較できます。
+`diff` では、繰り返しの宣言と呼出し元の差を確認できます。
+`sensitivity` では、繰り返しの上限 `at_most` と間隔 `gap` を全点で揃えます。
+回数を条件にした `kernel` の確率は点ごとに変えられます。
 次は未対応で、`unsupported` になります。
 
 - `over` を使う明細の走査、繰り返しの入れ子、再到着、無限の繰り返し。
-- body 内の `fork` / `join`、条件待ち `wait until`、縮退経路、および呼出しの
+- body 内の `join any`、`on_limit` 内の `fork` / `join` と `wait until`、縮退経路、および呼出しの
   `response_loss` / `retry` / recovery との組合せ。recovery や縮退経路の中への `repeat` も置けません。
-- 繰り返しを含むモデルの `compare`、`diff`、`sensitivity`、`mutate`、`conform`。
-- `contest` による異議経路、`quantile` による分位点との併用。
-  これらはモデルの宣言・指標であり、単独の CLI コマンドではありません。
+- 繰り返しの本体に `fork` がある構成での `mutate`、繰り返しを含む構成の `conform`。
+- `contest` による異議経路との併用。異議経路はモデルの宣言であり、単独の CLI コマンドではありません。
+
+繰り返しを含む構成にも `quantile` を宣言できます。`mutate` は各回を別々に変えるのではなく、元の呼出しや分岐を編集します。
 
 主な診断を次に示します。reason は `diagnostics[].message` 内の識別語です。
+判定を妨げた箇所まで分かる診断では、`diagnostics[].detail` に同じ理由語と具体物を出します。
 必須部分の欠落などは、reason ではなく `expected ...` の構文診断になります。
 
 | code | reason または message | 意味 |
@@ -262,7 +279,7 @@ body と `on_limit` で使えるのは、操作の呼出し、`if`、固定 `wai
 | `E-CON-0` | `loop_again_in_limit` | `on_limit` 内に `again` がある |
 | `E-CON-0` | `loop_unreachable_after_control` | `again` / `leave` の後に同じ block の文がある |
 | `E-NAME-0` | `loop name collision` | 繰り返しの名前が他の名前と衝突する |
-| `U-SEM-0` | `loop_expansion_limit` | 回数が32を超える |
+| `U-SEM-0` | `loop_expansion_limit` | 回数が32を超える、または `evidence_basis` の出口の組を調べる表が上限（1,024 組）を超える |
 | `U-SEM-0` | `loop_round_out_of_scope` | body の外などから `NAME.round` を読む |
 | `U-SEM-0` | `loop_stage_unsupported` | `over` を使う未対応の形 |
 | `U-SEM-0` | `loop_feature_combination` | 未対応の入れ子・組合せ・分析 |
@@ -360,17 +377,21 @@ q1 は Know を直接読みませんが、確定した記録経由の到達が�
   届くかもしれない源は `indirect` に残しますが、`via_records` には入れません。
   `evidence_basis` の要求がその経路だけに依存すると `evidence_basis_conditional_snapshot` で未対応です。
   登録者が経路で変わっても、すべての候補が運ぶ同じ源は確定した到達になります。
+- 確定した由来として示すのは、登録する操作まで確かに届いた源だけです。契約の判定では、登録前に到達を確かめられない源も候補に残します。要求した源が確かに届けば `satisfied`、候補にしかなければ `unsupported`、候補にもなければ `violated` です。
 - `evidence_basis direct` では記録経由を数えません。要求できるのは source Actor だけで、Notes 自体は要求できません。
 - 正常終了の結果が複数ある登録は `registration_result_dependent` で未対応です。
   拒否は `requires … else …`、登録しない経路は分岐で書きます。結果の名前で成功・失敗を推測しません。
+  分岐で書くときは、観測できる選択を先に分け、一つの正常結果を返す `registers` 付きの呼出しを登録する枝に置きます。時間や資源が判定の対象なら、分けた後も各経路の時間や資源使用が変わらないことを確かめてください。
 - 登録先に `instance per_case` を書けば案件ごとの記録です。印の無い先は `cases 1` だけ扱います。
   案件をまたぐ共有の記録や、追記型の蓄積は扱いません。
-- 登録や記録の読取りを repeat 内へ置く形は `loop_feature_combination`、
+- `repeat` では、前の回で正常に終わった登録も次の回の読取りへ引き継ぎます。
   応答喪失・再送、recovery、縮退、異議経路内の登録・読取りや start 効果との登録の併用は
   `registration_feature_combination` で未対応です。同じ記録を fork の兄弟が登録・読取りする形も拒否します。
 - 登録先が Cut で範囲外なら、登録も読取りも `E-CUT-1` です。
-  `check`・`explain`・`simulate`・`mutate` で扱い、compare・diff・sensitivity は
-  `registration_unsupported_command` で未対応です。conform は由来を照合せず未検査に残します。
+
+`diff` では、選んだ構成で有効な登録者・読取り手の変更を `record` 行に示します。
+`compare` では、記録を使う各構成の判定を並べられます。
+`sensitivity` では、登録先と記録の読取りを全点で揃えます。`conform` は由来を照合せず未検査に残します。
 
 従来の `source record` は、独立の根拠源の宣言のままです。自動で登録先に読み替えません。
 知識の写しを表したい場合は Notes から `source record` を外し、実際の登録操作へ `registers [Notes]` を加えます。
@@ -502,6 +523,20 @@ Old では承認操作を呼ばないという既存の警告も残ります。
 `policy observable fifo ...` などの方策は、実際に固定したい選択にだけ宣言します。
 非決定を消して simulate を通すためだけに追加しないでください。
 
+`repeat` でも `policy fifo tie_by case_id then call_order` を使えます。待ちに入った時刻、案件 ID、呼出しの記述順の順に比べます。反復の記述順は、1回目、2回目、…、`on_limit`、反復の後続です。各回の `fork` では枝の記述順を使います。`assign first_idle` を加えると、空いている実行者を宣言順に選びます。
+
+`dispatch after_finishes` を方策に付けると、方策の区分の Task は、同じ時刻の終了と取消の応答（ack）がすべて済んでから開始します。`join any` の採用や、環境の区分の Task の開始はこの規則の対象外です。
+
+異議が起票されない場合の負荷を見るには、シナリオ内で次のように指定します。
+
+```relca
+contest_not_filed Vendor on end.returned reason "filing frequency is unknown"
+```
+
+`simulate` は率（`rates`）のない異議条項に到達すると、既定では拒否します。起票を含めて評価するには率を指定し、起票しない場合の負荷を評価するには `contest_not_filed` を宣言します。
+
+対象は当事者と終端で一つに定まる `contest` 条項です。理由は必須で、起票率を指定した同じ条項には使えません。このシナリオでは異議の経路を実行しません。結果の読み方は [異議を起票しない場合の見積もり](results.md#異議を起票しない場合の見積もり) を参照してください。
+
 ## 確かめた版と使う版を揃える
 
 ```relca
@@ -558,12 +593,14 @@ relca mutate examples/same-version.relca --kinds summary_reused
 契約には引数名だけを書けます。
 対象の引数へ `case.id` や観測 case 変数（同名の呼出し結果で書かれるものも含む）を渡す形は、
 合流を経由する場合も `same_version_feature_combination` で拒否します。定数や process の入力を直接渡す構文もありません。
-`repeat` との併用は `U-SEM-0 loop_feature_combination`。
+`repeat` でも、使う操作の開始より前に正常終了した最後の確認を調べます。
+繰り返しを抜けた後に使う結果は、最後に実行した回の版を引き継ぎます。
 `join any`、応答喪失・再送・recovery・縮退経路との併用は `U-SEM-0 same_version_feature_combination`。
 異議経路の操作を対象にすると、その性質だけ `same_version_contest_route` で未対応です。
-この契約を適用する `compare`・`diff`・`sensitivity` は `same_version_unsupported_command` で未対応。
+`compare`・`diff` は各構成の判定を並べます。`sensitivity` では、契約が指定する二つの操作と引数を全点で揃えます。
+合流を含むモデルでは、引き続きこれらのコマンドを使えません。
 `conform` は契約に必要な引数の版を照合せず、`U-LOG-1` で未検査に残します。
-合流・繰り返しを含むモデルの `mutate` も未対応のままです。
+合流を含むモデルの `mutate` は未対応のままです。
 `version_check`・経由モデルの版との違いは[版の要求と証跡](results.md#版の要求と証跡)を参照してください。
 
 ## 根拠源を求める契約
@@ -621,6 +658,7 @@ relca explain examples/evidence-basis-missing.relca
 `requires` で拒否されうる書き手、省略されうる再送試行は、必ず終わるとはみなしません。
 要求した源がこうした辺からしか届かなければ `unsupported` で閉じます。
 ただし、別の要求源が確定で欠ける場合の違反は残します。
+記録経由でも同じです。登録者に要求源が確かに届き、読む記録にも確かに残るなら `satisfied`。どちらかを確かめられず候補にしかないなら `unsupported`、候補にもないなら `violated` です。
 `if`、`requires`、`wait until` の条件や `kernel_reads latent`、kernel の `given` は読取りに数えません。
 
 正常終了かどうかは、戻り値の `pass` / `fail` という名前ではなく、操作が正常に終わった事象で区別します。
@@ -637,11 +675,20 @@ Agency の判定行に出ていない操作にも使えますが、契約を足�
 | 必ず終了する辺だけでは要求を確かめられない | `U-SEM-0`、`evidence_basis_conditional_snapshot` |
 | 異議経路の操作を対象とする契約 | その性質だけ `U-SEM-0`、`evidence_basis_contest_route`。他の性質の判定は残す |
 | Cut で除外した Actor を要求 | `E-CUT-1`。既存の契約・条件式と同じく、範囲外の Actor 参照を拒否 |
-| repeat との併用 | `U-SEM-0`、`loop_feature_combination` |
+| 繰り返しの結果の別名が、記録への登録と読取りを経由して対象操作へ届く | `U-SEM-0`、`loop_feature_combination` |
+| 繰り返しを含むモデルの `evidence_basis` を `mutate` で検査する | `U-SEM-0`、`loop_feature_combination` |
 | 縮退経路・recovery との併用 | `U-SEM-0`、`evidence_basis_feature_combination` |
-| 選んだ構成にこの契約が適用される compare / diff / sensitivity | `U-SEM-0`、`evidence_basis_unsupported_command` |
 
 `check`、`explain`、`mutate` で扱い、`simulate` では標本中の違反だけを確認します。
+繰り返しの中では、対象操作が正常終了する回すべてで根拠源を求めます。
+繰り返しの後では、結果の別名を引数や観測変数を通じて渡せます。
+`leave` した出口ごとに、後続の処理を書き下した場合と同じように根拠を調べます。繰り返しが直列にあれば、出口の組ごとに調べます。
+ただし、同じ回に複数の `again` があると、次の回にどの書き手の根拠が届くか区別できず、書き下した版で `violated` になる形でも `unsupported` になることがあります。確かめるには `again` を1箇所にまとめるか、回ごとの処理を書き下してください。
+繰り返しの後の対象操作が別名を受け取らず、繰り返しの中で書かれた観測変数を読む場合にも、この差が出ることがあります。
+ある出口で根拠が確かに欠ければ `violated` です。確定した欠落はなく、出口内の条件付きの読取りを確かめられない場合は `unsupported` です。
+`direct` が数えるのは、別名を受け取る場合も対象操作自身の `reads` だけです。
+ただし、別名が記録への登録と読取りを経由して対象へ届く形は、`direct` でも未対応です。
+`compare`・`diff` は各構成の判定を並べます。`sensitivity` では、対象操作、`direct` の有無、要求する源を全点で揃えます。
 応答喪失と有限再送は既存の操作・権限契約が受理する範囲で扱い、応答の受信と操作の正常終了を分けます。
 `conform` は読取りをログで観測しないので、適用されるこの契約を検査せず `unsupported` にします。
 範囲外の契約はこれらの未対応要求にも数えず、適用範囲の欄に残します。
@@ -650,12 +697,33 @@ Agency の判定行に出ていない操作にも使えますが、契約を足�
 要求を書くのは、業務で本当に必要な根拠源だけです。
 未検出を0件にするために、すべての `reads` を契約へ転記することは勧めません。
 
+## 解析が未接続のとき
+
+診断に分析の区分と原因がある場合は、まず拒否されたコマンドやモードを確かめてください。`analysis_not_connected` は、示した機能の組合せや実行モードでは、現在の Relca が分析できないことを表します。位置がある場合は、診断に対応する宣言・参照・呼出しを調べてください。位置のない行は、モデル内の別の箇所を指しているわけではありません。
+
+例えば、到着時刻列そのものに確率を付ける `arrivals distribution` は、単独の `simulate` で扱える範囲がありますが、網羅検査では扱えません。標本の結果は網羅検査の代わりにはなりません。また、`verify` は優先規律を外部の検証エンジンに渡しません。未接続の機能を削った別のモデルの結果を、元のモデルの検査結果として扱わないでください。
+
 ## 追加の記述
 
 - `metrics` は時間、費用、件数を要求します。`breakdown waits` は待ちの内訳を追加します。
   単価の未設定は費用 0 ではありません。
 - `property case.X` と `metric cohort.X` は案件の性質と期待件数の比を定義します。
   `metric quantile.X` は到達時刻の分位点です。compare の hard と目的は宣言した場合だけ評価します。
+- `metric mean.Lead = mean(elapsed, case.Done)` は、到着から性質に初めて到達するまでの経過時間の期待値です。
+  全流入を分母にし、到達しない案件を黙って除きません。到達した質量だけを分母にする場合は
+  `mean(elapsed, case.Done given reached)` と書きます。`mean(elapsed)` は受理しません。
+  量には `work`（占有作業時間）、`named_people_work`（名前付き実行者の占有時間）、`cost`（占有費と開始費の和）も使えます。
+  これらは `metrics` を宣言して観測し、性質を省いた `mean(work)`・`mean(named_people_work)`・`mean(cost)` は案件が閉じた時点までの量です。
+  `mean(cost, case.Done given reached)` なら初到達時点までの費用を、到達質量で割ります。
+  単価の必要集合は既存の `metrics` と同じで、一つでも欠ければ費用は `not_configured` です。
+  名前は cohort・quantile と重複できません。`check`・`explain` では区間、`simulate` では標本の平均を出します。指標の宣言自体は合否を変えません。
+  `repeat` を含む手順にも指定できます。各回で行った作業と費用を数えます。`gap fixed` の待ちは経過時間に入りますが、占有作業時間には入りません。merge・応答喪失/再送との併用は未対応です。
+- `verify metric mean.Lead <= 30min` や `verify metric cohort.OnTime >= 0.95` で、1案の指標に条件を付けます。
+  比較は `<=`、`<`、`>=`、`>`。経過・作業・人の作業時間の閾値には時間単位が必要です。
+  費用は `metrics` の通貨の最小単位で、cohort の閾値は 0〜1 の数で書きます。
+  通常の `verify` または契約も書いてください。`verify metric` だけでは検証要求になりません。
+- 複数案を比べるには、例えば `compare [Fast, Slow] hard { mean.Lead <= 30min } objectives { minimize mean.Lead }` と書きます。
+  hard は採用候補を絞る必須条件で、目的は候補同士を比べる値です。分位点は目的に使えますが hard には使えません。
 - 応答喪失と有限再送には、呼出しの `response_loss` と `retry max_attempts ...` を使います。
   最初の呼出しも試行数に含みます。冪等なキーの atomic 処理と非冪等な `effect_scope modeled` は
   別の模型です。応答が不明のままの案件は完了扱いにしません。

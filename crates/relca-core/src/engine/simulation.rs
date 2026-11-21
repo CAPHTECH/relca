@@ -8,6 +8,274 @@ use crate::outcome::{
 use num_bigint::BigInt;
 use sha2::{Digest, Sha256};
 
+pub(super) const SAME_TIME_LIMIT: usize = 4096;
+pub(super) const SAME_TIME_LIMIT_REASON: &str = "same-time ordering limit";
+#[cfg(test)]
+thread_local! {
+    static TEST_SAME_TIME_LIMIT: std::cell::Cell<usize> = const { std::cell::Cell::new(SAME_TIME_LIMIT) };
+}
+
+pub(super) fn same_time_limit() -> usize {
+    #[cfg(test)]
+    {
+        TEST_SAME_TIME_LIMIT.get()
+    }
+    #[cfg(not(test))]
+    {
+        SAME_TIME_LIMIT
+    }
+}
+type InstantBranch<S, P> = EngineResult<(S, P)>;
+type InstantStep<S, P> = EngineResult<Result<Vec<InstantBranch<S, P>>, (S, P)>>;
+type Conflict = (Vec<(u64, String, diag::Span)>, bool);
+const UNRESOLVED: &str = "unresolved simulation nondeterminism";
+const PRIORITY_TIE: &str = "unresolved simulation nondeterminism: priority_tie_remaining";
+
+/// A sampled successor records actual operator effects, not a scheduler draw.
+/// Keep DFS order stable so the first closed branch supplies the audit order.
+pub(super) fn close_instant<S, P, O>(
+    root: S,
+    pending: Vec<InstantBranch<S, P>>,
+    limit: usize,
+    expand: impl FnMut(S, P) -> InstantStep<S, P>,
+    observation: impl Fn(&P) -> O,
+) -> EngineResult<Option<(S, P)>>
+where
+    S: Clone + Eq + std::hash::Hash,
+    O: Eq,
+{
+    use std::hash::BuildHasher;
+    let hash = std::hash::RandomState::new();
+    close_instant_by(
+        root,
+        pending,
+        limit,
+        |s| hash.hash_one(s),
+        expand,
+        observation,
+    )
+}
+
+/// A fingerprint only selects a bucket; full state equality still determines
+/// identity, the state limit and whether an observation has been seen before.
+pub(super) fn close_instant_by<S: Clone + Eq, P, O: Eq>(
+    root: S,
+    mut pending: Vec<InstantBranch<S, P>>,
+    limit: usize,
+    fingerprint: impl Fn(&S) -> u64,
+    mut expand: impl FnMut(S, P) -> InstantStep<S, P>,
+    observation: impl Fn(&P) -> O,
+) -> EngineResult<Option<(S, P)>> {
+    let mut visited = std::collections::HashMap::<u64, Vec<(S, usize, Vec<O>)>>::new();
+    visited.insert(fingerprint(&root), vec![(root, 0, Vec::new())]);
+    let mut states = 1;
+    let mut closed: Option<(S, P)> = None;
+    let mut failed = None;
+    pending.reverse();
+    let mut stack: Vec<_> = pending.into_iter().map(Some).collect();
+    let mut active = BTreeSet::from([0]);
+    let mut ancestors = Vec::new();
+    while let Some(entry) = stack.pop() {
+        let Some(branch) = entry else {
+            active.remove(&ancestors.pop().expect("parent of pending successors"));
+            continue;
+        };
+        let (state, path) = match branch {
+            Ok(pair) => pair,
+            Err(error) => {
+                if closed.is_some() || failed.is_some_and(|other| other != error) {
+                    return Ok(None);
+                }
+                failed = Some(error);
+                continue;
+            }
+        };
+        let key = observation(&path);
+        let bucket = visited.entry(fingerprint(&state)).or_default();
+        let id = if let Some((_, id, seen)) = bucket.iter_mut().find(|(old, _, _)| *old == state) {
+            if active.contains(id) {
+                return Ok(None);
+            }
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.push(key);
+            *id
+        } else {
+            let id = states;
+            states += 1;
+            bucket.push((state.clone(), id, vec![key]));
+            id
+        };
+        if states > limit {
+            return Err(SAME_TIME_LIMIT_REASON.into());
+        }
+        match expand(state, path) {
+            Err(error) => {
+                if closed.is_some() || failed.is_some_and(|other| other != error) {
+                    return Ok(None);
+                }
+                failed = Some(error);
+            }
+            Ok(Ok(mut successors)) => {
+                successors.reverse();
+                active.insert(id);
+                ancestors.push(id);
+                stack.push(None);
+                stack.extend(successors.into_iter().map(Some));
+            }
+            Ok(Err(leaf)) => {
+                if failed.is_some() {
+                    return Ok(None);
+                }
+                if let Some((s, p)) = &closed {
+                    if *s != leaf.0 || observation(p) != observation(&leaf.1) {
+                        return Ok(None);
+                    }
+                } else {
+                    closed = Some(leaf);
+                }
+            }
+        }
+    }
+    failed.map_or(Ok(closed), Err)
+}
+
+#[test]
+fn same_time_common_failure_is_not_a_nondeterminism_refusal() {
+    for same in [true, false] {
+        let result = close_instant(
+            0,
+            vec![Ok((1, ())), Ok((2, ()))],
+            4,
+            |s, _| {
+                Err(if same || s == 1 {
+                    "state overflow"
+                } else {
+                    "time overflow"
+                }
+                .into())
+            },
+            |_| (),
+        );
+        assert_eq!(
+            result,
+            if same {
+                Err(Halt::Unsupported("state overflow"))
+            } else {
+                Ok(None)
+            }
+        );
+    }
+}
+
+#[test]
+fn same_time_sibling_application_failure_is_not_a_common_failure() {
+    let failure = Halt::Unsupported("state overflow");
+    for pending in [
+        vec![Err(failure), Ok((1, ()))],
+        vec![Ok((1, ())), Err(failure)],
+    ] {
+        let close = close_instant(0, pending, 4, |s, p| Ok(Err((s, p))), |_| ());
+        assert_eq!(close, Ok(None));
+    }
+    let close = close_instant(
+        0,
+        vec![Err(failure), Err(failure)],
+        4,
+        |s, p: ()| Ok(Err((s, p))),
+        |_| (),
+    );
+    assert_eq!(close, Err(failure));
+    let nested = close_instant(
+        0,
+        vec![Ok((1, ()))],
+        4,
+        |s, p| {
+            if s == 1 {
+                Ok(Ok(vec![Err(failure), Ok((2, p))]))
+            } else {
+                Ok(Err((s, p)))
+            }
+        },
+        |_| (),
+    );
+    assert_eq!(nested, Ok(None));
+}
+
+#[test]
+fn same_time_non_root_back_edge_is_not_deduplication() {
+    let result = close_instant(
+        0,
+        vec![Ok((4, ())), Ok((1, ()))],
+        8,
+        |s, p| match s {
+            1 => Ok(Ok(vec![Ok((2, p))])),
+            2 => Ok(Ok(vec![Ok((1, p))])),
+            _ => Ok(Err((s, p))),
+        },
+        |_| (),
+    );
+    assert_eq!(result, Ok(None));
+}
+
+#[test]
+fn same_time_diamond_is_not_a_cycle() {
+    let result = close_instant(
+        0,
+        vec![Ok((1, ())), Ok((2, ()))],
+        8,
+        |s, p| {
+            if s == 3 {
+                Ok(Err((s, p)))
+            } else {
+                Ok(Ok(vec![Ok((3, p))]))
+            }
+        },
+        |_| (),
+    );
+    assert_eq!(result, Ok(Some((3, ()))));
+}
+
+#[test]
+fn same_time_cycle_is_not_a_convergent_path() {
+    let outcome = close_instant(
+        0,
+        vec![Ok((1, ())), Ok((2, ()))],
+        4,
+        |s, p| {
+            if s == 2 {
+                Ok(Err((s, p)))
+            } else {
+                Ok(Ok(vec![Ok((0, p))]))
+            }
+        },
+        |_| (),
+    )
+    .unwrap();
+    assert!(outcome.is_none());
+}
+
+#[test]
+fn same_time_fingerprint_collisions_still_count_and_distinguish_states() {
+    let close = |limit| {
+        close_instant_by(
+            0,
+            vec![Ok((1, ())), Ok((2, ()))],
+            limit,
+            |_| 0,
+            |state, path| Ok(Err((state, path))),
+            |_| (),
+        )
+    };
+    assert!(close(3).unwrap().is_none());
+    assert!(matches!(
+        close(2),
+        Err(Halt::Unsupported(SAME_TIME_LIMIT_REASON))
+    ));
+}
+
+#[derive(Clone)]
 pub(super) struct Sample {
     seed: u64,
     rep: u64,
@@ -18,6 +286,9 @@ pub(super) struct Sample {
     pub(super) provenance: Vec<(u64, String, diag::Span)>,
     pub(super) refused: bool,
     pub(super) priority_tie: bool,
+    pub(super) collect_orders: bool,
+    pub(super) instant_executors: Option<BTreeSet<(u64, ir::BindingId, ir::PersonId)>>,
+    first_conflict: Option<Conflict>,
 }
 impl Generation for Sample {
     fn take(&mut self, _: usize) -> EngineResult<()> {
@@ -39,16 +310,50 @@ impl Sample {
             provenance: Vec::new(),
             refused: false,
             priority_tie: false,
+            collect_orders: false,
+            instant_executors: None,
+            first_conflict: None,
+        }
+    }
+    pub(super) fn observe_executors(&mut self, case: u64, before: Option<&State>, state: &State) {
+        if let Some(seen) = &mut self.instant_executors {
+            seen.extend(
+                state
+                    .tasks
+                    .iter()
+                    .filter(|t| {
+                        t.lifecycle.running()
+                            && !before.is_some_and(|old| {
+                                old.tasks
+                                    .iter()
+                                    .any(|b| b.binding == t.binding && b.lifecycle.running())
+                            })
+                    })
+                    .filter_map(|t| t.executor.map(|executor| (case, t.binding, executor))),
+            );
         }
     }
     pub(super) fn reject<T>(&mut self) -> EngineResult<T> {
+        if let Some((origins, priority)) = self.first_conflict.take() {
+            self.provenance = origins;
+            self.priority_tie = priority;
+        }
         self.refused = true;
         Err(if self.priority_tie {
-            "unresolved simulation nondeterminism: priority_tie_remaining"
+            PRIORITY_TIE
         } else {
-            "unresolved simulation nondeterminism"
+            UNRESOLVED
         }
         .into())
+    }
+    /// The fork's working samples are discarded on failure. Classify a nested
+    /// refusal on the root sample, retaining the root's first conflict sites
+    /// and priority classification, as in the reference driver.
+    pub(super) fn finish_instant_error<T>(&mut self, error: Halt) -> EngineResult<T> {
+        match error {
+            Halt::Unsupported(UNRESOLVED | PRIORITY_TIE) => self.reject(),
+            _ => Err(error),
+        }
     }
     pub(super) fn choose(
         &mut self,
@@ -142,10 +447,10 @@ impl Sample {
     }
     // Only adjacent equal effects may be coalesced: non-adjacent intervals
     // cannot be moved without changing the key-to-effect coupling.
-    pub(super) fn unique<T: Clone + Eq>(
-        &mut self,
-        actions: &[Vec<(Rational, T)>],
-    ) -> EngineResult<()> {
+    pub(super) fn distinct_actions<T: Clone + Eq>(&self, actions: &[Vec<(Rational, T)>]) -> bool {
+        if actions.len() < 2 {
+            return false;
+        }
         let canonical = |xs: &Vec<(Rational, T)>| {
             let mut result: Vec<(Rational, T)> = Vec::new();
             for (p, s) in xs.iter().filter(|(p, _)| !p.is_zero()) {
@@ -164,17 +469,39 @@ impl Sample {
             let tag = self.tag(0);
             for (i, other) in actions.iter().enumerate().skip(1) {
                 if self.tag(i) != tag || canonical(other) != first {
-                    return self.reject();
+                    return true;
                 }
             }
         }
+        false
+    }
+    pub(super) fn unique<T: Clone + Eq>(
+        &mut self,
+        actions: &[Vec<(Rational, T)>],
+    ) -> EngineResult<()> {
+        if self.first_conflict.is_none() && self.distinct_actions(actions) {
+            if !self.collect_orders {
+                return self.reject();
+            }
+            self.first_conflict = Some((self.provenance.clone(), self.priority_tie));
+        }
         Ok(())
+    }
+
+    pub(super) fn clear_action(&mut self) {
+        self.sites.clear();
+        self.kernels.clear();
+        self.provenance.clear();
+        self.first_conflict = None;
     }
     pub(super) fn legacy_unique(
         &mut self,
         states: &[State],
         evidence: &mut Exploration,
     ) -> EngineResult<()> {
+        if self.first_conflict.is_some() {
+            return Ok(());
+        }
         let saved = evidence.chance_groups.clone();
         let actions = probability_actions(states.to_vec(), evidence)?;
         evidence.chance_groups = saved;
@@ -192,6 +519,218 @@ impl Sample {
         let result = self.unique(&actions);
         self.sites = old;
         result
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct LegacyHits {
+    mean: metrics::MeanPath,
+    query: Vec<bool>,
+    quality: Vec<bool>,
+    first: Vec<Option<u128>>,
+}
+
+impl LegacyHits {
+    fn observe(
+        &mut self,
+        s: &State,
+        m: &ir::Model,
+        end: Option<(ir::EndId, u64)>,
+        terminal: bool,
+    ) -> EngineResult<()> {
+        if let Some(q) = &m.quality {
+            for (i, p) in q.properties.iter().enumerate() {
+                let arrived = quality_hit(p, s, end, 0)?;
+                self.quality[i] |= arrived;
+                if let Some(first) = self.first.get_mut(i) {
+                    let at = if terminal || matches!(p.target, ir::QualityTarget::Ends(_)) {
+                        end.map(|(_, t)| t)
+                    } else {
+                        None
+                    };
+                    crate::quality::observe_first_world(
+                        std::slice::from_mut(first),
+                        &[0],
+                        s.time,
+                        true,
+                        &[(true, arrived, at)],
+                    );
+                }
+            }
+        }
+        self.mean
+            .observe(m, 0, |i| self.first[i], Some(s), s.time, terminal);
+        for (i, q) in m.probability_queries.iter().enumerate() {
+            if !terminal || matches!(q.condition, ir::ProbabilityCondition::End(_)) {
+                self.query[i] |= query_hit(q, s, end, 0)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+enum LegacyStop {
+    End(ir::EndId),
+    Cut(SimulationCut),
+    Deadlock,
+    Range,
+}
+
+fn legacy_offers(
+    sample: &mut Sample,
+    xs: Vec<State>,
+    scratch: &mut Exploration,
+) -> EngineResult<Vec<Vec<(Rational, State)>>> {
+    let actions = probability_actions(xs, scratch)?;
+    let mut offset = 0;
+    let old = std::mem::take(&mut sample.sites);
+    let mut kernels = std::mem::take(&mut sample.kernels);
+    for (i, action) in actions.iter().enumerate() {
+        if let Some((_, site, case)) = old.iter().find(|(j, _, _)| *j == offset) {
+            sample.sites.push((i, site.clone(), *case));
+        }
+        if let Some(pos) = kernels.iter().position(|(j, _)| *j == offset) {
+            sample.kernels.push((i, kernels.swap_remove(pos).1));
+        }
+        offset += action.len();
+    }
+    Ok(actions)
+}
+
+fn apply_legacy_offer(
+    s: &State,
+    m: &ir::Model,
+    sample: &mut Sample,
+    facts: &mut Exploration,
+    i: usize,
+    action: Vec<(Rational, State)>,
+) -> EngineResult<State> {
+    if let Some((_, task)) = sample.kernels.iter().find(|(j, _)| *j == i).copied() {
+        return sample_kernel(&action[0].1, task, m, sample, &mut Exploration::default());
+    }
+    let selected = if let Some((site, case)) = sample.tag(i) {
+        sample.choose(
+            case,
+            &site,
+            1,
+            &action.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
+        )?
+    } else {
+        0
+    };
+    let mut next = action
+        .into_iter()
+        .nth(selected)
+        .ok_or("empty successor action")?
+        .1;
+    selected_refusals(s, &mut next, m, facts);
+    sample.observe_executors(1, Some(s), &next);
+    Ok(next)
+}
+
+#[derive(Clone)]
+struct LegacyInstant {
+    sample: Sample,
+    facts: Exploration,
+    hits: LegacyHits,
+    stop: Option<LegacyStop>,
+}
+
+impl LegacyInstant {
+    fn successors(
+        &self,
+        s: &State,
+        m: &ir::Model,
+        mut offers: Vec<Vec<(Rational, State)>>,
+    ) -> Vec<InstantBranch<State, Self>> {
+        if !self.sample.distinct_actions(&offers) {
+            offers.truncate(1);
+        }
+        offers
+            .into_iter()
+            .enumerate()
+            .map(|(i, offer)| {
+                let mut path = self.clone();
+                let next = apply_legacy_offer(s, m, &mut path.sample, &mut path.facts, i, offer)?;
+                Ok((next, path))
+            })
+            .collect()
+    }
+
+    fn advance(
+        mut self,
+        mut s: State,
+        m: &ir::Model,
+        program: &[Instruction],
+        time: u64,
+    ) -> InstantStep<State, Self> {
+        if s.time != time {
+            return Ok(Err((s, self)));
+        }
+        if s.exceeds_live_bound(m.bounds.live_tasks) {
+            self.stop = Some(LegacyStop::Cut(SimulationCut::LiveTasks));
+            return Ok(Err((s, self)));
+        }
+        if s.initialized {
+            self.hits.observe(
+                &s,
+                m,
+                s.contest
+                    .as_ref()
+                    .and_then(|c| c.business.as_ref())
+                    .map(|b| (b.end, b.at)),
+                false,
+            )?;
+        }
+        self.facts.observe(&s, m)?;
+        self.facts.contracts(&s);
+        self.sample.clear_action();
+        match duration_gate(&s, m, &mut self.sample, &mut self.facts, 4096) {
+            Ok(Some(mut xs)) => return Ok(Ok(vec![Ok((xs.remove(0).1, self))])),
+            Ok(None) => (),
+            Err(Halt::Budget) if self.facts.duration_numeric => {
+                self.stop = Some(LegacyStop::Cut(SimulationCut::Numeric));
+                return Ok(Err((s, self)));
+            }
+            Err(e) => return Err(e),
+        }
+        let mut scratch = Exploration::default();
+        self.stop = Some(
+            match step_observed(s.clone(), program, m, &mut self.sample, &mut scratch)? {
+                Step::Next(xs) if scratch.ranges.is_empty() => {
+                    let offers = legacy_offers(&mut self.sample, xs, &mut scratch)?;
+                    return Ok(Ok(self.successors(&s, m, offers)));
+                }
+                Step::Next(xs) => {
+                    if !xs.is_empty() {
+                        return self.sample.reject();
+                    }
+                    self.facts.ranges = scratch.ranges;
+                    LegacyStop::Range
+                }
+                Step::Terminal(e) => {
+                    self.hits.observe(&s, m, Some((e, s.time)), true)?;
+                    emit(&mut s, Bundle::End(e), m, &mut self.facts)?;
+                    close_responses(&mut s);
+                    self.facts.contracts(&s);
+                    LegacyStop::End(e)
+                }
+                Step::Cut => {
+                    for monitor in &mut s.monitors {
+                        monitor.violated |= monitor.pending.iter().any(|d| *d <= m.bounds.clock);
+                    }
+                    self.facts.contracts(&s);
+                    LegacyStop::Cut(SimulationCut::Clock)
+                }
+                Step::Deadlock => {
+                    close_responses(&mut s);
+                    self.facts.contracts(&s);
+                    LegacyStop::Deadlock
+                }
+            },
+        );
+        Ok(Err((s, self)))
     }
 }
 
@@ -247,6 +786,7 @@ pub(super) fn path_warning(
     ] {
         if yes && !out.diagnostics.iter().any(|d| d.code == code) {
             out.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: code.into(),
                 severity: diag::Severity::Warning,
                 message: message.into(),
@@ -298,6 +838,9 @@ impl QueryObservation {
 }
 
 pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
+    if !m.valid_contest_exclusions() {
+        return invalid_outcome("invalid scenario contest exclusion", m);
+    }
     if let Some(v) = m.verify.iter().find(|v| v.property.completion()) {
         let mut out = invalid_outcome("simulation cannot check structural completion questions", m);
         out.diagnostics[0].span = Some(v.span);
@@ -328,24 +871,28 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
     result.metric_template = metrics::finish(None, m, crate::obligation::Coverage::Aborted);
     result.capability_refusals = m.has_requires().then(Vec::new);
     let mut quality_observations = Vec::new();
+    let mut mean_samples = metrics::MeanSamples::new(m);
     for rep in 1..=spec.replications {
         result.attempted_replications = rep;
         let mut sample = Sample::new(spec.seed, rep);
+        sample.collect_orders = true;
         let mut s = State::initial(m, entry);
         let mut facts = Exploration::default();
-        let mut hit = vec![false; m.probability_queries.len()];
-        let mut quality_hits = vec![false; m.quality.as_ref().map_or(0, |q| q.properties.len())];
-        let mut first_hits = vec![
-            None;
-            m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                0
-            } else {
-                q.properties.len()
-            })
-        ];
+        let mut hits = LegacyHits {
+            mean: metrics::MeanPath::new(m, 1),
+            query: vec![false; m.probability_queries.len()],
+            quality: vec![false; m.quality.as_ref().map_or(0, |q| q.properties.len())],
+            first: vec![
+                None;
+                m.quality
+                    .as_ref()
+                    .map_or(0, ir::QualitySpec::first_hit_count)
+            ],
+        };
         let mut cut = None;
         let mut terminal = None;
         let mut deadlock = None;
+        let mut same_time = false;
         let path = (|| -> EngineResult<()> {
             // Even a deterministic initial state receives exactly one bundle.
             if s.initialized {
@@ -361,48 +908,15 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
                     break;
                 }
                 if s.initialized {
-                    if let Some(q) = &m.quality {
-                        for (i, p) in q.properties.iter().enumerate() {
-                            let arrived = quality_hit(
-                                p,
-                                &s,
-                                s.contest
-                                    .as_ref()
-                                    .and_then(|c| c.business.as_ref())
-                                    .map(|b| (b.end, b.at)),
-                                0,
-                            )?;
-                            quality_hits[i] |= arrived;
-                            if let Some(first) = first_hits.get_mut(i) {
-                                let at = match p.target {
-                                    ir::QualityTarget::Ends(_) => s
-                                        .contest
-                                        .as_ref()
-                                        .and_then(|c| c.business.as_ref())
-                                        .map(|b| b.at),
-                                    _ => None,
-                                };
-                                crate::quality::observe_first_world(
-                                    std::slice::from_mut(first),
-                                    &[0],
-                                    s.time,
-                                    true,
-                                    &[(true, arrived, at)],
-                                );
-                            }
-                        }
-                    }
-                    for (i, q) in m.probability_queries.iter().enumerate() {
-                        hit[i] |= query_hit(
-                            q,
-                            &s,
-                            s.contest
-                                .as_ref()
-                                .and_then(|c| c.business.as_ref())
-                                .map(|b| (b.end, b.at)),
-                            0,
-                        )?;
-                    }
+                    hits.observe(
+                        &s,
+                        m,
+                        s.contest
+                            .as_ref()
+                            .and_then(|c| c.business.as_ref())
+                            .map(|b| (b.end, b.at)),
+                        false,
+                    )?;
                 }
                 facts.observe(&s, m)?;
                 facts.contracts(&s);
@@ -412,9 +926,7 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
                     s = xs.remove(0).1;
                     continue;
                 }
-                sample.sites.clear();
-                sample.kernels.clear();
-                sample.provenance.clear();
+                sample.clear_action();
                 let mut scratch = Exploration::default();
                 match step_observed(s.clone(), &program, m, &mut sample, &mut scratch)? {
                     Step::Next(xs) => {
@@ -425,56 +937,84 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
                             facts.ranges = scratch.ranges;
                             break;
                         }
-                        sample.legacy_unique(&xs, &mut scratch)?;
-                        let old = sample.sites.clone();
-                        let mut actions = probability_actions(xs, &mut scratch)?;
-                        let action = actions.remove(0);
-                        if let Some((_, task)) =
-                            sample.kernels.iter().find(|(i, _)| *i == 0).copied()
-                        {
-                            s = sample_kernel(&action[0].1, task, m, &mut sample, &mut scratch)?;
-                            continue;
-                        }
-                        let selected =
-                            if let Some((_, site, case)) = old.iter().find(|(i, _, _)| *i == 0) {
-                                sample.choose(
-                                    *case,
-                                    site,
-                                    1,
-                                    &action.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
-                                )?
-                            } else {
-                                0
+                        let mut actions = legacy_offers(&mut sample, xs, &mut scratch)?;
+                        if sample.distinct_actions(&actions) {
+                            let time = s.time;
+                            let drawn_before = sample.draws.len();
+                            let mut instant_sample = sample.clone();
+                            instant_sample.instant_executors = Some(BTreeSet::new());
+                            let root = LegacyInstant {
+                                sample: instant_sample,
+                                facts: facts.clone(),
+                                hits: hits.clone(),
+                                stop: None,
                             };
-                        let mut next = action
-                            .into_iter()
-                            .nth(selected)
-                            .ok_or("empty successor action")?
-                            .1;
-                        selected_refusals(&s, &mut next, m, &mut facts);
-                        s = next;
+                            let closed = close_instant(
+                                s.clone(),
+                                root.successors(&s, m, actions),
+                                same_time_limit(),
+                                |state, path| path.advance(state, m, &program, time),
+                                |p| {
+                                    let mut violations = p.facts.violation.clone();
+                                    while violations.last() == Some(&false) {
+                                        violations.pop();
+                                    }
+                                    (
+                                        p.hits.clone(),
+                                        p.stop.clone(),
+                                        violations,
+                                        p.facts.overcommit,
+                                        p.facts.lost_updates.clone(),
+                                        p.facts.ranges.clone(),
+                                        p.facts.refusals.clone(),
+                                        p.sample.instant_executors.clone(),
+                                        p.sample.draws[drawn_before..]
+                                            .iter()
+                                            .map(|d| d.key.clone())
+                                            .collect::<BTreeSet<_>>(),
+                                    )
+                                },
+                            );
+                            match closed {
+                                Ok(Some((state, p))) => {
+                                    same_time = true;
+                                    s = state;
+                                    facts = p.facts;
+                                    hits = p.hits;
+                                    sample = p.sample;
+                                    sample.instant_executors = None;
+                                    match p.stop {
+                                        None => continue,
+                                        Some(LegacyStop::End(e)) => {
+                                            terminal = Some(SimulationTerminal {
+                                                kind: SimulationTerminalKind::End,
+                                                end: Some(m.ends[e.0].clone()),
+                                            })
+                                        }
+                                        Some(LegacyStop::Cut(reason)) => cut = Some(reason),
+                                        Some(LegacyStop::Deadlock) => deadlock = Some(s.time),
+                                        Some(LegacyStop::Range) => (),
+                                    }
+                                    break;
+                                }
+                                Err(Halt::Unsupported(SAME_TIME_LIMIT_REASON)) => {
+                                    return Err(SAME_TIME_LIMIT_REASON.into());
+                                }
+                                Ok(None) => return sample.reject(),
+                                Err(e) => return sample.finish_instant_error(e),
+                            }
+                        }
+                        s = apply_legacy_offer(
+                            &s,
+                            m,
+                            &mut sample,
+                            &mut facts,
+                            0,
+                            actions.remove(0),
+                        )?;
                     }
                     Step::Terminal(e) => {
-                        if let Some(q) = &m.quality {
-                            for (i, p) in q.properties.iter().enumerate() {
-                                let arrived = quality_hit(p, &s, Some((e, s.time)), 0)?;
-                                quality_hits[i] |= arrived;
-                                if let Some(first) = first_hits.get_mut(i) {
-                                    crate::quality::observe_first_world(
-                                        std::slice::from_mut(first),
-                                        &[0],
-                                        s.time,
-                                        true,
-                                        &[(true, arrived, Some(s.time))],
-                                    );
-                                }
-                            }
-                        }
-                        for (i, q) in m.probability_queries.iter().enumerate() {
-                            if matches!(q.condition, ir::ProbabilityCondition::End(_)) {
-                                hit[i] |= query_hit(q, &s, Some((e, s.time)), 0)?;
-                            }
-                        }
+                        hits.observe(&s, m, Some((e, s.time)), true)?;
                         emit(&mut s, Bundle::End(e), m, &mut facts)?;
                         close_responses(&mut s);
                         facts.contracts(&s);
@@ -505,6 +1045,12 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
             }
             Ok(())
         })();
+        let LegacyHits {
+            mean: mut mean_path,
+            query: hit,
+            quality: quality_hits,
+            first: first_hits,
+        } = hits;
         if let Err(halt) = path {
             if halt == Halt::Budget && facts.duration_numeric {
                 cut = Some(SimulationCut::Numeric);
@@ -547,6 +1093,8 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
             })
             .collect();
         if let Some(q) = &m.quality {
+            mean_path.observe(m, 0, |i| first_hits[i], Some(&s), s.time, true);
+            mean_samples.add(mean_path, cut, !facts.ranges.is_empty());
             let truths: Vec<Vec<QueryTruth>> = q
                 .properties
                 .iter()
@@ -668,18 +1216,21 @@ pub(super) fn simulate(m: &ir::Model) -> SimulationOutcome {
         });
         result.add_refusals(facts.refusals.into_values());
         result.completed_replications = rep;
+        result.same_time |= same_time;
         *result.truncated_replications.get_or_insert(0) += u64::from(cut.is_some());
     }
-    result.quality = m
-        .quality
-        .as_ref()
-        .map(|_| crate::quality::simulation(m, &quality_observations, false));
+    result.quality = m.quality.as_ref().map(|_| {
+        let mut q = crate::quality::simulation(m, &quality_observations, false);
+        mean_samples.finish(m, &mut q);
+        q
+    });
     result
 }
 
 pub(super) fn invalid_outcome(message: &str, m: &ir::Model) -> SimulationOutcome {
     SimulationOutcome {
         diagnostics: vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -704,11 +1255,16 @@ pub(super) fn runtime_diagnostic(
         .map(|(_, _, s)| *s)
         .min_by_key(|s| s.start)
         .unwrap_or(m.process.span);
-    diag::Diagnostic {
+    let diagnostic = diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::U_SEM_0.into(),
         severity: diag::Severity::Error,
         span: Some(span),
-        message: if nondet {
+        message: if message == SAME_TIME_LIMIT_REASON {
+            format!(
+                "simulation exceeded the same-time ordering limit: replication {rep}, time {time}; more than {SAME_TIME_LIMIT} states without closing the instant"
+            )
+        } else if nondet {
             let label = if message.contains("priority_tie_remaining") {
                 "unresolved simulation nondeterminism: priority_tie_remaining"
             } else {
@@ -726,12 +1282,68 @@ pub(super) fn runtime_diagnostic(
         } else {
             format!("simulation aborted: replication {rep}, time {time}: {message}")
         },
+    };
+    if nondet && message != SAME_TIME_LIMIT_REASON {
+        diagnostic.unconnected(
+            "simulation_unresolved_nondeterminism",
+            "unresolved_choices",
+            provenance
+                .iter()
+                .map(|(_, site, span)| {
+                    diag::Blocker::at("feature", Some(site.clone()), Some(*span))
+                })
+                .collect(),
+        )
+    } else {
+        diagnostic
     }
 }
 
 #[cfg(test)]
+#[path = "../../tests/support/load_confluent_migration.rs"]
+mod load_confluent_migration;
+
+#[cfg(test)]
 mod simulation_tests {
     use super::*;
+    #[test]
+    fn ld_limit_from_both_engine_drivers() {
+        for name in ["ld-legacy-fork", "ld-confluent"] {
+            let m = fixture(name);
+            let old = TEST_SAME_TIME_LIMIT.replace(1);
+            let out = crate::engine::simulate(&m);
+            TEST_SAME_TIME_LIMIT.set(old);
+            assert_eq!(out.completed_replications, 0, "{name}");
+            let d = &out.diagnostics[0];
+            assert_eq!(d.code, diag::U_SEM_0);
+            assert!(
+                d.message.starts_with(
+                    "simulation exceeded the same-time ordering limit: replication 1,"
+                ),
+                "{}",
+                d.message
+            );
+        }
+    }
+    #[test]
+    fn ld_order_limit_refuses_before_following_first_child() {
+        let err = close_instant(
+            0,
+            vec![Ok((1, ())), Ok((2, ()))],
+            1,
+            |s, p| Ok(Err((s, p))),
+            |()| (),
+        )
+        .unwrap_err();
+        assert_eq!(err, Halt::Unsupported(SAME_TIME_LIMIT_REASON));
+        let m = fixture("ld-legacy-fork");
+        let d = runtime_diagnostic(&m, 1, 0, false, SAME_TIME_LIMIT_REASON, &[]);
+        assert_eq!(d.code, diag::U_SEM_0);
+        assert_eq!(
+            d.message,
+            "simulation exceeded the same-time ordering limit: replication 1, time 0; more than 4096 states without closing the instant"
+        );
+    }
     fn fixture(name: &str) -> ir::Model {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         let src = std::fs::read_to_string(root.join(name).join("model.relca")).unwrap();
@@ -1249,6 +1861,9 @@ mod simulation_tests {
             .filter(|p| p.is_dir())
         {
             let name = dir.file_name().unwrap().to_str().unwrap();
+            if name.starts_with("ld-") {
+                continue;
+            }
             let wait_names: &[&str] = include!("../../tests/support/waits_names.rs");
             if wait_names.contains(&name) {
                 continue;
@@ -1266,6 +1881,7 @@ mod simulation_tests {
                 || crate::mutation::review_fixture(name)
                 || crate::evaluation_population::fixture(name)
                 || crate::quantile_population::fixture(name)
+                || include!("../../tests/support/mean_names.rs").contains(&name)
                 || include!("../../tests/support/acceptance_gap_names.rs").contains(&name)
                 || crate::state_invariant_population::fixture(name)
                 || super::super::limits_population::fixture(name)
@@ -1412,7 +2028,8 @@ mod simulation_tests {
                         "{name}/{cfg:?}/budget{budget}: config does not affect generation, Room or outcome"
                     );
                 }
-                let expected = cfg.map_or_else(|| direct.contains(&name), |c| selected(name, c));
+                let expected = cfg.map_or_else(|| direct.contains(&name), |c| selected(name, c))
+                    || load_confluent_migration::accepted(name, cfg);
                 let out = simulate(&m);
                 let complete = out.completed_replications == 4;
                 count[usize::from(!complete)] += 1;
@@ -1429,6 +2046,6 @@ mod simulation_tests {
         assert_eq!((compare_dirs, old_dirs), (16, 148));
         assert_eq!(metrics_dirs, 24);
         assert!(mismatches.is_empty(), "{mismatches:?}");
-        assert_eq!(count, [80, 80, 19]);
+        assert_eq!(count, [106, 54, 19]);
     }
 }

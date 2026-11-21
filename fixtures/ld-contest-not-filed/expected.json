@@ -1,0 +1,15 @@
+{
+  "mode":"simulation",
+  "verdict":"inconclusive",
+  "bounds":{"truncated":false},
+  "simulation":{"status":"completed","completed_replications":4},
+  "properties":[{"id":"safety no_resource_overcommit","verdict":"inconclusive"},{"id":"contract K #1 authority_basis","verdict":"inconclusive"},{"id":"contract K #2 contest","verdict":"satisfied"},{"id":"contract K #2 contest_response","verdict":"inconclusive","excluded":"scenario_contest_not_filed"}],
+  "metrics":{
+    "actors":[{"actor":"Approver","work":{"mean":"4","min":"4","max":"4"}},{"actor":"Clerk","work":{"mean":"0","min":"0","max":"0"}}],
+    "cases":[
+      {"case_id":1,"terminals":[{"kind":"end","end":"ok"},{"kind":"end","end":"returned","lead_time":{"mean":"2","min":"2","max":"2"}},{"kind":"rejected","end":null}],"tasks":[{"binding":"v","wait":{"mean":"0","min":"0","max":"0"}}]},
+      {"case_id":2,"terminals":[{"kind":"end","end":"ok"},{"kind":"end","end":"returned","lead_time":{"mean":"3","min":"3","max":"3"}},{"kind":"rejected","end":null}],"tasks":[{"binding":"v","wait":{"mean":"1","min":"1","max":"1"}}]}
+    ]
+  },
+  "diagnostics":[{"code":"W-CONTEST-1","message":"scenario Day: contest Vendor on end.returned is not filed (reason \"contest frequency unknown\"); contest workload and response are not evaluated"}]
+}

@@ -394,6 +394,8 @@ pub struct Person {
 #[serde(deny_unknown_fields)]
 pub struct Capability {
     pub capability: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<crate::report::PropertyExclusion>,
     pub starts: Scalar,
     pub start_cost: Scalar,
 }

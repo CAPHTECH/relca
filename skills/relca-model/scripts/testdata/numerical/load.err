@@ -1,0 +1,5 @@
+W-CONTEST-1: scenario BusyDaySmoke: contest Vendor on end.returned is not filed (reason "contest frequency and effort are not known; structure only"); contest workload and response are not evaluated
+W-LIN-2: approvalV Approver.approve kernel approval_check targets [entry]: conditional independence under given assumes detection without a new evidence source
+W-RESP-1: a1 Approver.approve: 責務に対応する観測が無い
+W-RESP-0: Clerk has no declared responsibility
+W-RESP-0: Ledger has no declared responsibility

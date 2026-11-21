@@ -39,6 +39,7 @@ impl Error {
             Self::InvalidIr(reason) => (format!("invalid static IR for Agency: {reason}"), None),
         };
         diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message,

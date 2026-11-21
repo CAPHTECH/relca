@@ -39,10 +39,18 @@ fn argument(body: &Block, binding: BindingId, parameter: usize) -> Result<Bindin
     Err(StopReason::SemanticAbort)
 }
 
-fn origin(trace: &[Observation], mut binding: BindingId) -> BindingId {
+fn origin(m: &Model, trace: &[Observation], mut binding: BindingId) -> BindingId {
     for o in trace.iter().rev() {
         if let Occurrence::Merged(destination, source, ..) = o.event
             && destination == binding
+        {
+            binding = source;
+        }
+        if matches!(
+            o.event,
+            Occurrence::Completion(..) | Occurrence::Refusal(..)
+        ) && let Some(source) = o.binding
+            && m.loop_alias(source) == Some(binding)
         {
             binding = source;
         }
@@ -65,7 +73,7 @@ fn input(
         .ok_or(StopReason::SemanticAbort)?;
     let arg = argument(&m.process.body, binding, target.1)?;
     require(arg != CURRENT_CASE)?;
-    Ok((start, origin(&trace[..start], arg)))
+    Ok((start, origin(m, &trace[..start], arg)))
 }
 
 fn normal_completion(m: &Model, o: &Observation, target: CapabilityId) -> bool {

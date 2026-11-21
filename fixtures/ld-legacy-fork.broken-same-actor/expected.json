@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"unsupported","bounds":{"truncated":null},"simulation":{"status":"unsupported"},"diagnostics":[{"code":"U-SEM-0","message":"simulation encountered unresolved nondeterminism: replication 1, time 0, cases [1], sites [P.a,P.b]; at least two distinct successor actions remain"}]}

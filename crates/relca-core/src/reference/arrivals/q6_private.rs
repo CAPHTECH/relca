@@ -147,6 +147,7 @@ fn tree(m: &Model, times: Vec<Tick>) -> Tree<'_> {
         first_hits: vec![],
         first_closed: vec![],
         first_trees: vec![],
+        mean_hits: vec![],
         resource_worlds: None,
         depth: 0,
         m,

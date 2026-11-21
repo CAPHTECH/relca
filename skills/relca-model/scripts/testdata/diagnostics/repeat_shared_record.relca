@@ -1,0 +1,25 @@
+model Reg version "0.2" {
+  type V = enum { ok, alt }
+  observed case { flag: bool = false }
+  actor Src { source document }
+  actor Notes {}
+  actor Notes2 { instance per_case }
+  actor A { capacity 2
+    capability save() -> V { reads [Src]; registers [Notes]; duration fixed 1min; result nondet { ok } }
+    capability rd() -> V { reads [Notes]; duration fixed 1min; result nondet { ok } }
+    capability two() -> V { duration fixed 1min; result nondet { ok, alt } }
+  }
+  cut C { include [Src, Notes, Notes2, A] }
+  process P {
+    repeat R at_most 2 {
+      a = A.save()
+      j = A.two()
+      if j == ok { leave } else { again }
+    } on_limit { end limit }
+    t = A.rd()
+    end done
+  }
+  bounds { cases 2; live_tasks 4; clock 30min }
+  arrivals fixed [0min, 0min]
+  verify safety no_resource_overcommit
+}

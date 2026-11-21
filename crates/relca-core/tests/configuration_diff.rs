@@ -119,7 +119,7 @@ fn adr0008_diff_wire_literal_round_trips_without_added_or_missing_keys() {
                 "reentry": [], "horizon": []
             },
             "assumptions":[],
-            "diagnostics":[{"code":"W-CUT-0","severity":"warning","message":"undeclared","span":null}],
+            "diagnostics":[{"code":"W-CUT-0","severity":"warning","message":"undeclared","span":null,"location":null,"detail":null}],
             "bounds":{"cases":1,"live_tasks":2,"clock":10,"truncated":false},
             "properties":[{"id":"reachable end.done","verdict":"satisfied"}],
             "terminals":[{"end":"done","elapsed":{"min":5,"max":5},"work":{"min":8,"max":8},"result_at":{"min":3,"max":3}}]

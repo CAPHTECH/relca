@@ -423,6 +423,7 @@ fn failure(reason: &'static str, message: &str) -> MutationReport {
             .value = "not_applicable".into();
     }
     r.diagnostics.push(diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::E_SYN_0.into(),
         severity: diag::Severity::Error,
         message: message.into(),
@@ -530,6 +531,11 @@ fn select_site(m: &mut MutantRow, options: &Options) -> bool {
 
 fn all_sites_ran(row: &KindRow) -> bool {
     !row.mutants.is_empty()
+        && !row
+            .skipped_sites
+            .iter()
+            .flatten()
+            .any(|s| s.status == "unsupported")
         && row
             .mutants
             .iter()
@@ -583,14 +589,19 @@ fn mutate_using_raw(
 ) -> MutationReport {
     let limit = options.limit;
     let configuration = options.configuration.as_deref();
-    let original = report::work_profiles::refusal(src, configuration, scenario)
-        .map_or_else(|| baseline(src), |(r, _)| r);
+    let original = report::without_metric_checks(
+        report::work_profiles::refusal(src, configuration, scenario)
+            .map_or_else(|| baseline(src), |(r, _)| r),
+    );
     let mut r = uncomputed("original_not_decidable", limit);
     apply_options(&mut r, options);
     if configuration.is_some() {
         r.ledger.requested(configuration, scenario);
     }
     stage(&mut r, "original_check");
+    if original.unchecked.iter().any(|s| s == "metric_constraints") {
+        r.unchecked.push("metric_constraints".into());
+    }
     r.verdict = original.verdict;
     r.original_verdict = Some(original.verdict);
     r.original = Some(original.clone());
@@ -610,26 +621,41 @@ fn mutate_using_raw(
             a.affects.push_str("same_version の行も割り当て、その悪化を検出とする。ただし independence_credited は契約の検出で隠さない。");
         }
     }
-    if syntax::parse(src).is_ok_and(|ast| ast.has_merges()) {
+    if let Some(ast) = syntax::parse(src).ok().filter(|ast| ast.has_merges()) {
         r.verdict = Verdict::Unsupported;
         r.run.reason = Some("merge_feature_combination");
-        r.diagnostics.push(diag::Diagnostic {
-            code: diag::U_SEM_0.into(),
-            severity: diag::Severity::Error,
-            message: "merge_feature_combination: merge mutation sites are not connected".into(),
-            span: None,
-        });
+        r.diagnostics.push(
+            diag::Diagnostic {
+                presentation: Default::default(),
+                code: diag::U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message: "merge_feature_combination: merge mutation sites are not connected".into(),
+                span: None,
+            }
+            .merge_detail("mutate_merge_sites", ast.merge_blockers()),
+        );
+        diag::locate(src, &mut r.diagnostics);
         return r;
     }
-    if syntax::parse(src).is_ok_and(|ast| ast.has_repetition()) {
+    if syntax::parse(src).is_ok_and(|ast| {
+        if !ast.has_repetition_for_configuration(configuration) {
+            return false;
+        }
+        let selected = configuration.and_then(|name| ast.items.iter().find_map(|i| match i {
+            ast::Item::Configuration(c) if c.name.value == name => Some(c.process.value.as_str()),
+            _ => None,
+        }));
+        ast.items.iter().any(|i| matches!(i, ast::Item::Process(p) if selected.is_none_or(|name| p.name.value == name) && repeat_fork(&p.body, false)))
+    }) {
         r.verdict = Verdict::Unsupported;
         r.run.reason = Some("loop_feature_combination");
         r.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "loop_feature_combination: repeat mutation sites are not connected".into(),
             span: None,
-        });
+        }.loop_detail("mutate_repeat_fork", diag::DetailKind::AnalysisNotConnected, None, None));
         return r;
     }
     if syntax::parse(src).is_ok_and(|ast| {
@@ -651,12 +677,20 @@ fn mutate_using_raw(
         })
     }) {
         r.verdict = Verdict::Unsupported;
-        r.diagnostics.push(diag::Diagnostic {
-            code: diag::U_SEM_0.into(),
-            severity: diag::Severity::Error,
-            message: "recovery_feature_combination".into(),
-            span: None,
-        });
+        r.diagnostics.push(
+            diag::Diagnostic {
+                presentation: Default::default(),
+                code: diag::U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message: "recovery_feature_combination".into(),
+                span: None,
+            }
+            .unconnected(
+                "recovery_feature_combination",
+                "mutate_recovery",
+                Vec::new(),
+            ),
+        );
         return r;
     }
     if !matches!(original.verdict, Verdict::Satisfied | Verdict::Violated) {
@@ -668,6 +702,58 @@ fn mutate_using_raw(
     // blocked by the original check, just as it does for mutant execution.
     let context = lower::lower_with_selection(&ast, configuration, scenario)
         .expect("a decidable check already lowered this selection");
+    let repeated = context.has_loops();
+    if repeated
+        && let Some(feature) = [
+            (context.has_condition_wait(), "wait until"),
+            (
+                context
+                    .quality
+                    .as_ref()
+                    .is_some_and(|q| !q.quantiles.is_empty()),
+                "quantile",
+            ),
+            (crate::evidence_basis::present(&context), "evidence_basis"),
+            (crate::registration::present(&context), "registers"),
+            (
+                context
+                    .response_attempts()
+                    .iter()
+                    .any(|(_, r)| r.loss != ir::ResponseLoss::None || r.retry_span.is_some()),
+                "response_loss or retry",
+            ),
+        ]
+        .into_iter()
+        .find_map(|(present, name)| present.then_some(name))
+    {
+        r.verdict = Verdict::Unsupported;
+        r.run.reason = Some("loop_feature_combination");
+        r.diagnostics.push(
+            diag::Diagnostic {
+                presentation: Default::default(),
+                code: diag::U_SEM_0.into(),
+                severity: diag::Severity::Error,
+                message: format!(
+                    "loop_feature_combination: repeat mutation with {feature} is not connected"
+                ),
+                span: None,
+            }
+            .loop_detail(
+                match feature {
+                    "wait until" => "mutate_repeat_wait_until",
+                    "quantile" => "mutate_repeat_quantile",
+                    "evidence_basis" => "mutate_repeat_evidence_basis",
+                    "registers" => "mutate_repeat_registration",
+                    "response_loss or retry" => "mutate_repeat_response_or_retry",
+                    _ => "mutate_repeat",
+                },
+                diag::DetailKind::AnalysisNotConnected,
+                None,
+                None,
+            ),
+        );
+        return r;
+    }
     let direct_basis: BTreeSet<_> = context
         .contracts
         .iter()
@@ -687,6 +773,7 @@ fn mutate_using_raw(
     if !context.process.degradations.is_empty() {
         r.verdict = Verdict::Unsupported;
         r.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "q6_feature_combination: degradation mutation not connected".into(),
@@ -698,9 +785,21 @@ fn mutate_using_raw(
     let no_expiry_time = !authorities.is_empty() && no_time_elapse(&context, &original);
     stage(&mut r, "site_enumeration");
     let mut attempts = 0;
+    if repeated {
+        for i in [1, 3, 6, 7, 9] {
+            let row = &mut r.mutations[i];
+            if row.status != "not_selected" {
+                row.status = "unsupported";
+                row.reason = Some("loop_feature_combination");
+            }
+        }
+    }
     // Budget order is deliberately not display order: never steal an old trial.
     for i in [0, 2, 8, 9, 1, 4] {
         let row = &mut r.mutations[i];
+        if repeated && matches!(i, 1 | 9) {
+            continue;
+        }
         let candidates = match i {
             0 | 9 => &reads,
             1 => &authorities,
@@ -742,8 +841,8 @@ fn mutate_using_raw(
                 continue;
             }
             if let Some(edited) = budgeted_edit(c, &ast, &mut attempts, limit) {
-                let report = execute(src, &edited);
-                let comparison = match &c.edit {
+                let report = report::without_metric_checks(execute(src, &edited));
+                let mut comparison = match &c.edit {
                     Edit::Summary {
                         sources, consumer, ..
                     } => compare_summary(
@@ -755,6 +854,14 @@ fn mutate_using_raw(
                     ),
                     _ => compare_with_basis(i, &original, &report, &direct_basis),
                 };
+                if repeated
+                    && comparison.result == "undetected"
+                    && comparison.reason != Some("independence_credited")
+                    && loop_check_withheld(i, c, &original)
+                {
+                    comparison.result = "unsupported";
+                    comparison.reason = Some("loop_control");
+                }
                 m.result = comparison.result;
                 m.reason = comparison.reason;
                 m.assigned_changes = comparison.assigned;
@@ -766,16 +873,18 @@ fn mutate_using_raw(
             row.mutants.push(m);
         }
     }
-    kind7(src, &ast, &mut r, &mut attempts, options, process);
-    response::run(
-        src,
-        &ast,
-        &context,
-        &original,
-        &mut r,
-        (&mut attempts, options),
-        &mut execute,
-    );
+    if !repeated {
+        kind7(src, &ast, &mut r, &mut attempts, options, process);
+        response::run(
+            src,
+            &ast,
+            &context,
+            &original,
+            &mut r,
+            (&mut attempts, options),
+            &mut execute,
+        );
+    }
     r.run.candidates_total = Some(r.mutations.iter().filter_map(|row| row.candidates).sum());
     for m in r
         .mutations
@@ -976,6 +1085,10 @@ fn lexical_ends(block: &ast::Block, out: &mut Vec<String>) {
     for s in block {
         match &s.value {
             ast::Stmt::End(e) => add(out, &e.value),
+            ast::Stmt::Repeat { body, on_limit, .. } => {
+                lexical_ends(body, out);
+                lexical_ends(on_limit, out);
+            }
             ast::Stmt::Fork { join, .. } => {
                 if let ast::Join::Any { if_none, .. } = &join.value {
                     add(out, &if_none.value)
@@ -1208,10 +1321,14 @@ fn kind7(
     }
 }
 fn fold(rows: &[KindRow]) -> Verdict {
-    if rows
-        .iter()
-        .any(|r| r.status == "unsupported" || r.mutants.iter().any(|m| m.result == "unsupported"))
-    {
+    if rows.iter().any(|r| {
+        r.status == "unsupported"
+            || r.mutants.iter().any(|m| m.result == "unsupported")
+            || r.skipped_sites
+                .iter()
+                .flatten()
+                .any(|s| s.status == "unsupported")
+    }) {
         return Verdict::Unsupported;
     }
     let results: Vec<_> = rows
@@ -1230,6 +1347,25 @@ fn fold(rows: &[KindRow]) -> Verdict {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Branch {
+    Then,
+    Else,
+    Repeat,
+    OnLimit,
+}
+impl Branch {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Then => "then",
+            Self::Else => "else",
+            Self::Repeat => "repeat",
+            Self::OnLimit => "on_limit",
+        }
+    }
+}
+type Path = Vec<(usize, Branch)>;
+
 #[derive(Debug, Clone)]
 enum Edit {
     Authority {
@@ -1238,7 +1374,7 @@ enum Edit {
     },
     Summary {
         process: usize,
-        path: Vec<(usize, bool)>,
+        path: Path,
         index: usize,
         consumer: ConsumerPath,
         binding: String,
@@ -1252,14 +1388,14 @@ enum Edit {
     },
     Guard {
         process: usize,
-        path: Vec<(usize, bool)>,
+        path: Path,
         index: usize,
         keep_then: bool,
     },
 }
 #[derive(Debug, Clone)]
 struct ConsumerPath {
-    path: Vec<(usize, bool)>,
+    path: Path,
     index: usize,
     branch: Option<usize>,
     binding: String,
@@ -1366,18 +1502,7 @@ impl Candidate {
                 let ast::Item::Process(p) = &mut model.items[*process] else {
                     unreachable!()
                 };
-                let mut block = &mut p.body;
-                for (i, then) in path {
-                    let ast::Stmt::If {
-                        then_body,
-                        else_body,
-                        ..
-                    } = &mut block[*i].value
-                    else {
-                        unreachable!()
-                    };
-                    block = if *then { then_body } else { else_body };
-                }
+                let block = block_at(&mut p.body, path);
                 let ast::Stmt::If {
                     then_body,
                     else_body,
@@ -1387,11 +1512,47 @@ impl Candidate {
                     unreachable!()
                 };
                 let kept = if *keep_then { then_body } else { else_body }.clone();
+                if kept
+                    .last()
+                    .is_some_and(|s| matches!(s.value, ast::Stmt::Again | ast::Stmt::Leave))
+                {
+                    // An unconditional round transfer cannot reach this block's continuation.
+                    block.truncate(*index + 1);
+                }
                 block.splice(*index..=*index, kept);
             }
         }
         model
     }
+}
+
+fn loop_check_withheld(kind: usize, candidate: &Candidate, report: &report::Report) -> bool {
+    let Some(agency) = report
+        .agency
+        .as_ref()
+        .and_then(crate::agency::AgencyDerivation::as_derived)
+    else {
+        return false;
+    };
+    if kind == 8 {
+        // Process refusal is withdrawn for the whole model, not just loop sites.
+        return agency.unchecked.iter().any(|x| x == "loop_control");
+    }
+    let (4, Edit::Summary { consumer, .. }) = (kind, &candidate.edit) else {
+        return false;
+    };
+    let lineage = |name: &str| {
+        agency
+            .lineage
+            .iter()
+            .any(|l| l.call == name && l.capability == consumer.capability)
+    };
+    !lineage(&consumer.binding)
+        && report.repetition.as_ref().is_some_and(|r| {
+            r.sites
+                .iter()
+                .any(|s| s.origin.call_site == consumer.binding && lineage(&s.instance))
+        })
 }
 fn site(src: &str, span: diag::Span) -> Site {
     let prefix = &src[..span.start];
@@ -1417,7 +1578,11 @@ fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
     for stmt in block {
         match &stmt.value {
             ast::Stmt::Merge { .. } | ast::Stmt::Yield(_) => {}
-            ast::Stmt::Repeat { .. } | ast::Stmt::Again | ast::Stmt::Leave => {}
+            ast::Stmt::Again | ast::Stmt::Leave => {}
+            ast::Stmt::Repeat { body, on_limit, .. } => {
+                calls(body, out);
+                calls(on_limit, out);
+            }
             ast::Stmt::Call(c) => {
                 out.push(c);
                 if let Some(body) = &c.recovery {
@@ -1440,6 +1605,21 @@ fn calls<'a>(block: &'a ast::Block, out: &mut Vec<&'a ast::Call>) {
             | ast::Stmt::StopReceiptUnknown => {}
         }
     }
+}
+
+fn repeat_fork(block: &ast::Block, inside: bool) -> bool {
+    block.iter().any(|s| match &s.value {
+        ast::Stmt::Repeat { body, on_limit, .. } => {
+            repeat_fork(body, true) || repeat_fork(on_limit, true)
+        }
+        ast::Stmt::If {
+            then_body,
+            else_body,
+            ..
+        } => repeat_fork(then_body, inside) || repeat_fork(else_body, inside),
+        ast::Stmt::Fork { .. } => inside,
+        _ => false,
+    })
 }
 fn read_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
     let mut records = BTreeSet::new();
@@ -1518,17 +1698,15 @@ fn read_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candi
     }
     out
 }
-fn block_at<'a>(mut block: &'a mut ast::Block, path: &[(usize, bool)]) -> &'a mut ast::Block {
-    for (i, then) in path {
-        let ast::Stmt::If {
-            then_body,
-            else_body,
-            ..
-        } = &mut block[*i].value
-        else {
-            unreachable!()
+fn block_at<'a>(mut block: &'a mut ast::Block, path: &[(usize, Branch)]) -> &'a mut ast::Block {
+    for (i, branch) in path {
+        block = match (&mut block[*i].value, branch) {
+            (ast::Stmt::If { then_body, .. }, Branch::Then) => then_body,
+            (ast::Stmt::If { else_body, .. }, Branch::Else) => else_body,
+            (ast::Stmt::Repeat { body, .. }, Branch::Repeat) => body,
+            (ast::Stmt::Repeat { on_limit, .. }, Branch::OnLimit) => on_limit,
+            _ => unreachable!(),
         };
-        block = if *then { then_body } else { else_body };
     }
     block
 }
@@ -1610,7 +1788,7 @@ fn authority_sites_selected(
     out
 }
 
-fn call_paths(block: &ast::Block, path: &mut Vec<(usize, bool)>, out: &mut Vec<ConsumerPath>) {
+fn call_paths(block: &ast::Block, path: &mut Path, out: &mut Vec<ConsumerPath>) {
     for (index, s) in block.iter().enumerate() {
         let mut add = |c: &ast::Call, branch| {
             out.push(ConsumerPath {
@@ -1633,12 +1811,19 @@ fn call_paths(block: &ast::Block, path: &mut Vec<(usize, bool)>, out: &mut Vec<C
                 else_body,
                 ..
             } => {
-                path.push((index, true));
+                path.push((index, Branch::Then));
                 call_paths(then_body, path, out);
                 path.pop();
-                path.push((index, false));
+                path.push((index, Branch::Else));
                 call_paths(else_body, path, out);
                 path.pop();
+            }
+            ast::Stmt::Repeat { body, on_limit, .. } => {
+                for (branch, child) in [(Branch::Repeat, body), (Branch::OnLimit, on_limit)] {
+                    path.push((index, branch));
+                    call_paths(child, path, out);
+                    path.pop();
+                }
             }
             _ => {}
         }
@@ -1646,23 +1831,25 @@ fn call_paths(block: &ast::Block, path: &mut Vec<(usize, bool)>, out: &mut Vec<C
 }
 
 fn ast_call<'a>(block: &'a ast::Block, p: &ConsumerPath) -> &'a ast::Call {
-    let mut block = block;
-    for (i, then) in &p.path {
-        let ast::Stmt::If {
-            then_body,
-            else_body,
-            ..
-        } = &block[*i].value
-        else {
-            unreachable!()
-        };
-        block = if *then { then_body } else { else_body };
-    }
-    match &block[p.index].value {
+    match &ast_block_at(block, &p.path)[p.index].value {
         ast::Stmt::Call(c) => c,
         ast::Stmt::Fork { branches, .. } => &branches[p.branch.unwrap()],
         _ => unreachable!(),
     }
+}
+
+fn ast_block_at<'a>(block: &'a ast::Block, path: &[(usize, Branch)]) -> &'a ast::Block {
+    let mut block = block;
+    for (i, branch) in path {
+        block = match (&block[*i].value, branch) {
+            (ast::Stmt::If { then_body, .. }, Branch::Then) => then_body,
+            (ast::Stmt::If { else_body, .. }, Branch::Else) => else_body,
+            (ast::Stmt::Repeat { body, .. }, Branch::Repeat) => body,
+            (ast::Stmt::Repeat { on_limit, .. }, Branch::OnLimit) => on_limit,
+            _ => unreachable!(),
+        };
+    }
+    block
 }
 
 fn written_variables(cap: &ir::Capability) -> BTreeSet<ir::StateVarId> {
@@ -1856,7 +2043,18 @@ fn summary_sites(src: &str, model: &ast::Model, context: &ir::Model) -> Vec<Cand
                 continue;
             }
             let mut guarded = BTreeSet::new();
-            later_guard_variables(&context.process.body, c.span.start, &mut guarded);
+            // A guard before a duplicate in the source can still read it on
+            // the next round. Include the whole surrounding loop body.
+            let after = path
+                .path
+                .iter()
+                .position(|(_, b)| *b == Branch::Repeat)
+                .map_or(c.span.start, |pos| {
+                    ast_block_at(&p.body, &path.path[..pos])[path.path[pos].0]
+                        .span
+                        .start
+                });
+            later_guard_variables(&context.process.body, after, &mut guarded);
             guarded.retain(|v| {
                 matches!(
                     context.state_variables[v.0].kind,
@@ -1886,8 +2084,8 @@ fn summary_sites(src: &str, model: &ast::Model, context: &ir::Model) -> Vec<Cand
                 .find(|n| !names.contains(n))
                 .unwrap();
             let mut label = "body".to_string();
-            for (i, then) in &path.path {
-                label.push_str(&format!("/{i}/{}", if *then { "then" } else { "else" }));
+            for (i, branch) in &path.path {
+                label.push_str(&format!("/{i}/{}", branch.label()));
             }
             label.push_str(&format!("/{}", path.index));
             for consumer in consumers.into_iter().skip(1) {
@@ -1919,20 +2117,25 @@ fn summary_sites(src: &str, model: &ast::Model, context: &ir::Model) -> Vec<Cand
     out
 }
 
-fn has_end(block: &ast::Block) -> bool {
+fn transfers_control(block: &ast::Block, round: bool) -> bool {
     block.iter().any(|s| match &s.value {
         ast::Stmt::End(_) => true,
+        ast::Stmt::Again | ast::Stmt::Leave => round,
+        ast::Stmt::Repeat { body, on_limit, .. } => {
+            transfers_control(body, false) || transfers_control(on_limit, false)
+        }
         ast::Stmt::If {
             then_body,
             else_body,
             ..
-        } => has_end(then_body) || has_end(else_body),
+        } => transfers_control(then_body, round) || transfers_control(else_body, round),
         _ => false,
     })
 }
-fn has_call(block: &ast::Block) -> bool {
+fn has_call(block: &[ast::Spanned<ast::Stmt>]) -> bool {
     block.iter().any(|s| match &s.value {
         ast::Stmt::Call(_) | ast::Stmt::Fork { .. } => true,
+        ast::Stmt::Repeat { body, on_limit, .. } => has_call(body) || has_call(on_limit),
         ast::Stmt::If {
             then_body,
             else_body,
@@ -1940,6 +2143,23 @@ fn has_call(block: &ast::Block) -> bool {
         } => has_call(then_body) || has_call(else_body),
         _ => false,
     })
+}
+// Follow this round's possible paths, without treating a transfer in a
+// different repeat as a transfer of the current round.
+fn reaches_again(block: &[ast::Spanned<ast::Stmt>], after_block: bool) -> bool {
+    block
+        .iter()
+        .rev()
+        .fold(after_block, |after, s| match &s.value {
+            ast::Stmt::Again => true,
+            ast::Stmt::Leave | ast::Stmt::End(_) => false,
+            ast::Stmt::If {
+                then_body,
+                else_body,
+                ..
+            } => reaches_again(then_body, after) || reaches_again(else_body, after),
+            _ => after,
+        })
 }
 fn bindings(c: &ast::Cond, out: &mut Vec<String>) {
     match c {
@@ -1958,6 +2178,11 @@ fn bindings(c: &ast::Cond, out: &mut Vec<String>) {
     }
 }
 fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Candidate> {
+    #[derive(Clone, Copy)]
+    struct RoundContinuation {
+        calls_after_again: bool,
+        again_after_block: bool,
+    }
     struct Walker<'a> {
         src: &'a str,
         process: usize,
@@ -1969,9 +2194,10 @@ fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Cand
         fn visit(
             &mut self,
             block: &ast::Block,
-            path: &mut Vec<(usize, bool)>,
+            path: &mut Path,
             prefix: &str,
             parent_continuation: bool,
+            round: Option<RoundContinuation>,
         ) {
             for (i, stmt) in block.iter().enumerate() {
                 if let ast::Stmt::If {
@@ -1980,12 +2206,24 @@ fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Cand
                     else_body,
                 } = &stmt.value
                 {
-                    let continuation = parent_continuation || has_call(&block[i + 1..].to_vec());
+                    let continuation = parent_continuation || has_call(&block[i + 1..]);
+                    let after_if = round.map(|r| RoundContinuation {
+                        again_after_block: reaches_again(&block[i + 1..], r.again_after_block),
+                        ..r
+                    });
                     let label = format!("{prefix}/{i}");
+                    let in_body = path
+                        .iter()
+                        .any(|(_, b)| matches!(b, Branch::Repeat | Branch::OnLimit));
                     for (keep_then, kept, discarded) in
                         [(true, then_body, else_body), (false, else_body, then_body)]
                     {
-                        if has_end(discarded) && (has_call(kept) || continuation) {
+                        let later_round = after_if.is_some_and(|r| {
+                            r.calls_after_again && reaches_again(kept, r.again_after_block)
+                        });
+                        if transfers_control(discarded, in_body)
+                            && (has_call(kept) || continuation || later_round)
+                        {
                             let branch = if keep_then { "then" } else { "else" };
                             let mut s = site(self.src, stmt.span);
                             s.process = Some(self.name.into());
@@ -2006,12 +2244,48 @@ fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Cand
                             });
                         }
                     }
-                    path.push((i, true));
-                    self.visit(then_body, path, &format!("{label}/then"), continuation);
+                    path.push((i, Branch::Then));
+                    self.visit(
+                        then_body,
+                        path,
+                        &format!("{label}/then"),
+                        continuation,
+                        after_if,
+                    );
                     path.pop();
-                    path.push((i, false));
-                    self.visit(else_body, path, &format!("{label}/else"), continuation);
+                    path.push((i, Branch::Else));
+                    self.visit(
+                        else_body,
+                        path,
+                        &format!("{label}/else"),
+                        continuation,
+                        after_if,
+                    );
                     path.pop();
+                } else if let ast::Stmt::Repeat {
+                    at_most,
+                    body,
+                    on_limit,
+                    ..
+                } = &stmt.value
+                {
+                    let continuation = parent_continuation || has_call(&block[i + 1..]);
+                    let label = format!("{prefix}/{i}");
+                    for (kind, child) in [(Branch::Repeat, body), (Branch::OnLimit, on_limit)] {
+                        path.push((i, kind));
+                        self.visit(
+                            child,
+                            path,
+                            &format!("{label}/{}", kind.label()),
+                            continuation,
+                            (kind == Branch::Repeat).then(|| RoundContinuation {
+                                calls_after_again: (at_most.value > 1 && has_call(body))
+                                    || has_call(on_limit),
+                                again_after_block: false,
+                            }),
+                        );
+                        path.pop();
+                    }
                 }
             }
         }
@@ -2033,7 +2307,7 @@ fn guard_sites(src: &str, model: &ast::Model, process: Option<&str>) -> Vec<Cand
                     .collect(),
                 out: vec![],
             };
-            w.visit(&p.body, &mut vec![], "body", false);
+            w.visit(&p.body, &mut vec![], "body", false, None);
             out.extend(w.out);
         }
     }
@@ -3275,6 +3549,76 @@ mod tests {
         assert_eq!(count, 286);
     }
     #[test]
+    fn m_guard_promoted_if_preserves_round_transfers() {
+        let src = r#"model Promoted version "0.2" {
+            type V = enum { pass, fail }
+            observed case { use_first: bool = true }
+            actor A { capacity 1
+                capability review() -> V { duration fixed 1min; result nondet { pass, fail } }
+                capability finish() -> V { duration fixed 2min; result nondet { pass } }
+            }
+            process Flow {
+                repeat rounds at_most 2 {
+                    r = A.review();
+                    if use_first == true {
+                        leave
+                    } else {
+                        if r == fail { again } else {}
+                    }
+                    f = A.finish(); leave
+                } on_limit { end limit }
+                end done
+            }
+            bounds { cases 1; live_tasks 1; clock 10min }
+            verify safety no_resource_overcommit
+        }"#;
+        let ast = syntax::parse(src).unwrap();
+        let candidates = guard_sites(src, &ast, None);
+        for (branch, expected) in [
+            ("keep_then", vec![("done", 1, 1, 1, 1)]),
+            (
+                "keep_else",
+                vec![("done", 3, 4, 3, 4), ("limit", 2, 2, 2, 2)],
+            ),
+        ] {
+            // keep_then promotes a direct leave, truncating the parent suffix.
+            // keep_else promotes a partial transfer: after F, the next review
+            // must run; the finish call is reachable only after P. FF costs 2;
+            // P costs 1+2; FP costs 1+1+2 (time and work are equal here).
+            let id = format!("Flow:body/0/repeat/1:{branch}");
+            let c = candidates
+                .iter()
+                .find(|c| c.identity == id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "missing {id}: {:?}",
+                        candidates.iter().map(|c| &c.identity).collect::<Vec<_>>()
+                    )
+                });
+            let m = lower::lower(&c.apply(&ast)).unwrap();
+            let r = reference::explore(&m);
+            assert_eq!(r.stop, reference::StopReason::Complete);
+            for o in [engine::explore(&m), r.outcome] {
+                assert!(!o.truncated);
+                let mut got: Vec<_> = o
+                    .terminals
+                    .iter()
+                    .map(|t| {
+                        (
+                            m.ends[t.end.0].as_str(),
+                            t.elapsed.min,
+                            t.elapsed.max,
+                            t.work.min,
+                            t.work.max,
+                        )
+                    })
+                    .collect();
+                got.sort_unstable();
+                assert_eq!(got, expected, "{id}");
+            }
+        }
+    }
+    #[test]
     fn m_guard_keeps_nested_block_and_parent_suffix() {
         let src = source("mut-guard").replace(
             "if po == pass { } else { end returned }",
@@ -3685,6 +4029,7 @@ mod tests {
         let runtime_u = report::check_ast_using(&src, &ast, |m| {
             let mut out = engine::explore(m);
             out.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "injected backend refusal".into(),

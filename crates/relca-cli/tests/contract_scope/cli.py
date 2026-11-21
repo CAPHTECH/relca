@@ -726,9 +726,15 @@ class Evidence(unittest.TestCase):
         verdict(out, value, 'inconclusive')
         scope(value, 'contract Evidence #1 evidence_basis', 'Evidence')
 
-    def test_in_scope_evidence_keeps_its_existing_unsupported_command(self):
+    def test_in_scope_evidence_is_compared_and_witnesses_stay_unchecked(self):
         source = h.scoped(h.evidence(), 'Evidence', 'Old,New')
-        refuse(source, 'U-SEM-0', 'evidence_basis_unsupported_command', 'compare', ('--plans', 'Old,New', '--mode', 'exhaustive'))
+        out, value = invoke(source, 'compare', ('--plans', 'Old,New', '--mode', 'exhaustive'))
+        # Old does not call the approval capability, New calls it and reads Doc.
+        verdict(out, value, 'vacuous')
+        row, = (r for r in value['tables']['properties'] if r['id'] == 'contract Evidence #1 evidence_basis')
+        assert [c['status'] for c in row['values']] == ['applied', 'applied'], row
+        assert [c['verdict'] for c in row['values']] == ['vacuous', 'satisfied'], row
+        assert 'contract_witnesses' in value['unchecked']
 
 
 class ClosedContest(unittest.TestCase):
@@ -741,8 +747,12 @@ NO_REQUEST = 'at least one verification request is required'
 def zero_sensitivity_diagnostics(value, source):
     # Full arrays, including span, severity and every message. No unresolved
     # target diagnostic is permitted: lower failed before target resolution.
+    model = source.rstrip()
     expected = {'code': 'U-SEM-0', 'severity': 'error', 'message': NO_REQUEST,
-                'span': {'start': 0, 'end': len(source.rstrip())}}
+                'span': {'start': 0, 'end': len(model.encode('utf-8'))},
+                'location': {'line': 1, 'column': 1, 'end_line': model.count('\n') + 1,
+                             'end_column': len(model.rsplit('\n', 1)[-1]) + 1},
+                'detail': None}
     wrapped = dict(expected, message='sensitivity_model_invalid: point "p0": ' + NO_REQUEST)
     assert value['diagnostics'] == [wrapped], value['diagnostics']
     assert value['points'][0]['report']['diagnostics'] == [expected], value['points'][0]['report']['diagnostics']

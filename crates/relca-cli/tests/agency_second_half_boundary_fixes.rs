@@ -239,7 +239,7 @@ fn m1_control_not_called_keep_fallback_is_accepted() {
 }
 
 #[test]
-fn m2_unseparated_reads_keep_the_pre_c5_syntax_diagnostic_bytes() {
+fn m2_unseparated_reads_keep_the_current_syntax_diagnostic() {
     // Pre-C5 parser: ident, then `,` or `]` (names("]")); at PO it says
     // "expected ]". The diagnostic span is the PO token.
     for reads in ["reads [Doc PO]", "reads [Doc", "reads [Doc, PO X]"] {
@@ -262,8 +262,11 @@ fn m2_unseparated_reads_keep_the_pre_c5_syntax_diagnostic_bytes() {
         let token = (start, start + len);
         assert_eq!(
             v["diagnostics"][0],
-            json!({"code":"E-SYN-0","severity":"error","message":"expected ]",
-                   "span":{"start":token.0,"end":token.1}}),
+            relca_test_support::diagnostic::expected_row(
+                &source,
+                json!({"code":"E-SYN-0","severity":"error","message":"expected ]",
+                   "span":{"start":token.0,"end":token.1}})
+            ),
             "{reads}"
         );
     }

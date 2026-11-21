@@ -20,11 +20,21 @@ fn diagnostics(v: &Value, prefix: &str) -> String {
         .unwrap()
         .iter()
         .map(|d| {
-            format!(
+            let header = format!(
                 "{prefix}{}: {}\n",
                 d["code"].as_str().unwrap(),
                 d["message"].as_str().unwrap()
-            )
+            );
+            if prefix == "sensitivity: " && ["a", "b"].into_iter().any(|point| {
+                d["message"] == format!("sensitivity_feature_combination: point {point:?}: sensitivity_feature_combination: point {point:?}: contract projection: q6_feature_combination: degradation sensitivity not connected")
+            }) {
+                assert_eq!(d["detail"], json!({
+                    "reason":"sensitivity_feature_combination", "cause":"sensitivity_degradation_projection",
+                    "kind":"analysis_not_connected", "blockers":[], "see":"docs/guide/dsl.md#解析が未接続のとき"
+                }));
+                assert!(d["location"].is_null());
+                header + "  kind: analysis_not_connected\n  cause: sensitivity_degradation_projection\n  see: docs/guide/dsl.md#解析が未接続のとき\n"
+            } else { header }
         })
         .collect()
 }

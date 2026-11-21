@@ -17,6 +17,7 @@ fn tree(g: &input::Graph, i: usize) -> FirstTree {
         .collect();
     FirstTree {
         views: vec![vec![g.views[i].clone()]],
+        means: vec![],
         random: false,
         children,
     }

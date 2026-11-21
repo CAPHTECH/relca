@@ -132,6 +132,15 @@ def expected_wire(raw,old_source,new_source,map_offset,name,grain):
                     end_line,end_col=position(new_source,b)
                     for key,item in [('line',line),('column',col),('end_line',end_line),('end_column',end_col)]:
                         put(path+'/'+key,item)
+                if {'code','message','severity','location','detail'} <= value.keys():
+                    assert value['detail'] is None
+                    line,col=position(old_source,start)
+                    end_line,end_col=position(old_source,end)
+                    assert value['location']==dict(line=line,column=col,end_line=end_line,end_column=end_col)
+                    line,col=position(new_source,a)
+                    end_line,end_col=position(new_source,b)
+                    for key,item in [('line',line),('column',col),('end_line',end_line),('end_column',end_col)]:
+                        put(path+'/location/'+key,item)
             for key,item in value.items():
                 walk(item,path+'/'+key.replace('~','~0').replace('/','~1'))
         elif isinstance(value,list):

@@ -1,0 +1,1 @@
+{"verdict":"violated","bounds":{"truncated":false},"properties":[{"id":"contract K #1 invariant","verdict":"violated"}],"absent_diagnostics":["W-DEADLOCK-0"]}

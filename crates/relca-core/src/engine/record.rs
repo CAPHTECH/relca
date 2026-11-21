@@ -81,8 +81,7 @@ pub(super) fn validate(model: &ir::Model) -> EngineResult<()> {
     {
         for id in &k.given {
             let v = model
-                .state_variables
-                .get(id.0)
+                .declared_state_variable(*id)
                 .ok_or("invalid kernel given")?;
             if model
                 .types

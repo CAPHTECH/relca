@@ -48,6 +48,23 @@ fn invoke(name: &str, source: &str, diff: bool, exit: i32) -> Value {
                 d["code"].as_str().unwrap(),
                 d["message"].as_str().unwrap()
             ));
+            if name.starts_with("contest-true-") || name.starts_with("contest-false-") {
+                if d["message"] == "condition_wait_contest_unsupported" {
+                    stderr.push_str(concat!(
+                        "  at 12:27\n  kind: analysis_not_connected\n  cause: condition_wait\n",
+                        "  blocked by: feature at 10:2\n  blocked by: contest at 12:27\n",
+                        "  see: docs/guide/dsl.md#解析が未接続のとき\n",
+                    ));
+                }
+            } else if diff
+                && name != "diff-control"
+                && d["message"] == "condition_wait_diff_unsupported"
+            {
+                stderr.push_str(concat!(
+                    "  kind: analysis_not_connected\n  cause: diff_condition_wait\n",
+                    "  see: docs/guide/dsl.md#解析が未接続のとき\n",
+                ));
+            }
         }
     }
     assert_eq!(output.stderr, stderr.as_bytes());

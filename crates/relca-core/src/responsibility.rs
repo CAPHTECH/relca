@@ -243,6 +243,7 @@ impl TimeFrame {
 
 pub(crate) fn invalid() -> diag::Diagnostic {
     diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::U_SEM_0.into(),
         severity: diag::Severity::Error,
         message: "invalid responsibility/contest static IR".into(),
@@ -251,6 +252,7 @@ pub(crate) fn invalid() -> diag::Diagnostic {
 }
 pub(crate) fn warning(code: &str, message: String, span: diag::Span) -> diag::Diagnostic {
     diag::Diagnostic {
+        presentation: Default::default(),
         code: code.into(),
         severity: diag::Severity::Warning,
         message,

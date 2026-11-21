@@ -22,6 +22,7 @@ fn model(same_actor: bool, renamed: bool) -> ir::Model {
     let mut m = crate::lower::lower(&crate::syntax::parse(&source).unwrap()).unwrap();
     m.horizon = Some(10);
     m.scenario = Some(ir::ScenarioRecord {
+        contests_not_filed: Default::default(),
         name: "Private".into(),
         span: m.process.span,
     });

@@ -270,7 +270,10 @@ fn raw_wires_agree_at_both_matchers_for_every_materialized_input() {
                 diagnostics("explain: ", &v["explanation"]["diagnostics"]);
             }
         }
-        assert_eq!(out.stderr, stderr.as_bytes());
+        assert_eq!(
+            relca_test_support::diagnostic::stderr_facts(&out.stderr, &v),
+            stderr.as_bytes()
+        );
         assert_eq!(
             out.status.code(),
             Some(match v["verdict"].as_str().unwrap() {

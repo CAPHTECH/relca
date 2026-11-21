@@ -77,17 +77,17 @@ fn expected() -> Value {
         &["--from", "ToBeA", "--to", "ToBeB"],
         1,
     );
-    for (id, cfg) in [
-        ("as-is", "AsIs"),
-        ("to-be-p", "ToBeP"),
-        ("to-be-a", "ToBeA"),
+    for (id, cfg, exit) in [
+        ("as-is", "AsIs", 2),
+        ("to-be-p", "ToBeP", 2),
+        ("to-be-a", "ToBeA", 2),
     ] {
         add(
             &format!("busyday-{id}-simulate"),
             "busyday",
             "simulate",
-            &["--configuration", cfg, "--scenario", "BusyDay"],
-            4,
+            &["--configuration", cfg, "--scenario", "BusyDaySmoke"],
+            exit,
         );
     }
     add(
@@ -100,9 +100,9 @@ fn expected() -> Value {
             "--mode",
             "simulation",
             "--scenario",
-            "BusyDay",
+            "BusyDaySmoke",
         ],
-        4,
+        2,
     );
     add(
         "p1-compare-quantile",
@@ -707,30 +707,163 @@ fn live_rule_is_static_full_exemption_not_conditional_quality() {
 }
 
 #[test]
-fn live_busyday_declares_120_arrivals_and_rejects_unresolved_choices() {
+fn live_busyday_smoke_completes_12_arrivals_without_contests() {
     for id in [
         "busyday-as-is-simulate",
         "busyday-to-be-p-simulate",
         "busyday-to-be-a-simulate",
     ] {
         let v = live(id);
-        assert_eq!(v["verdict"], "unsupported");
+        assert_eq!(v["verdict"], "inconclusive");
+        assert_eq!(v["simulation"]["completed_replications"], 2);
+        assert!(v["metrics"]["overall"]["work"]["mean"].is_string());
         assert_eq!(
             v["scenario"]["arrivals"],
-            json!({"form":"fixed_every","every":4,"from":0,"until":480,"count":120})
+            json!({"form":"fixed_every","every":4,"from":0,"until":48,"count":12})
         );
         assert_eq!(v["scenario"]["horizon"], 960);
-        assert_eq!(v["scenario"]["drain"], json!({"from":476,"until":960}));
+        assert_eq!(v["scenario"]["drain"], json!({"from":44,"until":960}));
         assert!(
             v["diagnostics"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|d| d["code"] == "U-SEM-0"
-                    && d["message"].as_str().unwrap().contains("successor actions"))
+                .any(|d| d["code"] == "W-CONTEST-1")
         );
     }
-    assert_eq!(live("busyday-compare-simulation")["verdict"], "unsupported");
+    assert_eq!(
+        live("busyday-compare-simulation")["verdict"],
+        "inconclusive"
+    );
+}
+
+#[test]
+fn repeat_with_call_order_matches_the_written_out_process_in_check_and_compare() {
+    let base = include_str!("../../../fixtures/agy-vp-repeat-control/model.relca");
+    assert_eq!(base.matches("result nondet { pass,fail }").count(), 2);
+    let input = base.replace("result nondet { pass,fail }", "result nondet { pass }");
+    let (head, rest) = input.split_once("process Main {").unwrap();
+    let (body, tail) = rest.split_once("\ncut C").unwrap();
+    let tail = tail.trim_end().strip_suffix('}').unwrap();
+    let written = r#"
+        r1=Office.inspect(); q1=Office.second();
+        if r1==pass || q1==pass { end done } else {
+            c1=Office.correct(); r2=Office.inspect(); q2=Office.second();
+            if r2==pass || q2==pass { end done } else {
+                c2=Office.correct(); r3=Office.inspect(); q3=Office.second();
+                if r3==pass || q3==pass { end done } else {
+                    c3=Office.correct(); e=Office.escalate(); end escalated
+                }
+            }
+        }
+    "#;
+    let source = format!(
+        "{head}process Main {{{body}\nprocess Written {{{written}}}\ncut C{tail}\narrivals fixed [0min]\npolicy fifo tie_by case_id then call_order\nconfiguration A {{ cut C; process Main }}\nconfiguration B {{ cut C; process Written }}\nproperty case.Done = reached(end.done)\nmetric mean.Lead = mean(elapsed, case.Done)\n}}"
+    );
+
+    // Both inspections pass in round one. They take one minute each, so
+    // the sole case finishes at minute two, without correction or escalation.
+    let check_hand_value = |report: &Value| {
+        assert_eq!(report["verdict"], "satisfied");
+        assert_eq!(
+            report["case_outcomes"][0]["terminals"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            report["case_outcomes"][0]["terminals"][0]["completed_at"],
+            json!({"min":2,"max":2})
+        );
+        assert_eq!(
+            report["quality"]["means"][0]["value"],
+            json!({"lower":"2","upper":"2","basis":"exact","reason":null})
+        );
+    };
+    let checks = ["A", "B"].map(|name| {
+        let (checked, exit) = edited(&source, "check", &["--configuration", name]);
+        assert_eq!(exit, 0, "{name}: {}", checked["diagnostics"]);
+        check_hand_value(&checked);
+        checked
+    });
+    assert!(checks[0]["repetition"].is_object());
+    assert!(checks[1]["repetition"].is_null());
+    assert_eq!(checks[0]["case_outcomes"], checks[1]["case_outcomes"]);
+    let (compared, exit) = edited(
+        &source,
+        "compare",
+        &["--plans", "A,B", "--mode", "exhaustive"],
+    );
+    assert_eq!(exit, 0, "{}", compared["diagnostics"]);
+    assert_eq!(compared["verdict"], "satisfied");
+    let plans = compared["plans"].as_array().unwrap();
+    assert_eq!(plans.len(), 2);
+    for ((plan, name), checked) in plans.iter().zip(["A", "B"]).zip(checks) {
+        assert_eq!(plan["configuration"], name);
+        check_hand_value(&plan["report"]);
+        assert_eq!(plan["report"]["case_outcomes"], checked["case_outcomes"]);
+    }
+    assert_eq!(
+        compared["tables"]["repetition"][0]["values"][0]["value"]["rounds"],
+        json!({"min":1,"max":1})
+    );
+}
+
+#[test]
+fn not_filed_response_cannot_be_used_as_a_cohort_condition() {
+    let input = include_str!("../../../fixtures/ld-contest-not-filed/model.relca");
+    let marker = "  verify safety";
+    assert_eq!(input.matches(marker).count(), 1);
+    let source = input.replace(marker, "  property case.Response = reached(contract.K.contest_response)\n  metric cohort.Responses = expected(count(case.Response)) / arrivals\n  verify metric cohort.Responses >= 1\n  verify safety");
+    let (report, exit) = edited(&source, "simulate", &["--scenario", "Day"]);
+    assert_eq!(exit, 4);
+    assert_eq!(report["verdict"], "unsupported");
+    assert!(report["diagnostics"].as_array().unwrap().iter().any(|d| {
+        d["code"] == "U-SYN-0" && d["message"] == "unsupported syntax: multi-level state path"
+    }));
+}
+
+#[test]
+fn live_busyday_full_arrivals_complete_one_replication_with_load_metrics() {
+    let original = source("busyday");
+    let declaration = "simulation replications 100 seed";
+    assert_eq!(original.matches(declaration).count(), 1);
+    let input = original.replacen(declaration, "simulation replications 1 seed", 1);
+    // Utilization is derived from fixed Clerk work and the window (see README).
+    // The nonzero waits are observed regression pins, not hand-calculated oracles.
+    for (configuration, expected_exit, utilization, observed_wait) in [
+        ("AsIs", 1, "7/8", "172"),
+        ("ToBeP", 1, "7/8", "209"),
+        ("ToBeA", 2, "1/2", "0"),
+    ] {
+        let (v, exit) = edited(
+            &input,
+            "simulate",
+            &["--configuration", configuration, "--scenario", "BusyDay"],
+        );
+        assert_eq!(exit, expected_exit, "{configuration}");
+        assert_eq!(v["scenario"]["arrivals"]["count"], 120);
+        assert_eq!(v["case_outcomes"].as_array().unwrap().len(), 120);
+        assert_eq!(v["simulation"]["status"], "completed");
+        assert_eq!(v["simulation"]["replications"], 1);
+        assert_eq!(v["simulation"]["completed_replications"], 1);
+        assert_eq!(
+            v["metrics"]["overall"]["counts"]["completed"]["observed_total"],
+            120
+        );
+        assert!(
+            v["metrics"]["overall"]["work"]["mean"]
+                .as_str()
+                .is_some_and(|n| n != "0")
+        );
+        let clerk = named(&v["metrics"]["actors"], "actor", "Clerk");
+        assert_eq!(clerk["utilization"]["mean"], utilization);
+        assert_eq!(
+            v["metrics"]["cases"][119]["first_start_wait"]["mean"],
+            observed_wait
+        );
+    }
 }
 
 #[test]

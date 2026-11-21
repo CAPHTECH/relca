@@ -101,8 +101,8 @@ fn hand_report(v: &Value, h: &Value, source: &str, selection: Option<&str>) {
         if let Ok(model) = relca_core::lower::lower_with_selection(&ast, selection, None) {
             // ADR 0054 "範囲" / "意味": source/selection-bound complete rows,
             // never an unconditional extra code or a runtime-output warning oracle.
-            responsibility_oracle::assert_report(&model, v);
-            responsibility_oracle::expected(&model)
+            responsibility_oracle::assert_report(&model, source, v);
+            responsibility_oracle::expected_wire(&model, source)
         } else {
             vec![]
         };

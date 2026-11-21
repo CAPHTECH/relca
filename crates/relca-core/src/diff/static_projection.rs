@@ -1,7 +1,7 @@
 //! Lexical configuration projection. Normal calls and active contest routes are
 //! deliberately separate: routes must not change the legacy actor/relation rows.
-use super::{CallMode, Change, DiffValue, Difference, Kind, ProducerValue};
-use crate::{ir, responsibility as resp};
+use super::{CallMode, Change, DiffValue, Difference, Kind, ProducerValue, RepetitionValue};
+use crate::{ast, ir, responsibility as resp};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -71,6 +71,7 @@ pub(super) struct Shape {
     pub ends: BTreeSet<ir::EndId>,
     pub calls: BTreeMap<ir::BindingId, ir::Call>,
     pub result_reads: BTreeSet<ir::BindingId>,
+    aliases: BTreeSet<ir::BindingId>,
 }
 impl Shape {
     pub fn new(m: &ir::Model) -> Self {
@@ -101,7 +102,12 @@ impl Shape {
         for s in block {
             match &s.kind {
                 ir::Stmt::MergeCopy { .. } => {}
-                ir::Stmt::LoopControl(_) => {}
+                ir::Stmt::LoopControl(c) => {
+                    for alias in &c.aliases {
+                        self.aliases.insert(alias.binding);
+                        self.calls.insert(alias.binding, alias.clone());
+                    }
+                }
                 ir::Stmt::Call(c) | ir::Stmt::Query(c, _) => self.call(c, CallMode::Sequential),
                 ir::Stmt::ResolveEffect { evidence, .. } => {
                     self.result_reads.insert(*evidence);
@@ -170,21 +176,25 @@ pub(super) fn capname(m: &ir::Model, id: ir::CapabilityId) -> String {
 /// Only normal process bindings mentioned by arguments or process result conditions
 /// (If and join any matches) participate, including dead branches and suffixes after End;
 /// it is not a reaching-definition analysis of state writes or synthetic routes.
-fn read_producers(m: &ir::Model) -> BTreeMap<String, String> {
+fn read_producers(m: &ir::Model) -> BTreeMap<String, (String, bool)> {
     let shape = Shape::new(m);
     read_producers_from_shape(m, &shape)
 }
 
-fn read_producers_from_shape(m: &ir::Model, shape: &Shape) -> BTreeMap<String, String> {
+fn read_producers_from_shape(m: &ir::Model, shape: &Shape) -> BTreeMap<String, (String, bool)> {
     shape
-        .calls
+        .result_reads
         .iter()
-        .filter(|(binding, _)| shape.result_reads.contains(binding))
-        .map(|(binding, call)| {
-            (
+        .filter_map(|binding| {
+            let binding = m.loop_alias(*binding).unwrap_or(*binding);
+            let call = shape.calls.get(&binding)?;
+            Some((
                 m.process.bindings[binding.0].name.clone(),
-                capname(m, call.capability),
-            )
+                (
+                    capname(m, call.capability),
+                    shape.aliases.contains(&binding),
+                ),
+            ))
         })
         .collect()
 }
@@ -192,19 +202,32 @@ fn read_producers_from_shape(m: &ir::Model, shape: &Shape) -> BTreeMap<String, S
 pub(super) fn producer_differences(from: &ir::Model, to: &ir::Model) -> Vec<Difference> {
     let a = read_producers(from);
     let b = read_producers(to);
-    a.into_iter()
-        .filter_map(|(target, from)| {
-            let to = b.get(&target)?;
-            (from != *to).then(|| Difference {
+    let keys: BTreeSet<_> = a.keys().chain(b.keys()).collect();
+    keys.into_iter()
+        .filter_map(|target| {
+            let from = a.get(target);
+            let to = b.get(target);
+            let change = match (from, to) {
+                (Some((a, _)), Some((b, _))) if a != b => Change::Modified,
+                (None, Some((_, true))) => Change::Added,
+                (Some((_, true)), None) => Change::Removed,
+                _ => return None,
+            };
+            let side = |p: Option<&(String, bool)>| {
+                Some(p.map_or(DiffValue::Inactive, |(name, _)| {
+                    DiffValue::Producer(ProducerValue {
+                        producer: name.clone(),
+                    })
+                }))
+            };
+            Some(Difference {
                 kind: Kind::Relation,
-                target,
-                change: Change::Modified,
+                target: target.clone(),
+                change,
                 reason: None,
                 loses: None,
-                from: Some(DiffValue::Producer(ProducerValue { producer: from })),
-                to: Some(DiffValue::Producer(ProducerValue {
-                    producer: to.clone(),
-                })),
+                from: side(from),
+                to: side(to),
                 annotations: vec![],
                 covered_by: vec![],
             })
@@ -390,6 +413,30 @@ fn projection_from_shape(
             out.insert((Kind::Authority, capname(m, *id)), value);
         }
     }
+    let mut records = BTreeMap::<String, super::RecordValue>::new();
+    for id in active {
+        let c = &m.capabilities[id.0];
+        let name = capname(m, *id);
+        for id in &c.registers {
+            records
+                .entry(m.actors[id.0].name.clone())
+                .or_default()
+                .registrars
+                .push(name.clone());
+        }
+        for id in &c.read_records {
+            records
+                .entry(m.actors[id.0].name.clone())
+                .or_default()
+                .readers
+                .push(name.clone());
+        }
+    }
+    for (name, mut value) in records {
+        value.registrars.sort();
+        value.readers.sort();
+        out.insert((Kind::Record, name), DiffValue::Record(value));
+    }
     let owners: BTreeSet<_> = active.iter().map(|c| m.capabilities[c.0].actor).collect();
     for id in owners {
         let a = &m.actors[id.0];
@@ -481,6 +528,7 @@ fn projection_differences(
             Kind::Meaning => DiffValue::Meaning(false),
             Kind::Visibility => DiffValue::Readers(vec![]),
             Kind::Contest => DiffValue::Contests(vec![]),
+            Kind::Record => DiffValue::Record(super::RecordValue::default()),
             Kind::ContractScope
             | Kind::Actor
             | Kind::Relation
@@ -490,6 +538,7 @@ fn projection_differences(
             | Kind::Rule
             | Kind::Qualification
             | Kind::Performance
+            | Kind::Repetition
             | Kind::Degradation => DiffValue::Inactive,
         };
         let key = (kind, target.clone());
@@ -523,6 +572,89 @@ fn projection_differences(
         });
     }
     out
+}
+
+pub(super) fn repetition_differences(
+    ast: &ast::Model,
+    from: &ir::Model,
+    to: &ir::Model,
+) -> Option<Vec<Difference>> {
+    fn collect(block: &ast::Block, out: &mut BTreeMap<(Kind, String), DiffValue>) -> Option<()> {
+        fn inventory(block: &ast::Block, sites: &mut Vec<String>, ends: &mut Vec<String>) {
+            for s in block {
+                match &s.value {
+                    ast::Stmt::Call(c) => sites.push(c.binding.value.clone()),
+                    ast::Stmt::Fork { branches, .. } => {
+                        sites.extend(branches.iter().map(|c| c.binding.value.clone()))
+                    }
+                    ast::Stmt::End(e) if !ends.contains(&e.value) => ends.push(e.value.clone()),
+                    ast::Stmt::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        inventory(then_body, sites, ends);
+                        inventory(else_body, sites, ends);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for s in block {
+            match &s.value {
+                ast::Stmt::Repeat {
+                    name,
+                    at_most,
+                    gap,
+                    body,
+                    on_limit,
+                } => {
+                    let gap = match gap {
+                        None => 0,
+                        Some(d) => d.amount.value.checked_mul(match d.unit.value.as_str() {
+                            "min" => 1,
+                            "h" => 60,
+                            "d" => 1440,
+                            _ => return None,
+                        })?,
+                    };
+                    let mut sites = Vec::new();
+                    let mut on_limit_ends = Vec::new();
+                    inventory(body, &mut sites, &mut Vec::new());
+                    inventory(on_limit, &mut sites, &mut on_limit_ends);
+                    out.insert(
+                        (Kind::Repetition, name.value.clone()),
+                        DiffValue::Repetition(RepetitionValue {
+                            at_most: at_most.value,
+                            gap,
+                            sites,
+                            on_limit_ends,
+                        }),
+                    );
+                }
+                ast::Stmt::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect(then_body, out)?;
+                    collect(else_body, out)?;
+                }
+                _ => {}
+            }
+        }
+        Some(())
+    }
+    let project = |m: &ir::Model| {
+        let process = ast.items.iter().find_map(|i| match i {
+            ast::Item::Process(p) if p.name.value == m.process.name => Some(p),
+            _ => None,
+        })?;
+        let mut out = BTreeMap::new();
+        collect(&process.body, &mut out)?;
+        (m.has_loops() != out.is_empty()).then_some(out)
+    };
+    Some(projection_differences(project(from)?, project(to)?))
 }
 
 /// A comparison-only substitution: keep every value function on the original
@@ -579,7 +711,7 @@ pub(super) fn replacement_difference_keys(
     let b = read_producers(&to.model);
     keys.extend(
         a.into_iter()
-            .filter(|(n, v)| b.get(n).is_some_and(|to| to != v))
+            .filter(|(n, (v, _))| b.get(n).is_some_and(|(to, _)| to != v))
             .map(|(n, _)| (Kind::Relation, n)),
     );
     keys

@@ -512,7 +512,8 @@ fn s_check_ignored_all_148_old_inputs_check_and_diff_json_keys_and_assumptions()
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        if relca_test_support::fixture_match::intent_fixture(&name)
+        if name.starts_with("ld-")
+            || relca_test_support::fixture_match::intent_fixture(&name)
             || relca_test_support::fixture_match::agency_limit_fixture(&name)
             || relca_test_support::fixture_match::contract_scope_fixture(&name)
         {
@@ -553,6 +554,7 @@ fn s_check_ignored_all_148_old_inputs_check_and_diff_json_keys_and_assumptions()
                 .contains(&name)
             || include!("support/evaluation_names.rs").contains(&name.as_str())
             || include!("support/quantile_names.rs").contains(&name.as_str())
+            || include!("support/mean_names.rs").contains(&name.as_str())
             || include!("support/acceptance_gap_names.rs").contains(&name.as_str())
         {
             continue;
@@ -709,6 +711,8 @@ fn s_check_ignored_all_148_old_inputs_check_and_diff_json_keys_and_assumptions()
             }
         };
         let (mut before, mut after) = (run(&s), run(&added));
+        relca_test_support::diagnostic::check_and_clear_locations(&s, &mut before);
+        relca_test_support::diagnostic::check_and_clear_locations(&added, &mut after);
         remove_hash(&mut before);
         remove_hash(&mut after);
         let at = s.rfind('}').unwrap() as u64;

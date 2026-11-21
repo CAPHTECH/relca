@@ -53,13 +53,17 @@ pub(super) fn schema() -> Ty {
                 "per_case_relaxation",
                 "with_undetermined",
                 "statistical",
+                "lower_bound",
             ])),
         ),
         (
             "interval",
-            nullable(Obj(vec![("lower", MetricNumber), ("upper", MetricNumber)])),
+            nullable(Obj(vec![
+                ("lower", MetricNumber),
+                ("upper", nullable(MetricNumber)),
+            ])),
         ),
-        ("reason", reason()),
+        ("reason", OneOf(vec![reason(), metric_check_reason()])),
         ("source_reason", quality_reason()),
         ("point", OptionalField(Box::new(nullable(MetricNumber)))),
     ]);
@@ -90,7 +94,7 @@ pub(super) fn schema() -> Ty {
         ("kind", Lit(&["verify", "hard"])),
         ("constraint", nullable(Str)),
         ("verdict", Verdict),
-        ("reason", reason()),
+        ("reason", OneOf(vec![reason(), metric_check_reason()])),
     ]);
     Obj(vec![
         ("rules", Lit(&["compare-evaluation-p1-1"])),
@@ -107,9 +111,10 @@ pub(super) fn schema() -> Ty {
             "hard",
             Arr(Box::new(Obj(vec![
                 ("constraint", Str),
-                ("cohort", Str),
+                ("cohort", OptionalField(Box::new(Str))),
+                ("mean", OptionalField(Box::new(Str))),
                 ("op", Lit(&["<=", "<", ">=", ">"])),
-                ("bound", RationalText),
+                ("bound", MetricNumber),
                 ("values", Arr(Box::new(cell))),
             ]))),
         ),
@@ -220,6 +225,7 @@ fn nonempty_unique(xs: &[Value]) -> bool {
 fn field_ref(s: &str) -> bool {
     s.strip_prefix("cohort.").is_some_and(valid_plan_name)
         || s.strip_prefix("quantile.").is_some_and(valid_plan_name)
+        || s.strip_prefix("mean.").is_some_and(valid_plan_name)
         || [
             "metrics.overall.work",
             "metrics.overall.named_people_work",
@@ -341,12 +347,16 @@ pub(super) fn validate(v: &Value) -> Result<(), String> {
     let mut constraints = BTreeSet::new();
     let mut m = 0u64;
     for h in hard {
-        let name = h["cohort"].as_str().unwrap();
+        let (kind, name) = match (h["cohort"].as_str(), h["mean"].as_str()) {
+            (Some(n), None) => ("cohort", n),
+            (None, Some(n)) => ("mean", n),
+            _ => return Err("hard needs exactly one target".into()),
+        };
         let op = h["op"].as_str().unwrap();
         let bound = h["bound"].as_str().unwrap();
         if !valid_plan_name(name)
-            || !metric_le(&h["bound"], &json!("1"))?
-            || h["constraint"] != format!("cohort.{name} {op} {bound}")
+            || kind == "cohort" && !metric_le(&h["bound"], &json!("1"))?
+            || h["constraint"] != format!("{kind}.{name} {op} {bound}")
             || !constraints.insert(h["constraint"].as_str().unwrap())
         {
             return Err("hard normalized identity/duplicates".into());
@@ -356,8 +366,40 @@ pub(super) fn validate(v: &Value) -> Result<(), String> {
             return Err("hard rectangular inventory".into());
         }
         for (j, c) in cells.iter().enumerate() {
-            if c["configuration"] != names[j] || sim != c.get("point").is_some() {
+            if c["configuration"] != names[j]
+                || (sim && kind == "cohort") != c.get("point").is_some()
+            {
                 return Err("hard cell order/mode".into());
+            }
+            if kind == "mean" {
+                let q = mean_source(&plans[j]["report"], name)?;
+                let v = &q["value"];
+                let (basis, interval, reason) = if sim {
+                    (Value::Null, Value::Null, json!("no_statistical_bound"))
+                } else if !v["lower"].is_null() {
+                    (
+                        v["basis"].clone(),
+                        json!({"lower":v["lower"],"upper":v["upper"]}),
+                        Value::Null,
+                    )
+                } else if !q["lower_bound"].is_null() {
+                    (
+                        json!("lower_bound"),
+                        json!({"lower":q["lower_bound"],"upper":null}),
+                        v["reason"].clone(),
+                    )
+                } else {
+                    (Value::Null, Value::Null, v["reason"].clone())
+                };
+                if c["basis"] != basis
+                    || c["interval"] != interval
+                    || c["reason"] != reason
+                    || !c["source_reason"].is_null()
+                    || c["verdict"] != metric_interval_verdict(&interval, &reason, op, &h["bound"])?
+                {
+                    return Err("mean hard transport or verdict".into());
+                }
+                continue;
             }
             let q = plans[j]["report"]["quality"]["cohort"]
                 .as_array()
@@ -507,14 +549,25 @@ pub(super) fn validate(v: &Value) -> Result<(), String> {
                 return Err("objective plan order".into());
             }
             let quantile = target.strip_prefix("quantile.");
-            if let Some(name) = quantile {
+            let mean = target.strip_prefix("mean.");
+            if let Some(name) = mean {
+                let v = &mean_source(&plans[j]["report"], name)?["value"];
+                let keys: &[&str] = if sim {
+                    &["point", "reason"]
+                } else {
+                    &["lower", "upper", "basis", "reason"]
+                };
+                if keys.iter().any(|k| c.get(k) != v.get(k)) {
+                    return Err("mean objective must transport only the declared value".into());
+                }
+            } else if let Some(name) = quantile {
                 validate_quantile_objective_cell(c, &plans[j]["report"], name, sim)?;
             } else {
                 // The new quantile alternative must not widen old objective reasons.
                 check(&c["reason"], &reason(), "objective reason")?;
             }
             if sim {
-                let cohort = target.starts_with("cohort.") || quantile.is_some();
+                let cohort = target.starts_with("cohort.") || quantile.is_some() || mean.is_some();
                 if cohort != c.get("point").is_some()
                     || !cohort != c.get("sample").is_some()
                     || c.get("lower").is_some()
@@ -672,6 +725,54 @@ pub(super) fn validate(v: &Value) -> Result<(), String> {
         return Err("evaluation assumptions presence/order".into());
     }
     Ok(())
+}
+
+fn mean_source<'a>(report: &'a Value, name: &str) -> Result<&'a Value, String> {
+    report["quality"]["means"]
+        .as_array()
+        .and_then(|a| a.iter().find(|q| q["name"] == name))
+        .ok_or_else(|| "unknown mean source".into())
+}
+
+pub(super) fn metric_interval_verdict(
+    interval: &Value,
+    reason: &Value,
+    op: &str,
+    bound: &Value,
+) -> Result<&'static str, String> {
+    if interval.is_null() {
+        return Ok(
+            if matches!(
+                reason.as_str(),
+                Some("aborted" | "no_samples" | "no_statistical_bound")
+            ) {
+                "unsupported"
+            } else {
+                "inconclusive"
+            },
+        );
+    }
+    let lower = number_cmp(&interval["lower"], bound)?;
+    let upper = if interval["upper"].is_null() {
+        std::cmp::Ordering::Greater
+    } else {
+        number_cmp(&interval["upper"], bound)?
+    };
+    let valid = !interval["upper"].is_null();
+    let (sat, bad) = match op {
+        "<=" => (!upper.is_gt(), lower.is_gt()),
+        "<" => (upper.is_lt(), !lower.is_lt()),
+        ">=" => (!lower.is_lt(), upper.is_lt()),
+        ">" => (lower.is_gt(), valid && !upper.is_gt()),
+        _ => return Err("invalid metric operator".into()),
+    };
+    Ok(if sat {
+        "satisfied"
+    } else if bad {
+        "violated"
+    } else {
+        "inconclusive"
+    })
 }
 fn validate_quantile_objective_cell(
     cell: &Value,

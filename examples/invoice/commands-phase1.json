@@ -12,9 +12,9 @@
   {"id":"rule-a-check","model":"examples/invoice/rules.relca","args":["check","examples/invoice/rules.relca","--configuration","ToBeA"],"expected_exit":5},
   {"id":"rule-b-check","model":"examples/invoice/rules.relca","args":["check","examples/invoice/rules.relca","--configuration","ToBeB"],"expected_exit":1},
   {"id":"rule-diff","model":"examples/invoice/rules.relca","args":["diff","examples/invoice/rules.relca","--from","ToBeA","--to","ToBeB"],"expected_exit":1},
-  {"id":"busyday-as-is-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","AsIs","--scenario","BusyDay"],"expected_exit":4},
-  {"id":"busyday-to-be-p-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeP","--scenario","BusyDay"],"expected_exit":4},
-  {"id":"busyday-to-be-a-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeA","--scenario","BusyDay"],"expected_exit":4},
-  {"id":"busyday-compare-simulation","model":"examples/invoice/busyday.relca","args":["compare","examples/invoice/busyday.relca","--plans","AsIs,ToBeP,ToBeA","--mode","simulation","--scenario","BusyDay"],"expected_exit":4},
+  {"id":"busyday-as-is-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","AsIs","--scenario","BusyDaySmoke"],"expected_exit":2},
+  {"id":"busyday-to-be-p-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeP","--scenario","BusyDaySmoke"],"expected_exit":2},
+  {"id":"busyday-to-be-a-simulate","model":"examples/invoice/busyday.relca","args":["simulate","examples/invoice/busyday.relca","--configuration","ToBeA","--scenario","BusyDaySmoke"],"expected_exit":2},
+  {"id":"busyday-compare-simulation","model":"examples/invoice/busyday.relca","args":["compare","examples/invoice/busyday.relca","--plans","AsIs,ToBeP,ToBeA","--mode","simulation","--scenario","BusyDaySmoke"],"expected_exit":2},
   {"id":"p1-compare-quantile","model":"examples/invoice/quantile-compare.relca","args":["compare","examples/invoice/quantile-compare.relca","--plans","AsIs,ToBeP,ToBeA","--mode","exhaustive"],"expected_exit":1}
 ]

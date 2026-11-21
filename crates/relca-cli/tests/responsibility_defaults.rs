@@ -59,7 +59,10 @@ fn expected(source: &str, actor: &str) -> Value {
             _ => None,
         })
         .unwrap();
-    json!({"code":"W-RESP-0", "severity":"warning", "message":format!("{actor} has no declared responsibility"), "span":span})
+    relca_test_support::diagnostic::expected_row(
+        source,
+        json!({"code":"W-RESP-0", "severity":"warning", "message":format!("{actor} has no declared responsibility"), "span":span}),
+    )
 }
 fn two_plans(source: &str) -> String {
     // Simulation requires distinct process operation keys across plans.

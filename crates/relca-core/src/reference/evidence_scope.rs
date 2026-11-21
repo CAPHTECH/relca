@@ -8,6 +8,166 @@ struct Site<'a> {
     physical: bool,
     mandatory: bool,
 }
+
+// Independently follow the expanded control tree, merging paths with the same
+// pair of private flags. Actual roots are still read from the replay trace.
+fn loop_prefixes(m: &Model) -> BTreeMap<BindingId, (BTreeSet<BindingId>, BTreeSet<BindingId>)> {
+    type Seen = (BTreeSet<BindingId>, BTreeSet<BindingId>);
+    type Paths = [Option<Seen>; 4];
+    fn add(into: &mut Option<Seen>, from: Seen) {
+        if let Some((sure, may)) = into {
+            *sure = sure.intersection(&from.0).copied().collect();
+            may.extend(from.1);
+        } else {
+            *into = Some(from);
+        }
+    }
+    fn joined(p: &Paths) -> Seen {
+        let mut combined = None;
+        for state in p.iter().flatten() {
+            add(&mut combined, state.clone());
+        }
+        combined.unwrap_or_default()
+    }
+    fn flag(m: &Model, id: StateVarId) -> u8 {
+        match m.state_variables.get(id.0).and_then(|v| v.loop_role()) {
+            Some("active") => 1,
+            Some("continue") => 2,
+            _ => 0,
+        }
+    }
+    fn walk(
+        m: &Model,
+        b: &Block,
+        mut paths: Paths,
+        out: &mut BTreeMap<BindingId, Seen>,
+        ended: &mut Paths,
+    ) -> Paths {
+        for s in b {
+            match &s.kind {
+                Stmt::Call(c) | Stmt::Response(c, _) => {
+                    let normal = !matches!(&s.kind, Stmt::Response(_, r) if r.attempt != 1);
+                    if let Stmt::Response(_, r) = &s.kind
+                        && r.attempt == 1
+                    {
+                        out.insert(r.command, joined(&paths));
+                        for (sure, may) in paths.iter_mut().flatten() {
+                            sure.insert(r.command);
+                            may.insert(r.command);
+                        }
+                    }
+                    out.insert(c.binding, joined(&paths));
+                    for (sure, may) in paths.iter_mut().flatten() {
+                        if normal {
+                            sure.insert(c.binding);
+                        }
+                        may.insert(c.binding);
+                    }
+                }
+                Stmt::Fork { branches, .. } => {
+                    let common = joined(&paths);
+                    let ids: BTreeSet<_> = branches.iter().map(|c| c.binding).collect();
+                    for c in branches {
+                        let (sure, mut may) = common.clone();
+                        if paths.iter().any(Option::is_some) {
+                            may.extend(ids.iter().copied().filter(|b| *b != c.binding));
+                        }
+                        out.insert(c.binding, (sure, may));
+                    }
+                    for (_, may) in paths.iter_mut().flatten() {
+                        may.extend(&ids);
+                    }
+                }
+                Stmt::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
+                    let mask = match condition {
+                        Cond::IntCompare {
+                            variable,
+                            operator: IntComparison::Eq,
+                            value: 1,
+                        } => flag(m, *variable) as usize,
+                        _ => 0,
+                    };
+                    let t = std::array::from_fn(|i| {
+                        (mask == 0 || i & mask != 0)
+                            .then(|| paths[i].clone())
+                            .flatten()
+                    });
+                    let e = std::array::from_fn(|i| {
+                        (i & mask == 0).then(|| paths[i].clone()).flatten()
+                    });
+                    let incoming = (mask == 0).then_some(paths);
+                    let mut arms = Paths::default();
+                    paths = walk(m, then_body, t, out, &mut arms);
+                    for (i, facts) in walk(m, else_body, e, out, &mut arms)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        if let Some(facts) = facts {
+                            add(&mut paths[i], facts);
+                        }
+                    }
+                    for (i, facts) in arms.into_iter().enumerate() {
+                        if let Some(facts) = facts {
+                            if mask == 0
+                                && let Some((_, may)) = &mut paths[i]
+                            {
+                                may.extend(&facts.1);
+                            }
+                            add(&mut ended[i], facts);
+                        }
+                    }
+                    if let Some(incoming) = incoming {
+                        for (after, before) in paths.iter_mut().zip(incoming) {
+                            if let (Some((sure, _)), Some((original, _))) = (after, before) {
+                                sure.retain(|b| original.contains(b));
+                            }
+                        }
+                    }
+                }
+                Stmt::LoopControl(c) => {
+                    let mut next: Paths = Default::default();
+                    for (i, facts) in paths.into_iter().enumerate() {
+                        if let Some(facts) = facts {
+                            let mut j = if c.updates.is_empty() { 3 } else { i };
+                            for (id, value) in &c.updates {
+                                let bit = flag(m, *id) as usize;
+                                j = if *value == StateValue::Integer(1) {
+                                    j | bit
+                                } else {
+                                    j & !bit
+                                };
+                            }
+                            add(&mut next[j], facts);
+                        }
+                    }
+                    paths = next;
+                }
+                Stmt::End(_) | Stmt::StopReceiptUnknown => {
+                    for (i, facts) in std::mem::take(&mut paths).into_iter().enumerate() {
+                        if let Some(facts) = facts {
+                            add(&mut ended[i], facts);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        paths
+    }
+    let mut out = BTreeMap::new();
+    walk(
+        m,
+        &m.process.body,
+        [None, None, None, Some(Seen::default())],
+        &mut out,
+        &mut Paths::default(),
+    );
+    out
+}
 fn sites<'a>(body: &'a Block, before: &BTreeSet<BindingId>, out: &mut Vec<Site<'a>>) {
     let mut before = before.clone();
     for s in body {
@@ -108,12 +268,19 @@ impl Read {
         }
     }
 }
-pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
+#[derive(Default)]
+pub(super) struct Constraints {
+    pub masks: BTreeMap<BindingId, BTreeSet<ActorId>>,
+    pub registrar_must: BTreeMap<BindingId, BTreeSet<ActorId>>,
+}
+
+pub(super) fn constraints(m: &Model) -> Constraints {
     let mut all = Vec::new();
     sites(&m.process.body, &BTreeSet::new(), &mut all);
+    let loop_prefixes = m.has_loops().then(|| loop_prefixes(m));
     let mut normal: BTreeMap<BindingId, (BTreeSet<ActorId>, BTreeSet<ActorId>)> = BTreeMap::new();
     let mut values = normal.clone();
-    let mut masks = BTreeMap::new();
+    let mut constraints = Constraints::default();
     for (index, s) in all.iter().enumerate() {
         let c = &m.capabilities[s.call.capability.0];
         let mut sure: BTreeSet<_> = c.reads.iter().copied().collect();
@@ -155,7 +322,14 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
                         _ => false,
                     })
                 }
-                if disjoint(&m.process.body, w.call.span, s.call.span) {
+                let prefix = loop_prefixes
+                    .as_ref()
+                    .and_then(|p| p.get(&s.call.binding))
+                    .filter(|_| m.loop_site(w.call.binding).is_some());
+                if prefix.map_or_else(
+                    || disjoint(&m.process.body, w.call.span, s.call.span),
+                    |(_, may)| !may.contains(&w.call.binding),
+                ) {
                     continue;
                 }
                 let wc = &m.capabilities[w.call.capability.0];
@@ -165,7 +339,9 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
                 last.push(w.call.binding);
                 if w.mandatory
                     && wc.requires.is_none()
-                    && s.before.contains(&w.call.binding)
+                    && prefix
+                        .map_or(&s.before, |(sure, _)| sure)
+                        .contains(&w.call.binding)
                     && input.certain(wc)
                 {
                     closed = true;
@@ -187,14 +363,21 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
                     union.extend(maybe);
                 }
             }
-            if !closed || last.len() != 1 {
+            // A certain registration is not proof that all of its possible
+            // inputs were certainly available to the registrar.
+            if !closed || last.len() != 1 || matches!(input, Read::Record(_)) {
                 mask.extend(union.difference(&intersection).copied());
             }
             sure.extend(intersection);
             possible.extend(union);
         }
         mask.retain(|r| !sure.contains(r));
-        masks.insert(s.call.binding, mask);
+        constraints.masks.insert(s.call.binding, mask);
+        if !c.registers.is_empty() {
+            constraints
+                .registrar_must
+                .insert(s.call.binding, sure.clone());
+        }
         normal.insert(s.call.binding, (sure.clone(), possible.clone()));
         values.insert(
             s.call.binding,
@@ -208,5 +391,5 @@ pub(super) fn constraints(m: &Model) -> BTreeMap<BindingId, BTreeSet<ActorId>> {
             ),
         );
     }
-    masks
+    constraints
 }

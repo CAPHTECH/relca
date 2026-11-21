@@ -84,6 +84,9 @@ Relca は良い設計を自動では出さない。できるのは三つであ�
 | 統制の `vacuous` | 統制の前件が一度も起きない | 前件の操作が `metrics.capabilities` で呼ばれているかを見る。構造の変更で呼ばれなくなったなら、手順4で新しい構造に合わせて統制を書き直す |
 | `unsupported` | その組合せは未対応 | 未検査として残す。黙って外さない |
 
+拒否に当たったら、案を変更する前に stderr の補足行(または JSON の `diagnostics[].detail`)を読む。
+`kind` を見て、[拒否に当たったとき](../relca-model/references/unsupported.md#拒否に当たったとき)の手順を選ぶ。分析が未対応でも、意味を保って書き下せるなら、その版で検査してよい。元の書き方で何が未対応だったかは報告に残す。
+
 違反している案に `mutate` を掛けると、違反中の性質はそれ以上悪化できない。その性質だけに効く変異は `no_worsening` になり、検出は他の性質についてだけ得られる。
 請求書の例では、`to-be-a.relca` で検出11件・`no_worsening` 5件、`to-be-a-phase1.relca` ではほとんどが `no_worsening` だった。
 違反している案の見逃しを穴と読まず、直した後にもう一度回す。
@@ -124,11 +127,19 @@ Relca は良い設計を自動では出さない。できるのは三つであ�
   - stderr の `W-CUT-2` に原因の `defer` が1行ずつ出る。JSON では `cut.defer_effects` に、取り下げの範囲(`withdraws`)と理由(`because`)が出る。
   - 値が要るなら、その段をモデルに書くか、`defer` を実在する Actor か `Actor.capability` に直す。関係のない操作の名前で代用しない。外した前提が隠れる。
   - 時間を比べるときは `configurations.relca` の `compare` を使った。
-- 並行(`fork`/`join`)を含むやり直しは `repeat` で書けない(`loop_feature_combination`)。`evidence_basis`・`same_version`・`mutate` も、`repeat` を含むモデルでは使えない。
-  - 上限の回数が小さければ、回ごとに `if` で書き下して比べる。書き下した版では、並行も、これらの契約も、`mutate` も使えた。
+- やり直しは `repeat` で書ける。本体に並行(`fork` と `join all`)を置けるし、`same_version`・`evidence_basis`・`registers`、`compare`・`diff`・`sensitivity`、`metric mean.…` も使える。
+  - まだ閉じている組合せがある(名前つきの `loop_feature_combination` で拒否される)。当たったものを報告に書く。
+    - `repeat` の結果が、記録への登録と読取りを経由して `evidence_basis` の対象の操作へ届く形(引数や観測変数で渡す形は使える。出口ごとに調べ、書き下した版と同じ判定になる)。
+    - `contest` との併用、`conform`、`join any`、入れ子。
+    - `mutate` は種類で分かれる。使えるのは `evidence_missing`・`hold_delayed`・`summary_reused`・`refusal_path_cut`。本体に `fork` がある構成は `mutate` 全体が拒否される。
+  - 閉じている組合せに当たり、上限の回数が小さければ、回ごとに `if` で書き下して比べる。書き下した版には、上の制限は掛からない。
   - 代償は、回数に比例してモデルが長くなること、回ごとに束縛の名前を変えること、回をまたいで値を更新できないこと。
   - 記録は [references/rework-unrolling.md](references/rework-unrolling.md)。
-- 繁忙日の `simulate` は、方策(`policy`)を宣言しても `unsupported` になった。別の案件の出来事が同じ分に重なると、どれを先に処理するかが決まらないためである。今の構文では、業務の意味を変えずに負荷を評価する方法が見つかっていない。
+- 繁忙日の負荷は `simulate` で評価できる。`examples/invoice/busyday.relca` が例である。
+  - 別の案件の出来事が同じ分に重なっても、順序が結果に効かないと確かめられれば進む。効く場合は `unsupported` で止まる。その場合は、方策に `dispatch after_finishes`(その分に終わった仕事を先に記録してから割り当てる)を足すと決まることがある。業務の実際の運用がそうなっているかを確かめてから足す。
+  - 発生率を入れていない異議は、既定では拒否される。評価から外すなら、scenario に `contest_not_filed <当事者> on end.<終端> reason "…"` と理由つきで宣言する。外した異議への応答の契約は `inconclusive` のままになり、合格にはならない。
+  - 負荷の値(稼働率、待ち)は本番用の scenario を release build で回して読む。検査用の小さい scenario の値を、負荷の結論に使わない。
+  - `simulate` の値は標本の値である。全ての順序での安全性を示すものではない。
 
 ## 報告
 

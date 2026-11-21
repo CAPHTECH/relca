@@ -63,6 +63,7 @@ fn independent_population_matches_public_outcome_and_four_observation_sets() {
         completion_explorer_product::check_properties(&m, &actual, &wanted);
         completion_explorer_product::check_report(
             &serde_json::to_value(report::check(&e.source)).unwrap(),
+            &e.source,
             &e.own,
             &wanted,
         )
@@ -218,7 +219,7 @@ fn warnings_and_raw_comparator_reject_each_code_target_reason_span_and_completio
     let e = examples.iter().find(|e| e.name == "pass-only").unwrap();
     let wanted = expected(e);
     let actual = serde_json::to_value(report::check(&e.source)).unwrap();
-    completion_explorer_product::check_report(&actual, &e.own, &wanted).unwrap();
+    completion_explorer_product::check_report(&actual, &e.source, &e.own, &wanted).unwrap();
     for code in ["W-UNREACH-0", "W-UNREACH-1", "W-UNREACH-2", "W-UNREACH-3"] {
         let index = actual["diagnostics"]
             .as_array()
@@ -230,14 +231,17 @@ fn warnings_and_raw_comparator_reject_each_code_target_reason_span_and_completio
             let mut broken = actual.clone();
             broken["diagnostics"][index][field] = serde_json::json!("corrupt");
             assert!(
-                completion_explorer_product::check_report(&broken, &e.own, &wanted).is_err(),
+                completion_explorer_product::check_report(&broken, &e.source, &e.own, &wanted)
+                    .is_err(),
                 "{code} {field}"
             );
         }
     }
     let mut broken = actual.clone();
     broken["properties"][0]["verdict"] = serde_json::json!("violated");
-    assert!(completion_explorer_product::check_report(&broken, &e.own, &wanted).is_err());
+    assert!(
+        completion_explorer_product::check_report(&broken, &e.source, &e.own, &wanted).is_err()
+    );
     for extra in [false, true] {
         let mut broken = actual.clone();
         let ps = broken["properties"].as_array_mut().unwrap();
@@ -246,7 +250,9 @@ fn warnings_and_raw_comparator_reject_each_code_target_reason_span_and_completio
         } else {
             ps.pop();
         }
-        assert!(completion_explorer_product::check_report(&broken, &e.own, &wanted).is_err());
+        assert!(
+            completion_explorer_product::check_report(&broken, &e.source, &e.own, &wanted).is_err()
+        );
     }
 }
 #[test]

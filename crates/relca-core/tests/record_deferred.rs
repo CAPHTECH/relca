@@ -433,6 +433,8 @@ fn s29_unused_record_declaration_keeps_adr0035_classifications() {
         let t = format!("{}{inserted}{}", &s[..end], &s[end..]);
         let mut a = check(&s);
         let mut b = check(&t);
+        relca_test_support::diagnostic::check_and_clear_locations(&s, &mut a);
+        relca_test_support::diagnostic::check_and_clear_locations(&t, &mut b);
         shift(&mut b, end as u64, inserted.len() as u64);
         for v in [&mut a, &mut b] {
             v["model"]["sha256"] = Value::Null;

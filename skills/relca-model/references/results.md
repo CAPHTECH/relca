@@ -33,6 +33,7 @@ check・explain・simulate の report(compare の各案の report も同じ)の�
 - 上のどれも無い(性質が空で error も無い)とき: unsupported
 
 warning は中立で、全体の判定には数えない。
+指標条件はこの関数の引数ではない。check / explain は `fold_verdict` の結果に `metric_checks[]` の判定を重ね、simulate も全体判定に畳む。指標の宣言のみでは合否は変わらない。
 後段(ledger の完成処理)で全体が重くなる場合があるかは確かめていない [U]。examples/invoice の実出力では、全 report で計算し直した判定と一致した。
 
 compare と diff の最上位は、通常は各案(diff は from と to)の report の verdict と、compare・diff 自身の error の診断を同じ優先順でまとめる(`crates/relca-core/src/compare.rs` の `fold` と `diff.rs`)。
@@ -71,7 +72,7 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `terminals[]` | 終端ごとの `elapsed` / `work` の min..max、確率 | 全到達経路の範囲。平均ではない |
 | `assumptions[]` | `field / value / affects` | 既定で埋めた欄・置いた仮定の一覧。報告に必ず付ける |
 | `actors[]` | Actor の各欄と `status: declared / default` | `default` は省略時既定。業務の人に確かめてもらう対象 |
-| `diagnostics[]` | `code / severity / message / span{start,end}` | span はモデルの **バイト位置**(lexer が byte span) |
+| `diagnostics[]` | `code`、`severity`、`message`、`span`、`location`、`detail` の6欄 | 人がモデル上の位置を探すときは `location` を使う |
 | `agency` | origin・lineage・refusal・common_causes・viewpoints | 入力構成から導出する欄で、自己申告の値は受けない。実運用の効果を測定した値ではない |
 | `responsibilities[]` | 人・対象・案件全体と各段の根拠源の読取り・拒否の到達 | W-RESP-1(案件全体で観測が無い)・W-RESP-2(拒否が効果に届かない)・W-RESP-3(別の段でだけ直接読む) |
 | `metrics` | 時間・費用・件数。`rates` に単価、`not_configured` は未設定または defer による撤回 | 単価未設定も撤回も 0 円ではない |
@@ -85,6 +86,21 @@ HTML内の `review-data.unverified_count` も同じ値。従来の項目別リ�
 | `repetition` | repeatを含むモデルの回数、上限後の処理への到達、元位置との対応 | 下の「繰り返しを含むモデルで出る欄」 |
 
 確率の `min / max` は完全情報の緩和境界で、実現できる方策の値ではない(assumptions の `probability.scheduler`)。
+
+### 診断の位置と詳細
+
+`span` の `start` / `end` はモデルの UTF-8 バイト位置。`location` は同じ区間を `line`、`column`、`end_line`、`end_column` で表す。行は LF で区切り、行・列は1から数える。タブ、絵文字、結合文字、LF の前の CR はそれぞれ1列。終点は区間に含まない。位置を求められないときは `location: null`。
+
+`detail: null` は補足がないという意味。診断自体は残るので、`message` を読む。補足があるときは次の順に読む。
+
+1. **`kind` で次の手を決める。** `rewrite` は書き方を直せば判定できる。`analysis_not_connected` はその分析が機能に未対応。`property_undecided` はモデルは受理されたが、その性質だけ未判定。具体的な対応は [拒否に当たったとき](unsupported.md#拒否に当たったとき)を参照する。
+2. `reason` は `message` にも残る理由語。`cause` は原因を区別する識別語で、区別がなければ `null`。複数の原因文があるときは `cause` だけで結論を出さず、`blockers` をすべて読む。同じ `non_result_argument` でも、応答が原因文に含まれる例では `analysis_not_connected` になる。
+3. `blockers` は `role` (役割)、`name` (名前)、`location` (位置)を持つ。名前や位置は `null` のことがある。`rounds` はその箇所が指す回の番号、`exits` は対応する出口。出口ごとに `loop_name`、`round`、`phase` (`body` は本体、`on_limit` は上限到達後)、該当時の `leave_site` (何番目の `leave` か)を同じ行に結び付けて読む。
+4. `see` が指す利用ガイドの節を読む。
+
+stderr では、診断の直後に字下げされた `at`、`kind:`、`cause:`、`blocked by:`、`not counted:`、`provenance:`、`see:` が補足として出る。補足を別の診断に数えない。根拠源の診断では `not counted:` は静的な系譜で数えなかった辺、`provenance:` は繰り返しの出口を示す。数えなかった辺が今回の候補源を実際に運んだとは限らない。
+
+確認用ページは JSON の `location` を表示する。位置が `null` なら「位置なし」。鍵が無い旧形式ではその旨を示し、換算できる場合だけ `span` を使う。両者が食い違う場合は `location` を表示し、不一致を「確かめられていないもの」に残す。未知の役割・`kind`・`cause`・鍵は元の値を残し、未解釈として数える。
 
 ### defer で値が撤回された場合
 
@@ -303,7 +319,12 @@ explain の違反した反例 object だけに `evidence` が付く。
 [読取りを外した実例](../../../examples/evidence-basis-missing.relca)では、正常終了は時刻2分で、
 binding=p、actor=Clerk、capability=match_po、required=[Invoice,PurchaseOrder]、
 sources=[PurchaseOrder]、missing=[Invoice]、excluded_edges=[]。
-後半4欄は昇順の配列。excluded_edges は `p -> a` のような、数えなかった観測変数の辺である。
+missing は要求した源のうち候補にも無いものだけ。記録や観測変数を経由して届きうるが確かめられない要求源は
+`conditional_sources` に出る。確認用ページは「届きうるが確かめられない源」として、不足した源や照合に数えた源とは分けて表示する。
+後半5欄(required/sources/missing/conditional_sources/excluded_edges)は昇順の配列。excluded_edges は `p -> a` のような、数えなかった観測変数の辺である。
+繰り返しの結果を受ける後続操作の反例には repetition_exits(通った出口。leave_site は on_limit も数えた出口の番号)が付く。
+確認用ページはその繰り返しの名前、回、本体か上限到達後か、記録されていれば出口番号を表にする。違反した呼出しが繰り返し内なら、`repetition` の元の呼出し名と回または上限到達後の処理を示す。
+`unsupported` で反例がなく、explain に理由の記録もない場合は、同じ構成・シナリオで `check` し、診断を確認する。ページは記録のない原因を補わない。
 sources はモデルの照合に数えた集合で、実際の資料参照を観測したログではない。
 確認用ページは source の契約とこの証跡を表示し、欠けた・不整合な証跡を正常な空欄にしない。
 
@@ -311,8 +332,8 @@ mutate の evidence_missing はこの行も使う。original_access_removed が�
 正の実例の2/2検出はその入力の件数であり、他のモデルの検出率や網羅率ではない。
 契約が悪化しても同じ変異で系譜行が消える場合は、既存規則によりinconclusive / assigned_check_unavailableになりうる。
 異議経路の対象は、その性質だけU-SEM-0 evidence_basis_contest_route。他の判定は残す。
-選んだ構成に適用される契約のcompare/diff/sensitivity は U-SEM-0 evidence_basis_unsupported_command で拒否する。
-diff の両側の個別検査が violated でも、最上位unsupportedは比較未実施を示す。両方を報告する。
+選んだ構成に適用される契約は、compare/diff/sensitivity でも判定する。比較全体の判定は、各案の判定を invalid > violated > unsupported > inconclusive > vacuous > satisfied の順で畳んだものになる。
+ある案が unsupported でも、他の案が violated なら全体は violated になる。各案の判定と診断を両方報告する。
 conform は U-LOG-1、not_checked に unsupported_request、unchecked に evidence_basis を残す。
 範囲外の契約は未対応要求にも数えず、contract_scopeに残す。
 詳しくは[利用ガイド](../../../docs/guide/results.md#根拠源の要求と証跡)を参照。
@@ -387,6 +408,23 @@ bounds と simulation は計算の設定なので、この宣言一覧ではな�
 
 explain では、再送した呼出しの `steps[]` に `attempt` と `observed_receipt` が入る(試行の案 B: 1 回目 finish が `unknown`、2 回目 finish が `delivered` で `result: charged`)。応答が失われた試行の `result` は null だった。
 
+## 期待値の指標と負荷の評価で出る欄
+
+正本は[結果のガイド](../../../docs/guide/results.md)。宣言したモデルにだけ出る。
+
+| 欄 | 中身 | 読み方 |
+|---|---|---|
+| `quality.means[]` | `metric mean.…` の値 | `check`・`explain` では区間と `basis`(`exact` / `per_case_relaxation` / `lower_bound`)。値が出ないときは理由(`beyond_reached_mass`・`denominator_may_be_zero`・`not_configured`・`truncated` など)。`simulate` では `point`・`observations`・`censored` |
+| `metric_checks[]` | `verify metric` の条件ごとの判定 | 閾値と比較演算子は `constraint` の文字列に入る。区間と根拠は別欄。`simulate` の cohort の条件は確率の問いと同じ誤り率の割当てに入る。mean の標本には判定用の信頼区間がなく `unsupported / no_statistical_bound` |
+| 仮定の行 `simulation.same_time` | 同じ時刻の出来事の順序を試して、結果に効かないと確かめた | 出ている実行は、その確認を通っている。全ての順序での安全性の検証ではない |
+| 仮定の行 `policy.dispatch` | 方策に `dispatch after_finishes` を書いた | 開始の順の前提として報告に書く |
+| 仮定の行 `scenario.contest_not_filed`、警告 `W-CONTEST-1`、性質の `excluded` | 異議を起票しない前提で評価した | 時間・待ち・作業・稼働率は「起票されない場合の値」と書く。応答の契約は `inconclusive` のまま |
+| 変異の `unsupported / loop_control`、`unsupported / loop_feature_combination` | 繰り返しのために、その変異を判定する検査が導出されていない・その種類が未対応 | 「検出できなかった」とは書かない。未対応として報告する |
+
+確認用ページは分数のまま区間の両端を示す。`per_case_relaxation` は案件ごとの緩和区間、`lower_bound` は下限で、どちらも単一の値に丸めない。標本平均は観測数と打切り件数を併記する。打切りがある平均は点推定でなく理由を表示する。除外・数値の算出なし・未解釈の欄は冒頭の未確認にも載る。
+負荷の表では完了や終端別の件数と観測窓を併読する。件数は、単位時間あたりの処理能力に換算していない。`scenario.contest_not_filed` のある report では、負荷の数値を起票しない条件から切り離さない。
+理由語は、ガイドの[業務指標で値が出ない理由](../../../docs/guide/results.md#業務指標で値が出ない理由)と[品質指標で値が出ない理由](../../../docs/guide/results.md#品質指標で値が出ない理由)を参照。ページは「該当なし」で値がない行を、未設定や打切りなどの「確かめられていないもの」に含めない。
+
 ## explain
 
 `explanation.counterexamples[]` に反例。各 `steps[]` に `time / case_id / actor / capability / executor / result / kind / location{line,column}` と、違反の段に `violation`。
@@ -399,13 +437,15 @@ explain は `--configuration NAME` と `--scenario NAME` で check と同じ対�
 ## simulate
 
 `simulation.status / replications / completed_replications / seed / confidence / nondeterminism`。
-`nondeterminism: reject-on-encounter` で、未解決の非決定に出会うと U-SEM-0 で unsupported。
+`nondeterminism: reject-on-encounter` で、未解決の非決定に出会うと U-SEM-0 で unsupported。同時刻を閉じた状態と観測が一致して先に進んだ実行では `simulation.same_time` が仮定に残る。
 basis は性質や中断の有無で異なり、確率性質の案件別推定は `basis: statistical` で表す。**全スケジュールの安全性検証ではない。**
 
 ## compare
 
 `plans[]` に案ごとの完全な report(`configuration` と `report`)、`tables.properties / terminals / metrics` に横並び、`mismatch` に比較条件の不一致。
-`assumptions` は `compare.purpose = side-by-side-only`(順位・総合点・Pareto は出さない)。`unchecked` に ranking 等が並ぶ。
+`evaluation.hard` は案ごとの必須条件の判定、`evaluation.plans` は採用候補かどうか、`evaluation.objectives` は目的の値。ページはこの3つを分け、目的で必須条件や性質の違反を相殺しない。比較の標本値を必須条件の合否に流用しない。
+比較の宣言がなければ `compare.purpose = side-by-side-only` で、順位・総合点・Pareto は出さない。宣言つきの評価では `compare.purpose = declared-evaluation` と `evaluation.pareto` が出る。必須条件と性質の検査を通った案だけが目的の優劣比較の対象。simulation は標本推定のため優劣を計算しない。どちらも順位・総合点は出さない。
+`path_range`・`with_undetermined`、採否の状態、Pareto の理由語は、ガイドの[比較の採否と目的を読む](../../../docs/guide/results.md#比較の採否と目的を読む)を参照。
 exhaustive の invoice 3 案は全体 violated(ToBeA が violated)で exit 1、simulation は 3 案とも unsupported で exit 4 だった。
 再送を含む案があると、`plans[]` は入るが `checked` は空、`unchecked` に `configuration_selection`・`property_tables` 等が並び、最上位は unsupported・exit 4(EC 試行)。読み方は上の「全体の verdict」の例外。
 

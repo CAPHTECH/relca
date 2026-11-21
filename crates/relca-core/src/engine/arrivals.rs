@@ -290,12 +290,55 @@ impl std::hash::Hash for Global {
     }
 }
 impl Global {
+    /// A cheap subset of the value-based state identity. Used only to select
+    /// a same-time search bucket, never to decide equality or convergence.
+    fn instant_fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::hash::DefaultHasher::new();
+        self.time.hash(&mut hash);
+        self.cursor.hash(&mut hash);
+        self.phase.hash(&mut hash);
+        self.shared.hash(&mut hash);
+        for slot in &self.cases {
+            std::mem::discriminant(slot).hash(&mut hash);
+            if let Some(c) = slot.payload() {
+                c.local.pc.hash(&mut hash);
+                c.terminal.hash(&mut hash);
+                c.local.state_values.hash(&mut hash);
+                for task in &c.local.tasks {
+                    task.binding.hash(&mut hash);
+                    task.lifecycle.hash(&mut hash);
+                    task.executor.hash(&mut hash);
+                }
+            }
+        }
+        hash.finish()
+    }
+
+    fn queued_policy_ranks(&self, m: &ir::Model) -> EngineResult<Vec<usize>> {
+        let ranks = policy::ranks(m)?;
+        for c in self.cases.iter().filter_map(|s| match s {
+            Slot::Admitted(c) => Some(c),
+            _ => None,
+        }) {
+            for t in c
+                .local
+                .tasks
+                .iter()
+                .filter(|t| t.lifecycle == Lifecycle::Queued)
+            {
+                policy::queued_rank(&ranks, t.binding)?;
+            }
+        }
+        Ok(ranks)
+    }
+
     fn calendar_pending(&self, m: &ir::Model) -> EngineResult<bool> {
         let ranks = m
             .start_policy
             .as_ref()
             .filter(|p| p.call_order)
-            .map(|_| policy::ranks(m))
+            .map(|_| self.queued_policy_ranks(m))
             .transpose()?;
         for (k, slot) in self.cases.iter().enumerate() {
             let Slot::Admitted(c) = slot else { continue };
@@ -306,7 +349,7 @@ impl Global {
                 let cap = &m.capabilities[task.capability.0];
                 if task.lifecycle != Lifecycle::Queued
                     || cap.qualified_executors.as_ref().is_some_and(Vec::is_empty)
-                    || !self.fifo_head(k, j, m)
+                    || !self.fifo_head(k, j, m)?
                     || !m.actors[cap.actor.0].capacity.is_some_and(|n| n > 0)
                     || cap
                         .uses
@@ -456,6 +499,8 @@ impl Global {
         for (j, slot) in self.cases.iter_mut().enumerate() {
             if j != k
                 && let Slot::Admitted(c) = slot
+                // Taking a mutable view here detaches an otherwise shared case.
+                && needs_write_notification(&c.local, &writes, m)
             {
                 notify_writes(&mut c.local, None, &writes, m);
             }
@@ -497,25 +542,25 @@ impl Global {
             |s| matches!(s, Slot::Admitted(c) if c.local.exceeds_live_bound(m.bounds.live_tasks)),
         )
     }
-    fn fifo_head(&self, k: usize, j: usize, m: &ir::Model) -> bool {
+    fn fifo_head(&self, k: usize, j: usize, m: &ir::Model) -> EngineResult<bool> {
         // Include all queued predecessors, even in stopped cases. Candidate
         // liveness is checked separately, as in the reference dispatch rules.
         if m.start_policy.is_none() {
-            return true;
+            return Ok(true);
         }
         let Slot::Admitted(c) = &self.cases[k] else {
-            return false;
+            return Ok(false);
         };
         if let Some(p) = &m.start_policy
             && p.priority.is_some()
         {
             let cap = &m.capabilities[c.local.tasks[j].capability.0];
             if !p.controls(cap.actor) {
-                return true;
+                return Ok(true);
             }
-            let ranks = policy::ranks(m).expect("validated lexical sites");
+            let ranks = self.queued_policy_ranks(m)?;
             let own = (c.queued_at[j], k, ranks[c.local.tasks[j].binding.0]);
-            return !self.cases.iter().enumerate().any(|(other, slot)| {
+            return Ok(!self.cases.iter().enumerate().any(|(other, slot)| {
                 let Slot::Admitted(c) = slot else {
                     return false;
                 };
@@ -534,14 +579,14 @@ impl Global {
                                 .iter()
                                 .any(|u| cap.uses.iter().any(|v| u.resource == v.resource)))
                 })
-            });
+            }));
         }
         let actor = m.capabilities[c.local.tasks[j].capability.0].actor;
         let key = (c.queued_at[j], k);
-        !self.cases.iter().enumerate().any(|(other,s)| {
+        Ok(!self.cases.iter().enumerate().any(|(other,s)| {
             matches!(s, Slot::Admitted(c) if c.local.tasks.iter().enumerate().any(|(i,t)|
                 t.lifecycle == Lifecycle::Queued && m.capabilities[t.capability.0].actor == actor && (c.queued_at[i],other) < key))
-        })
+        }))
     }
 
     /// Intersecting checked receipts constrain only currently due finishes.
@@ -601,7 +646,7 @@ impl Global {
     /// Lightweight preselection: no successor allocation, monitor or Room use.
     fn fixed_starts(&self, m: &ir::Model) -> EngineResult<StartCandidates> {
         let p = m.start_policy.as_ref().ok_or("missing fixed policy")?;
-        let ranks = policy::ranks(m)?;
+        let ranks = self.queued_policy_ranks(m)?;
         let units = self.resource_occupancy(m)?;
         let mut counts = vec![0; m.actors.len()];
         let mut busy = BTreeSet::new();
@@ -630,7 +675,7 @@ impl Global {
             let cap = &m.capabilities[cap_id.0];
             let actor = &m.actors[cap.actor.0];
             let ordered = p.priority.is_none() && p.call_order && p.controls(cap.actor);
-            if !self.fifo_head(k, j, m)
+            if !self.fifo_head(k, j, m)?
                 || counts[cap.actor.0] >= actor.capacity.ok_or("capacity-less execution")?
                 || !resources_fit(cap, &units, m)
                 || !self.calendar_fit(cap, &counts, &units, m)
@@ -1200,6 +1245,7 @@ impl trace::Capture {
     }
 }
 
+#[derive(Clone)]
 struct Facts {
     response_receipts: Vec<outcome::ResponseReceipt>,
     horizon: bool,
@@ -1972,6 +2018,53 @@ fn transition(
     Ok(actions)
 }
 
+#[cfg(test)]
+#[test]
+fn ld_probe_closed_states() {
+    let text = include_str!("../../../../fixtures/ld-confluent/model.relca");
+    let m = crate::lower::lower(&crate::syntax::parse(text).unwrap()).unwrap();
+    let times = arrivals(&m).unwrap();
+    let mut program = vec![Instruction::Stop];
+    let entry = compile(&m.process.body, 0, &mut program);
+    let mut sample = simulation::Sample::new(0, 1);
+    sample.collect_orders = true;
+    let mut root = initial(&m, times.len());
+    let generate = |s: &Global, r: &mut simulation::Sample| {
+        r.clear_action();
+        transition(
+            s,
+            &m,
+            &times,
+            &program,
+            entry,
+            r,
+            &mut Facts::new(times.len()),
+        )
+        .unwrap()
+    };
+    while root.time < 3 {
+        root = generate(&root, &mut sample).unwrap().remove(0).remove(0).1;
+    }
+    let mut pending = vec![root];
+    let mut visited = std::collections::HashSet::new();
+    let mut closed = std::collections::HashSet::new();
+    while let Some(s) = pending.pop() {
+        if !visited.insert(s.clone()) {
+            continue;
+        }
+        assert!(visited.len() <= 4096);
+        if s.time > 3 {
+            closed.insert(s);
+            continue;
+        }
+        for action in generate(&s, &mut sample).unwrap() {
+            assert_eq!(action.len(), 1);
+            pending.push(action.into_iter().next().unwrap().1);
+        }
+    }
+    assert_eq!(closed.len(), 1, "{closed:#?}");
+}
+
 fn transition_inner(
     s: &Global,
     m: &ir::Model,
@@ -2168,9 +2261,7 @@ fn transition_inner(
                 v.pc = *next;
             }
             Instruction::LoopControl { updates, next } => {
-                for (id, value) in updates {
-                    v.state_values[id.0] = *value;
-                }
+                m.apply_loop_updates(&mut v.state_values, updates)?;
                 v.pc = *next;
             }
             Instruction::Receipt {
@@ -2393,6 +2484,13 @@ fn transition_inner(
     } else {
         None
     };
+    let defer_dispatch = m.start_policy.as_ref().filter(|p| p.dispatch_after_finishes).filter(|_| {
+        s.cases.iter().any(|slot| matches!(slot, Slot::Admitted(c) if !c.stopped() && c.local.tasks.iter().any(|t| match t.lifecycle {
+            Lifecycle::Running { finish, ack } => finish == s.time || ack == Some(s.time),
+            Lifecycle::DistributedRunning { due, ack, .. } => due || ack == Some(s.time),
+            _ => false,
+        })))
+    });
     let mut policy_choices = 0usize;
     let mut priority_task_choices = 0usize;
     let generated = (|| -> EngineResult<()> {
@@ -2637,7 +2735,11 @@ fn transition_inner(
                 if fixed.as_ref().is_some_and(|cs| !cs.contains_key(&(k, j))) {
                     continue;
                 }
-                if t.lifecycle != Lifecycle::Queued || !s.fifo_head(k, j, m) {
+                if t.lifecycle != Lifecycle::Queued
+                    || defer_dispatch
+                        .is_some_and(|p| p.controls(m.capabilities[t.capability.0].actor))
+                    || !s.fifo_head(k, j, m)?
+                {
                     continue;
                 }
                 let cap = &m.capabilities[t.capability.0];
@@ -2707,10 +2809,7 @@ fn transition_inner(
                             local
                                 .results
                                 .resize(local.results.len().max(t.binding.0 + 1), None);
-                            local.results[t.binding.0] = Some(req.otherwise);
-                            if let Some(alias) = m.loop_alias(t.binding) {
-                                local.results[alias.0] = Some(req.otherwise);
-                            }
+                            bind_result(&mut local, t.binding, Some(req.otherwise), m);
                         }
                         f.local_using(k, |e| {
                             record_refusal(
@@ -3798,6 +3897,97 @@ fn quality_result(
             Err(_) => return quality_aborted(m),
         }
     }
+    if !spec.means.is_empty() && !m.actors.iter().any(|a| a.metadata.rule.is_some()) {
+        let rows: EngineResult<Vec<_>> = spec
+            .means
+            .iter()
+            .map(|c| {
+                let p = c.property.map(|i| &spec.properties[i]);
+                let views = (0..a.len())
+                    .map(|k| {
+                        nodes
+                            .iter()
+                            .map(|n| {
+                                let s = &n.state;
+                                let received = s.cases[k].payload().is_some_and(|c| c.received);
+                                let settled =
+                                    matches!(s.cases[k], Slot::Rejected | Slot::Overflow(_))
+                                        || s.cases[k].payload().is_some_and(|c| c.stopped())
+                                        || n.actions.is_empty() && !n.unknown && !n.numeric;
+                                let hit = if let Some(p) = p {
+                                    if received
+                                        && quality_hit(p, &s.view(k, m)?, ended(s, k), a[k])?
+                                    {
+                                        Some(
+                                            match p.target {
+                                                ir::QualityTarget::Ends(_) => {
+                                                    ended(s, k).unwrap().1 as u128
+                                                }
+                                                _ => s.time as u128,
+                                            } - a[k] as u128,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    settled.then_some(0)
+                                };
+                                let closed=p.is_some_and(|p|kind(s,k).is_some()
+                                    && (matches!(p.target,ir::QualityTarget::Ends(_))
+                                        || !matches!(&s.cases[k],Slot::Admitted(c) if !c.stopped()))
+                                    || p.within.is_some_and(|d|s.time>=a[k] && s.time-a[k]>d));
+                                let at = match n.cut {
+                                    ProbabilityCut::Clock => m.bounds.clock as u128 + 1,
+                                    ProbabilityCut::Horizon => s.time as u128 + 1,
+                                    _ => s.time as u128,
+                                };
+                                let first = crate::quality::FirstView {
+                                    hit,
+                                    closed,
+                                    censor: (n.unknown || n.numeric).then(|| {
+                                        crate::quality::Arrival::censor(
+                                            at.saturating_sub(a[k] as u128),
+                                            p.and_then(|p| p.within).map(u128::from),
+                                            n.cut != ProbabilityCut::Horizon || n.numeric,
+                                        )
+                                    }),
+                                };
+                                Ok(if c.measure == ir::MeanMeasure::Elapsed {
+                                    crate::quality::MeanView::elapsed(first)
+                                } else {
+                                    crate::quality::MeanView {
+                                        first,
+                                        amount: metrics::mean_amount(
+                                            m,
+                                            s.cases[k].payload().map(|c| &c.local),
+                                            if hit.is_none() && n.cut == ProbabilityCut::Clock {
+                                                m.bounds.clock
+                                            } else {
+                                                s.time
+                                            },
+                                            c.measure,
+                                        ),
+                                    }
+                                })
+                            })
+                            .collect::<EngineResult<Vec<_>>>()
+                    })
+                    .collect::<EngineResult<Vec<_>>>()?;
+                let (v, lb) = crate::quality::graph_mean(
+                    c,
+                    order,
+                    |i| nodes[i].actions.clone(),
+                    &views,
+                    4096,
+                );
+                Ok(crate::quality::mean_row(m, c, v, lb))
+            })
+            .collect();
+        match rows {
+            Ok(rows) => q.means = Some(rows),
+            Err(_) => return quality_aborted(m),
+        }
+    }
     q
 }
 
@@ -3922,7 +4112,7 @@ fn sampled_contests(
             .contests()
             .iter()
             .enumerate()
-            .filter(|(_, d)| d.rates.is_some())
+            .filter(|(id, d)| d.rates.is_some() || m.contest_not_filed(*id))
         {
             let c = slot.payload();
             let r = c
@@ -3969,6 +4159,447 @@ fn sampled_contests(
         }
     }
     rows
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct SampledHits {
+    mean: metrics::MeanPath,
+    hit: Vec<Vec<bool>>,
+    quality_hits: Vec<Vec<bool>>,
+    quality_closed: Vec<Vec<bool>>,
+    first_hits: Vec<Vec<Option<u128>>>,
+}
+
+impl SampledHits {
+    fn observe(&mut self, s: &Global, m: &ir::Model, a: &[u64]) -> EngineResult<()> {
+        if let Some(q) = &m.quality {
+            for (i, p) in q.properties.iter().enumerate() {
+                let mut first_views = self
+                    .first_hits
+                    .get(i)
+                    .map(|_| vec![(false, false, None); a.len()]);
+                for (k, hits) in self.quality_hits[i].iter_mut().enumerate() {
+                    if self.quality_closed[i][k] {
+                        continue;
+                    }
+                    // Observe the closing transition, then freeze the case's view.
+                    self.quality_closed[i][k] = kind(s, k).is_some()
+                        && (matches!(p.target, ir::QualityTarget::Ends(_))
+                            || s.cases[k].payload().is_none_or(|c| c.stopped()))
+                        || p.within
+                            .is_some_and(|d| s.time >= a[k] && s.time - a[k] > d);
+                    if s.cases[k].payload().is_some_and(|c| c.received) {
+                        let arrived = quality_hit(p, &s.view(k, m)?, ended(s, k), a[k])?;
+                        *hits |= arrived;
+                        if let Some(views) = &mut first_views {
+                            let at = match p.target {
+                                ir::QualityTarget::Ends(_) => {
+                                    ended(s, k).map_or(s.time, |(_, t)| t)
+                                }
+                                _ => s.time,
+                            };
+                            views[k] = (true, arrived, Some(at));
+                        }
+                    }
+                }
+                if let Some(views) = first_views {
+                    crate::quality::observe_first_world(
+                        &mut self.first_hits[i],
+                        a,
+                        s.time,
+                        true,
+                        &views,
+                    );
+                }
+            }
+        }
+        if m.quality.as_ref().is_some_and(|q| !q.means.is_empty()) {
+            for (k, slot) in s.cases.iter().enumerate() {
+                self.mean.observe(
+                    m,
+                    k,
+                    |i| self.first_hits[i][k],
+                    slot.payload().map(|c| &c.local),
+                    s.time,
+                    matches!(slot, Slot::Rejected | Slot::Overflow(_))
+                        || slot.payload().is_some_and(|c| c.stopped()),
+                );
+            }
+        }
+        if !m.probability_queries.is_empty() {
+            let shared = m.state_variables.iter().any(|v| m.is_shared_state(v.kind));
+            for (k, hits) in self.hit.iter_mut().enumerate() {
+                if let Some(c) = s.cases[k].payload().filter(|c| c.received) {
+                    let owned;
+                    let view = if shared {
+                        owned = s.view(k, m)?;
+                        &owned
+                    } else {
+                        &c.local
+                    };
+                    let end = ended(s, k);
+                    for (i, q) in m.probability_queries.iter().enumerate() {
+                        // A stopped case's local clock can differ from the observation time.
+                        hits[i] |= query_hit_at(q, view, s.time, end, a[k])?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn apply_sampled_action(
+    s: &Global,
+    m: &ir::Model,
+    sample: &mut simulation::Sample,
+    facts: &mut Facts,
+    index: usize,
+    action: Action,
+) -> EngineResult<Global> {
+    if let Some((_, task)) = sample.kernels.iter().find(|(i, _)| *i == index).copied() {
+        let (_, case) = sample.tag(index).ok_or("missing kernel site")?;
+        sample.case = case;
+        let k = case as usize - 1;
+        let local = sample_kernel_in(
+            &s.view(k, m)?,
+            task,
+            m,
+            sample,
+            &mut Exploration::default(),
+            k,
+        )?;
+        let mut next = s.clone();
+        next.store(k, local, m);
+        next.normalize_state_invariants(m)?;
+        return Ok(next);
+    }
+    let selected = if let Some((site, case)) = sample.tag(index) {
+        sample.choose(
+            case,
+            &site,
+            1,
+            &action.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
+        )?
+    } else {
+        0
+    };
+    let next = action
+        .into_iter()
+        .nth(selected)
+        .ok_or("empty sampled action")?
+        .1;
+    if m.has_requires() {
+        for (k, (old, new)) in s.cases.iter().zip(&next.cases).enumerate() {
+            if matches!((old, new), (Slot::Admitted(_), Slot::Admitted(_))) {
+                selected_refusals(&s.view(k, m)?, &mut next.view(k, m)?, m, &mut facts.per[k]);
+            }
+        }
+    }
+    if sample.instant_executors.is_some() {
+        for (k, slot) in next.cases.iter().enumerate() {
+            if let Slot::Admitted(c) = slot {
+                sample.observe_executors(
+                    k as u64 + 1,
+                    s.cases[k].payload().map(|before| &before.local),
+                    &c.local,
+                );
+            }
+        }
+    }
+    Ok(next)
+}
+
+#[derive(Clone)]
+struct InstantPath {
+    sample: simulation::Sample,
+    facts: Facts,
+    hits: SampledHits,
+    cut: Option<outcome::SimulationCut>,
+    deadlocks: Vec<Option<u64>>,
+}
+
+#[derive(PartialEq, Eq)]
+struct InstantObservation {
+    executors: Option<BTreeSet<(u64, ir::BindingId, ir::PersonId)>>,
+    hits: SampledHits,
+    overcommit: bool,
+    cases: Vec<InstantCaseObservation>,
+    draw_keys: BTreeSet<String>,
+    cut: Option<outcome::SimulationCut>,
+    deadlocks: Vec<Option<u64>>,
+}
+
+#[derive(PartialEq, Eq)]
+struct InstantCaseObservation {
+    violations: Vec<bool>,
+    lost_updates: BTreeSet<ir::StateVarId>,
+    ranges: Vec<outcome::StateRangeViolation>,
+    refusals: BTreeMap<ir::BindingId, outcome::CapabilityRefusal>,
+}
+
+impl InstantPath {
+    fn observation(&self, drawn_before: usize) -> InstantObservation {
+        InstantObservation {
+            executors: self.sample.instant_executors.clone(),
+            hits: self.hits.clone(),
+            overcommit: self.facts.overcommit,
+            cases: self
+                .facts
+                .per
+                .iter()
+                .map(|e| {
+                    let mut violations = e.violation.clone();
+                    while violations.last() == Some(&false) {
+                        violations.pop();
+                    }
+                    InstantCaseObservation {
+                        violations,
+                        lost_updates: e.lost_updates.clone(),
+                        ranges: e.ranges.clone(),
+                        refusals: e.refusals.clone(),
+                    }
+                })
+                .collect(),
+            draw_keys: self.sample.draws[drawn_before..]
+                .iter()
+                .map(|d| d.key.clone())
+                .collect(),
+            cut: self.cut,
+            deadlocks: self.deadlocks.clone(),
+        }
+    }
+
+    fn apply(
+        mut self,
+        s: &Global,
+        m: &ir::Model,
+        actions: Vec<Action>,
+    ) -> Vec<EngineResult<(Global, Self)>> {
+        if !self.sample.distinct_actions(&actions) {
+            return vec![
+                actions
+                    .into_iter()
+                    .next()
+                    .ok_or(Halt::Unsupported("empty instant"))
+                    .and_then(|action| {
+                        apply_sampled_action(s, m, &mut self.sample, &mut self.facts, 0, action)
+                            .map(|next| (next, self))
+                    }),
+            ];
+        }
+        actions
+            .into_iter()
+            .enumerate()
+            .map(|(index, action)| {
+                let mut path = self.clone();
+                let next =
+                    apply_sampled_action(s, m, &mut path.sample, &mut path.facts, index, action)?;
+                Ok((next, path))
+            })
+            .collect()
+    }
+}
+
+#[test]
+fn ld_same_time_each_observation_component_can_prevent_convergence() {
+    let model = crate::syntax::parse(
+        r#"model MeanObservation version "0.2" {
+          process P { wait 1min; end done }
+          bounds { cases 1; live_tasks 1; clock 2min }
+          verify reachable end.done
+          property case.Done = reached(end.done)
+          metric mean.Lead = mean(elapsed, case.Done)
+        }"#,
+    )
+    .and_then(|ast| crate::lower::lower(&ast))
+    .unwrap();
+    let baseline = InstantPath {
+        sample: simulation::Sample::new(0, 1),
+        facts: Facts::new(1),
+        hits: SampledHits {
+            mean: metrics::MeanPath::new(&model, 1),
+            hit: vec![vec![false]],
+            quality_hits: vec![],
+            quality_closed: vec![],
+            first_hits: vec![],
+        },
+        cut: None,
+        deadlocks: vec![None],
+    };
+    let refusal = outcome::CapabilityRefusal {
+        case_id: 1,
+        call: "x".into(),
+        capability: "A.work".into(),
+        result: "denied".into(),
+        at: outcome::RefusalRange { min: 0, max: 0 },
+        coverage: "sampled".into(),
+        observed_count: None,
+        samples: None,
+    };
+    let range = outcome::StateRangeViolation {
+        case_id: Some(1),
+        time: 0,
+        binding: "x".into(),
+        actor: "A".into(),
+        capability: "work".into(),
+        phase: "finish".into(),
+        variable: "n".into(),
+        operator: "+=".into(),
+        before: "2".into(),
+        operand: "1".into(),
+        attempted: "3".into(),
+        lower: "0".into(),
+        upper: "2".into(),
+        write_span: diag::Span { start: 0, end: 1 },
+        declaration_span: diag::Span { start: 0, end: 1 },
+    };
+    let check = |component: &str, edit: &dyn Fn(&mut InstantPath)| {
+        let mut changed = baseline.clone();
+        edit(&mut changed);
+        let outcome = simulation::close_instant(
+            0,
+            vec![Ok((1, baseline.clone())), Ok((2, changed))],
+            8,
+            |state, path| {
+                if state == 3 {
+                    Ok(Err((state, path)))
+                } else {
+                    Ok(Ok(vec![Ok((3, path))]))
+                }
+            },
+            |path| path.observation(0),
+        )
+        .unwrap();
+        assert!(
+            outcome.is_none(),
+            "{component} disappeared from the observation key"
+        );
+    };
+    check("contract violations", &|p| {
+        p.facts.per[0].violation = vec![true]
+    });
+    check("resource overcommit", &|p| p.facts.overcommit = true);
+    check("lost updates", &|p| {
+        p.facts.per[0].lost_updates.insert(ir::StateVarId(0));
+    });
+    check("requires refusals", &|p| {
+        p.facts.per[0]
+            .refusals
+            .insert(ir::BindingId(0), refusal.clone());
+    });
+    check("range stop", &|p| p.facts.per[0].ranges.push(range.clone()));
+    check("random keys", &|p| {
+        p.sample.draws.push(outcome::SimulationDraw {
+            key: "new-key".into(),
+        })
+    });
+    check("horizon", &|p| {
+        p.cut = Some(outcome::SimulationCut::Horizon)
+    });
+    check("deadlock", &|p| p.deadlocks[0] = Some(0));
+    check("probability hit", &|p| p.hits.hit[0][0] = true);
+    check("mean first-hit amount", &|p| {
+        p.hits.mean.observe(&model, 0, |_| Some(1), None, 1, false)
+    });
+}
+
+fn stopped_sample(
+    s: &Global,
+    m: &ir::Model,
+    scratch: Facts,
+    facts: &mut Facts,
+    cut: &mut Option<outcome::SimulationCut>,
+    deadlocks: &mut [Option<u64>],
+    no_successor: bool,
+) {
+    use outcome::SimulationCut;
+    if !no_successor && scratch.per.iter().any(|e| !e.ranges.is_empty()) {
+        for (dst, src) in facts.per.iter_mut().zip(scratch.per) {
+            dst.ranges = src.ranges;
+        }
+        return;
+    }
+    if !no_successor {
+        *cut = Some(if m.horizon == Some(s.time) && s.time <= m.bounds.clock {
+            SimulationCut::Horizon
+        } else {
+            SimulationCut::Clock
+        });
+    }
+    for (k, (dst, src)) in facts.per.iter_mut().zip(scratch.per).enumerate() {
+        if no_successor
+            && s.cases[k]
+                .payload()
+                .is_some_and(|c| c.terminal.is_none() && !c.stopped())
+        {
+            deadlocks[k] = Some(s.time);
+        }
+        if !no_successor || !src.violation.is_empty() {
+            dst.violation.resize(m.contracts.len(), false);
+            for (i, v) in src.violation.into_iter().enumerate() {
+                dst.violation[i] |= v;
+            }
+        }
+    }
+}
+
+fn close_sampled_arrival_instant(
+    s: &Global,
+    m: &ir::Model,
+    a: &[u64],
+    program: &[Instruction],
+    entry: usize,
+    path: InstantPath,
+    actions: Vec<Action>,
+) -> EngineResult<Option<(Global, InstantPath)>> {
+    use outcome::SimulationCut;
+    let drawn_before = path.sample.draws.len();
+    simulation::close_instant_by(
+        s.clone(),
+        path.apply(s, m, actions),
+        simulation::same_time_limit(),
+        Global::instant_fingerprint,
+        |state, mut path| {
+            if state.time != s.time {
+                return Ok(Err((state, path)));
+            }
+            if state.live_cut(m) {
+                path.cut = Some(SimulationCut::LiveTasks);
+                return Ok(Err((state, path)));
+            }
+            path.facts.observe(&state, m, a)?;
+            path.hits.observe(&state, m, a)?;
+            path.sample.clear_action();
+            let mut scratch = Facts::new(a.len());
+            match transition(&state, m, a, program, entry, &mut path.sample, &mut scratch) {
+                Ok(Some(actions)) if !actions.is_empty() => {
+                    if scratch.per.iter().any(|e| !e.ranges.is_empty()) {
+                        return path.sample.reject();
+                    }
+                    Ok(Ok(path.apply(&state, m, actions)))
+                }
+                Ok(result) => {
+                    stopped_sample(
+                        &state,
+                        m,
+                        scratch,
+                        &mut path.facts,
+                        &mut path.cut,
+                        &mut path.deadlocks,
+                        result.is_none(),
+                    );
+                    Ok(Err((state, path)))
+                }
+                Err(Halt::Budget) if scratch.numeric => {
+                    path.cut = Some(SimulationCut::Numeric);
+                    Ok(Err((state, path)))
+                }
+                Err(e) => Err(e),
+            }
+        },
+        |path| path.observation(drawn_before),
+    )
 }
 
 pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
@@ -4024,11 +4655,13 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
     out.metric_template = metrics::finish(None, m, crate::obligation::Coverage::Aborted);
     out.capability_refusals = m.has_requires().then(Vec::new);
     let mut quality_observations = Vec::new();
+    let mut mean_samples = metrics::MeanSamples::new(m);
     let mut program = vec![Instruction::Stop];
     let entry = compile(&m.process.body, 0, &mut program);
     for rep in 1..=spec.replications {
         out.attempted_replications = rep;
         let mut sample = simulation::Sample::new(spec.seed, rep);
+        sample.collect_orders = true;
         let mut realized = shape.clone();
         if let Some(d) = &m.arrival_distribution {
             let weights: Vec<_> = d.entries.iter().map(|e| e.1.clone()).collect();
@@ -4052,21 +4685,26 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
         let a = m.arrivals.clone().unwrap_or_else(|| a.clone());
         let mut s = initial(m, a.len());
         let mut facts = Facts::new(a.len());
-        let mut hit = vec![vec![false; m.probability_queries.len()]; a.len()];
-        let mut quality_hits =
+        let quality_hits =
             vec![vec![false; a.len()]; m.quality.as_ref().map_or(0, |q| q.properties.len())];
         // Observer lifetime is path-local, not part of execution-state identity.
-        let mut quality_closed = vec![vec![false; a.len()]; quality_hits.len()];
-        let mut first_hits = vec![
+        let quality_closed = vec![vec![false; a.len()]; quality_hits.len()];
+        let first_hits = vec![
             vec![None; a.len()];
-            m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                0
-            } else {
-                q.properties.len()
-            })
+            m.quality
+                .as_ref()
+                .map_or(0, ir::QualitySpec::first_hit_count)
         ];
+        let mut hits = SampledHits {
+            mean: metrics::MeanPath::new(m, a.len()),
+            hit: vec![vec![false; m.probability_queries.len()]; a.len()],
+            quality_hits,
+            quality_closed,
+            first_hits,
+        };
         let mut cut = None;
         let mut deadlocks = vec![None; a.len()];
+        let mut same_time = false;
         let path = (|| -> EngineResult<()> {
             loop {
                 if s.live_cut(m) {
@@ -4074,58 +4712,8 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
                     break;
                 }
                 facts.observe(&s, m, &a)?;
-                if let Some(q) = &m.quality {
-                    for (i, p) in q.properties.iter().enumerate() {
-                        let mut first_views = first_hits
-                            .get(i)
-                            .map(|_| vec![(false, false, None); a.len()]);
-                        for (k, hits) in quality_hits[i].iter_mut().enumerate() {
-                            if quality_closed[i][k] {
-                                continue;
-                            }
-                            // Include the closing transition itself, then freeze both
-                            // B6 reachability and first arrival before later shared writes.
-                            quality_closed[i][k] = kind(&s, k).is_some()
-                                && (matches!(p.target, ir::QualityTarget::Ends(_))
-                                    || s.cases[k].payload().is_none_or(|c| c.stopped()))
-                                || p.within
-                                    .is_some_and(|d| s.time >= a[k] && s.time - a[k] > d);
-                            if s.cases[k].payload().is_some_and(|c| c.received) {
-                                let arrived = quality_hit(p, &s.view(k, m)?, ended(&s, k), a[k])?;
-                                *hits |= arrived;
-                                if let Some(views) = &mut first_views {
-                                    let at = match p.target {
-                                        ir::QualityTarget::Ends(_) => {
-                                            ended(&s, k).map_or(s.time, |(_, t)| t)
-                                        }
-                                        _ => s.time,
-                                    };
-                                    views[k] = (true, arrived, Some(at));
-                                }
-                            }
-                        }
-                        if let Some(views) = first_views {
-                            crate::quality::observe_first_world(
-                                &mut first_hits[i],
-                                &a,
-                                s.time,
-                                true,
-                                &views,
-                            );
-                        }
-                    }
-                }
-                for (k, hits) in hit.iter_mut().enumerate() {
-                    if s.cases[k].payload().is_some_and(|c| c.received) {
-                        let view = s.view(k, m)?;
-                        for (i, q) in m.probability_queries.iter().enumerate() {
-                            hits[i] |= query_hit(q, &view, ended(&s, k), a[k])?;
-                        }
-                    }
-                }
-                sample.sites.clear();
-                sample.kernels.clear();
-                sample.provenance.clear();
+                hits.observe(&s, m, &a)?;
+                sample.clear_action();
                 let mut scratch = Facts::new(a.len());
                 match transition(&s, m, &a, &program, entry, &mut sample, &mut scratch) {
                     Ok(None) => {
@@ -4167,54 +4755,49 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
                         if scratch.per.iter().any(|e| !e.ranges.is_empty()) {
                             return sample.reject();
                         }
-                        sample.unique(&actions)?;
-                        let action = actions.remove(0);
-                        if let Some((_, task)) =
-                            sample.kernels.iter().find(|(i, _)| *i == 0).copied()
-                        {
-                            let (_, case) = sample.tag(0).ok_or("missing kernel site")?;
-                            sample.case = case;
-                            let k = case as usize - 1;
-                            let local = sample_kernel_in(
-                                &s.view(k, m)?,
-                                task,
-                                m,
-                                &mut sample,
-                                &mut scratch.per[k],
-                                k,
-                            )?;
-                            s.store(k, local, m);
-                            s.normalize_state_invariants(m)?;
-                            continue;
-                        }
-                        let selected = if let Some((site, case)) = sample.tag(0) {
-                            sample.choose(
-                                case,
-                                &site,
-                                1,
-                                &action.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(),
-                            )?
-                        } else {
-                            0
-                        };
-                        let next = action
-                            .into_iter()
-                            .nth(selected)
-                            .ok_or("empty sampled action")?
-                            .1;
-                        for k in 0..a.len() {
-                            if !m.has_requires() {
-                                break;
-                            }
-                            if let (Slot::Admitted(_), Slot::Admitted(_)) =
-                                (&s.cases[k], &next.cases[k])
-                            {
-                                let old = s.view(k, m)?;
-                                let mut local = next.view(k, m)?;
-                                selected_refusals(&old, &mut local, m, &mut facts.per[k]);
+                        if sample.distinct_actions(&actions) {
+                            let mut instant_sample = sample.clone();
+                            instant_sample.instant_executors = Some(BTreeSet::new());
+                            let path = InstantPath {
+                                sample: instant_sample,
+                                facts: facts.clone(),
+                                hits: hits.clone(),
+                                cut,
+                                deadlocks: deadlocks.clone(),
+                            };
+                            match close_sampled_arrival_instant(
+                                &s, m, &a, &program, entry, path, actions,
+                            ) {
+                                Ok(Some((next, path))) => {
+                                    let advanced = next.time != s.time;
+                                    s = next;
+                                    sample = path.sample;
+                                    sample.instant_executors = None;
+                                    facts = path.facts;
+                                    hits = path.hits;
+                                    cut = path.cut;
+                                    deadlocks = path.deadlocks;
+                                    same_time = true;
+                                    if !advanced {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                Err(Halt::Unsupported(simulation::SAME_TIME_LIMIT_REASON)) => {
+                                    return Err(simulation::SAME_TIME_LIMIT_REASON.into());
+                                }
+                                Ok(None) => return sample.reject(),
+                                Err(e) => return sample.finish_instant_error(e),
                             }
                         }
-                        s = next;
+                        s = apply_sampled_action(
+                            &s,
+                            m,
+                            &mut sample,
+                            &mut facts,
+                            0,
+                            actions.remove(0),
+                        )?;
                     }
                     Err(Halt::Budget) if scratch.numeric => {
                         cut = Some(SimulationCut::Numeric);
@@ -4225,6 +4808,13 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
             }
             Ok(())
         })();
+        let SampledHits {
+            mean: mut mean_path,
+            hit,
+            quality_hits,
+            first_hits,
+            ..
+        } = hits;
         if let Err(h) = path {
             let message = match h {
                 Halt::Unsupported(s) => s,
@@ -4243,6 +4833,23 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
             return out;
         }
         if let Some(q) = &m.quality {
+            if !q.means.is_empty() {
+                for (k, slot) in s.cases.iter().enumerate() {
+                    mean_path.observe(
+                        m,
+                        k,
+                        |i| first_hits[i][k],
+                        slot.payload().map(|c| &c.local),
+                        s.time,
+                        true,
+                    );
+                }
+            }
+            mean_samples.add(
+                mean_path,
+                cut,
+                facts.per.iter().any(|e| !e.ranges.is_empty()),
+            );
             let truths: Vec<Vec<crate::outcome::QueryTruth>> = q
                 .properties
                 .iter()
@@ -4531,6 +5138,7 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
             })
         }));
         out.completed_replications = rep;
+        out.same_time |= same_time;
         *out.truncated_replications.get_or_insert(0) +=
             u64::from(cut.is_some() && cut != Some(SimulationCut::Horizon));
     }
@@ -4543,10 +5151,11 @@ pub(super) fn simulate(m: &ir::Model) -> outcome::SimulationOutcome {
             crate::recovery::Coverage::Sampled,
         ));
     }
-    out.quality = m
-        .quality
-        .as_ref()
-        .map(|_| crate::quality::simulation(m, &quality_observations, false));
+    out.quality = m.quality.as_ref().map(|_| {
+        let mut q = crate::quality::simulation(m, &quality_observations, false);
+        mean_samples.finish(m, &mut q);
+        q
+    });
     out
 }
 
@@ -4615,22 +5224,42 @@ fn recovery_paths(
         .transpose()
 }
 
+pub(super) fn explore_reported(m: &ir::Model, budget: usize) -> outcome::Outcome {
+    explore_traced(m, budget, None, true).0
+}
+
+#[cfg(test)]
 pub(super) fn explore(m: &ir::Model, budget: usize) -> outcome::Outcome {
-    explore_traced(m, budget, None).0
+    explore_traced(m, budget, None, false).0
 }
 
 pub(super) fn explore_traced(
     m: &ir::Model,
     budget: usize,
     trace: Option<trace::Capture>,
+    report_evidence: bool,
 ) -> (outcome::Outcome, Option<trace::Capture>) {
     let _timer = crate::perf::span("engine.total");
     let a = match arrivals(m) {
         Ok(a) => a,
-        Err(Halt::Unsupported(msg)) => return (Exploration::default().abort(msg, m), trace),
+        Err(Halt::Unsupported(msg)) => {
+            return (
+                Exploration {
+                    snapshot_findings: report_evidence.then(Default::default),
+                    ..Default::default()
+                }
+                .abort(msg, m),
+                trace,
+            );
+        }
         Err(Halt::Budget) => unreachable!(),
     };
     let mut f = Facts::new(a.len());
+    if report_evidence {
+        for case in &mut f.per {
+            case.snapshot_findings = Some(Default::default());
+        }
+    }
     f.trace = trace;
     let result = graph(m, &a, budget, &mut f)
         .and_then(|nodes| topology(&nodes).map(|order| (nodes, order)))
@@ -4715,6 +5344,13 @@ pub(super) fn explore_traced(
                             || f.terminals[k].contains_key(&Kind::Overflow(e)) =>
                     {
                         Verdict::Satisfied
+                    }
+                    p if m.contest_response_excluded(p) => {
+                        if abort.is_some() {
+                            Verdict::Unsupported
+                        } else {
+                            Verdict::Inconclusive
+                        }
                     }
                     ir::Property::Contract(id) if f.per[k].violation.get(id.0) == Some(&true) => {
                         Verdict::Violated
@@ -4925,6 +5561,7 @@ pub(super) fn explore_traced(
     ] {
         if yes {
             diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: code.into(),
                 severity: diag::Severity::Warning,
                 message: msg.into(),
@@ -4934,6 +5571,7 @@ pub(super) fn explore_traced(
     }
     if let Some(msg) = abort {
         diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: msg.into(),
@@ -4991,6 +5629,13 @@ pub(super) fn explore_traced(
             min:reason.is_none().then(|| low.min(high).into()),max:reason.is_none().then(||high.into()),reason,
         }}
     });
+    if report_evidence {
+        diagnostics.extend(evidence::diagnostics(
+            m,
+            &properties,
+            f.per.iter().filter_map(|e| e.snapshot_findings.as_ref()),
+        ));
+    }
     (
         outcome::Outcome {
             response_recovery: response_paths.map(|paths| {
@@ -5107,6 +5752,7 @@ pub(super) fn explore_traced(
                     .iter()
                     .filter(|v| v.property.completion())
                     .map(|v| diag::Diagnostic {
+                        presentation: Default::default(),
                         code: diag::U_SEM_0.into(),
                         severity: diag::Severity::Error,
                         message:
@@ -5558,7 +6204,7 @@ mod arrivals_tests {
             if let Slot::Admitted(c) = &mut s.cases[1] {
                 c.local.tasks[0].capability = ir::CapabilityId(1);
             }
-            assert_eq!(s.fifo_head(1, 0, &m), other_actor);
+            assert_eq!(s.fifo_head(1, 0, &m).unwrap(), other_actor);
             let mut f = Facts::new(2);
             let xs = transition(&s, &m, &[0, 0], &p, entry, &mut Room(1000), &mut f).unwrap();
             let starts = xs.iter().flatten().flatten().any(|(_,s)| matches!(&s.cases[1],Slot::Admitted(c) if c.local.tasks[0].lifecycle.running()));
@@ -5856,8 +6502,8 @@ mod arrivals_tests {
                 ack: None,
             },
         );
-        assert!(!s.fifo_head(0, 0, &m));
-        assert!(s.fifo_head(1, 0, &m));
+        assert!(!s.fifo_head(0, 0, &m).unwrap());
+        assert!(s.fifo_head(1, 0, &m).unwrap());
         let a = [0, 1, 2];
         let mut f = Facts::new(3);
         for _ in 0..100 {

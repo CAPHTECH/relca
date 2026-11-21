@@ -68,7 +68,7 @@ fn prelower_control() -> Value {
         "actors":null,"cut_context":{"notices":[],"reentry":[],"horizon":[]},
         "agency":null,"verdict":"invalid","mode":"exhaustive","unit":"min",
         "model":{"name":null,"sha256":null},"cut":"undeclared","assumptions":[],
-        "diagnostics":[{"code":"E-SYN-0","severity":"error","message":"unreadable","span":null}],
+        "diagnostics":[{"code":"E-SYN-0","severity":"error","message":"unreadable","span":null,"location":null,"detail":null}],
         "bounds":{"cases":null,"live_tasks":null,"clock":null,"truncated":null},
         "properties":[],"terminals":[]});
     v["ledger"] = oracle::expected(&v, &Spec::prelower("exhaustive", true)).unwrap();

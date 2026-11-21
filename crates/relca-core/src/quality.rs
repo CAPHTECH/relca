@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 mod quantile;
 pub(crate) use quantile::*;
+mod mean;
+pub(crate) use mean::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Quality {
@@ -21,6 +23,11 @@ pub struct Quality {
         serialize_with = "ordered_optional_rows"
     )]
     pub quantiles: Option<Vec<Value>>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ordered_optional_rows"
+    )]
+    pub means: Option<Vec<Value>>,
     #[serde(serialize_with = "ordered_rows")]
     pub outcomes_per_arrival: Vec<Value>,
     pub checked: Vec<String>,
@@ -91,6 +98,19 @@ impl Quality {
             withdraw(&mut q["value"]);
             q["lower_bound"] = Value::Null;
         }
+        for row in self.means.iter_mut().flatten() {
+            if self.analysis == "simulation" {
+                let v = &mut row["value"];
+                if !matches!(v["reason"].as_str(), Some("aborted" | "no_samples")) {
+                    v["point"] = Value::Null;
+                    v["observations"] = json!(0);
+                    v["reason"] = json!("not_configured");
+                }
+            } else if row["value"]["reason"] != "aborted" {
+                row["value"] = absent("not_configured");
+            }
+            row["lower_bound"] = Value::Null;
+        }
         for o in &mut self.outcomes_per_arrival {
             withdraw(&mut o["expected_count"]);
             withdraw(&mut o["rate"]);
@@ -142,6 +162,15 @@ impl Serialize for Ordered<'_> {
                     &["configuration", "status", "value"]
                 } else if o.contains_key("p") && o.contains_key("property") {
                     &["name", "p", "property", "form", "value", "lower_bound"]
+                } else if o.contains_key("measure") {
+                    &[
+                        "name",
+                        "measure",
+                        "property",
+                        "form",
+                        "value",
+                        "lower_bound",
+                    ]
                 } else if o.contains_key("form") {
                     &[
                         "name",
@@ -208,6 +237,8 @@ impl<'de> Deserialize<'de> for Quality {
             cohort: Vec<Value>,
             #[serde(default, deserialize_with = "strict_quantiles")]
             quantiles: Option<Vec<Value>>,
+            #[serde(default, deserialize_with = "strict_quantiles")]
+            means: Option<Vec<Value>>,
             #[serde(deserialize_with = "strict_rows")]
             outcomes_per_arrival: Vec<Value>,
             checked: Vec<String>,
@@ -220,6 +251,7 @@ impl<'de> Deserialize<'de> for Quality {
             properties: r.properties,
             cohort: r.cohort,
             quantiles: r.quantiles,
+            means: r.means,
             outcomes_per_arrival: r.outcomes_per_arrival,
             checked: r.checked,
             unchecked: r.unchecked,
@@ -577,6 +609,7 @@ pub(crate) fn validate_wire(q: &Quality) -> Result<(), &'static str> {
         }
     }
     quantile_wire(q)?;
+    mean_wire(q)?;
     Ok(())
 }
 
@@ -811,6 +844,14 @@ pub(crate) fn inventory(m: &ir::Model, analysis: &str, aborted: bool) -> Quality
             checked.push("quantiles");
         }
     }
+    let means_aborted = aborted || m.actors.iter().any(|a| a.metadata.rule.is_some());
+    if !spec.means.is_empty() {
+        if means_aborted {
+            unchecked.push("means");
+        } else {
+            checked.push("means");
+        }
+    }
     Quality {
         rules: "quality-cohort-p1-1".into(),
         analysis: analysis.into(),
@@ -820,6 +861,18 @@ pub(crate) fn inventory(m: &ir::Model, analysis: &str, aborted: bool) -> Quality
             spec.quantiles
                 .iter()
                 .map(|c| quantile_row(m, c, absent("aborted"), Value::Null))
+                .collect()
+        }),
+        means: (!spec.means.is_empty()).then(|| {
+            spec.means
+                .iter()
+                .map(|c| {
+                    if analysis == "simulation" {
+                        sample_mean_row(m, c, None, 0, 0, Some("aborted"))
+                    } else {
+                        mean_row(m, c, absent("aborted"), Value::Null)
+                    }
+                })
                 .collect()
         }),
         outcomes_per_arrival: vec![],
@@ -992,6 +1045,13 @@ pub(crate) fn simulation(m: &ir::Model, observations: &[Observation], abort: boo
     };
     let mut q = inventory(m, "simulation", missing.is_some());
     let spec = m.quality.as_ref().unwrap();
+    if missing == Some("no_samples")
+        && let Some(rows) = &mut q.means
+    {
+        for row in rows {
+            row["value"]["reason"] = json!("no_samples");
+        }
+    }
     let times = m.arrivals.clone().unwrap_or_else(|| vec![0]);
     let mut totals = Vec::new();
     for (i, p) in spec.properties.iter().enumerate() {

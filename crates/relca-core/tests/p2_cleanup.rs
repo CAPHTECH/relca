@@ -650,12 +650,10 @@ fn q9_management_simultaneous_finishes_are_not_randomly_ordered() {
         core::engine::simulate(&m),
         core::reference::simulate(&m).outcome,
     ] {
-        assert_eq!(o.completed_replications, 0);
-        assert_eq!(o.truncated_replications, None);
-        assert!(o.diagnostics.iter().any(|d| d.code == "U-SEM-0"
-            && d.message.contains("time 3,")
-            && d.message.contains("Flow.a,Flow.contest:1")
-            && d.message.contains("unresolved nondeterminism")));
+        assert_eq!(o.completed_replications, 2);
+        assert_eq!(o.truncated_replications, Some(0));
+        assert!(o.same_time);
+        assert!(o.diagnostics.iter().all(|d| d.code != "U-SEM-0"));
     }
 }
 #[test]

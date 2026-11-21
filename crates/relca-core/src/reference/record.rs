@@ -79,8 +79,7 @@ pub(super) fn validate(m: &Model) -> Execution {
     {
         for id in &k.given {
             let v = m
-                .state_variables
-                .get(id.0)
+                .declared_state_variable(*id)
                 .ok_or(StopReason::SemanticAbort)?;
             require(m.types.get(v.base.0).is_none_or(|t| t.record.is_none()))?;
         }

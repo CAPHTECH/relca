@@ -1,0 +1,26 @@
+model M version "0.2" {
+  type V = enum { ok, fail }
+  observed case { brief: optional<V>; memo: optional<V> }
+  actor Doc { source document }
+  actor Policy { source document }
+  actor A { capacity 1
+    capability take() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { ok } }
+    capability patch() -> V { writes brief; duration fixed 1min; result nondet { ok } }
+    capability choose() -> V { duration fixed 1min; result nondet { ok, fail } }
+    capability draft() -> V { reads [brief]; duration fixed 1min; result nondet { ok } }
+    capability note() -> V { reads [Policy]; writes memo; duration fixed 1min; result nondet { ok } }
+    capability use(x: V) -> V { reads [memo]; duration fixed 1min; result nondet { ok } }
+  }
+  process P {
+    i = A.take()
+    c = A.choose()
+    if c == ok { p = A.patch() } else {}
+    d = A.draft()
+    if c == ok { n = A.note() } else {}
+    u = A.use(d)
+    end done
+  }
+  cut C { include [A, Doc, Policy] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  contract Basis { evidence_basis A.use [Doc, Policy] }
+}

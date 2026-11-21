@@ -60,7 +60,7 @@ fn closed_row_set() {
 }
 
 #[test]
-fn old_syntax_outputs_match_the_pre_adr0035_binary_byte_for_byte() {
+fn old_syntax_current_outputs_match_byte_for_byte() {
     for row in rows().iter().filter(|r| r.get("stdout").is_some()) {
         let name = row["name"].as_str().unwrap();
         let (stdout, stderr, exit) = run(row);
@@ -72,6 +72,10 @@ fn old_syntax_outputs_match_the_pre_adr0035_binary_byte_for_byte() {
         let (current_stdout, current_stderr) = syntax_cut_expectations::current(
             row["stdout"].as_str().unwrap(),
             row["stderr"].as_str().unwrap(),
+        );
+        let current_stdout = relca_test_support::diagnostic::extend_saved_stdout(
+            row["source"].as_str().unwrap(),
+            &current_stdout,
         );
         assert_eq!(
             String::from_utf8(stdout).unwrap(),

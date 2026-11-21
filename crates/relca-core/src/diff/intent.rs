@@ -377,7 +377,9 @@ fn related(d: &Difference, m: &ir::Model) -> BTreeSet<ir::CapabilityId> {
         | Kind::Rule
         | Kind::Qualification
         | Kind::Performance
-        | Kind::Degradation => BTreeSet::new(),
+        | Kind::Degradation
+        | Kind::Record
+        | Kind::Repetition => BTreeSet::new(),
         Kind::Relation | Kind::Authority | Kind::Time => active
             .into_iter()
             .filter(|c| capname(m, *c) == d.target)

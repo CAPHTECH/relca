@@ -12,6 +12,7 @@ fn observe(probe: &oracle::Probe, reference: bool) -> Value {
     match probe.route {
         Route::SimulationLoweredError | Route::AnalyzeLoweredError => {
             model.diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::E_CAP_0.into(),
                 severity: diag::Severity::Error,
                 message: "a7fix injected lowered error".into(),

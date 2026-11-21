@@ -7755,6 +7755,206 @@
     ]
   },
   {
+    "id": "fixture-ld-after-finishes",
+    "args": [
+      "simulate",
+      "fixtures/ld-after-finishes/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-after-finishes.broken-off",
+    "args": [
+      "simulate",
+      "fixtures/ld-after-finishes.broken-off/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-confluent",
+    "args": [
+      "simulate",
+      "fixtures/ld-confluent/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-confluent.broken-people",
+    "args": [
+      "simulate",
+      "fixtures/ld-confluent.broken-people/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-duplicate",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-duplicate/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-empty-reason",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-empty-reason/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-other-end",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-other-end/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-outside",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-outside/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-rates",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-rates/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-contest-not-filed.broken-undeclared",
+    "args": [
+      "simulate",
+      "fixtures/ld-contest-not-filed.broken-undeclared/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-defer-not-filed",
+    "args": [
+      "simulate",
+      "fixtures/ld-defer-not-filed/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-defer-not-filed.broken-undeclared",
+    "args": [
+      "simulate",
+      "fixtures/ld-defer-not-filed.broken-undeclared/model.relca",
+      "--scenario",
+      "Day"
+    ]
+  },
+  {
+    "id": "fixture-ld-environment-start",
+    "args": [
+      "check",
+      "fixtures/ld-environment-start/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-environment-start.broken-controlled",
+    "args": [
+      "check",
+      "fixtures/ld-environment-start.broken-controlled/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-instant-observation",
+    "args": [
+      "simulate",
+      "fixtures/ld-instant-observation/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-instant-observation.broken-transient",
+    "args": [
+      "simulate",
+      "fixtures/ld-instant-observation.broken-transient/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-late-enqueue",
+    "args": [
+      "check",
+      "fixtures/ld-late-enqueue/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-late-enqueue.broken-off",
+    "args": [
+      "check",
+      "fixtures/ld-late-enqueue.broken-off/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-legacy-fork",
+    "args": [
+      "simulate",
+      "fixtures/ld-legacy-fork/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-legacy-fork.broken-same-actor",
+    "args": [
+      "simulate",
+      "fixtures/ld-legacy-fork.broken-same-actor/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-priority-admission",
+    "args": [
+      "simulate",
+      "fixtures/ld-priority-admission/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-priority-admission.broken-one-slot",
+    "args": [
+      "simulate",
+      "fixtures/ld-priority-admission.broken-one-slot/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-priority-dispatch",
+    "args": [
+      "simulate",
+      "fixtures/ld-priority-dispatch/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-priority-dispatch.broken-duplicate",
+    "args": [
+      "simulate",
+      "fixtures/ld-priority-dispatch.broken-duplicate/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-ld-priority-dispatch.broken-off",
+    "args": [
+      "simulate",
+      "fixtures/ld-priority-dispatch.broken-off/model.relca"
+    ]
+  },
+  {
     "id": "fixture-lim-admitted-after",
     "args": [
       "check",
@@ -8445,6 +8645,282 @@
     "args": [
       "check",
       "fixtures/lin-tacit.broken-unused-tacit/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-chance",
+    "args": [
+      "check",
+      "fixtures/mean-chance/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-chance.broken-clock",
+    "args": [
+      "check",
+      "fixtures/mean-chance.broken-clock/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-chance.broken-defer",
+    "args": [
+      "check",
+      "fixtures/mean-chance.broken-defer/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-chance.broken-nondet",
+    "args": [
+      "check",
+      "fixtures/mean-chance.broken-nondet/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-close-contest",
+    "args": [
+      "check",
+      "fixtures/mean-close-contest/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-close-contest.broken-no-contest",
+    "args": [
+      "check",
+      "fixtures/mean-close-contest.broken-no-contest/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-compare",
+    "args": [
+      "compare",
+      "fixtures/mean-compare/model.relca",
+      "--plans",
+      "Fast,Slow",
+      "--mode",
+      "exhaustive"
+    ]
+  },
+  {
+    "id": "fixture-mean-compare.broken-clock",
+    "args": [
+      "compare",
+      "fixtures/mean-compare.broken-clock/model.relca",
+      "--plans",
+      "Fast,Slow",
+      "--mode",
+      "exhaustive"
+    ]
+  },
+  {
+    "id": "fixture-mean-compare.broken-tight",
+    "args": [
+      "compare",
+      "fixtures/mean-compare.broken-tight/model.relca",
+      "--plans",
+      "Fast,Slow",
+      "--mode",
+      "exhaustive"
+    ]
+  },
+  {
+    "id": "fixture-mean-conditional-arrivals",
+    "args": [
+      "check",
+      "fixtures/mean-conditional-arrivals/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-conditional-arrivals.broken-deadline",
+    "args": [
+      "check",
+      "fixtures/mean-conditional-arrivals.broken-deadline/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-contention",
+    "args": [
+      "check",
+      "fixtures/mean-contention/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-contention.broken-fifo",
+    "args": [
+      "check",
+      "fixtures/mean-contention.broken-fifo/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-first-hit-fork",
+    "args": [
+      "check",
+      "fixtures/mean-first-hit-fork/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-first-hit-fork.broken-clock",
+    "args": [
+      "check",
+      "fixtures/mean-first-hit-fork.broken-clock/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-metric-check",
+    "args": [
+      "check",
+      "fixtures/mean-metric-check/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-metric-check.broken-nondet",
+    "args": [
+      "check",
+      "fixtures/mean-metric-check.broken-nondet/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-metric-check.broken-tight",
+    "args": [
+      "check",
+      "fixtures/mean-metric-check.broken-tight/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-mixed-family",
+    "args": [
+      "simulate",
+      "fixtures/mean-mixed-family/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-mixed-family.broken-no-cohort-check",
+    "args": [
+      "simulate",
+      "fixtures/mean-mixed-family.broken-no-cohort-check/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-mixed-family.broken-no-probability",
+    "args": [
+      "simulate",
+      "fixtures/mean-mixed-family.broken-no-probability/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-people",
+    "args": [
+      "check",
+      "fixtures/mean-people/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-people.broken-named-b",
+    "args": [
+      "check",
+      "fixtures/mean-people.broken-named-b/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-repeat",
+    "args": [
+      "check",
+      "fixtures/mean-repeat/model.relca",
+      "--configuration",
+      "Loop"
+    ]
+  },
+  {
+    "id": "fixture-mean-repeat-policy",
+    "args": [
+      "check",
+      "fixtures/mean-repeat-policy/model.relca",
+      "--configuration",
+      "Loop"
+    ]
+  },
+  {
+    "id": "fixture-mean-repeat-policy.broken-earlier-arrival",
+    "args": [
+      "check",
+      "fixtures/mean-repeat-policy.broken-earlier-arrival/model.relca",
+      "--configuration",
+      "Loop"
+    ]
+  },
+  {
+    "id": "fixture-mean-repeat.broken-no-gap",
+    "args": [
+      "check",
+      "fixtures/mean-repeat.broken-no-gap/model.relca",
+      "--configuration",
+      "Loop"
+    ]
+  },
+  {
+    "id": "fixture-mean-simulate",
+    "args": [
+      "simulate",
+      "fixtures/mean-simulate/model.relca",
+      "--scenario",
+      "Busy"
+    ]
+  },
+  {
+    "id": "fixture-mean-simulate.broken-clock",
+    "args": [
+      "simulate",
+      "fixtures/mean-simulate.broken-clock/model.relca",
+      "--scenario",
+      "Busy"
+    ]
+  },
+  {
+    "id": "fixture-mean-work",
+    "args": [
+      "check",
+      "fixtures/mean-work/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work-contention",
+    "args": [
+      "check",
+      "fixtures/mean-work-contention/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work-contention.broken-fifo",
+    "args": [
+      "check",
+      "fixtures/mean-work-contention.broken-fifo/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work.broken-defer",
+    "args": [
+      "check",
+      "fixtures/mean-work.broken-defer/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work.broken-missing-rate",
+    "args": [
+      "check",
+      "fixtures/mean-work.broken-missing-rate/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work.broken-nondet",
+    "args": [
+      "check",
+      "fixtures/mean-work.broken-nondet/model.relca"
+    ]
+  },
+  {
+    "id": "fixture-mean-work.broken-wait",
+    "args": [
+      "check",
+      "fixtures/mean-work.broken-wait/model.relca"
     ]
   },
   {
@@ -18808,9 +19284,9 @@
       "--configuration",
       "AsIs",
       "--scenario",
-      "BusyDay"
+      "BusyDaySmoke"
     ],
-    "expected_exit": 4
+    "expected_exit": 2
   },
   {
     "id": "invoice-busyday-to-be-p-simulate",
@@ -18820,9 +19296,9 @@
       "--configuration",
       "ToBeP",
       "--scenario",
-      "BusyDay"
+      "BusyDaySmoke"
     ],
-    "expected_exit": 4
+    "expected_exit": 2
   },
   {
     "id": "invoice-busyday-to-be-a-simulate",
@@ -18832,9 +19308,9 @@
       "--configuration",
       "ToBeA",
       "--scenario",
-      "BusyDay"
+      "BusyDaySmoke"
     ],
-    "expected_exit": 4
+    "expected_exit": 2
   },
   {
     "id": "invoice-busyday-compare-simulation",
@@ -18846,9 +19322,9 @@
       "--mode",
       "simulation",
       "--scenario",
-      "BusyDay"
+      "BusyDaySmoke"
     ],
-    "expected_exit": 4
+    "expected_exit": 2
   },
   {
     "id": "invoice-p1-compare-quantile",
@@ -18868,6 +19344,68 @@
       "verify",
       "fixtures/serial-time/model.relca"
     ]
+  },
+  {
+    "id": "metric-check-explain",
+    "args": [
+      "explain",
+      "fixtures/mean-metric-check.broken-tight/model.relca"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "metric-check-diff",
+    "args": [
+      "diff",
+      "crates/relca-cli/tests/snapshots/inputs/metric-consumers.relca",
+      "--from",
+      "Fast",
+      "--to",
+      "Slow"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "metric-check-mutate",
+    "args": [
+      "mutate",
+      "fixtures/mean-metric-check/model.relca"
+    ]
+  },
+  {
+    "id": "metric-check-suite",
+    "args": [
+      "sensitivity",
+      "crates/relca-cli/tests/snapshots/inputs/metric-consumers.json",
+      "--mode",
+      "simulation"
+    ],
+    "expected_exit": 4,
+    "expected_verdict": "unsupported"
+  },
+  {
+    "id": "metric-check-compare-sampled",
+    "args": [
+      "compare",
+      "crates/relca-cli/tests/snapshots/inputs/metric-compare-families.relca",
+      "--plans",
+      "Fast,Slow",
+      "--mode",
+      "simulation"
+    ],
+    "expected_exit": 1,
+    "expected_verdict": "violated"
+  },
+  {
+    "id": "metric-check-simulation-refusal",
+    "args": [
+      "simulate",
+      "fixtures/mean-metric-check/model.relca"
+    ],
+    "expected_exit": 3,
+    "expected_verdict": "invalid"
   },
   {
     "id": "cli-refusal-00",

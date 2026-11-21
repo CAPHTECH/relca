@@ -265,6 +265,7 @@ impl Builder {
             metrics: None,
             quality: None,
             comparison: None,
+            metric_checks: Vec::new(),
             arrivals: None,
             start_policy: None,
             admission_queue: None,
@@ -274,6 +275,7 @@ impl Builder {
             initial_distributions: Vec::new(),
             probability_queries: Vec::new(),
             state_variables: Vec::new(),
+            static_loop_rounds: Vec::new(),
             people: Vec::new(),
             authorities: Vec::new(),
             contracts: Vec::new(),
@@ -323,6 +325,7 @@ impl Builder {
             ],
             assumptions: vec![],
             diagnostics: vec![Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_CUT_0.into(),
                 severity: diag::Severity::Warning,
                 message: "undeclared Cut".into(),
@@ -1302,6 +1305,7 @@ fn configuration_oracle_guards_properties_and_diagnostics() {
         }
         let mut changed = r.clone();
         changed.outcome.diagnostics.push(Diagnostic {
+            presentation: Default::default(),
             code: diag::W_CUT_0.into(),
             severity: diag::Severity::Warning,
             message: "injected spurious warning".into(),
@@ -1473,7 +1477,8 @@ fn run_corpus(reference_limits: Limits, fixtures: bool) {
     // not change the old 28 directories / 39 inputs / 31 accepted / 8 rejected.
     dirs.retain(|p| {
         let id = p.file_name().unwrap().to_str().unwrap();
-        if relca_test_support::fixture_match::intent_fixture(id)
+        if id.starts_with("ld-")
+            || relca_test_support::fixture_match::intent_fixture(id)
             || relca_test_support::fixture_match::agency_limit_fixture(id)
             || relca_test_support::fixture_match::contract_scope_fixture(id)
         {
@@ -1513,6 +1518,7 @@ fn run_corpus(reference_limits: Limits, fixtures: bool) {
                 .any(|n| n == id)
             || include!("support/evaluation_names.rs").contains(&id)
             || include!("support/quantile_names.rs").contains(&id)
+            || include!("support/mean_names.rs").contains(&id)
             || include!("support/acceptance_gap_names.rs").contains(&id)
         {
             return false;

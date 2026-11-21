@@ -139,7 +139,7 @@ fn warning_rows(report: &Value, src: &str, targets: &[&str]) {
         let needle = format!("defer {target} reason");
         let start = offset + src[offset..].find(&needle).expect("target occurrence") + "defer ".len();
         offset = start + target.len();
-        json!({"code":"W-CUT-2","severity":"warning","message":h::warning(target),"span":{"start":start,"end":offset}})
+        relca_test_support::diagnostic::expected_row(src, json!({"code":"W-CUT-2","severity":"warning","message":h::warning(target),"span":{"start":start,"end":offset}}))
     }).collect();
     assert_eq!(actual, expected, "W-CUT-2 code/message/target byte span");
     assert!(

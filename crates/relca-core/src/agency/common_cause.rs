@@ -809,6 +809,7 @@ fn with_limits_mode(
             });
         } else {
             warnings.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_LIN_2.into(),
                 severity: diag::Severity::Warning,
                 message: format!(

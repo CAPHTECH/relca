@@ -37,6 +37,17 @@ fn complete(out: &h::Output, count: usize) {
 }
 
 #[test]
+fn round_condition_effective_inputs_survive_wire_decode() {
+    let half = include_str!("../../relca-core/tests/bounded_repetition/models/L4.relca");
+    let quarter = half.replace("0.5: fail; 0.5: pass", "0.25: fail; 0.75: pass");
+    let out = suite(&[("half", half), ("quarter", &quarter)], false, 4);
+    assert_eq!(out.exit, 1, "{}", out.stderr);
+    let decoded: relca_core::sensitivity::wire::SensitivityReport =
+        serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), out.value);
+}
+
+#[test]
 fn a2_suite_accepts_common_cause_and_ordered_miss_correlation() {
     let sources = [i::a2("independent"), i::a2("common"), i::a2("ordered")];
     let out = suite(

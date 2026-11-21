@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"inconclusive","simulation":{"status":"completed","completed_replications":4},"metrics":{"overall":{"work":{"mean":"4"}},"capabilities":[{"capability":"Approver.approve","starts":{"mean":"2"}},{"capability":"Clerk.recheck","excluded":"scenario_contest_not_filed","starts":{"mean":"0"},"start_cost":{"reason":"not_configured"}}]}}

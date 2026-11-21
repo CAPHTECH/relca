@@ -239,6 +239,9 @@ pub struct Boundaries {
 
 impl EffectiveInputs {
     pub fn from_model(m: &ir::Model) -> Result<Self> {
+        if m.capabilities.iter().any(|c| m.reads_static_loop_round(c)) {
+            super::contract::supported(m)?;
+        }
         let n = Names(m);
         let assignment = |id, v| -> Result<Assignment> {
             Ok(Assignment {
@@ -250,6 +253,7 @@ impl EffectiveInputs {
             .state_variables
             .iter()
             .enumerate()
+            .filter(|(_, v)| v.loop_role().is_none())
             .map(|(i, v)| {
                 let id = ir::StateVarId(i);
                 let (kind, entries) = match v.initial {

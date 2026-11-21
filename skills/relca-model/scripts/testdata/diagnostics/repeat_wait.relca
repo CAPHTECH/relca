@@ -1,0 +1,20 @@
+model Wait version "0.2" {
+  type V = enum { ok, alt }
+  observed case { flag: bool = false }
+  actor A { capacity 1
+    capability two() -> V { duration fixed 1min; result nondet { ok, alt } }
+    capability mark() -> V { writes flag; duration fixed 1min; finish { flag = true }; result nondet { ok } }
+  }
+  cut C { include [A] }
+  process P {
+    k = A.mark()
+    repeat R at_most 2 {
+      a = A.two()
+      wait until flag == true
+      if a == ok { leave } else { again }
+    } on_limit { end limit }
+    end done
+  }
+  bounds { cases 1; live_tasks 1; clock 30min }
+  verify safety no_resource_overcommit
+}

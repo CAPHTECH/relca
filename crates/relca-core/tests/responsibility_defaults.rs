@@ -18,7 +18,7 @@ fn expected(source: &str, actors: &[&str]) -> Vec<Value> {
     let m = lower::lower(&syntax::parse(source).unwrap()).unwrap();
     actors.iter().map(|name| {
         let a = m.actors.iter().find(|a| a.name == *name).unwrap();
-        json!({"code":"W-RESP-0","severity":"warning","message":format!("{name} has no declared responsibility"),"span":a.span})
+        relca_test_support::diagnostic::expected_row(source, json!({"code":"W-RESP-0","severity":"warning","message":format!("{name} has no declared responsibility"),"span":a.span}))
     }).collect()
 }
 #[test]
@@ -52,7 +52,7 @@ fn independent_ir_candidate_walker_agrees_with_every_hand_pair() {
     for (name, source, names) in input::cases() {
         let model = lower::lower(&syntax::parse(&source).unwrap()).unwrap();
         assert_eq!(
-            json!(oracle::expected(&model)),
+            json!(oracle::expected_wire(&model, &source)),
             json!(expected(&source, &names)),
             "{name}"
         );

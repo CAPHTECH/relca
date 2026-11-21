@@ -1,0 +1,1 @@
+{"verdict":"satisfied","metric_checks":[{"constraint":"mean.Cost <= 50","verdict":"satisfied","basis":"exact","interval":{"lower":"93/2","upper":"93/2"},"reason":null}]}

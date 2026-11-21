@@ -39,15 +39,34 @@ fn invoke(name: &str, source: &str) -> (Value, i32) {
     let mirror = ds
         .iter()
         .map(|d| {
-            format!(
+            let header = format!(
                 "{}: {}\n",
                 d["code"].as_str().unwrap(),
                 d["message"].as_str().unwrap()
-            )
+            );
+            let supplement = match (name, d["message"].as_str().unwrap()) {
+                ("environment-resolve", "priority_resolution_scope_unsupported") => concat!(
+                    "  at 5:11\n  kind: analysis_not_connected\n  cause: non_policy_actor\n",
+                    "  blocked by: feature A at 3:7\n  blocked by: feature A.claim at 5:11\n",
+                    "  see: docs/guide/dsl.md#解析が未接続のとき\n",
+                ),
+                ("version-retry", "retry_feature_combination: version_check retry") => concat!(
+                    "  at 7:55\n  kind: analysis_not_connected\n  cause: version_check\n",
+                    "  blocked by: feature A.claim at 5:11\n  blocked by: call r at 7:22\n",
+                    "  see: docs/guide/dsl.md#解析が未接続のとき\n",
+                ),
+                _ => "",
+            };
+            header + supplement
         })
         .collect::<String>();
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
+        // Priority paths and refusals are checked here; diagnostic_details checks the added detail.
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         mirror,
         "diagnostic mirror {name}"
     );

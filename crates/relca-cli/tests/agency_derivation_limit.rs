@@ -431,6 +431,7 @@ fn mutation_agency_checks_are_unsupported_not_missed_or_detected() {
 fn small_models_preserve_entire_stdout_stderr_and_exit() {
     let path = root().join("crates/relca-cli/tests/agency_limit_preservation.json");
     let mut observed = serde_json::Map::new();
+    let mut inputs = std::collections::BTreeMap::new();
     for (name, s, options) in [
         ("gate-2", input::gate(2), vec![]),
         ("gate-3", input::gate(3), vec![]),
@@ -447,6 +448,7 @@ fn small_models_preserve_entire_stdout_stderr_and_exit() {
     ] {
         let o = run("check", &s, &options);
         observed.insert(name.into(), json!({"stdout":String::from_utf8(relca_test_support::stage_projection::bytes(&o.stdout)).unwrap(),"stderr":String::from_utf8(o.stderr).unwrap(),"exit":o.status.code()}));
+        inputs.insert(name, s);
     }
     if std::env::var_os("RELCA_RECORD_AGENCY_LIMIT_PRESERVATION").is_some() {
         std::fs::write(
@@ -455,8 +457,14 @@ fn small_models_preserve_entire_stdout_stderr_and_exit() {
         )
         .unwrap();
     } else {
-        let expected: Value =
+        let mut expected: Value =
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for (name, source) in inputs {
+            let stdout = expected[name]["stdout"].as_str().unwrap();
+            expected[name]["stdout"] = json!(relca_test_support::diagnostic::extend_saved_stdout(
+                &source, stdout
+            ));
+        }
         assert_eq!(json!(observed), expected);
     }
 }

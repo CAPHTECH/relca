@@ -66,7 +66,12 @@ fn invoke_source(name: &str, mode: &str, src: &str, args: &[&str]) -> (Value, i3
         _ => diagnostics(&v, ""),
     };
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
+        // This oracle checks the refusal and rates, not detail (see diagnostic_details).
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         expected_stderr,
         "diagnostic stderr must mirror the JSON paths"
     );

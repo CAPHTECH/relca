@@ -62,6 +62,7 @@ pub(crate) mod evaluation_spy {
         (result, counts)
     }
 }
+pub mod estimate;
 #[cfg(test)]
 #[path = "../tests/support/evaluation_review_private_spy.rs"]
 mod evaluation_review_private_spy;

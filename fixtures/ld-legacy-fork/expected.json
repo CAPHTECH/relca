@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"satisfied","bounds":{"truncated":false},"simulation":{"status":"completed","completed_replications":4},"properties":[{"id":"reachable end.done","verdict":"satisfied"}],"metrics":{"overall":{"observed_until":{"mean":"2","min":"2","max":"2"},"work":{"mean":"4","min":"4","max":"4"}}},"absent_diagnostics":["U-SEM-0","W-DEADLOCK-0"]}

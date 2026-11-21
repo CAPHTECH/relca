@@ -164,10 +164,16 @@ fn s22_scenario_body_amend_keeps_parser_error_without_cut_warning() {
         + bad[bad.find("scenario Light").unwrap()..]
             .find("amend")
             .unwrap();
-    assert_eq!(
-        ds[0],
-        json!({"code":"U-SYN-0","severity":"error","message":"unsupported syntax: scenario item","span":{"start":start,"end":start+5}})
+    let mut expected = relca_test_support::diagnostic::expected_row(
+        &bad,
+        json!({"code":"U-SYN-0","severity":"error","message":"unsupported syntax: scenario item","span":{"start":start,"end":start+5}}),
     );
+    expected["detail"] = json!({
+        "reason":"unsupported_scenario_item", "kind":"analysis_not_connected", "cause":"unsupported_token",
+        "blockers":[{"role":"feature","name":"amend","location":expected["location"]}],
+        "see":"docs/guide/dsl.md#解析が未接続のとき"
+    });
+    assert_eq!(ds[0], expected);
     assert_eq!(v["cut"], "unresolved");
 }
 
@@ -1173,7 +1179,7 @@ fn atomic_rule_u_responsibility_follows_actor_declaration_order() {
         // the Rule requires approval, independently of atomic legacy refusal.
         let ast = relca_core::syntax::parse(&source).unwrap();
         let model = relca_core::lower::lower(&ast).unwrap();
-        responsibility_oracle::assert_report(&model, &v);
+        responsibility_oracle::assert_report(&model, &source, &v);
         let got: Vec<_> = v["diagnostics"]
             .as_array()
             .unwrap()

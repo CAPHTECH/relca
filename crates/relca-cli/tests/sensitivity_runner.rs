@@ -260,6 +260,20 @@ fn red_same_question_gate_rejects_process_change() {
 }
 
 #[test]
+fn red_same_question_gate_rejects_dispatch_change() {
+    let base = o::BASE.replace(
+        "cut C",
+        "policy fifo tie_by case_id then call_order\n  cut C",
+    );
+    let changed = base.replace("then call_order", "then call_order dispatch after_finishes");
+    assert_ne!(base, changed);
+    let (d, m) = h::custom(&[("base", &base), ("changed", &changed)], false);
+    let out = h::run_custom(&d, &m, "exhaustive");
+    h::reject(&out, 3, "E-CMP-0", "sensitivity_contract_mismatch");
+    h::no_executed_prefix(&out.value);
+}
+
+#[test]
 fn red_duplicate_unknown_missing_and_empty_manifest_fields_fail_closed() {
     let (d, m) = h::custom(&[("p", o::BASE)], false);
     for mutation in 0..5 {

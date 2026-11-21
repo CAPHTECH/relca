@@ -67,6 +67,242 @@ def rewrite(src, dst, fn):
     return dst
 
 
+class NumericalPageTest(unittest.TestCase):
+    """実物の採取コマンドは testdata/numerical/capture.py。改変は未知・欠落の試験だけ。"""
+
+    def render(self, name, change=None):
+        from testdata.numerical.capture import RUNS
+        data = HERE / 'testdata' / 'numerical'
+        if name in RUNS:
+            command, model, *_ = RUNS[name]
+        elif name == 'lower-check':
+            command, model = 'check', RUNS['lower'][1]
+        else:
+            command = 'simulate' if name == 'ld-contest-not-filed' else 'compare'
+            model = f'fixtures/{name}/model.relca'
+        role = 'check' if command == 'explain' else command
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):
+            if name == 'mutate' or name not in RUNS:
+                args = RUNS.get(name)
+                if args is None:
+                    inv = json.loads((ROOT / model).with_name('invocation.json').read_text()) if name != 'lower-check' else {}
+                    if name == 'lower-check':
+                        src = Path(tmp) / 'lower-check.relca'
+                        base = (ROOT / model).read_text()
+                        i = base.rindex('}')
+                        src.write_text(base[:i] + '  verify metric mean.Work <= 3min\n' + base[i:])
+                        model = str(src)
+                    args = [role, model]
+                    if inv.get('plans'):
+                        args += ['--plans', ','.join(inv['plans']), '--mode', inv['mode']]
+                    if inv.get('scenario'):
+                        args += ['--scenario', inv['scenario']]
+                fixture, stderr, code = relca(tmp, name, *args)
+                if name == 'mutate':
+                    self.assertEqual(code, 4)
+            else:
+                fixture = data / (name + '.json')
+                stderr = data / (name + '.err')
+                code = int((data / (name + '.exit')).read_text())
+            if change is not None:
+                fixture = rewrite(fixture, Path(tmp) / 'altered.json', change)
+            args = ['--model', ROOT / model]
+            if role != 'check':
+                args += ['--check', data / 'exact.json', '--check-exit', 0]
+            return page(tmp, name, *args, '--' + role, fixture,
+                        '--' + role + '-stderr', stderr, '--' + role + '-exit', code, '--no-mermaid')
+
+    def row(self, text, heading, *prefix):
+        rows = [r for r in table_after(text, heading) if tuple(map(plain, r[:len(prefix)])) == prefix]
+        self.assertEqual(len(rows), 1, (heading, prefix))
+        return rows[0]
+
+    def test_exact_and_relaxed_intervals_keep_both_endpoints(self):
+        for name, interval, basis in [('exact', '15/2 〜 15/2 分', 'exact'),
+                                      ('interval', '3 〜 6 分', '案件ごとの緩和区間')]:
+            with self.subTest(name=name):
+                text, _ = self.render(name)
+                value = plain(self.row(text, '<h4>品質の指標 (quality)', 'mean.Lead')[2])
+                self.assertIn(interval, value)
+                self.assertIn(basis, value)
+                self.assertIn('受付拒否</td><td>0 〜 0 件', text)
+
+    def test_missing_is_not_zero_and_lower_bound_is_not_a_value(self):
+        text, data = self.render('unavailable')
+        row = self.row(text, '<h4>品質の指標 (quality)', 'mean.Cost')[2]
+        self.assertIn('算出なし: not_configured', row)
+        self.assertNotRegex(row, r'>0(?: |<)')
+        self.assertIn('mean.Cost', [x[1] for x in data['unverified']])
+        text, data = self.render('lower')
+        self.assertIn('算出なし: truncated / 下限: 8 JPY の最小単位', self.row(text, '<h4>品質の指標 (quality)', 'mean.Cost')[2])
+        self.assertIn('mean.Cost', [x[1] for x in data['unverified']])
+
+    def test_sample_is_not_a_verdict_and_censoring_withholds_point(self):
+        text, data = self.render('sample-checks')
+        heading = '<h4>品質の指標 (quality)'
+        self.assertIn('標本平均: 5 分 / 観測数 6 / 打切り 0 件', self.row(text[text.index('2.3 simulate'):], heading, 'mean.Lead')[2])
+        self.assertIn('合否の根拠ではない', text)
+        row = self.row(text, '<h4>指標の条件 (metric_checks)', 'mean.Lead <= 100 分')
+        self.assertEqual(plain(row[1]), '算出なし: no_statistical_bound')
+        self.assertIn('badge warn', row[2]); self.assertNotIn('badge ok', row[2])
+        self.assertTrue(any(v[2:] == ['unsupported', 'no_statistical_bound'] for v in data['unverified']))
+        text, data = self.render('censored')
+        self.assertEqual(plain(self.row(text[text.index('2.3 simulate'):], heading, 'mean.Lead')[2]),
+                         '算出なし: undetermined / 観測数 0 / 打切り 6 件')
+        self.assertIn('mean.Lead', [x[1] for x in data['unverified']])
+
+    def test_metric_checks_cohort_quantile_and_compare(self):
+        text, _ = self.render('checks')
+        self.assertIn('mean.Cost &lt;= 50 JPY の最小単位', text)
+        self.assertIn('93/2 〜 93/2 JPY の最小単位', text)
+        text, _ = self.render('cohort')
+        for value in ('cohort.OnTime', '931461/1048576 〜 1 (比率)', '1/80', '判定不能'):
+            self.assertIn(value, text)
+        text, data = self.render('quantile')
+        self.assertIn('19/20', text)
+        self.assertIn('quantile.P95', [x[1] for x in data['unverified']])
+        text, _ = self.render('compare')
+        for value in ('必須条件 (hard)', '目的 (objectives)', 'mean.Lead &lt;= 6 分',
+                      'minimize mean.Lead', '2 〜 2 分', '5 〜 5 分'):
+            self.assertIn(value, text)
+
+    def test_load_assumptions_exclusion_and_metrics(self):
+        text, data = self.render('load')
+        for value in ('simulation.same_time', '同じ時刻の出来事の順序が結果に効かないことを確かめた',
+                      'policy.dispatch', 'after_finishes', 'scenario.contest_not_filed',
+                      'この異議が起票されない場合の値', '評価から外した', '稼働率',
+                      '7/80 (比率)', '待ち時間', '処理件数', '405/2 分'):
+            self.assertIn(value, text)
+        self.assertTrue(any(w.startswith('W-CONTEST-1') for w in data['relca_warnings']))
+        self.assertTrue(any('contest_response' in w[1] and w[2] == 'excluded' for w in data['unverified']))
+        cap = self.row(text[text.index('2.3 simulate'):], '<h4>負荷・時間・費用', 'capability: Clerk.recheck', '開始回数')
+        self.assertIn('評価から外した', cap[-1]); self.assertIn('scenario_contest_not_filed', cap[-1])
+        self.assertTrue(any('Clerk.recheck' in w[1] and w[2] == 'excluded' for w in data['unverified']))
+
+    def test_contest_notes_stay_next_to_values_and_same_time_is_limited(self):
+        text, _ = self.render('load')
+        sim = text[text.index('2.3 simulate'):]
+        for start in ('<h4>終端ごとの値', '<h4>負荷・時間・費用', '<summary>案件・操作ごとの待ち時間と作業'):
+            fragment = sim[sim.index(start):]
+            self.assertIn('この異議が起票されない場合の値', fragment.split('<table', 1)[0], start)
+        sentence = re.search(r'<p class="note"><code>simulation.same_time</code>.*?</p>', sim).group()
+        self.assertIn('対象はこの実行で確認できた時刻と観測に限る', sentence)
+        self.assertNotIn('全ての順序で安全', sentence)
+
+    def test_cut_off_is_next_to_known_quality_count_and_counted(self):
+        text, data = self.render('censored')
+        sim = text[text.index('2.3 simulate'):]
+        row = self.row(sim, '<h4>品質の指標 (quality)', 'case.Done')
+        self.assertRegex(plain(row[-1]), r'既知の到達.*標本平均: 2 件.*未確定件数.*標本平均: 1 件')
+        self.assertIn('算出なし: 対象の条件がない', self.row(sim, '<th>誤り率の割当て</th>', 'alpha_after')[-1])
+        self.assertTrue(any(r[1:3] == ['case.Done', 'not_reported'] for r in data['unverified']))
+        self.assertEqual(plain(self.row(sim, '<h4>観測終了時に確定しなかった案件', '3', '業務上の打切り')[-1]), '2')
+
+    def test_not_applicable_and_same_cause_keep_page_counts_consistent(self):
+        text, data = self.render('checks')
+        self.assertEqual(data['unverified'], [])  # Agency の未導出は別枠。
+        self.assertIn('該当なしで値が無い行', section(text, 'unverified'))
+        self.assertGreater(data['terminal_exclusion_row_count'], 0)
+        self.assertIn('終端別の集計対象外', section(text, 'unverified'))
+        row = self.row(text, '<summary>案件・操作ごとの待ち時間と作業', '案件 1 / 受付拒否の区分', '終端までの経過時間')
+        self.assertIn('該当なし: 受付拒否の区分には完了までの時間を定義しない', row[-1])
+        text, data = self.render('load')
+        count = data['unverified_count']
+        self.assertIn(f'確かめられていないもの {count} 件', section(text, 'unverified'))
+        self.assertIn(f'({count} 件)', section(text, 'conclusion'))
+        self.assertRegex(text, r'<details><summary>同じ理由の数値 \d+ 行</summary>')
+        self.assertLess(count, len(data['unverified']))
+
+    def test_simulation_samples_from_both_models(self):
+        for fixture, value, n in (('sample', '5', 6), ('repeat-sample', '15/2', 4)):
+            text, _ = self.render(fixture)
+            row = self.row(text[text.index('2.3 simulate'):], '<h4>品質の指標 (quality)', 'mean.Lead')
+            self.assertIn(f'標本平均: {value} 分 / 観測数 {n} / 打切り 0 件', row[-1])
+
+    @unittest.skipUnless(RELCA.exists() or 'RELCA_BIN' in os.environ, 'relca の binary が無い')
+    def test_real_compare_and_check_rows(self):
+        self.assertTrue(RELCA.is_file(), str(RELCA))
+        hard, objectives = '<h4>必須条件 (hard)', '<h4>目的 (objectives)'
+        text, _ = self.render('lower-check')
+        self.assertIn('下限: 2 分 (上限なし)', self.row(text, '<h4>指標の条件 (metric_checks)', 'mean.Work <= 3 分')[1])
+        text, data = self.render('eval-hard')
+        row = self.row(text, hard, 'Fast', 'cohort.WrongPerArrival <= 1/20 (比率)')
+        self.assertIn('badge bad', row[-1]); self.assertNotIn('badge ok', row[-1])
+        self.assertIn('6 〜 8 分', self.row(text, objectives, 'Check', 'minimize metrics.overall.work')[-1])
+        self.assertIn('到達経路の最小〜最大', self.row(text, objectives, 'Check', 'minimize metrics.overall.work')[-1])
+        self.assertIn('条件を満たさず採用候補外', self.row(text, '<th>採用候補の判定</th>', 'Fast')[1])
+        self.assertFalse(any('より重い' in a[1] and '理由は確かめていない' in a[1] for a in data['alerts']))
+        _, data = self.render('eval-hard', lambda d: d.update(verdict='satisfied'))
+        self.assertTrue(any('必須条件と採否' in a[1] for a in data['alerts']))
+        text, _ = self.render('cmp7-clock-loose')
+        row = self.row(text, hard, 'Check', 'cohort.WrongPerArrival <= 1/2 (比率)')
+        self.assertIn('1/75 〜 26/75', row[2]); self.assertIn('未確定を両端に含む', row[2]); self.assertIn('badge ok', row[3])
+        text, _ = self.render('mean-compare.broken-clock')
+        row = self.row(text, hard, 'Slow', 'mean.Lead <= 6 分')
+        self.assertIn('下限: 5 分 (上限なし)', row[2]); self.assertIn('badge warn', row[3])
+        self.assertNotIn('badge ok', row[3])
+        self.assertIn('採否を確定できない', self.row(text, '<th>採用候補の判定</th>', 'Slow')[1])
+        text, _ = self.render('cmp7-abort')
+        row = self.row(text, hard, 'Bad', 'cohort.WrongPerArrival <= 3/5 (比率)')
+        self.assertIn('badge warn', row[3]); self.assertIn('参考の標本値 (判定に使わない)', row[3])
+        self.assertNotIn('標本値', row[2])
+        pareto = '<h4>目的の優劣 (Pareto、順位ではない)'
+        for fixture, reason in (('cmp7-sim-no-hard', '標本推定のため'), ('cmp7-no-admissible', '採用候補がないため')):
+            text, data = self.render(fixture)
+            self.assertIn('優劣は計算していない。算出なし: ' + reason, self.row(text, pareto, '計算状態')[-1])
+            self.assertTrue(any(r[1:3] == ['evaluation.pareto', 'not_computed'] for r in data['unverified']))
+        text, data = self.render('cmp7-overlap')
+        self.assertIn('目的の区間が重なるため', self.row(text, pareto, 'One / Two')[-1])
+        self.assertTrue(any(r[1] == 'evaluation.pareto One / Two' for r in data['unverified']))
+        text, _ = self.render('mean-compare.broken-tight')
+        self.assertIn('badge bad', self.row(text, hard, 'Slow', 'mean.Lead <= 3 分')[-1])
+        text, data = self.render('ld-contest-not-filed')
+        sim = text[text.index('2.3 simulate'):]
+        self.assertIn('評価から外した', self.row(sim, '<h4>負荷・時間・費用', 'capability: Clerk.recheck', '開始回数')[-1])
+
+    def test_unknown_words_and_missing_keys_stay_visible(self):
+        def alter(report):
+            report['quality']['means'][0]['value']['basis'] = 'future_basis'
+            report['quality']['means'][0]['measure'] = 'future_measure'
+            report['quality']['means'][1]['value']['reason'] = 'future_reason'
+            del report['quality']['means'][1]['value']['upper']
+            report['metric_checks'][0]['verdict'] = 'future_verdict'
+        text, data = self.render('checks', alter)
+        self.assertIn('未解釈', text)
+        for key in ('future_basis', 'future_measure', 'future_reason', 'future_verdict', 'upper'):
+            self.assertTrue(any(key in str(row) for row in data['unreadable']), key)
+        row = self.row(text, '<h4>品質の指標 (quality)', 'mean.Lead')
+        self.assertIn('15/4 〜 15/4', row[-1]); self.assertIn('単位の記載なし', row[-1]); self.assertIn('future_basis', row[-1])
+        issues = [r for r in data['unverified'] if r[1:3] == ['mean.Lead', 'uninterpreted']]
+        self.assertEqual(len(issues), 1)
+
+    def test_excluded_never_counts_as_satisfied_even_if_verdict_says_so(self):
+        # CLI は excluded を inconclusive にする。誤読の試験だけ verdict を壊す。
+        def alter(report):
+            for row in report['properties']:
+                if 'excluded' in row:
+                    row.update(verdict='satisfied', cases=[])
+        text, _ = self.render('load', alter)
+        conclusion = text.split('<section id="conclusion">', 1)[1].split('</section>', 1)[0]
+        row, = re.findall(r'<tr>(?:(?!</tr>).)*contest_response</code>(?:(?!</tr>).)*</tr>', conclusion)
+        self.assertIn('評価から外した', row)
+        self.assertNotIn('badge ok', row)
+        self.assertNotIn('contest_response', text.split('満たす性質(')[-1].split('</table>')[0])
+
+    @unittest.skipUnless(RELCA.exists() or 'RELCA_BIN' in os.environ, "relca の binary が無い")
+    def test_loop_mutation_is_unsupported_not_undetected(self):
+        self.assertTrue(RELCA.is_file(), str(RELCA))
+        text, data = self.render('mutate')
+        rows = table_after(text, '<th>kind</th>')
+        authority, = [r for r in rows if plain(r[1]) == 'authority_expired']
+        summary, = [r for r in rows if plain(r[1]) == 'summary_reused']
+        self.assertIn('badge warn', authority[2]); self.assertIn('loop_feature_combination', authority[3])
+        self.assertEqual(list(map(plain, summary[6:9])), ['0', '0', 'unsupported 1'])
+        mutant, = [r for r in table_after(text, '<summary>変異体ごと') if 'loop_control' in r[-1]]
+        self.assertIn('badge warn', mutant[2]); self.assertNotIn('badge bad', mutant[2])
+        self.assertTrue(any(v[2] == 'unsupported' and 'loop_control' in v[3] for v in data['unverified']))
+
+
 @unittest.skipUnless(RELCA.exists(), "relca の binary が無い: %s(cargo build -p relca-cli)" % RELCA)
 class ReviewPageTest(unittest.TestCase):
     def test_defer_effects_and_warnings_are_shown_for_main_plans_and_mutants(self):
@@ -432,7 +668,9 @@ class ReviewPageTest(unittest.TestCase):
                          for i in range(15)]
         p.basis_unknown = []
         terminal = io.StringIO()
-        with patch.object(review_page, "Page", return_value=p), redirect_stdout(terminal):
+        # この試験では Agency 由来の集計だけを注入する。数値の未確認は NumericalPageTest で検査。
+        with patch.object(p, "_numerical_html", return_value=""), \
+                patch.object(review_page, "Page", return_value=p), redirect_stdout(terminal):
             self.assertEqual(review_page.main(argv), 0)
         self.assertIn("確かめられていないもの 15 件", terminal.getvalue())
         text = target.read_text(encoding="utf-8")
@@ -1016,6 +1254,307 @@ def plain(cell):
     return html.unescape(re.sub(r"<[^>]+>", " ", cell)).strip()
 
 
+class DiagnosticVocabularyTest(unittest.TestCase):
+    def test_cause_and_role_dictionaries_match_the_adr_tables(self):
+        adr = ROOT / 'docs' / 'adr' / '0081-diagnostic-location-and-detail.md'
+        if not adr.is_file():
+            self.skipTest('配布版には設計記録がない')
+        tables = adr.read_text(encoding='utf-8')
+        codes = re.compile(r'`([a-z][a-z0-9_]*)`')
+        causes, roles, reasons = set(), set(), set()
+        table_count = 0
+        for table in re.finditer(r'^\| reason \| cause \| kind \| blocker [^\n]+\n\|---[^\n]+\n((?:\|[^\n]+\n)+)',
+                                 tables, re.M):
+            table_count += 1
+            for row in table[1].splitlines():
+                reason, cause, _, blockers = row.strip('|').split('|')
+                reasons.update(codes.findall(reason))
+                causes.update(codes.findall(cause))
+                # 役割欄に出る DSL の leave/on_limit と位置の wire 鍵は役割ではない。
+                roles.update(set(codes.findall(blockers)) - {'leave', 'on_limit', 'span', 'location'})
+        self.assertEqual(table_count, 5, '診断の語彙表の形式が変わった')
+        self.assertEqual(causes, set(review_page.DIAGNOSTIC_CAUSES))
+        self.assertEqual(roles, set(review_page.DIAGNOSTIC_ROLES))
+        comparisons = (ROOT / 'crates/relca-test-support/src/diagnostic.rs').read_text(encoding='utf-8')
+        admitted = re.search(r'pub const NEW_REASONS: &\[&str\] = &\[(.*?)\];', comparisons, re.S)
+        self.assertIsNotNone(admitted)
+        self.assertLessEqual(set(re.findall(r'"([a-z_]+)"', admitted[1])), reasons)
+
+
+@unittest.skipUnless(RELCA.exists() or 'RELCA_BIN' in os.environ, 'relca の binary が無い')
+class DiagnosticPageTest(unittest.TestCase):
+    fixtures = HERE / 'testdata' / 'diagnostics'
+
+    def capture(self, name, expected_exit, *opts, edit=None):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        tmp = directory.name
+        model = self.fixtures / name
+        if edit is not None:
+            source = model.read_bytes()
+            model = Path(tmp) / name
+            model.write_bytes(edit(source))
+        out, err, code = relca(tmp, 'diagnostics', 'check', model, *opts)
+        self.assertEqual(code, expected_exit)
+        return tmp, model, out, err, code
+
+    def render(self, captured, change=None, stderr=None, extra=()):
+        tmp, model, out, err, code = captured
+        if change is not None:
+            out = rewrite(out, Path(tmp) / 'changed.json', change)
+        with redirect_stdout(io.StringIO()):
+            return page(tmp, 'diagnostics', '--model', model, '--check', out, '--check-exit', code,
+                        '--check-stderr', stderr or err, '--no-mermaid', *extra)
+
+    def diagnostic_row(self, text, code, message, origin='check'):
+        rows = table_after(text, '<h3>1.6 relca の診断')
+        found = [r for r in rows if tuple(map(plain, r[:4])) in (
+            (origin, 'error', code, message), (origin, 'warning', code, message))]
+        self.assertEqual(len(found), 1, (origin, code, message))
+        return found[0]
+
+    def details(self, text, code, message, location, origin='check'):
+        row = self.diagnostic_row(text, code, message, origin)
+        self.assertEqual(plain(row[4]), location)
+        link = re.search(r'href="#([^"]+)"', row[6])
+        assert link is not None, row
+        heading = '<h4 id="' + link[1] + '">'
+        start = text.index(heading)
+        end = re.search(r'<h[234]\b|</section>', text[start + len(heading):])
+        assert end is not None
+        return text[start:start + len(heading) + end.start()]
+
+    def assert_details(self, detail, kind_text, cause, see, blockers):
+        rows = {plain(k): plain(v) for k, v in table_after(detail, '<h4')}
+        self.assertEqual(rows['読み方'], kind_text)
+        self.assertEqual(rows['原因'], cause)
+        self.assertEqual(rows['利用ガイドの節'], see)
+        self.assertEqual([tuple(map(plain, r)) for r in table_after(detail, '<h5>関係する箇所')],
+                         [r + ('—',) for r in blockers])
+
+    def test_same_version_uses_kind_even_with_same_cause(self):
+        for mixed in (True, False):
+            with self.subTest(mixed=mixed):
+                edit = None if mixed else lambda s: s.replace(b'    e = A.make() response_loss none\n', b'')
+                captured = self.capture('mixed.relca', 4, edit=edit)
+                text, data = self.render(captured)
+                # contract V { + space は15字。same_version 節はそこから36字。
+                line = 17 if mixed else 16
+                detail = self.details(text, 'U-SEM-0', 'same_version_feature_combination',
+                                      f'{line}:16–{line}:52')
+                blockers = [('操作結果でない値を渡す呼出し', 'a', '10:5–10:25', '—'),
+                            ('操作結果でない値を渡す呼出し', 'b', '11:5–11:26', '—')]
+                if mixed:
+                    blockers.append(('応答', 'e', '12:5–12:36', '—'))
+                self.assert_details(detail,
+                                    'この機能の組合せは、この分析では扱えない。局所の書き直しで直るとは限らない。' if mixed else
+                                    '書き方で直る。示された文を見直す。',
+                                    'non_result_argument', '確かめた版と使う版を揃える', blockers)
+                self.assertEqual(data['unverified_count'], 2)
+
+    def test_candidates_and_excluded_writers_keep_their_own_exit(self):
+        captured = self.capture('two_exits.relca', 4, '--configuration', 'Loop')
+        text, data = self.render(captured)
+        message = 'contract Basis #1 evidence_basis: evidence_basis_conditional_snapshot'
+        detail = self.details(text, 'U-SEM-0', message, '54:20–54:57')
+        body = 'rework・1 回目・本体・leave 1 番目'
+        limit = 'rework・1 回目・上限到達後・leave 2 番目'
+        # Actor は字下げ2字、呼出しと leave は各文の字下げ・if の接頭辞を数える。
+        self.assert_details(detail, 'この性質だけ判定できていない。', '—', '根拠源を求める契約', [
+            ('候補の根拠源', 'Doc', '5:3–5:32', limit),
+            ('候補の根拠源', 'Policy', '6:3–6:35', body),
+            ('静的な系譜で数えなかった辺', 'b1 -> r', '32:7–32:24', body),
+            ('静的な系譜で数えなかった辺', 'b1 -> r3', '32:7–32:24', limit),
+            ('静的な系譜で数えなかった辺', 'x1 -> r', '36:25–36:44', body),
+            ('繰り返しの出口', '—', '38:9–38:14', body),
+            ('静的な系譜で数えなかった辺', 'x2 -> r3', '42:22–42:41', limit),
+            ('繰り返しの出口', '—', '44:7–44:12', limit),
+            ('対象の呼出し', 'u', '46:5–46:20', body),
+            ('対象の呼出し', 'u', '46:5–46:20', limit),
+        ])
+        self.assertEqual(data['unverified_count'], 6)
+        self.assertIn('確かめられていないもの 6 件。', section(text, 'unverified'))
+        bare = self.render(captured, lambda o: [d.update(detail=None) for d in o['diagnostics']])[1]
+        self.assertEqual(data['unverified'], bare['unverified'])
+        self.assertEqual(data['relca_warnings'], bare['relca_warnings'])
+        stderr = Path(captured[0]) / 'supplement.err'
+        # blocker の名前に「: U-」を含む未知の語彙が増えても診断に数えない。
+        stderr.write_text(captured[3].read_text() + '  blocked by: role name: U-future at 1:1\n')
+        with_extra = self.render(captured, stderr=stderr)[1]
+        self.assertEqual(data['alerts'], with_extra['alerts'])
+
+    def test_location_crlf_tab_unicode_multiline_and_eof(self):
+        unknown = 'cut includes an undeclared Actor'
+        cases = [
+            (lambda s: s.replace(b'\n', b'\r\n'), 3, 'E-NAME-0', unknown, '14:35–14:42', '[Unknown]'),
+            (lambda s: s.replace(b'  cut', b'\tcut'), 3, 'E-NAME-0', unknown, '14:34–14:41', '[Unknown]'),
+            (lambda s: s.replace('確認'.encode(), '確認😀é'.encode()),
+             3, 'E-NAME-0', unknown, '14:38–14:45', '[Unknown]'),
+            (lambda _: 'model M version あ'.encode(),
+             4, 'U-SYN-0', 'unsupported syntax: あ', '1:17–1:18', 'あ'),
+            (lambda _: b'model M version "0.2" {\r\n',
+             3, 'E-SYN-0', 'expected model item or closing brace', '2:1', ''),
+            (lambda _: b'model M version "0.2" {',
+             3, 'E-SYN-0', 'expected model item or closing brace', '1:24', '{'),
+            (lambda s: s.replace(b'  }\n  process', b'    capability spare() -> V {\n'
+                                 b'      duration fixed 1min; result nondet { ok }\n    }\n  }\n  process', 1)
+             .replace(b'[Unknown]', b'[A]'),
+             0, 'W-UNREACH-0', 'process P: A.spare not_called', '7:5–9:6', 'capability spare'),
+        ]
+        # Unknown の前は字下げ2 + `cut C { `8 + `question `9 + `"確認"; `6 + `include [`9 = 34 字。
+        # タブで −1、絵文字・e・結合文字で +3。`model M version ` は16字、あは1字。
+        # EOF は LF の直後か、23 字の直後。spare は字下げ4字から9行目の } の直後まで。
+        for edit, status, code, msg, location, source in cases:
+            with self.subTest(location=location):
+                text, data = self.render(self.capture('location.relca', status, edit=edit))
+                row = self.diagnostic_row(text, code, msg)
+                self.assertEqual(plain(row[4]), location)
+                self.assertIn(source, plain(row[5]))
+                self.assertFalse(any('span と location' in r[3] for r in data['unverified']))
+
+    def test_null_missing_and_disagreeing_locations_are_distinct(self):
+        captured = self.capture('location.relca', 3, edit=lambda s: s.replace(b'\n', b'\r\n'))
+        message = 'cut includes an undeclared Actor'
+        for mode, expected in [('null', '位置なし'), ('legacy', '14:35–14:42 (旧形式: span から換算)'),
+                               ('disagree', '15:3–15:9')]:
+            with self.subTest(mode=mode):
+                def change(out):
+                    d = next(d for d in out['diagnostics'] if d['code'] == 'E-NAME-0')
+                    if mode == 'null':
+                        d.update(location=None, span=None)
+                    elif mode == 'legacy':
+                        d.pop('location')
+                    else:
+                        d.update(location=dict(line=15, column=3, end_line=15, end_column=9))
+
+                text, data = self.render(captured, change)
+                row = self.diagnostic_row(text, 'E-NAME-0', message)
+                self.assertEqual(plain(row[4]), expected)
+                self.assertEqual(data['unverified_count'], 3 if mode == 'disagree' else 2)
+                if mode == 'disagree':
+                    self.assertIn('bounds {', plain(row[5]))
+                    self.assertTrue(any('span と location' in r[3] and '14:35–14:42' in r[3]
+                                        and '15:3–15:9' in r[3] for r in data['unverified']))
+
+    def test_unknown_kind_role_and_fields_show_raw_values_and_count(self):
+        captured = self.capture('two_exits.relca', 4, '--configuration', 'Loop')
+
+        def change(out):
+            detail = out['diagnostics'][-1]['detail']
+            detail.update(kind='future<kind>', cause='future<cause>', added={'x': '<future>'})
+            detail['blockers'][0].update(role='future<role>')
+            detail['blockers'][0]['exits'][0]['added'] = 42
+
+        text, data = self.render(captured, change)
+        detail = self.details(text, 'U-SEM-0',
+                              'contract Basis #1 evidence_basis: evidence_basis_conditional_snapshot', '54:20–54:57')
+        rows = {plain(k): plain(v) for k, v in table_after(detail, '<h4')}
+        self.assertEqual(rows['読み方'], 'future<kind>')
+        self.assertEqual(rows['原因'], 'future<cause>')
+        first = table_after(detail, '<h5>関係する箇所')[0]
+        self.assertEqual(tuple(map(plain, first[:3])), ('future<role>', 'Doc', '5:3–5:32'))
+        self.assertEqual([tuple(map(plain, r)) for r in table_after(detail, '<h5>未解釈の欄')],
+                         [('detail.added', '{"x": "<future>"}'), ('detail.blockers[0].exits[0].added', '42')])
+        self.assertEqual(data['unverified_count'], 11)
+        self.assertIn('確かめられていないもの 11 件。', section(text, 'unverified'))
+        self.assertNotIn('<future>', detail)
+
+    def test_new_refusal_cause_stays_on_its_diagnostic(self):
+        captured = self.capture('mixed.relca', 4)
+
+        def change(out):
+            # 未対応の理由語・原因を模した入力。後続の CLI を実行した結果ではない。
+            diagnostic = out['diagnostics'][-1]
+            diagnostic['message'] = 'loop_feature_combination'
+            diagnostic['detail'].update(reason='loop_feature_combination', cause='value_returning_if')
+
+        text, _ = self.render(captured, change)
+        detail = self.details(text, 'U-SEM-0', 'loop_feature_combination', '17:16–17:52')
+        rows = {plain(k): plain(v) for k, v in table_after(detail, '<h4')}
+        self.assertEqual(rows['理由語'], 'loop_feature_combination')
+        self.assertEqual(rows['原因'], 'value_returning_if')
+
+    def test_repeat_rewrite_points_to_guide_and_rewritten_model_is_accepted(self):
+        captured = self.capture('repeat_value_if.relca', 4)
+        text, data = self.render(captured)
+        # 字下げ6字の直後が束縛名 v、外側は字下げ4字と長さ6の repeat。
+        detail = self.details(text, 'U-SEM-0', 'unsupported syntax: loop_feature_combination', '15:7–15:8')
+        self.assert_details(detail, '書き方で直る。示された文を見直す。', 'value_returning_if', '繰り返し', [
+            ('繰り返しの導入箇所', '—', '12:5–12:11', '—'),
+            ('併用した機能・文', '—', '15:7–15:8', '—'),
+        ])
+        self.assertIn('直し方は利用ガイドの「繰り返し」を参照。', detail)
+        self.assertIn('繰り返しの中に値を返す if がある。', detail)
+        self.assertEqual(data['unverified_count'], 3)
+
+        def rewrite_if(source):
+            before = b'      v = if a == ok { yield a } else { yield b }\n      u = A.use(v)\n'
+            self.assertIn(before, source)
+            return source.replace(before, b'      if a == ok { u1 = A.use(a) } else { u2 = A.use(b) }\n')
+
+        fixed = self.capture('repeat_value_if.relca', 0, edit=rewrite_if)
+        self.assertNotIn('value_returning_if', self.render(fixed)[0])
+
+    def test_shared_record_keeps_rounds_on_the_call_not_the_declaration(self):
+        captured = self.capture('repeat_shared_record.relca', 4)
+        text, data = self.render(captured)
+        # 15 行目は字下げ6字の後に a = A.save() が12字。
+        detail = self.details(text, 'U-SEM-0', 'registration_feature_combination', '8:5–8:105')
+        self.assertIn('案件をまたぐ共有記録の登録・読取りは扱えない。', detail)
+        self.assertEqual([tuple(map(plain, r)) for r in table_after(detail, '<h5>関係する箇所')], [
+            ('記録 Actor の宣言', 'Notes', '5:3–5:17', '—', '—'),
+            ('登録する操作の宣言', 'A.save', '8:5–8:105', '—', '—'),
+            ('操作の呼出し', 'a', '15:7–15:19', '—', '1、2 回目'),
+        ])
+        self.assertEqual(data['unverified_count'], 2)
+
+    def test_rounds_and_exits_are_independent_cells(self):
+        captured = self.capture('two_exits.relca', 4, '--configuration', 'Loop')
+
+        def add_rounds(out):
+            # 両鍵の同居を模した入力。元の実物ではこの行に exits だけがある。
+            out['diagnostics'][-1]['detail']['blockers'][0]['rounds'] = [1]
+
+        text, data = self.render(captured, add_rounds)
+        detail = self.details(text, 'U-SEM-0',
+                              'contract Basis #1 evidence_basis: evidence_basis_conditional_snapshot', '54:20–54:57')
+        doc = table_after(detail, '<h5>関係する箇所')[0]
+        self.assertEqual(tuple(map(plain, doc)), ('候補の根拠源', 'Doc', '5:3–5:32',
+                                                  'rework・1 回目・上限到達後・leave 2 番目', '1 回目'))
+        self.assertEqual(data['unverified_count'], 6)
+
+    def test_command_refusals_without_root_position(self):
+        merge = self.capture('merge_configurations.relca', 0, '--configuration', 'X')
+        for role, opts, message, cause in [
+            ('compare', ['--plans', 'X,Y', '--mode', 'exhaustive'], 'merge comparison is not connected',
+             'compare では合流を含む案を比較できない。'),
+            ('diff', ['--from', 'X', '--to', 'Y'], 'merge diff projection is not connected',
+             'diff では合流を含む構成の差分を出せない。'),
+        ]:
+            with self.subTest(role=role):
+                out, err, code = relca(merge[0], role, role, merge[1], *opts)
+                self.assertEqual(code, 4)
+                text, _ = self.render(merge, extra=[f'--{role}', out, f'--{role}-stderr', err,
+                                                   f'--{role}-exit', code, f'--{role}-model', merge[1]])
+                detail = self.details(text, 'U-SEM-0', 'merge_feature_combination: ' + message, '位置なし', role)
+                self.assertIn(cause, detail)
+                # 17 行目の束縛名 v は字下げ4字に続く1字。
+                row = table_after(detail, '<h5>関係する箇所')[0]
+                self.assertEqual(tuple(map(plain, row)), ('合流値の定義', 'v', '17:5–17:6', '—', '—'))
+                if role == 'diff':
+                    self.diagnostic_row(text, 'W-UNREACH-0', 'process Q: A.use2 not_called', 'diff to Y')
+
+        wait = self.capture('repeat_wait.relca', 0)
+        out, err, code = relca(wait[0], 'mutate', 'mutate', wait[1], '--set', 'bpr-default')
+        self.assertEqual(code, 4)
+        text, _ = self.render(wait, extra=['--mutate', out, '--mutate-stderr', err, '--mutate-exit', code])
+        detail = self.details(text, 'U-SEM-0',
+                              'loop_feature_combination: repeat mutation with wait until is not connected',
+                              '位置なし', 'mutate')
+        self.assertIn('mutate では条件待ちを含む繰り返しを扱えない。', detail)
+        self.assertIn('関係する箇所なし', detail)
+
+
 class ResponseRetryPageTest(unittest.TestCase):
     """注文・決済モデルの再送と応答喪失。explain 出力の必要な欄を抜いた固定 JSON を使い、relca は回さない。"""
 
@@ -1514,7 +2053,7 @@ class RepetitionPageTest(unittest.TestCase):
             "too-many": base.replace("at_most 3", "at_most 33"),
             "zero-limit": base.replace("at_most 3", "at_most 0"),
             "no-limit": base.replace("on_limit { end timed_out }", ""),
-            "fork": base.replace("s = Registry.read()", "fork f { s = Registry.read() }; join all f"),
+            "join-any": base.replace("s = Registry.read()", "fork f { s = Registry.read() }; join any f where result == ready tie by [s] remaining drain if none -> timed_out"),
             "zero-time": base.replace("gap fixed 5min", "gap fixed 0min").replace("duration fixed 1min", "duration fixed 0min"),
             "after-control": base.replace("{ again }", "{ again; wait 1min }"),
             "response-loss": base.replace("s = Registry.read()", "s = Registry.read() response_loss none"),
@@ -1531,7 +2070,7 @@ class RepetitionPageTest(unittest.TestCase):
 
     def test_not_derived_in_plan_and_mutate_original_keeps_each_origin(self):
         original = json.loads(Path(self.r["poll", "check"][0]).read_text())
-        # Transport-only controls: repeat compare/mutate is unsupported by Relca.
+        # Transport-only controls: these envelopes are hand-built, not produced by the CLI.
         # These envelopes exercise the page's existing all-report scanner, not new CLI support.
         original["repetition"]["coverage"] = "not_derived"
         original["repetition"]["cases"] = []
@@ -1621,7 +2160,7 @@ class MergePageTest(unittest.TestCase):
         self.assertTrue(any(s["kind"] == "call" and s["binding"] == "yield" for s in steps))
 
 
-@unittest.skipUnless(RELCA.exists(), "relca の binary が無い")
+@unittest.skipUnless(RELCA.exists() or "RELCA_BIN" in os.environ, "relca の binary が無い")
 class EvidenceBasisPageTest(unittest.TestCase):
     def setUp(self):
         (ROOT / ".tmp").mkdir(exist_ok=True)
@@ -1635,6 +2174,112 @@ class EvidenceBasisPageTest(unittest.TestCase):
     def build(self, name, output=None):
         return page(self.tmp, name, "--model", self.model, "--check", output or self.out,
                     "--check-exit", self.code, "--check-stderr", self.err, "--no-mermaid")
+
+    def basis_page(self, name, model, configuration, code, command="explain", fault=None):
+        out, err, actual = relca(self.tmp, name, command, model, "--configuration", configuration)
+        self.assertEqual(actual, code, msg=err.read_text())
+        if fault:
+            def change(report):
+                fault(report["explanation"]["counterexamples"][0]["evidence"])
+            out = rewrite(out, Path(self.tmp) / (name + "-fault.json"), change)
+        return page(self.tmp, name + "-page", "--model", model, "--check", out,
+                    "--check-exit", code, "--check-stderr", err, "--no-mermaid")
+
+    def conditional_model(self):
+        # The x06 regression: Doc may reach Notes, Extra cannot, Policy does.
+        model = Path(self.tmp) / "conditional.relca"
+        model.write_text('''model ConditionalEvidence version "0.2" {
+  type V = enum { pass, fail }
+  kernel Review { * -> { 0.5: pass; 0.5: fail } }
+  observed case { brief: optional<V> }
+  actor Doc { source document }
+  actor Policy { source document }
+  actor Extra { source document }
+  actor Notes {}
+  actor Clerk { capacity 1
+    capability intake() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability patch() -> V { writes brief; duration fixed 1min; result nondet { pass } }
+    capability draft() -> V { reads [brief]; duration fixed 1min; result nondet { pass } }
+    capability pol() -> V { reads [Policy]; duration fixed 1min; result nondet { pass } }
+    capability review() -> V { duration fixed 1min; outcomes kernel Review }
+  }
+  actor Boss { capacity 1
+    capability register(d: V, e: V) -> V { registers [Notes]; duration fixed 1min; result nondet { pass } }
+    capability use() -> V { reads [Notes]; duration fixed 1min; result nondet { pass } }
+  }
+  cut C { include [Doc, Policy, Extra, Notes, Clerk, Boss] }
+  process Work { i = Clerk.intake(); g = Clerk.review(); if g == pass { p = Clerk.patch() } else {}; d = Clerk.draft(); e = Clerk.pol(); s = Boss.register(d, e); u = Boss.use(); end done }
+  configuration Hand { cut C; process Work }
+  bounds { cases 1; live_tasks 2; clock 60min }
+  contract Basis { evidence_basis Boss.use [Policy, Doc, Extra] }
+}
+''', encoding="utf-8")
+        return model
+
+    def test_conditional_sources_are_not_missing_or_counted_sources(self):
+        text, _ = self.basis_page("conditional", self.conditional_model(), "Hand", 1)
+        rows = list(map(lambda r: tuple(map(plain, r)), table_after(text, "<h5>モデルの根拠源の証跡")))
+        for row in (("照合に数えた源", "Policy"), ("不足した源", "Extra"),
+                    ("届きうるが確かめられない源", "Doc")):
+            self.assertIn(row, rows)
+
+    def loop_model(self, number):
+        return ROOT / "crates/relca-core/tests/bounded_repetition/models" / f"eb-alias-e{number}.relca"
+
+    def test_exit_table_keeps_number_phase_and_round(self):
+        model = self.loop_model(5)
+        cases = [("limit", model, ["rework", "2 回目", "上限到達後の処理 (on_limit)", "2 番目の leave"]),
+                 ("two-loops", self.loop_model(6), ["rework", "2 回目", "本体", "番号の記録なし"])]
+        body = Path(self.tmp) / "body.relca"
+        body.write_text(model.read_text().replace("reads [Doc]; writes brief", "writes brief"))
+        cases.append(("body", body, ["rework", "1 回目", "本体", "1 番目の leave"]))
+        for name, model, row in cases:
+            with self.subTest(name=name):
+                text, _ = self.basis_page(name, model, "Loop", 1)
+                exits = [list(map(plain, r)) for r in table_after(text, "<h5>反例で通った繰り返しの出口")]
+                expected = [row] + ([["note", "1 回目", "本体", "番号の記録なし"]] if name == "two-loops" else [])
+                self.assertEqual(exits, expected)
+        text, _ = self.basis_page("limit-hand", self.loop_model(5), "Hand", 1)
+        self.assertIn(["不足した源", "Doc"], [list(map(plain, r)) for r in table_after(text, "<h5>モデルの根拠源の証跡")])
+        self.assertNotIn("<h5>反例で通った繰り返しの出口", text)
+
+    def test_counterexample_inside_repeat_names_original_call(self):
+        model = Path(self.tmp) / "inside.relca"
+        model.write_text(self.loop_model(5).read_text().replace("evidence_basis Boss.use", "evidence_basis Clerk.review"))
+        text, _ = self.basis_page("inside", model, "Loop", 1)
+        rows = [list(map(plain, r)) for r in table_after(text, "<h5>モデルの根拠源の証跡")]
+        self.assertIn(["繰り返し内の呼出し", "rework / 1 回目 / 本体 / 元の呼出し d"], rows)
+
+    def test_conditional_only_does_not_invent_a_counterexample_or_reason(self):
+        for command in ("check", "explain"):
+            text, info = self.basis_page("unsupported-" + command, self.loop_model(4), "Loop", 4, command)
+            self.assertNotIn("<h5>モデルの根拠源の証跡", text)
+            rows = [list(map(plain, r)) for r in table_after(text, "<h4>確かめられていない性質")]
+            row, = [r for r in rows if r[0] == "contract Basis #1 evidence_basis"]
+            self.assertIn("unsupported", row[1])
+            issue, = [u for u in info["unverified"] if u[:3] == [command, row[0], "unsupported"]]
+            if command == "check":
+                self.assertIn("届きうるが確かめられない源がある", row[-1])
+                self.assertIn("evidence_basis_conditional_snapshot", issue[-1])
+            else:
+                self.assertIn("理由の記録なし", row[-1])
+                self.assertIn("check --configuration Loop", row[-1])
+                self.assertNotIn("evidence_basis_conditional_snapshot", issue[-1])
+
+    def test_bad_optional_evidence_does_not_render_as_a_witness(self):
+        conditional = self.conditional_model()
+        for name, model, cfg, fault in (
+            ("overlap", conditional, "Hand", lambda e: e.update(conditional_sources=["Extra"])),
+            ("unrequested", conditional, "Hand", lambda e: e.update(conditional_sources=["Doc", "Other"])),
+            ("wrong-conditional", conditional, "Hand", lambda e: e.update(conditional_sources="Doc")),
+            ("wrong-site", self.loop_model(5), "Loop", lambda e: e["repetition_exits"][0].update(leave_site=True)),
+            ("wrong-phase", self.loop_model(5), "Loop", lambda e: e["repetition_exits"][0].update(phase="else")),
+            ("unknown-exit-key", self.loop_model(5), "Loop", lambda e: e["repetition_exits"][0].update(extra=1)),
+        ):
+            with self.subTest(name=name):
+                text, info = self.basis_page(name, model, cfg, 1, fault=fault)
+                self.assertNotIn("<h5>モデルの根拠源の証跡", text)
+                self.assertTrue(any(u[:2] == ["review_page", "根拠源の証跡"] for u in info["unverified"]))
 
     def test_positive_example_keeps_hand_times_and_both_read_mutations(self):
         model = ROOT / "examples/evidence-basis.relca"
@@ -1821,6 +2466,105 @@ class IntentPageTest(unittest.TestCase):
         text, _ = self.build("escape", self.source.replace("照合を自動化", "<確認>&"))
         self.assertIn("&lt;確認&gt;&amp;", text)
         self.assertNotIn("<確認>", text)
+
+
+@unittest.skipUnless(RELCA.is_file(), "relca がない。cargo build -p relca-cli が必要")
+class EstimatePageTest(unittest.TestCase):
+    def render(self, outcome="outcomes kernel K", pass_p="0.5", fail_p="0.5", minimum=1,
+               change=None, supplied_exit=None, censored=False, decimals=2):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):
+            model = Path(tmp) / "input.relca"
+            kernel = f"kernel K {{ * -> {{ {pass_p}: pass; {fail_p}: fail }} }}" if "kernel" in outcome else ""
+            model.write_text(f'''model M version "0.2" {{
+              type T = enum {{ pass, fail }}
+              people [p]
+              {kernel}
+              actor A {{ executors [p]; capability run() -> T {{ duration fixed 1min; {outcome} }} }}
+              process P {{ r = A.run(); end done }}
+              cut C {{ include [A] }}
+              bounds {{ cases 1; live_tasks 1; clock 10min }}
+              verify reachable end.done
+            }}''', encoding="utf-8")
+            log = Path(tmp) / "events.jsonl"
+            cases = [{"case_id": str(i), "from_case_start": True, "through_case_end": True} for i in range(4)]
+            lines = [{"kind": "header", "schema": "relca-log/v1", "clock": "log", "time_unit": "min",
+                      "window": {"from": 0, "to": 1}, "cases": cases,
+                      "actor_map": [{"source_id": "a", "actor": "A"}],
+                      "executor_map": [{"source_id": "p", "person": "p"}]}]
+            for i, result in enumerate(("pass", "fail", "pass", "fail")):
+                for instant, phase in enumerate(("start", "finish")):
+                    if censored and i >= 2 and phase == "finish":
+                        continue
+                    lines.append({"kind": "event", "event_id": f"{i}-{phase}", "case_id": str(i), "task_id": "t",
+                                  "operation": "A.run", "lifecycle": phase, "cancel_phase": None,
+                                  "time": {"earliest": instant, "latest": instant}, "after": [],
+                                  "actor_id": "a", "executor_id": "p", "input_version": None, "output_version": None,
+                                  "result": result if instant else None})
+            log.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+            spec = Path(tmp) / "spec.json"
+            spec.write_text(json.dumps({"schema": "relca-estimate-spec/v1",
+                                        "model_sha256": review_page.sha256_file(model),
+                                        "log_sha256": review_page.sha256_file(log), "slots": "all",
+                                        "confidence": "1079/2048", "decimals": decimals, "max_support": 4,
+                                        "min_samples": minimum}), encoding="utf-8")
+            report, _, check_exit = relca(tmp, "check", "check", model)
+            self.assertEqual(check_exit, 0)
+            estimate, err, exit_code = relca(tmp, "estimate", "estimate", model, "--log", log, "--spec", spec)
+            expected_exit = 4 if "nondet" in outcome else 2 if minimum > 4 or censored or decimals == 0 else 0
+            self.assertEqual(exit_code, expected_exit, err.read_text())
+            if change:
+                estimate = rewrite(estimate, Path(tmp) / "changed.json", change)
+            return page(tmp, "estimate", "--model", model, "--check", report, "--check-exit", check_exit,
+                        "--estimate", estimate, "--estimate-exit", exit_code if supplied_exit is None else supplied_exit,
+                        "--no-mermaid")
+
+    def test_matching_candidates_supply_provenance(self):
+        text, data = self.render()
+        self.assertNotIn("A.run.duration", data["unprovenanced"])
+        self.assertNotIn("kernel.K", data["unprovenanced"])
+        self.assertIn("relca がログから導出(n=4", text)
+        self.assertIn("ログの窓 0〜1 分", text)
+        self.assertIn("ログの真正性と代表性は人が未確認", text)
+        self.assertIn("[1/8, 7/8]", text)
+
+    def test_revise3_partial_candidate_is_not_provenance_even_when_equal(self):
+        text, data = self.render(censored=True)
+        self.assertIn("kernel.K", data["unprovenanced"])
+        self.assertIn("ログからの候補あり(一部未確定: 既知 2 件 / 4 件、打切り 2 件)", text)
+        for label in ("n=4", "unknown=2", "censored=2", "coverage=partial"):
+            self.assertIn(label, text)
+
+    def test_revise3_exact_only_candidate_keeps_other_provenance(self):
+        text, data = self.render(decimals=0)
+        self.assertIn("厳密値のみ（DSL の桁不足）", text)
+        self.assertIn("dsl_precision_insufficient", text)
+        self.assertIn("kernel.K", data["unprovenanced"])
+        self.assertNotIn("A.run.duration", data["unprovenanced"])
+
+    def test_outside_interval_warns_without_provenance_claim(self):
+        text, data = self.render(pass_p="0.99", fail_p="0.01")
+        self.assertIn("relca がログから導出", text)
+        self.assertIn("宣言値はログから導いた区間の外", text)
+        self.assertIn("kernel.K", data["unprovenanced"])
+        self.assertNotIn("A.run.duration", data["unprovenanced"])
+
+    def test_hash_and_exit_mismatch_are_not_used(self):
+        for kwargs, warning in [({"change": lambda d: d["model"].update(sha256="0" * 64)}, "sha256 が違う"),
+                                ({"supplied_exit": 2}, "verdict と exit を照合できない")]:
+            with self.subTest(warning=warning):
+                text, data = self.render(**kwargs)
+                self.assertIn(warning, text)
+                self.assertNotIn("relca がログから導出", text)
+                self.assertIn("A.run.duration", data["unprovenanced"])
+                self.assertIn("kernel.K", data["unprovenanced"])
+
+    def test_absent_values_have_a_separate_table(self):
+        text, data = self.render(outcome="result nondet { pass, fail }", minimum=5)
+        rows = [tuple(map(plain, row[:3])) for row in table_after(text, "ログから候補を出せなかった欄")]
+        self.assertEqual(rows, [("duration.A.run", "withheld", "insufficient_samples"),
+                                ("nondet.A.run", "not_derivable", "nondeterministic")])
+        self.assertIn("A.run.duration", data["unprovenanced"])
+        self.assertNotIn("relca がログから導出", text)
 
 
 if __name__ == "__main__":

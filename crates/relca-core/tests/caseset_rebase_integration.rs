@@ -62,7 +62,7 @@ fn membership_state_invariant_uses_each_case_context_under_the_fixed_policy() {
     for (s, invariant) in [(&control, "satisfied"), (&broken, "violated")] {
         let v = check(s);
         let m = model(s);
-        responsibility_oracle::assert_report(&m, &v);
+        responsibility_oracle::assert_report(&m, s, &v);
         let e = engine::explore(&m);
         let r = reference::explore(&m);
         assert_eq!(r.stop, reference::StopReason::Complete);
@@ -120,7 +120,7 @@ fn any_join_over_atomic_results_is_a_state_guard_in_the_viewpoints() {
     // ADR 0054 "範囲" / "意味": L1/L2 are both known E and atomic U
     // carriers even without people. Require the independent complete rows.
     let m = model(ANY_ATOMIC);
-    responsibility_oracle::assert_report(&m, &v);
+    responsibility_oracle::assert_report(&m, ANY_ATOMIC, &v);
     let responsibility = responsibility_oracle::expected(&m);
     assert_eq!(
         responsibility
@@ -160,7 +160,7 @@ fn any_join_over_atomic_results_is_a_state_guard_in_the_viewpoints() {
     }
     let v = check(&plain);
     let m = model(&plain);
-    responsibility_oracle::assert_report(&m, &v);
+    responsibility_oracle::assert_report(&m, &plain, &v);
     assert_eq!(
         codes(&v),
         vec!["W-RESP-0"; responsibility_oracle::expected(&m).len()],

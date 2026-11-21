@@ -1,0 +1,18 @@
+model RoundGate version "0.2" {
+  type Entry = enum { entry }
+  type V = enum { pass, fail }
+  actor Invoice { source document }
+  actor Reader { capacity 1; capability enter() -> Entry { reads [Invoice]; duration fixed 1min; result nondet { entry } } }
+  actor Rev { capacity 1; capability review(e: Entry) -> V { duration fixed 1min; result nondet { pass, fail } } }
+  actor Ledger { capacity 1; capability post(e: Entry) -> V { commits; duration fixed 1min; result nondet { pass } } }
+  process P {
+    entry = Reader.enter()
+    wait 1min
+    r2 = Rev.review(entry)
+    if r2 == fail { end denied } else { p2 = Ledger.post(entry); end done }
+  }
+  cut C { include [Invoice,Reader,Rev,Ledger] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  verify reachable end.done
+  verify reachable end.denied
+}

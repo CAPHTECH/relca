@@ -5,6 +5,8 @@ use num_traits::Zero;
 use serde_json::{Value, json};
 mod quantile;
 pub(super) use quantile::*;
+mod mean;
+pub(super) use mean::*;
 fn integer(n: u64) -> Q {
     Q::from_integer(n.into())
 }

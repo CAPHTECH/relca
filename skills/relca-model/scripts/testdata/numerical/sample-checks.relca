@@ -1,0 +1,19 @@
+model BusyMean version "0.2" {
+  type T = enum { ok }
+  people [p]
+  actor A { executors [p]; capability run() -> T { duration fixed 3min; result nondet { ok } } }
+  process P { x=A.run(); end done }
+  cut C { include [A] }
+  scenario Busy { arrivals fixed [0min,1min,2min]; horizon 12min; bounds { cases 3; live_tasks 3; clock 20min } }
+  policy fifo tie_by case_id
+  simulation replications 2 seed 3 confidence 0.95
+  metrics { window 20min; currency "JPY"; rate A per_minute 2; rate A.run per_start 1 }
+  verify safety no_resource_overcommit
+  property case.Done = reached(end.done)
+  verify metric mean.Lead <= 100min
+  metric mean.Lead = mean(elapsed, case.Done)
+  metric mean.LeadReached = mean(elapsed, case.Done given reached)
+  metric mean.Work = mean(work)
+  metric mean.People = mean(named_people_work)
+  metric mean.Cost = mean(cost)
+}

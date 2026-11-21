@@ -1,0 +1,64 @@
+model EvidenceAliasE6 version "0.2" {
+  type V = enum { pass, fail }
+  kernel Review { * -> { 0.5: pass; 0.5: fail } }
+  observed case { brief: optional<V> }
+  actor Doc { source document }
+  actor Memo { source document }
+  actor Clerk { capacity 1
+    capability intake() -> V { reads [Doc]; writes brief; duration fixed 1min; result nondet { pass } }
+    capability patch() -> V { writes brief; duration fixed 1min; result nondet { pass } }
+    capability draft() -> V { reads [brief]; duration fixed 1min; result nondet { pass } }
+    capability memo() -> V { reads [Memo]; duration fixed 1min; result nondet { pass } }
+    capability review() -> V { duration fixed 1min; outcomes kernel Review }
+  }
+  actor Boss { capacity 1
+    capability use(d: V, m: V) -> V { duration fixed 1min; result nondet { pass } }
+  }
+  cut C { include [Doc, Memo, Clerk, Boss] }
+  process Repeated {
+    i = Clerk.intake()
+    repeat rework at_most 2 {
+      d = Clerk.draft()
+      c = Clerk.review()
+      if c == pass { leave } else { p = Clerk.patch(); again }
+    } on_limit { end escalated }
+    repeat note at_most 2 {
+      m = Clerk.memo()
+      cm = Clerk.review()
+      if cm == pass { leave } else { again }
+    } on_limit { end escalated }
+    u = Boss.use(d,m)
+    end done
+  }
+  process Written {
+    i = Clerk.intake()
+    d1 = Clerk.draft()
+    c1 = Clerk.review()
+    if c1 == pass {
+      m11 = Clerk.memo()
+      cm11 = Clerk.review()
+      if cm11 == pass { u11 = Boss.use(d1,m11); end done } else {
+        m12 = Clerk.memo()
+        cm12 = Clerk.review()
+        if cm12 == pass { u12 = Boss.use(d1,m12); end done } else { end escalated }
+      }
+    } else {
+      p1 = Clerk.patch()
+      d2 = Clerk.draft()
+      c2 = Clerk.review()
+      if c2 == pass {
+        m21 = Clerk.memo()
+        cm21 = Clerk.review()
+        if cm21 == pass { u21 = Boss.use(d2,m21); end done } else {
+          m22 = Clerk.memo()
+          cm22 = Clerk.review()
+          if cm22 == pass { u22 = Boss.use(d2,m22); end done } else { end escalated }
+        }
+      } else { p2 = Clerk.patch(); end escalated }
+    }
+  }
+  configuration Loop { cut C; process Repeated }
+  configuration Hand { cut C; process Written }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  contract Basis { evidence_basis Boss.use [Doc,Memo] }
+}

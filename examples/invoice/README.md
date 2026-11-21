@@ -23,12 +23,34 @@
 | `to-be-a-phase1.relca` | 拡張した ToBeA の単独解析と反例の説明 | `./target/debug/relca explain examples/invoice/to-be-a-phase1.relca` | violated / 1 | 確率性質の違反を一本の原因経路にはしない |
 | `rules.relca` | 承認規則を読む ToBeA | `./target/debug/relca check examples/invoice/rules.relca --configuration ToBeA` | vacuous / 5 | 非活性の契約を satisfied に数えない |
 | 同上 | 変更前の規則で授権を検査し、承認を全件免除する ToBeB | `./target/debug/relca check examples/invoice/rules.relca --configuration ToBeB` | violated / 1 | 無条件の承認 invariant を破る。低リスク案件だけの条件付き免除ではない |
-| `busyday.relca` | 4分間隔120件の人工負荷、1000反復、960分の業務 horizon | `./target/debug/relca simulate examples/invoice/busyday.relca --configuration AsIs --scenario BusyDay` | unsupported / 4 | 未解決の非決定を一様乱数で埋めない。負荷下の平均/P95や安定性は得られない |
+| `busyday.relca` | 4分間隔120件の人工負荷、100反復、960分の業務 horizon | release ビルドで `./target/release/relca simulate examples/invoice/busyday.relca --configuration AsIs --scenario BusyDay` | AsIs・ToBeP: violated / 1、ToBeA: inconclusive / 2 | 異議が起票されない場合の作業量・待ち時間・稼働率を見る。所要の目安は1構成あたり約1分10秒（2026-11-19実測） |
 | `quantile-compare.relca` | 終端時間の分位点目的と品質 hard の分離 | `./target/debug/relca compare examples/invoice/quantile-compare.relca --plans AsIs,ToBeP,ToBeA --mode exhaustive` | violated / 1 | 目的の宣言はあるが、Cut の保留と交差する量の数値順位を出さない |
 
 `commands.json` と `commands-phase1.json` には、check 以外も含めた35件の呼出しと期待 exit があります。
 通常の3案の simulate は unsupported / 4、既定の mutate も未対応種を残して unsupported / 4 です。
 未解決の非決定や未完了の変更生成を、合格や検出成功に読み替えないでください。
+
+繁忙日の割当てでは、その分に終わった仕事と取消の応答を先に記録します。その後、先に待ちに入った仕事を、宣言順で最初に空いている人へ割り当てます。同時に待ちに入った仕事は案件IDと呼出し順で比べます。異議は頻度と再確認の作業量が分からないため、起票しない場合を見積もります。W-CONTEST-1 と `contest_response` の `excluded` は、この見積もりで応答期限を評価していない印です。
+
+`BusyDay` を release ビルドで100反復ずつ実行した結果です。待ちは120件目が最初の仕事を始めるまでの標本平均です。
+
+```sh
+cargo build --release -p relca-cli
+./target/release/relca simulate examples/invoice/busyday.relca --configuration AsIs --scenario BusyDay
+```
+
+他の構成を測るときは `AsIs` を `ToBeP` または `ToBeA` に替えます。
+
+| 構成 | 判定 / exit | Clerk の稼働率 | 待ち | 実行時間 |
+|---|---|---:|---:|---:|
+| AsIs | violated / 1 | 87.5% | 172分 | 1分12秒 |
+| ToBeP | violated / 1 | 87.5% | 209分 | 1分10秒 |
+| ToBeA | inconclusive / 2 | 50.0% | 0分 | 1分10秒 |
+
+AsIs と ToBeP では、請求書の処理期限に違反する標本がありました。到着と所要時間を固定しているので、この例の稼働率や待ちは反復を増やしてもほとんど変わりません。反復数は主に確率の区間幅に効きます。通常の検査で使う `BusyDaySmoke` は12件・2反復で、完走と出力を確かめるためのシナリオです。負荷や確率の値を読むときは、release ビルドで本番規模の `BusyDay` を実行してください。
+この例の表にある待ちの平均は特定案件についての値で、全案件のリードタイムの平均/P95 ではありません。172分と209分はシミュレーションの観測値です。回帰検査には使いますが、手計算による受入値ではありません。
+
+全120件が確認まで進むので、Clerk の作業は AsIs・ToBeP で (入力6分＋発注書確認3分＋受領確認5分) × 120 = 1680分、ToBeA で (3分＋5分) × 120 = 960分です。容量2・観測窓960分で割ると、稼働率はそれぞれ 7/8 と 1/2 です。ToBeA では最初の抽出が1分で、次の到着まで4分あるため、120件目も抽出開始を待ちません。
 
 ## 時間と品質を読む
 
@@ -71,7 +93,7 @@ calc.md の数値対照は defer 行だけを外して検算するもので、�
 | I12.5-capacity | 名目能力 | src | calc.md の60/7・15件/時の算術 | runtime の安定性検証ではない | calc.md |
 | I12.5-risk | 誤登録確率と上限 | output | /properties の probability と verdict | AsIs/P satisfied、A violated | as-is-check, to-be-p-check, to-be-a-check: /properties/1/probability, /properties/1/verdict |
 | I12.5-decomposition | 並列化と入力移転 | output | /plans /evaluation | 目的の良さで違反を相殺しない | compare-exhaustive: /plans, /tables; p1-compare-exhaustive → /evaluation/hard, /evaluation/objectives |
-| I12.5-busyday | 人工負荷 | output | /scenario /diagnostics | 未解決非決定により simulate 拒否 | as-is-check: /metrics/unchecked; busyday-as-is-simulate → /scenario, /diagnostics |
+| I12.5-busyday | 人工負荷 | output | /scenario /diagnostics | 業務 horizon と非起票の前提を開示 | as-is-check: /metrics/unchecked; busyday-as-is-simulate → /scenario, /diagnostics, /metrics |
 | I12.5-c | 潜在条件の拒否 | output | /diagnostics の E-POL-LATENT | 観測可能な代理は未宣言 | to-be-c-check: /diagnostics/0/code, /verdict |
 | I12.5-b | 規則の静的改定 | output | /actors /properties /differences | B は全件免除。条件付き免除の分布は未設定 | as-is-mutate: /unchecked; rule-b-check → /actors, /properties; rule-diff → /differences |
 | I12.6-structure | 構成差分と intent | output | /differences /agency/differences | 未計算の種類は unchecked | diff: /differences, /terminals, /diagnostics, /unchecked; p1-diff → /differences, /agency/differences |

@@ -831,11 +831,15 @@ pub fn evaluation_definition_check(
         return Err("independent hard declaration inventory".into());
     }
     for (row, decl) in hard.iter().zip(&spec.hard) {
-        let name = &quality.ok_or("hard quality declaration absent")?.metrics[decl.cohort].name;
-        let bound = decl.bound.to_string();
-        let op = decl.op.text();
-        if row["constraint"] != format!("cohort.{name} {op} {bound}")
-            || row["cohort"] != *name
+        let q = quality.ok_or("hard quality declaration absent")?;
+        let (kind, name) = match decl.constraint.target {
+            ir::MetricRef::Cohort(i) => ("cohort", &q.metrics[i].name),
+            ir::MetricRef::Mean(i) => ("mean", &q.means[i].name),
+        };
+        let bound = decl.constraint.bound.0.to_string();
+        let op = decl.constraint.op.text();
+        if row["constraint"] != format!("{kind}.{name} {op} {bound}")
+            || row[kind] != *name
             || row["bound"] != bound
             || row["op"] != op
         {
@@ -878,6 +882,10 @@ pub fn evaluation_definition_check(
                     .name
             ),
             ir::ObjectiveRef::Overall(v) => format!("metrics.overall.{}", v.text()),
+            ir::ObjectiveRef::Mean(i) => format!(
+                "mean.{}",
+                quality.ok_or("objective mean declaration absent")?.means[i].name
+            ),
         };
         if row["objective"] != format!("{direction} {target}") || row["direction"] != direction {
             return Err("independent objective definition/direction/order".into());

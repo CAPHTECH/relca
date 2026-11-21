@@ -1,0 +1,1 @@
+{"verdict":"violated","evaluation":{"plans":[{"configuration":"Fast","status":"admissible"},{"configuration":"Slow","status":"excluded","hard_verdict":"violated"}]}}

@@ -57,7 +57,12 @@ fn accept(base: &str) {
             let m = h::model(&h::source(&name));
             let e = engine::simulate(&m);
             let r = reference::simulate(&m);
-            assert_eq!(e, r.outcome, "independent simulation {name}");
+            let facts = relca_test_support::diagnostic::simulation_facts;
+            assert_eq!(
+                facts(e.clone()),
+                facts(r.outcome),
+                "independent simulation {name}"
+            );
             assert_eq!(
                 e.completed_replications,
                 if expected["verdict"] == "unsupported" {

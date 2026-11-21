@@ -70,6 +70,12 @@ impl SelectedReport {
             Self::Simulation(r) => &r.cut_context.horizon,
         }
     }
+    fn repetition(&self) -> Option<&report::repetition::Table> {
+        match self {
+            Self::Exhaustive(r) => r.repetition.as_ref(),
+            Self::Simulation(r) => r.repetition.as_ref(),
+        }
+    }
     fn view(&self, m: &ir::Model) -> projection::Result<projection::View> {
         match self {
             Self::Exhaustive(r) => projection::exhaustive(r, m),
@@ -116,6 +122,25 @@ pub struct Tables {
     pub metrics: Option<Vec<MetricRow>>,
     pub properties: Vec<PropertyRow>,
     pub terminals: Vec<TerminalRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repetition: Option<Vec<RepetitionRow>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RepetitionRow {
+    pub case_id: u64,
+    #[serde(rename = "loop")]
+    pub loop_name: String,
+    pub values: Vec<RepetitionCell>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RepetitionCell {
+    pub configuration: String,
+    pub status: TerminalStatus,
+    pub value: Option<report::repetition::CaseValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct AgencyPair {
@@ -364,6 +389,7 @@ impl CompareReport {
     }
     fn diagnostic(&mut self, code: &str, message: impl Into<String>) {
         self.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: code.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -372,6 +398,8 @@ impl CompareReport {
     }
     fn finish(mut self) -> Self {
         let intent_unchecked = self.unchecked.iter().any(|x| x == "intent");
+        let contract_witnesses = self.unchecked.iter().any(|x| x == "contract_witnesses");
+        let record_differences = self.unchecked.iter().any(|x| x == "record_differences");
         // Applicability is established from the selected IR, not from an
         // automatic property that might be absent after a backend abort.
         let receipt_not_applicable = self
@@ -407,8 +435,25 @@ impl CompareReport {
         if intent_unchecked {
             self.unchecked.push("intent".into());
         }
+        if contract_witnesses {
+            self.unchecked.push("contract_witnesses".into());
+        }
+        if record_differences {
+            self.unchecked.push("record_differences".into());
+        }
         if checked.contains("contract_scope") {
             self.checked.push("contract_scope".into());
+        }
+        if self
+            .tables
+            .repetition
+            .iter()
+            .flatten()
+            .any(|r| r.values.iter().any(|c| c.value.is_some()))
+        {
+            self.checked.push("repetition_tables".into());
+        } else if self.plans.iter().any(|p| p.report.repetition().is_some()) {
+            self.unchecked.push("repetition_tables".into());
         }
         if checked.contains("metric_tables") {
             self.checked.push("metric_tables".into());
@@ -568,41 +613,17 @@ pub fn compare_with_scenario(
     scenario: Option<&str>,
 ) -> CompareReport {
     if let Ok(ast) = crate::syntax::parse(src) {
-        if crate::registration::declared(&ast)
-            && plans.iter().any(|name| {
-                lower::lower_configuration_with_scenario(&ast, name, scenario)
-                    .is_ok_and(|s| crate::registration::present(&s.model))
-            })
-        {
-            let mut result = CompareReport::empty(Some(analysis));
-            result.diagnostic(diag::U_SEM_0, "registration_unsupported_command");
-            return result.finish();
-        }
         if ast.has_merges() {
             let mut result = CompareReport::empty(Some(analysis));
             result.diagnostic(
                 diag::U_SEM_0,
                 "merge_feature_combination: merge comparison is not connected",
             );
-            return result.finish();
-        }
-        if ast.has_evidence_basis() && (!ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if c.applies_to.is_some())) || plans.iter().any(|name| ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c) if crate::contract_scope::applies(c, Some(name)) && c.clauses.iter().any(|c| matches!(c.value, crate::ast::ContractClause::EvidenceBasis { .. })))))) {
-            let mut result = CompareReport::empty(Some(analysis));
-            result.diagnostic(diag::U_SEM_0, "evidence_basis_unsupported_command");
-            return result.finish();
-        }
-        if plans.iter().any(|name| ast.items.iter().any(|i| matches!(i, crate::ast::Item::Contract(c)
-            if crate::contract_scope::applies(c, Some(name)) && c.clauses.iter().any(|c| matches!(c.value, crate::ast::ContractClause::SameVersion { .. }))))) {
-            let mut result = CompareReport::empty(Some(analysis));
-            result.diagnostic(diag::U_SEM_0, "same_version_unsupported_command");
-            return result.finish();
-        }
-        if ast.has_repetition() {
-            let mut result = CompareReport::empty(Some(analysis));
-            result.diagnostic(
-                diag::U_SEM_0,
-                "loop_feature_combination: repeat comparison is not connected",
-            );
+            let last = result.diagnostics.last_mut().unwrap();
+            *last = last
+                .clone()
+                .merge_detail("compare_merge_projection", ast.merge_blockers());
+            diag::locate(src, &mut result.diagnostics);
             return result.finish();
         }
         let distribution = ast.items.iter().any(|i| match i {
@@ -620,7 +641,14 @@ pub fn compare_with_scenario(
             })
         {
             let mut result = CompareReport::empty(Some(analysis));
-            result.diagnostic(diag::U_SEM_0, "stochastic_arrivals_mode_unsupported");
+            let reason = "stochastic_arrivals_mode_unsupported";
+            result.diagnostic(diag::U_SEM_0, reason);
+            let cause = match analysis {
+                Analysis::Exhaustive => "compare_exhaustive_stochastic_arrivals",
+                Analysis::Simulation => "compare_simulation_stochastic_arrivals",
+            };
+            let last = result.diagnostics.last_mut().unwrap();
+            *last = last.clone().unconnected(reason, cause, Vec::new());
             return result.finish();
         }
     }
@@ -661,7 +689,9 @@ pub fn compare_with_scenario(
     {
         result.scenario = scenario.map(String::from);
     }
-    result.seal()
+    let mut result = result.seal();
+    diag::locate(src, &mut result.diagnostics);
+    result
 }
 fn compare_using(
     plans: &[&str],
@@ -685,10 +715,35 @@ fn compare_using(
     }
     result.assumptions.push(ir::Assumption{field:"compare.purpose".into(),value:"side-by-side-only".into(),affects:"plans are listed in requested order without ranking, a baseline, hard filtering, Pareto selection or a combined score".into()});
     if analysis == Analysis::Simulation {
+        let confidence_scope = if metadata.iter().flatten().any(|m| {
+            m.model
+                .metric_checks
+                .iter()
+                .any(|c| matches!(c.target, ir::MetricRef::Cohort(_)))
+        }) {
+            "Bonferroni correction applies to probability-query and cohort component case rows within each plan; no simultaneous confidence across plans or interval for a difference is claimed"
+        } else {
+            "Bonferroni correction applies to probability-query case rows within each plan; no simultaneous confidence across plans or interval for a difference is claimed"
+        };
         result.assumptions.extend([
             ir::Assumption{field:"compare.common_random".into(),value:"initial-only".into(),affects:"case initial keys and actor-local initial keys with case ID 0 are shared when the corresponding draws occur; rejected or unarrived cases do not draw; kernel and duration sites are separated by distinct process names; independence of distinct SHA-256 keys is a modeling assumption".into()},
-            ir::Assumption{field:"compare.confidence".into(),value:"within-plan-only".into(),affects:"Bonferroni correction applies to probability-query case rows within each plan; no simultaneous confidence across plans or interval for a difference is claimed".into()},
+            ir::Assumption{field:"compare.confidence".into(),value:"within-plan-only".into(),affects:confidence_scope.into()},
         ]);
+    }
+    if metadata
+        .iter()
+        .flatten()
+        .any(|m| crate::evidence_basis::present(&m.model) || crate::same_version::present(&m.model))
+    {
+        result.unchecked.push("contract_witnesses".into());
+    }
+    if metadata.iter().flatten().any(|m| {
+        m.model
+            .capabilities
+            .iter()
+            .any(crate::registration::participates)
+    }) {
+        result.unchecked.push("record_differences".into());
     }
     let Some(metadata) = metadata.into_iter().collect::<Option<Vec<_>>>() else {
         return result.finish();
@@ -713,6 +768,12 @@ fn compare_using(
         .any(|m| report::priority::comparison_mismatch(&metadata[0].model, &m.model))
     {
         result.diagnostic(diag::U_SEM_0, "priority_feature_combination: compare requires identical priority inputs and disciplines");
+        let last = result.diagnostics.last_mut().unwrap();
+        *last = last.clone().unconnected(
+            "priority_feature_combination",
+            "compare_priority_mismatch",
+            Vec::new(),
+        );
         return result.finish();
     }
     if metadata
@@ -945,6 +1006,7 @@ fn compare_using(
                 .collect();
             if !asymmetric.is_empty() {
                 result.diagnostics.push(diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::W_CMP_1.into(),
                     severity: diag::Severity::Warning,
                     span: None,
@@ -1078,7 +1140,10 @@ fn tables(
             return Err("report inventories differ");
         }
     }
-    let mut tables = Tables::default();
+    let mut tables = Tables {
+        repetition: repetition_rows(plans, metadata)?,
+        ..Tables::default()
+    };
     let quality = plans
         .iter()
         .zip(metadata)
@@ -1309,6 +1374,78 @@ fn tables(
     Ok((tables, complete))
 }
 
+fn repetition_rows(
+    plans: &[Plan],
+    metadata: &[lower::SelectedConfiguration],
+) -> projection::Result<Option<Vec<RepetitionRow>>> {
+    let mut sides = Vec::new();
+    let mut keys = BTreeSet::new();
+    for (plan, selected) in plans.iter().zip(metadata) {
+        let m = &selected.model;
+        let mut rows = BTreeMap::new();
+        if m.has_loops() {
+            let table = plan
+                .report
+                .repetition()
+                .ok_or("missing repetition report")?;
+            let mut reported = BTreeMap::new();
+            for row in &table.cases {
+                if reported
+                    .insert((row.case_id, row.loop_name.as_str()), row)
+                    .is_some()
+                {
+                    return Err("duplicate repetition row");
+                }
+            }
+            for var in m.state_variables.iter().filter(|v| v.is_loop_round()) {
+                let name = var
+                    .name
+                    .trim_start_matches("@loop:")
+                    .trim_end_matches(":round");
+                for case in 1..=m.bounds.cases {
+                    let key = (case, name);
+                    let value = reported
+                        .remove(&key)
+                        .map(report::repetition::CaseValue::from);
+                    if value.is_none() != (table.coverage == "not_derived") {
+                        return Err("missing or unexpected repetition observation");
+                    }
+                    keys.insert(key);
+                    rows.insert(key, value);
+                }
+            }
+            if !reported.is_empty() {
+                return Err("unexpected repetition row");
+            }
+        }
+        sides.push(rows);
+    }
+    Ok(metadata.iter().any(|m| m.model.has_loops()).then(|| {
+        keys.into_iter()
+            .map(|key @ (case_id, loop_name)| RepetitionRow {
+                case_id,
+                loop_name: loop_name.into(),
+                values: plans
+                    .iter()
+                    .zip(&sides)
+                    .enumerate()
+                    .map(|(i, (plan, side))| RepetitionCell {
+                        configuration: plan.configuration.clone(),
+                        status: match side.get(&key) {
+                            Some(Some(_)) => TerminalStatus::Reported,
+                            Some(None) => TerminalStatus::NotReported,
+                            None => TerminalStatus::NotApplicable,
+                        },
+                        value: side.get(&key).cloned().flatten(),
+                        reason: matches!(side.get(&key), Some(None))
+                            .then(|| format!("/plans/{i}/report/repetition/unchecked")),
+                    })
+                    .collect(),
+            })
+            .collect()
+    }))
+}
+
 fn common_random(plans: &[&str], metadata: &[lower::SelectedConfiguration]) -> CommonRandom {
     let m = &metadata[0].model;
     let mut case_sites = Vec::new();
@@ -1418,6 +1555,9 @@ fn common_random(plans: &[&str], metadata: &[lower::SelectedConfiguration]) -> C
     }
 }
 
+#[cfg(test)]
+#[path = "compare_mean_tests.rs"]
+mod compare_mean_tests;
 #[cfg(test)]
 #[path = "../tests/support/evaluation_review_private_compare.rs"]
 mod evaluation_review_private_compare;
@@ -1539,6 +1679,7 @@ mod tests {
                     assert_eq!(fold(values.into_iter(), &[]), order[i.max(j)]);
                     for (code, index) in [(diag::E_CMP_0, 5), (diag::U_SEM_0, 3)] {
                         let ds = [diag::Diagnostic {
+                            presentation: Default::default(),
                             code: code.into(),
                             severity: diag::Severity::Error,
                             message: "injected".into(),
@@ -1640,13 +1781,14 @@ mod tests {
     }
     #[test]
     fn c_internal_simulation_compare_legacy_and_two_case_routes() {
-        // Legacy route: ToBeP leaves the fork start order open, so ADR 0016 refuses it.
+        // Legacy route: ToBeP uses independent capacity. Both fork starts
+        // commute within the tick, without changing sampled safety guarantees.
         let legacy = include_str!("../../../fixtures/config-diff-parallel/model.relca").replace(
             "  verify safety no_resource_overcommit\n",
             "  verify safety no_resource_overcommit\n  simulation replications 3 seed 7 confidence 0.5\n",
         );
         let out = compare(&legacy, &["AsIs", "ToBeP"], Analysis::Simulation);
-        assert_eq!(out.verdict, Verdict::Unsupported);
+        assert_eq!(out.verdict, Verdict::Inconclusive);
         let verdicts: Vec<Vec<Verdict>> = out
             .tables
             .properties
@@ -1656,12 +1798,12 @@ mod tests {
         assert_eq!(
             verdicts,
             [
-                [Verdict::Satisfied, Verdict::Unsupported],
-                [Verdict::Inconclusive, Verdict::Unsupported]
+                [Verdict::Satisfied, Verdict::Satisfied],
+                [Verdict::Inconclusive, Verdict::Inconclusive]
             ]
         );
-        assert!(out.tables.terminals.is_empty());
-        assert!(!out.checked.iter().any(|c| c == "terminal_tables"));
+        assert!(!out.tables.terminals.is_empty());
+        assert!(out.checked.iter().any(|c| c == "terminal_tables"));
         // Two cases. u < 1/2 (first hex digit below 8) draws first; P ends yes on first, Q on
         // second. kernel.P.a: case1 09e8.., 0a79.. (first, first); case2 9e64.., 78e6..
         // (second, first). kernel.Q.a: case1 d15b.., eed5.. (second, second); case2 4415..,
@@ -1816,6 +1958,7 @@ mod tests {
                 // Malformed producer: static failure with leftover numeric data.
                 r.verdict = Verdict::Invalid;
                 r.diagnostics.push(diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::E_NAME_0.into(),
                     severity: diag::Severity::Error,
                     message: "injected static failure retaining numbers".into(),

@@ -1,0 +1,22 @@
+model E5 version "0.2" {
+  type V = enum { pass, fail }
+  type D = enum { doc }
+  observed case { draft: optional<D> }
+  actor Invoice { source document }
+  actor Mail { source document }
+  actor Reader { capacity 1; capability enter() -> D { reads [Invoice]; duration fixed 1min; result nondet { doc }; writes draft } }
+  actor Rev { capacity 1; capability review() -> V { reads [draft]; duration fixed 1min; result nondet { pass, fail } } }
+  actor Clerk { capacity 1; capability fix() -> D { reads [Mail]; duration fixed 2min; result nondet { doc }; writes draft } }
+  process P {
+    e = Reader.enter()
+    repeat rework at_most 2 {
+      r = Rev.review()
+      if r == pass { leave } else { f = Clerk.fix(); again }
+    } on_limit { end escalated }
+    end done
+  }
+  cut C { include [Invoice, Mail, Reader, Rev, Clerk] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  verify reachable end.done
+  contract Basis { evidence_basis Rev.review [Invoice] }
+}

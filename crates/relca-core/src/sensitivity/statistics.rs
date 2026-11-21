@@ -13,8 +13,8 @@ pub struct SuiteMultiplicity {
 }
 
 impl SuiteMultiplicity {
-    /// Each input count is all probability-query × case rows of one planned
-    /// model point, not its completed replications or a pooled case sample size.
+    /// Count Bernoulli intervals for each planned point: probability-query and
+    /// cohort component case rows, not completed replications or pooled cases.
     pub fn new(confidence: Rational, planned_rows: &[u64]) -> Result<Self, InputError> {
         if confidence <= Rational::zero() || confidence >= Rational::one() {
             return Err(InputError::new(
@@ -28,13 +28,13 @@ impl SuiteMultiplicity {
             .ok_or_else(|| {
                 InputError::new(
                     FailureKind::CapacityLimit,
-                    "planned probability-row count overflow",
+                    "planned statistical row count overflow",
                 )
             })?;
         if planned_rows.is_empty() || rows == 0 {
             return Err(InputError::new(
                 FailureKind::TargetInvalid,
-                "no planned probability-query case rows",
+                "no planned statistical case rows",
             ));
         }
         Ok(Self { confidence, rows })

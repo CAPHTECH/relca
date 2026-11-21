@@ -162,10 +162,6 @@ def combination_cases():
     # Remove Basis so each gate must be owned by registration itself.
     source = plain(R0)
     for role, call in [('registrar', 'r = Clerk.register()'), ('reader', 'b = Reviewer.review(e)')]:
-        repeat = edit(source, call, f'repeat attempt at_most 1 {{ {call}; leave }} on_limit {{ end returned }}')
-        if role == 'reader':
-            repeat = edit(repeat, 'if a == pass && b == pass {} else { end returned }\n    x = Ledger.post(a, b)', '')
-        yield 'repeat_' + role, repeat, 'loop_feature_combination'
         for name, suffix in [('response', 'response_loss none'),
                              ('retry', 'response_loss sequence [unknown, delivered] retry max_attempts 2 when receipt unknown backoff fixed 1min exhausted end returned')]:
             yield name + '_' + role, edit(source, call, call + ' ' + suffix), 'registration_feature_combination'

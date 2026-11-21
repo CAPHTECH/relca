@@ -10,6 +10,8 @@ pub struct SimulationOutcome {
     pub response_recovery: Option<crate::recovery::Recovery>,
     #[serde(skip)]
     pub stochastic_arrivals: bool,
+    #[serde(skip)]
+    pub same_time: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<crate::quality::Quality>,
     #[serde(skip)]

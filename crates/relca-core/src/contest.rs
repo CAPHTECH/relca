@@ -676,11 +676,21 @@ pub(crate) const CONDITION_WAIT_UNSUPPORTED: &str = "condition_wait_contest_unsu
 /// combination before either static candidates or restricted grants are read.
 pub(crate) fn condition_wait_refusal(m: &ir::Model) -> Option<diag::Diagnostic> {
     let contest = m.contests().first()?;
-    m.has_condition_wait().then(|| diag::Diagnostic {
-        code: diag::U_SEM_0.into(),
-        severity: diag::Severity::Error,
-        message: CONDITION_WAIT_UNSUPPORTED.into(),
-        span: Some(contest.span),
+    m.has_condition_wait().then(|| {
+        let mut blockers = m.condition_wait_blockers();
+        blockers.extend(
+            m.contests()
+                .iter()
+                .map(|c| diag::Blocker::at("contest", None, Some(c.span))),
+        );
+        diag::Diagnostic {
+            presentation: Default::default(),
+            code: diag::U_SEM_0.into(),
+            severity: diag::Severity::Error,
+            message: CONDITION_WAIT_UNSUPPORTED.into(),
+            span: Some(contest.span),
+        }
+        .unconnected(CONDITION_WAIT_UNSUPPORTED, "condition_wait", blockers)
     })
 }
 

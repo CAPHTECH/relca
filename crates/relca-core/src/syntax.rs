@@ -96,6 +96,9 @@ fn parse_with_priority_context(src: &str) -> (Result<Model, Vec<Diagnostic>>, bo
         degradation_depth: 0,
         recovery_depth: 0,
         repeat_depth: 0,
+        repeat_limit: false,
+        repeat_token: None,
+        incompatible_scope: None,
         merge_yield_depths: Vec::new(),
         merge_bindings,
     };
@@ -113,6 +116,9 @@ struct Parser<'s> {
     degradation_depth: usize,
     recovery_depth: usize,
     repeat_depth: usize,
+    repeat_limit: bool,
+    repeat_token: Option<Span>,
+    incompatible_scope: Option<Span>,
     merge_yield_depths: Vec<usize>,
     merge_bindings: std::collections::BTreeSet<String>,
 }
@@ -372,6 +378,7 @@ impl<'s> Parser<'s> {
         let unsupported = token.kind == Kind::Unsupported
             || (token.kind == Kind::Word && outside_keyword(token.text));
         Diagnostic {
+            presentation: Default::default(),
             code: if unsupported {
                 diag::U_SYN_0
             } else {
@@ -466,6 +473,19 @@ impl<'s> Parser<'s> {
         }
         self.expect(")")?;
         Ok(args)
+    }
+
+    fn unsupported_form(&self, message: &str, reason: &str) -> Diagnostic {
+        let token = self.current();
+        self.unsupported(message).unconnected(
+            reason,
+            "unsupported_token",
+            vec![diag::Blocker::at(
+                "feature",
+                (!token.text.is_empty()).then(|| token.text.to_owned()),
+                Some(token.span),
+            )],
+        )
     }
 
     fn unsupported(&self, message: &str) -> Diagnostic {
@@ -880,7 +900,10 @@ impl<'s> Parser<'s> {
             let ty = self.named_type()?;
             if ty.value == "set" && self.take("<") {
                 if optional || !self.at("CaseId") {
-                    return Err(self.unsupported("set element type is unsupported"));
+                    return Err(self.unsupported_form(
+                        "set element type is unsupported",
+                        "unsupported_set_element_type",
+                    ));
                 }
                 self.ident()?;
                 self.expect(">")?;
@@ -1042,6 +1065,7 @@ impl<'s> Parser<'s> {
                 self.pos += 1;
             }
             return Err(Diagnostic {
+                presentation: Default::default(),
                 code: diag::E_SYN_0.into(),
                 severity: diag::Severity::Error,
                 message: "metrics values must be nonnegative integers".into(),
@@ -1170,6 +1194,7 @@ impl<'s> Parser<'s> {
         self.expect("}")?;
         if !window || !currency {
             return Err(Diagnostic {
+                presentation: Default::default(),
                 code: diag::E_SYN_0.into(),
                 severity: diag::Severity::Error,
                 message: "metrics requires window and currency".into(),
@@ -1325,6 +1350,52 @@ impl<'s> Parser<'s> {
         })
     }
 
+    fn mean_metric(&mut self) -> Parsed<MeanMetric> {
+        let start = self.expect("metric")?.span.start;
+        self.expect("mean")?;
+        self.expect(".")?;
+        let name = self.ident()?;
+        self.expect("=")?;
+        self.expect_choice("mean")?;
+        self.expect("(")?;
+        let measure = if self.take("elapsed") {
+            crate::ir::MeanMeasure::Elapsed
+        } else if self.take("work") {
+            crate::ir::MeanMeasure::Work
+        } else if self.take("named_people_work") {
+            crate::ir::MeanMeasure::NamedPeopleWork
+        } else if self.take("cost") {
+            crate::ir::MeanMeasure::Cost
+        } else {
+            return Err(self.unsupported("mean measure"));
+        };
+        let property = if self.take(",") {
+            self.expect_choice("case")?;
+            self.expect(".")?;
+            Some(self.ident()?)
+        } else {
+            None
+        };
+        if measure == crate::ir::MeanMeasure::Elapsed && property.is_none() {
+            return Err(self.unsupported("mean elapsed needs a case property"));
+        }
+        let given_reached = self.take("given");
+        if given_reached && !self.take("reached") {
+            return Err(self.unsupported("mean given must be reached"));
+        }
+        if given_reached && property.is_none() {
+            return Err(self.unsupported("mean given reached needs a case property"));
+        }
+        self.expect(")")?;
+        Ok(MeanMetric {
+            name,
+            measure,
+            property,
+            given_reached,
+            span: self.span(start),
+        })
+    }
+
     fn model(&mut self) -> Parsed<Model> {
         self.separators();
         let start = self.expect("model")?.span.start;
@@ -1388,14 +1459,16 @@ impl<'s> Parser<'s> {
                 }
                 "property" => Item::QualityProperty(self.quality_property()?),
                 "metric" => {
-                    let quantile = self
+                    let kind = self
                         .tokens
                         .iter()
                         .skip(self.pos + 1)
                         .find(|t| t.text != "\n")
-                        .is_some_and(|t| t.text == "quantile");
-                    if quantile {
+                        .map(|t| t.text);
+                    if kind == Some("quantile") {
                         Item::QuantileMetric(self.quantile_metric()?)
+                    } else if kind == Some("mean") {
+                        Item::MeanMetric(self.mean_metric()?)
                     } else {
                         Item::CohortMetric(self.cohort_metric()?)
                     }
@@ -1422,6 +1495,7 @@ impl<'s> Parser<'s> {
                 "metrics" => Item::Metrics(self.metrics()?),
                 "simulation" => Item::Simulation(self.simulation()?),
                 "scenario" => Item::Scenario(self.scenario()?),
+                "contest_not_filed" => return Err(self.unsupported("contest_not_filed outside scenario")),
                 "arrivals" => self.arrivals()?,
                 "policy" => Item::Policy(self.start_policy()?),
                 word @ ("queue" | "concurrent") => {
@@ -1462,6 +1536,11 @@ impl<'s> Parser<'s> {
                 "actor" => Item::Actor(self.actor()?),
                 "process" => Item::Process(self.process()?),
                 "bounds" => Item::Bounds(self.bounds()?),
+                "verify" if self.tokens[self.pos + 1..].iter().find(|t| t.text != "\n").is_some_and(|t| t.text == "metric") => {
+                    self.expect("verify")?;
+                    self.expect("metric")?;
+                    Item::VerifyMetric(Box::new(self.metric_constraint()?))
+                }
                 "verify" => Item::Verify(self.verify()?),
                 "cut" => Item::Cut(self.cut()?),
                 "configuration" => Item::Configuration(self.configuration()?),
@@ -1576,7 +1655,7 @@ impl<'s> Parser<'s> {
     }
 
     fn compare_decl(&mut self) -> Parsed<CompareDecl> {
-        use crate::ir::{Direction, HardComparison, OverallObjective};
+        use crate::ir::{Direction, OverallObjective};
         let start = self.expect("compare")?.span.start;
         self.expect("[")?;
         if self.at("]") {
@@ -1622,28 +1701,25 @@ impl<'s> Parser<'s> {
             }
             while !self.at("}") {
                 let row_start = self.start();
-                if !self.take("cohort") {
-                    return Err(self.compare_error("hard constraints apply to cohort ratios only"));
-                }
-                self.expect(".")?;
-                let cohort = self.ident()?;
-                self.lines();
-                let op = if self.take_adjacent("<", "=") {
-                    HardComparison::Le
-                } else if self.take_adjacent(">", "=") {
-                    HardComparison::Ge
-                } else if self.take("<") {
-                    HardComparison::Lt
-                } else if self.take(">") {
-                    HardComparison::Gt
+                let constraint = if self.at("mean") {
+                    self.metric_constraint()?
                 } else {
-                    return Err(self.error("expected comparison"));
+                    if !self.take("cohort") {
+                        // Keep the existing diagnostic for old unsupported hard syntax.
+                        return Err(
+                            self.compare_error("hard constraints apply to cohort ratios only")
+                        );
+                    }
+                    self.expect(".")?;
+                    MetricConstraint {
+                        target: self.ident()?,
+                        mean: false,
+                        op: self.hard_operator()?,
+                        bound: MetricBound::Number(self.probability()?),
+                    }
                 };
-                let bound = self.probability()?;
                 hard.push(HardRow {
-                    cohort,
-                    op,
-                    bound,
+                    constraint,
                     span: self.span(row_start),
                 });
                 if matches!(self.current().text, "weight" | "score") {
@@ -1680,6 +1756,9 @@ impl<'s> Parser<'s> {
                 } else if self.take("quantile") {
                     self.expect(".")?;
                     ObjectiveRef::Quantile(self.ident()?)
+                } else if self.take("mean") {
+                    self.expect(".")?;
+                    ObjectiveRef::Mean(self.ident()?)
                 } else if self.take("metrics") {
                     self.expect(".")?;
                     if !self.take("overall") {
@@ -1817,6 +1896,7 @@ impl<'s> Parser<'s> {
         }
         if self.at("tie") {
             return Err(Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "duplicate priority tie".into(),
@@ -1828,6 +1908,7 @@ impl<'s> Parser<'s> {
 
     fn priority_incompatible(&self) -> Diagnostic {
         Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "priority_tie_incompatible".into(),
@@ -1862,7 +1943,7 @@ impl<'s> Parser<'s> {
         };
         let mut extensions = Vec::new();
         let mut assigned = false;
-        while self.at("then") || self.at("assign") {
+        while self.at("then") || self.at("assign") || self.at("dispatch") {
             let token = self.current();
             if priority.is_some() && assigned && self.at("then") {
                 return Err(self.priority_incompatible());
@@ -1870,6 +1951,9 @@ impl<'s> Parser<'s> {
             let value = if self.take("then") {
                 self.expect_choice("call_order")?;
                 PolicyExtension::CallOrder
+            } else if self.take("dispatch") {
+                self.expect_choice("after_finishes")?;
+                PolicyExtension::AfterFinishes
             } else {
                 self.expect("assign")?;
                 self.expect_choice("first_idle")?;
@@ -1952,6 +2036,31 @@ impl<'s> Parser<'s> {
                     ScenarioItem::Horizon(self.duration()?)
                 }
                 "policy" => ScenarioItem::Policy(self.start_policy()?),
+                "contest_not_filed" => {
+                    let start = self.expect("contest_not_filed")?.span.start;
+                    let party = self.ident()?;
+                    self.expect("on")?;
+                    self.expect("end")?;
+                    self.expect(".")?;
+                    let end = self.ident()?;
+                    self.expect("reason")?;
+                    let reason = self.string()?;
+                    if reason.value.trim().is_empty() {
+                        return Err(Diagnostic {
+                            presentation: Default::default(),
+                            code: diag::E_SYN_0.into(),
+                            severity: diag::Severity::Error,
+                            message: "contest_not_filed reason must not be empty".into(),
+                            span: Some(reason.span),
+                        });
+                    }
+                    ScenarioItem::ContestNotFiled(ContestNotFiled {
+                        party,
+                        end,
+                        reason,
+                        span: self.span(start),
+                    })
+                }
                 // ADR 0042: the existing item form (ADR 0039), shared with the
                 // model-level arm. A scenario-local `end` terminal is refused
                 // by lower (U10), not by the parser.
@@ -1967,7 +2076,9 @@ impl<'s> Parser<'s> {
                 {
                     return Err(self.unsupported("compare"));
                 }
-                _ => return Err(self.unsupported("scenario item")),
+                _ => {
+                    return Err(self.unsupported_form("scenario item", "unsupported_scenario_item"));
+                }
             });
             self.separators();
         }
@@ -3119,8 +3230,11 @@ impl<'s> Parser<'s> {
                     });
                 }
             }
-            if ["fork", "degrade"].iter().any(|w| self.position_word(w)) {
-                return Err(self.loop_combination());
+            if self.position_word("degrade") {
+                return Err(self.loop_operand("degradation_in_repeat"));
+            }
+            if self.repeat_limit && self.position_word("fork") {
+                return Err(self.loop_operand("on_limit_statement"));
             }
         }
         if self.at("if") {
@@ -3142,6 +3256,17 @@ impl<'s> Parser<'s> {
         let mut d = self.unsupported("loop_feature_combination");
         d.code = diag::U_SEM_0.into();
         d
+    }
+
+    fn loop_operand(&self, cause: &str) -> Diagnostic {
+        let d = self.loop_combination();
+        let span = d.span;
+        d.loop_detail(
+            cause,
+            diag::DetailKind::loop_cause(cause),
+            self.repeat_token,
+            span,
+        )
     }
 
     fn merge_error(&self, reason: &str) -> Diagnostic {
@@ -3218,12 +3343,24 @@ impl<'s> Parser<'s> {
     // limit and the standard test stack are the same as for ordinary if.
     fn merge_header(&mut self) -> Parsed<Box<(usize, Ident, Spanned<Cond>)>> {
         if self.repeat_depth > 0 {
-            return Err(self.loop_combination());
+            return Err(self.loop_operand("value_returning_if"));
         }
         if self.recovery_depth > 0 || self.degradation_depth > 0 {
             let mut d = self.unsupported("merge_feature_combination");
             d.code = diag::U_SEM_0.into();
-            return Err(d);
+            let span = d.span;
+            let (cause, role) = if self.recovery_depth > 0 {
+                ("merge_in_recovery", "recovery")
+            } else {
+                ("merge_in_degradation", "degradation")
+            };
+            return Err(d.merge_detail(
+                cause,
+                vec![
+                    diag::Blocker::at("merge_binding", Some(self.current().text.into()), span),
+                    diag::Blocker::at(role, None, self.incompatible_scope),
+                ],
+            ));
         }
         let start = self.start();
         let binding = self.ident()?;
@@ -3247,10 +3384,33 @@ impl<'s> Parser<'s> {
             let mut d = self.loop_combination();
             if over {
                 d.message = "loop_stage_unsupported".into();
+            } else {
+                let span = d.span;
+                d = if self.repeat_depth > 0 {
+                    d.loop_detail(
+                        "nested_repeat",
+                        diag::DetailKind::AnalysisNotConnected,
+                        self.repeat_token,
+                        span,
+                    )
+                } else {
+                    let cause = if self.recovery_depth > 0 {
+                        "repeat_in_recovery"
+                    } else {
+                        "repeat_in_degradation"
+                    };
+                    d.loop_detail(
+                        cause,
+                        diag::DetailKind::AnalysisNotConnected,
+                        span,
+                        self.incompatible_scope,
+                    )
+                };
             }
             return Err(d);
         }
-        let start = self.expect("repeat")?.span.start;
+        let repeat = self.expect("repeat")?.span;
+        let start = repeat.start;
         let name = self.ident()?;
         if self.at("over") {
             let mut d = self.loop_combination();
@@ -3276,11 +3436,15 @@ impl<'s> Parser<'s> {
             return Err(d);
         }
         self.repeat_depth += 1;
+        self.repeat_token = Some(repeat);
         let body = self.block()?;
         self.separators();
         self.expect("on_limit")?;
+        self.repeat_limit = true;
         let on_limit = self.block()?;
+        self.repeat_limit = false;
         self.repeat_depth -= 1;
+        self.repeat_token = None;
         Ok(Spanned {
             value: Stmt::Repeat {
                 name,
@@ -3387,8 +3551,8 @@ impl<'s> Parser<'s> {
             self.take("wait");
             self.lines();
             if self.take("until") {
-                if self.repeat_depth > 0 {
-                    return Err(self.loop_combination());
+                if self.repeat_limit {
+                    return Err(self.loop_operand("on_limit_statement"));
                 }
                 if self.recovery_depth > 0 {
                     return Err(self.unsupported("condition wait in recovery"));
@@ -3400,7 +3564,9 @@ impl<'s> Parser<'s> {
                 }
                 Stmt::Wait(self.duration()?)
             }
-        } else if self.take("fork") {
+        } else if self.at("fork") {
+            let loop_error = (self.repeat_depth > 0).then(|| self.loop_operand("join_any"));
+            self.take("fork");
             let name = self.ident()?;
             self.expect("{")?;
             self.separators();
@@ -3413,6 +3579,11 @@ impl<'s> Parser<'s> {
             self.expect("}")?;
             self.separators();
             let join = self.join()?;
+            if matches!(join.value, Join::Any { .. })
+                && let Some(err) = loop_error
+            {
+                return Err(err);
+            }
             Stmt::Fork {
                 name,
                 branches,
@@ -3448,7 +3619,7 @@ impl<'s> Parser<'s> {
     }
 
     fn degradation_stmt(&mut self, start: usize) -> Parsed<Spanned<Stmt>> {
-        self.expect("degrade")?;
+        let marker = self.expect("degrade")?.span;
         if self.depth != 1 {
             let mut d = self.unsupported("q6_feature_combination: nested degradation");
             d.code = diag::U_SEM_0.into();
@@ -3458,11 +3629,13 @@ impl<'s> Parser<'s> {
         self.expect("when")?;
         let condition = self.cond()?;
         self.degradation_depth += 1;
+        let outer_scope = self.incompatible_scope.replace(marker);
         let then_body = self.block()?;
         self.separators();
         self.expect("else")?;
         let else_body = self.block()?;
         self.degradation_depth -= 1;
+        self.incompatible_scope = outer_scope;
         self.degradations.push(Degradation {
             name,
             span: self.span(start),
@@ -3513,7 +3686,7 @@ impl<'s> Parser<'s> {
                 .iter()
                 .any(|w| self.position_word(w))
         {
-            return Err(self.loop_combination());
+            return Err(self.loop_operand("response_or_retry"));
         }
         let after_args = self.pos;
         let response_loss = if self.take("response_loss") {
@@ -3615,7 +3788,25 @@ impl<'s> Parser<'s> {
             if self.at("response_loss") || finite_retry {
                 let mut d = self.error("recovery_feature_combination");
                 d.code = diag::U_SEM_0.into();
-                return Err(d);
+                return Err(d.unconnected(
+                    "recovery_feature_combination",
+                    "query_response_channel",
+                    query_command
+                        .iter()
+                        .map(|name| {
+                            diag::Blocker::at(
+                                "reference",
+                                Some(name.value.clone()),
+                                Some(name.span),
+                            )
+                        })
+                        .chain(std::iter::once(diag::Blocker::at(
+                            "feature",
+                            None,
+                            Some(self.current().span),
+                        )))
+                        .collect(),
+                ));
             }
         } else {
             self.pos = saved;
@@ -3630,6 +3821,9 @@ impl<'s> Parser<'s> {
                     return Err(self.unsupported("nested recovery handler"));
                 }
                 self.recovery_depth += 1;
+                let outer_scope = self
+                    .incompatible_scope
+                    .replace(self.tokens[self.pos - 1].span);
                 recovery = Some(Box::new(self.block().map_err(|mut d| {
                     if d.code == diag::E_SYN_0 {
                         d.message = "invalid_recovery_syntax".into();
@@ -3637,6 +3831,7 @@ impl<'s> Parser<'s> {
                     d
                 })?));
                 self.recovery_depth -= 1;
+                self.incompatible_scope = outer_scope;
                 let after = self.pos;
                 if self.take("on") && self.take("receipt_unknown") {
                     let mut d = self.error("invalid_recovery_contract");
@@ -4538,6 +4733,7 @@ impl<'s> Parser<'s> {
             let path = self.path()?;
             if path.value.len() > 2 {
                 return Err(Diagnostic {
+                    presentation: Default::default(),
                     code: diag::U_SYN_0.into(),
                     severity: diag::Severity::Error,
                     message: "intent targets are Actor or Actor.Capability".into(),
@@ -4732,7 +4928,10 @@ impl<'s> Parser<'s> {
                 self.expect("commit")?;
                 path.span = self.span(start);
                 if self.at(".") || self.at("(") {
-                    return Err(self.unsupported("standing supports only end and commit targets"));
+                    return Err(self.unsupported_form(
+                        "standing supports only end and commit targets",
+                        "unsupported_standing_target",
+                    ));
                 }
                 Ok(StandingRef::Commit(path))
             })();
@@ -4740,7 +4939,10 @@ impl<'s> Parser<'s> {
                 return parsed;
             }
             self.pos = saved;
-            return Err(self.unsupported("standing supports only end and commit targets"));
+            return Err(self.unsupported_form(
+                "standing supports only end and commit targets",
+                "unsupported_standing_target",
+            ));
         }
         self.expect("end")?;
         self.expect(".")?;
@@ -4891,7 +5093,10 @@ impl<'s> Parser<'s> {
                     | "history"
             )
         {
-            return Err(self.unsupported("state invariant expression"));
+            return Err(self.unsupported_form(
+                "state invariant expression",
+                "unsupported_invariant_expression",
+            ));
         }
         let look: Vec<_> = self.tokens[self.pos..]
             .iter()
@@ -5264,6 +5469,51 @@ impl<'s> Parser<'s> {
             applies_to,
             clauses,
             span: self.span(start),
+        })
+    }
+
+    fn metric_constraint(&mut self) -> Parsed<MetricConstraint> {
+        let mean = if self.take("mean") {
+            true
+        } else if self.take("cohort") {
+            false
+        } else {
+            return Err(self.unsupported("metric constraints require cohort or mean"));
+        };
+        self.expect(".")?;
+        let target = self.ident()?;
+        let op = self.hard_operator()?;
+        self.lines();
+        let bound = if self.current().kind == Kind::Integer
+            && self.tokens.get(self.pos + 1).is_some_and(|t| {
+                matches!(t.text, "min" | "h" | "d")
+                    || t.kind == Kind::Word && t.span.start == self.current().span.end
+            }) {
+            MetricBound::Time(self.discrete_duration()?)
+        } else {
+            MetricBound::Number(self.probability()?)
+        };
+        Ok(MetricConstraint {
+            target,
+            mean,
+            op,
+            bound,
+        })
+    }
+
+    fn hard_operator(&mut self) -> Parsed<crate::ir::HardComparison> {
+        use crate::ir::HardComparison;
+        self.lines();
+        Ok(if self.take_adjacent("<", "=") {
+            HardComparison::Le
+        } else if self.take_adjacent(">", "=") {
+            HardComparison::Ge
+        } else if self.take("<") {
+            HardComparison::Lt
+        } else if self.take(">") {
+            HardComparison::Gt
+        } else {
+            return Err(self.error("expected comparison"));
         })
     }
 
@@ -5803,6 +6053,8 @@ mod tests {
                     path.file_name().unwrap().to_str().unwrap(),
                 )
                 || crate::quantile_population::fixture(path.file_name().unwrap().to_str().unwrap())
+                || include!("../tests/support/mean_names.rs")
+                    .contains(&path.file_name().unwrap().to_str().unwrap())
             {
                 continue;
             }

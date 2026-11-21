@@ -1,0 +1,18 @@
+model ScopeContest version "0.2" {
+  type V = enum { ok, denied }
+  people [j,r]
+  kernel K given [rework.round] { 1 -> { 1: ok }; 2 -> { 1: ok } }
+  actor Rev { executors [r]; capability review() -> V { duration fixed 1min; outcomes kernel K } }
+  actor Party { control party; standing over [end.returned] basis "claim" }
+  process Looped {
+    repeat rework at_most 2 { wait 1min; again } on_limit { end limit }
+    end returned
+  }
+  process U { wait 1min; end returned }
+  cut C { include [Rev,Party] }
+  configuration Loop { cut C; process Looped }
+  configuration Hand { cut C; process U }
+  bounds { cases 1; live_tasks 1; clock 10min }
+  verify safety no_resource_overcommit
+  contract Controls { contest Party on end.returned route Rev.review reversible_by [j] respond_by 4min }
+}

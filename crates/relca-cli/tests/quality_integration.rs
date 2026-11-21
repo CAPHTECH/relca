@@ -151,8 +151,8 @@ fn c_quality_block_follows_scenario_and_agency_rows_and_matcher_accepts() {
     // Require exact source/Day-IR rows and stderr instead of a blanket empty log.
     let ast = relca_core::syntax::parse(&old_source).unwrap();
     let model = relca_core::lower::lower_with_selection(&ast, None, Some("Day")).unwrap();
-    responsibility_oracle::assert_report(&model, &old);
-    let warnings = responsibility_oracle::expected(&model);
+    responsibility_oracle::assert_report(&model, &old_source, &old);
+    let warnings = responsibility_oracle::expected_wire(&model, &old_source);
     assert!(!warnings.is_empty());
     assert_eq!(old["diagnostics"], json!(warnings));
     let stderr = warnings

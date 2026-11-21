@@ -1,0 +1,7 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"quality":{"means":[
+  {"name":"Lead","measure":"elapsed","property":"Any","form":"all_arrivals","value":{"lower":"3","upper":"6","basis":"per_case_relaxation","reason":null},"lower_bound":null},
+  {"name":"Work","measure":"work","property":"Any","form":"all_arrivals","value":{"lower":"3","upper":"6","basis":"per_case_relaxation","reason":null},"lower_bound":null},
+  {"name":"People","measure":"named_people_work","property":"Any","form":"all_arrivals","value":{"lower":"0","upper":"0","basis":"exact","reason":null},"lower_bound":null},
+  {"name":"Cost","measure":"cost","property":null,"form":"all_arrivals","value":{"lower":"31","upper":"93","basis":"per_case_relaxation","reason":null},"lower_bound":null},
+  {"name":"CostDone","measure":"cost","property":"Done","form":"reached_only","value":{"lower":null,"upper":null,"basis":null,"reason":"denominator_may_be_zero"},"lower_bound":null}
+]}}

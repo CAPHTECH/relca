@@ -36,6 +36,7 @@ fn allowed(at: &str, version: &str) -> bool {
                 | "agency-p1-rule-1"
                 | "agency-p1-reads-1"
                 | "agency-p2-response-1"
+                | "agency-p2-loop-1"
         ),
         "/via_model_paths/rules" => matches!(
             version,
@@ -46,6 +47,7 @@ fn allowed(at: &str, version: &str) -> bool {
         "/response_analysis/rules" => version == "response-p2-1",
         "/uncertainty/rules" => version == "uncertainty-p2-1",
         "/resource_time/rules" => version == "resource-time-v1",
+        "/repetition/rules" => version == "bounded-repetition-1",
         "/priority_policy/rules" => version == "priority-queues-v1",
         "/explanation/version" => version == "invoice-counterexample-v1",
         "/schema" => version == "relca-conformance/v1",
@@ -74,6 +76,7 @@ pub fn components(report: &Value) -> Result<Value, String> {
             "/response_analysis/rules",
             "/uncertainty/rules",
             "/resource_time/rules",
+            "/repetition/rules",
             "/priority_policy/rules",
             "/explanation/version",
             "/schema",

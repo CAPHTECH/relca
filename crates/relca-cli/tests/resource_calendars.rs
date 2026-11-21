@@ -42,15 +42,30 @@ fn invoke(name: &str) -> (Value, i32) {
         .unwrap()
         .iter()
         .map(|d| {
-            format!(
+            let header = format!(
                 "{}: {}\n",
                 d["code"].as_str().unwrap(),
                 d["message"].as_str().unwrap()
-            )
+            );
+            if matches!(name, "arrivals-check" | "arrivals-explain")
+                && d["message"] == "stochastic_arrivals_mode_unsupported"
+            {
+                header + concat!(
+                    "  at 6:3\n  kind: analysis_not_connected\n  cause: exhaustive_stochastic_arrivals\n",
+                    "  blocked by: feature at 8:3\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
+                )
+            } else {
+                header
+            }
         })
         .collect();
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
+        // Compare refusal facts for the calendar oracle; diagnostic_details checks the new detail.
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         stderr,
         "{name}: exact diagnostic mirror, including warnings"
     );

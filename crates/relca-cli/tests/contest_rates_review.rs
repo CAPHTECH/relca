@@ -34,7 +34,11 @@ fn invoke(name: &str, mode: &str) -> (Value, i32) {
             )
         })
         .collect();
-    assert_eq!(String::from_utf8(out.stderr).unwrap(), stderr);
+    // Refusal precedence is checked here; diagnostic_details checks the supplement.
+    assert_eq!(
+        relca_test_support::diagnostic::stderr_facts(&out.stderr, &v),
+        stderr.as_bytes()
+    );
     (v, out.status.code().unwrap())
 }
 #[test]

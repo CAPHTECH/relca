@@ -1,0 +1,15 @@
+model LdEnvironment version "0.2" {
+  type T = enum { ok }
+  people [p]
+  observed case { busy: bool = false }
+  actor A { executors [p]; capability x() -> T { duration fixed 3min; result nondet { ok } } }
+  actor B { capacity 1; capability x() -> T { duration fixed 3min; result nondet { ok } } }
+  actor E { control policy; executors [p]; capability x() -> T {
+    duration fixed 1min; result nondet { ok }; writes busy; start { busy = true }; finish { busy = false }
+  } }
+  process P { fork f { a = A.x(); b = B.x(); e = E.x() } join all f; end done }
+  cut C { include [A,B,E] }
+  bounds { cases 1; live_tasks 3; clock 10min }
+  policy fifo tie_by case_id then call_order dispatch after_finishes
+  contract K { invariant B.x.finish -> busy == false }
+}

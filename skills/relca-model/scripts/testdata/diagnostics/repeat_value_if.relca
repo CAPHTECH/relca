@@ -1,0 +1,23 @@
+model L version "0.2" {
+  type V = enum { ok, alt }
+  observed case { flag: bool = false }
+  actor Src { source document }
+  actor A { capacity 2
+    capability save() -> V { reads [Src]; duration fixed 1min; result nondet { ok } }
+    capability two() -> V { duration fixed 1min; result nondet { ok, alt } }
+    capability use(x: V) -> V { duration fixed 1min; result nondet { ok } }
+  }
+  cut C { include [Src, A] }
+  process P {
+    repeat R at_most 2 {
+      a = A.two()
+      b = A.two()
+      v = if a == ok { yield a } else { yield b }
+      u = A.use(v)
+      if b == ok { leave } else { again }
+    } on_limit { end limit }
+    end done
+  }
+  bounds { cases 1; live_tasks 2; clock 30min }
+  verify safety no_resource_overcommit
+}

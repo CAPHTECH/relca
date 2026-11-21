@@ -12,6 +12,7 @@ Relca は業務フローを DSL で書き、検査・比較・標本推定する
 
 - `references/dsl.md` DSL 早見表(根拠の印つき。[U] は未確認)
 - `references/results.md` verdict・exit・JSON の欄の読み方
+- `references/estimate.md` 実績ログから所要時間・確率の候補を出す手順と確認
 - `references/unsupported.md` よくある unsupported / invalid とその理由
 - `references/minimal.relca` 最小の例(check で satisfied・exit 0 を 1 回確認。承認の分岐を消すと violated・exit 1)
 - `scripts/review_page.py` 確認用ページの生成、`scripts/test_review_page.py` その検査
@@ -35,7 +36,7 @@ Relca は業務フローを DSL で書き、検査・比較・標本推定する
 4. **Capability を書く。**`reads`(何を見るか)、`duration`、結果(`result nondet {..}` か根拠のある `outcomes kernel`)、`writes`、確定なら `commits`。引数は、その操作が実際にデータを受け取るときだけ書く(`review(claim)` は申請を受け取って判定する)。**警告(W-RESP-2 等)を消すために引数を足さない。**`case.id` 以外の引数も追加の読取りも無い呼出しは判定と数えられない([構造の出力](../../docs/guide/results.md#構造の出力)、`fixtures/agency-refusal/`)。警告が業務の実態(判定が本当に止めていない)を示していれば、そのまま報告する。
 5. **process を書く。**`x = Actor.cap(args)`、`fork … join all`、`if … {} else { end … }`。分岐の条件に潜在(真値)を書かない(E-POL-LATENT)。
 6. **Cut・bounds・verify・contract を書く。**`bounds` は cases・live_tasks・clock の 3 つとも。承認の統制は `invariant Ledger.post.commit -> approval == pass` のように契約に書く。
-7. **案を比べるなら** 共通の宣言と案ごとの process を一つのモデルに置き、`configuration` で選ぶ(examples/invoice/configurations.relca)。explain 用には案ごとの単一 process のモデルも作る。
+7. **案を比べるなら** 共通の宣言と案ごとの process を一つのモデルに置き、check と explain の `--configuration` で選ぶ(examples/invoice/configurations.relca)。
    案の違いが再送(`response_loss` / `retry`)にかかわるなら、compare と diff は使えない。先に下の「再送を含むモデル」を読んでから作業の順を決める。
 
 ## 回す
@@ -45,10 +46,10 @@ Relca は業務フローを DSL で書き、検査・比較・標本推定する
 | コマンド | 使う場面 | 注意 |
 |---|---|---|
 | `relca check <m> [--configuration N] [--scenario N]` | 上限(bounds)内の全状態を展開して性質を判定 | 最初に必ず回す。複数 configuration なら `--configuration` が必須 |
-| `relca explain <m> [--scenario N]` | check と同じ解析に反例と DSL 位置を足す | 反例は一つの例で原因ではない。確率の性質には反例が出ない |
-| `relca compare <m> --plans A,B --mode exhaustive\|simulation` | 案を並べる | 順位・総合点は出さない。Cut が違えば mismatch。**再送を含む案が一つでもあれば U-SEM-0 `retry_feature_combination`、exit 4**(下の「再送を含むモデル」) |
+| `relca explain <m> [--configuration N] [--scenario N]` | check と同じ解析に反例と DSL 位置を足す | 反例は一つの例で原因ではない。確率の性質には反例が出ない |
+| `relca compare <m> --plans A,B --mode exhaustive\|simulation` | 案を並べ、宣言があれば必須条件と目的を評価する | 順位・総合点は出さない。Cut が違えば mismatch。**再送を含む案が一つでもあれば U-SEM-0 `retry_feature_combination`、exit 4**(下の「再送を含むモデル」) |
 | `relca diff <m> --from A --to B` | 構成と Agency の差分 | intent に無い差分は W-DIFF-1。**再送を含めば compare と同じく exit 4** |
-| `relca simulate <m> [--configuration N]` | 標本推定 | 非決定に出会うと unsupported。全スケジュールの安全性検証ではない |
+| `relca simulate <m> [--configuration N] [--scenario N]` | 標本推定 | 未解決の非決定に出会うと unsupported。同時刻に残った順序を入れ替えて結果が一致する場合は先へ進める。全スケジュールの安全性検証ではない |
 | `relca mutate <m> [--set bpr-default]` | 検査がわざと壊したモデルを捕まえるか | 検出数は検出率でもモデルの強さでもない |
 | `relca verify` | 外部バックエンド | 未接続で常に unsupported・exit 4。priority を使うモデルでは理由が `priority_feature_combination` になる |
 
@@ -60,6 +61,9 @@ relca check m.relca > out/check.json 2> out/check.err; echo $? > out/check.exit
 
 exit: 0 satisfied、1 violated、2 inconclusive、3 invalid、4 unsupported、5 vacuous(`crates/relca-core/src/lib.rs`)。
 satisfied 以外は exit 0 にならない。exit と JSON の verdict が食い違ったら、その結果を使わない。exit を記録していない結果は「exit 未確認」で、satisfied でも合格として扱わない。
+
+拒否に当たったら、書き換える前に stderr の補足行(または JSON の `diagnostics[].detail`)を読む。
+示された文を確認し、`kind` に応じて [拒否に当たったとき](references/unsupported.md#拒否に当たったとき)の手順を選ぶ。
 
 ### 再送を含むモデル
 
@@ -76,7 +80,7 @@ compare と diff の拒否では、全体の verdict は unsupported でも、�
 
 **代わりの手順**(比較そのものの代わりにはならない):
 
-1. 案ごとに `relca check <m> --configuration <案>` を回し、stdout・stderr・exit を別々に保存する。反例は案ごとの単一 process のモデルを `relca explain` する。
+1. 案ごとに `relca check <m> --configuration <案>` を回し、stdout・stderr・exit を別々に保存する。反例は同じ案を `relca explain <m> --configuration <案>` で調べる。
 2. 性質・終端・`response_receipts`・`case_outcomes` を、案を列にした表へ人が並べる。表の上に **「compare ではない。順位・差分・Cut と終端の不一致(mismatch)の検査を relca はしていない。人が並べただけ」** と書く。
 3. compare と diff を回したなら、その exit 4 と理由も「確かめられていないもの」に載せる。案の verdict(`plans[].report.verdict`)を compare の結論として書かない。
 4. 待ちの分解は `breakdown waits` を外して回す。人の待ちの内訳は出ないので、時間は `case_outcomes[].terminals[].elapsed` か `terminals[].elapsed` の範囲だけを書き、「待ちの内訳は確かめていない」と書く。再送の部分を別モデルに切り出すと案件の流れが切れて待ちの意味が変わるので、切り出した結果を同じ案件の待ちとして書かない。
@@ -134,11 +138,15 @@ python3 skills/relca-model/scripts/review_page.py \
 status は placeholder / confirmed(`confirmed_by` 必須)/ measured(`source` 必須)。必須の欄が無い・知らない status はすべて placeholder として扱う。どの status でも「確かめられた値」にはならない。申告の無い宣言は「出所の申告なし」として冒頭に数える。
 
 `--check` には check か explain の JSON を渡す(explain なら反例が出る)。他は任意。`--no-mermaid` で外部 script を入れない。
+diff の診断も載せるなら `--diff out/diff.json --diff-exit 4 --diff-stderr out/diff.err` を足す。diff に別のモデルを使った場合は `--diff-model` で渡す。diff の差分表はページで再現しない。
 ページは単一の HTML で、流れ図だけ cdn.jsdelivr.net の Mermaid(版固定)を読む。読めなくても表が同じ内容を持つ。
 冒頭に入力の sha256・verdict・exit・生成時刻・relca の版・上限、続いて「確かめられていないもの・警告」、その後に 3 段(業務との照合・結論・検査の効き)。
 
-「確かめられていないもの」は、入力に含まれる全 report(check/explain、simulate、compare の最上位と各案の report、mutate の最上位と original)を同じ規則で走査して集める:
-verdict と畳み込み(report.rs の fold_verdict と同じ)の照合、Cut の undeclared・loses の欠け、parse の失敗、bounds.truncated、性質ごとの vacuous・unsupported・inconclusive・invalid、mismatch。
+結論では平均・cohort・分位点を、集計対象、単位、算出根拠と一緒に読む。区間は両端を表示し、値を出せなかった理由や下限は分けて記す。simulate の平均は標本値で、打切りがあれば点を出さない。指標の合否は `metric_checks` の表、compare の採用候補と目的は `hard` と `objectives` の表で別々に読む。
+負荷の表には処理件数、稼働率、待ち、作業などを載せる。`scenario.contest_not_filed` がある値はその異議が起票されない場合に限る。W-CONTEST-1 と「評価から外した」行も確認する。`simulation.same_time` はこの実行で順序による違いがなかったことの記録で、他の順序や標本経路での安全性を保証しない。
+
+「確かめられていないもの」は、入力に含まれる全 report(check/explain、simulate、compare の最上位と各案、diff の最上位と変更前後、mutate の最上位と original)を同じ規則で走査して集める:
+verdict と畳み込みの照合、Cut の undeclared・loses の欠け、parse の失敗、bounds.truncated、性質や指標条件ごとの vacuous・unsupported・inconclusive・invalid、除外された行、表示した数値の算出なし、mismatch。未知の根拠・理由・判定は「未解釈」として警告に残す。mutate の繰り返しに起因する未対応は未検出に数えない。
 冒頭の欄には他に、relca が自分で申告した未検査(`unchecked`・`agency.unchecked`・`cut.unchecked`・`explanation.unchecked`)、全入力の W-* 警告、回していないコマンド、Agency の観点で not_derived・basis unknown のもの、mechanism_unmodeled の性質、AI の仮置き、人が確かめる必要のある AI 申告、出所の申告なしの宣言、ページが読まなかった最上位の鍵を出す。全部が空のときだけ「この入力の範囲で検出されたものは無い」と出す。
 変異体ごとの report(壊したモデルの判定)は走査しない。
 

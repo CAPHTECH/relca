@@ -1,4 +1,10 @@
 [
+  {"id":"metric-check-explain","args":["explain","fixtures/mean-metric-check.broken-tight/model.relca"],"expected_exit":1,"expected_verdict":"violated","reason":"A mean threshold violation is part of the explain report verdict."},
+  {"id":"metric-check-diff","args":["diff","crates/relca-cli/tests/snapshots/inputs/metric-consumers.relca","--from","Fast","--to","Slow"],"expected_exit":1,"expected_verdict":"violated","reason":"Metric checks travel in plan reports; diff does not derive metric differences."},
+  {"id":"metric-check-mutate","args":["mutate","fixtures/mean-metric-check/model.relca"],"reason":"Disclose that mutation does not assign metric constraints to mutations."},
+  {"id":"metric-check-suite","args":["sensitivity","crates/relca-cli/tests/snapshots/inputs/metric-consumers.json","--mode","simulation"],"expected_exit":4,"expected_verdict":"unsupported","reason":"Two points share four Bernoulli intervals; mean checks have no statistical bound."},
+  {"id":"metric-check-compare-sampled","args":["compare","crates/relca-cli/tests/snapshots/inputs/metric-compare-families.relca","--plans","Fast,Slow","--mode","simulation"],"expected_exit":1,"expected_verdict":"violated","reason":"Per-plan alpha 1/80 differs from hard alpha 1/160; the Slow plan's cohort check excludes it."},
+  {"id":"metric-check-simulation-refusal","args":["simulate","fixtures/mean-metric-check/model.relca"],"expected_exit":3,"expected_verdict":"invalid","reason":"A missing simulation clause refuses mean sampling but retains the sampled mean assumption and shape."},
   {
     "id": "cli-refusal-00",
     "args": [

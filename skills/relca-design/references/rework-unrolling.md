@@ -1,16 +1,19 @@
-# 並行を含むやり直しを書き下して比べた記録
+# 並行を含むやり直しを、書き下した版と `repeat` 版で比べた記録
 
 分割して2人で並行に詳細化する仕事で、検査をどこに置くかを比べた。
 値はすべて仮定で、実業務の測定値ではない。手計算を先に書き、その後に relca の出力と照合した。
 照合は `scripts/test_design_examples.py` の `Unrolling` で再実行できる。
+
+最初の記録(2026-11 上旬)の時点では、`repeat` の本体に `fork` を置けず、契約も `mutate` も `repeat` と併用できなかった。
+そのため check-at-end は回ごとに `if` で書き下した。今はどちらも `repeat` で書ける。下の記述は今の挙動に合わせてある。
 
 ## 2案
 
 - **split-first**(`examples/split-first.relca`): 分割案を先に確認し、落ちたら分割し直す。通った案を2人が並行に詳細化し、統合して最後に検査する。
 - **check-at-end**(`examples/check-at-end.relca`): 分割してすぐ2人が並行に詳細化し、統合して検査する。落ちたら分割からやり直す。
 
-check-at-end のやり直しは並行を含む。`repeat` の本体には `fork` を置けない(`U-SEM-0 loop_feature_combination`)。
-そこで、回ごとに `if` で書き下した。split-first は `repeat` でも書けるので、両方の形を置いた(`examples/split-first-repeat.relca`)。
+check-at-end のやり直しは並行を含む。どちらの案も、回ごとに `if` で書き下した版と、`repeat` で書いた版を置いた
+(`examples/split-first-repeat.relca`、`examples/check-at-end-repeat.relca`)。
 
 ## 仮定
 
@@ -52,17 +55,18 @@ check-at-end:
 - check-at-end は、1回で通れば速く、引渡しの確率も高い。ただし、関門が最後の検査だけなので、不健全な分割案を約5倍通す。
 - split-first は、安いうちに分割の誤りを止めるので線を守る。ただし、11% が最後で落ちる。
 
-## 書き下しについて確かめたこと
+## 書き下した版と `repeat` 版について確かめたこと
 
-- split-first の書き下し版と `repeat` 版で、終端の確率・時間・作業が一致した。この1例で、書き下し方が `repeat` の意味と合っていることを確かめた。
-- `repeat` 版に `evidence_basis` を足すと `U-SEM-0 loop_feature_combination`(exit 4)で拒否された。書き下し版では3本の契約が判定された。
-- check-at-end の2回目の検査に1回目の分割案(`p1`)を渡すように壊すと、`same_version` が2本とも violated になった。
-- `mutate` は、書き下し版の check-at-end では回り、検出11件と `no_worsening` 11件だった。`repeat` 版では `loop_feature_combination` で拒否された。
-- check-at-end を `repeat` で書くと、`fork` の位置で `loop_feature_combination` になった。
+- split-first と check-at-end の両方で、書き下した版と `repeat` 版の終端の確率・時間・作業が一致した。check-at-end の `repeat` 版は、上の手計算の値(引渡し 0.906975、不健全な引渡し 783/20000)とも一致した。
+- check-at-end の `repeat` 版では、`evidence_basis` と `same_version` 2本が satisfied になった。本体の中で、検査に別の分割案を渡すように壊すと、`same_version` が2本とも violated になった。書き下した版で2回目の検査に1回目の分割案(`p1`)を渡した場合と同じである。
+- split-first の `repeat` 版(例のファイルには契約を2本だけ置いている)に `same_version` 2本を足すと、どちらも satisfied になった。`evidence_basis direct Reviewer.check [Spec]` と `evidence_basis Reviewer.check [Spec]` を足すと、どちらも satisfied になった。`repeat` の結果(分割案)を引数に取る、`repeat` の外の操作が対象で、書き下した版に同じ契約を足した場合と同じ判定である。
+- `mutate` は、書き下した版の check-at-end では回り、検出11件と `no_worsening` 11件だった。
+  - split-first の `repeat` 版でも回る。`evidence_missing`・`hold_delayed`・`summary_reused`・`refusal_path_cut` は変異体が作られ、`authority_expired`・`command_resent`・`receipt_unknown`・`original_access_removed` は `unsupported / loop_feature_combination` になった。全体は exit 4 なので、変異ごとの行を読む。
+  - 変異の数は書き下した版と一致しない。`repeat` 版は元の呼出しと分岐を単位に変異を作り、書き下した版は回ごとに別の箇所として数える。
+  - check-at-end の `repeat` 版(本体に `fork` がある)は、`mutate` 全体が `loop_feature_combination` で拒否された。
 
 ## 確かめていないこと
 
-- 書き下し版での `compare`・`diff`・`sensitivity`、`contest` との併用。
-- `registers` との併用。
+- この2例での `compare`・`diff`・`sensitivity`、`contest` との併用、`registers` との併用。
 - 1件の案件(`cases 1`)だけで、繁忙時の負荷は見ていない。
-- 書き下し版と `repeat` 版の一致は split-first の1例だけ。
+- 期待値の指標(`metric mean.…`)は、この2例の試験には入れていない。

@@ -1,0 +1,1 @@
+{"verdict":"violated","metric_checks":[{"constraint":"mean.Cost <= 45","verdict":"violated","basis":"exact","interval":{"lower":"93/2","upper":"93/2"},"reason":null}]}

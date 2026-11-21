@@ -112,16 +112,23 @@ fn a04_start_only_shared_writer_is_refused_at_the_capability_span() {
         .iter()
         .filter(|d| d["severity"] == "error")
         .collect();
-    assert_eq!(
-        ds,
-        vec![&json!({
+    let mut expected = relca_test_support::diagnostic::expected_row(
+        START_ONLY,
+        json!({
             "code": "U-SEM-0",
             "severity": "error",
             "message": "unresolved concurrent writes to Desk.busy by Desk.work and Desk.work (G5)",
             "span": {"start": start, "end": end}
-        })],
-        "{v}"
+        }),
     );
+    expected["detail"] = json!({
+                "reason": "concurrent_writers", "kind": "analysis_not_connected", "cause": "cross_case_shared_write",
+                "blockers": [
+                    {"role":"reference", "name":"Desk.busy", "location":{"line":3,"column":34,"end_line":3,"end_column":52}},
+                    {"role":"feature", "name":"Desk.work", "location":{"line":3,"column":54,"end_line":3,"end_column":145}}
+                ], "see":"docs/guide/dsl.md#解析が未接続のとき"
+    });
+    assert_eq!(ds, vec![&expected], "{v}");
 }
 
 /// A12 + A23: forged capacity 2 on a start-only writer at the cases 2 boundary.

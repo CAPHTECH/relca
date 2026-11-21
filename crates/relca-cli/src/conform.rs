@@ -14,10 +14,10 @@ struct Arguments<'a> {
     scenario: Option<&'a str>,
     approval_spec: Option<&'a str>,
 }
-fn value(s: &str) -> bool {
+pub(super) fn value(s: &str) -> bool {
     !s.is_empty() && !s.starts_with('-')
 }
-fn local_path(s: &str) -> bool {
+pub(super) fn local_path(s: &str) -> bool {
     value(s)
         && !s.contains("://")
         && s != "/dev/stdin"
@@ -83,7 +83,7 @@ fn arguments(args: &[String]) -> Result<Arguments<'_>, &'static str> {
         approval_spec,
     })
 }
-fn regular_file(path: &str) -> std::io::Result<File> {
+pub(super) fn regular_file(path: &str) -> std::io::Result<File> {
     // Check before open as well, so named pipes/devices cannot block an open.
     if !std::fs::metadata(path)?.is_file() {
         return Err(std::io::Error::other("regular file required"));
@@ -156,7 +156,7 @@ fn execute(args: &[String]) -> ConformanceReport {
 pub fn run(args: &[String]) -> ! {
     let r = execute(args).seal();
     for d in &r.diagnostics {
-        eprintln!("{}: {}", d.code, d.message);
+        super::print_diagnostic(format_args!(""), d);
     }
     println!(
         "{}",

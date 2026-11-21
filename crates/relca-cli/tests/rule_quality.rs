@@ -218,7 +218,8 @@ fn matcher_has_hand_positive_and_two_independent_withdrawal_fault_controls() {
     let mut invalid = null_left;
     invalid["verdict"] = json!("invalid");
     invalid["diagnostics"].as_array_mut().unwrap().push(json!({
-        "code":"E-CON-0", "severity":"error", "message":"hand invalid refusal", "span":null
+        "code":"E-CON-0", "severity":"error", "message":"hand invalid refusal", "span":null,
+        "location":null,"detail":null
     }));
     fixture_match::compare_report(&json!({}), &invalid).unwrap();
     invalid["verdict"] = json!("satisfied");

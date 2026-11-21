@@ -1,0 +1,16 @@
+model MetricCheck version "0.2" {
+  type V = enum { pass, fail }
+  type T = enum { ok }
+  kernel K { * -> { 0.75: pass; 0.25: fail } }
+  actor A { capacity 1; capability run() -> V { duration {2min:0.5, 4min:0.5}; outcomes kernel K } }
+  actor B { capacity 1; capability fix() -> T { duration fixed 3min; result nondet { ok } } }
+  process P { v = A.run(); if v == pass { end done } else { f = B.fix(); end reworked } }
+  cut C { include [A, B] }
+  bounds { cases 1; live_tasks 1; clock 20min }
+  metrics { window 20min; currency "JPY"; rate A per_minute 10; rate A.run per_start 1; rate B per_minute 20; rate B.fix per_start 2 }
+  verify reachable end.done
+  property case.Any = reached(end.done || end.reworked)
+  metric mean.Lead = mean(elapsed, case.Any)
+  metric mean.Cost = mean(cost)
+  verify metric mean.Cost <= 50
+}

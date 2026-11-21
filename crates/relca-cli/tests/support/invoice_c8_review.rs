@@ -181,6 +181,30 @@ fn aborted() -> Value {
     json!({"lower":null,"upper":null,"basis":null,"reason":"aborted"})
 }
 fn simulation_refusal(v: &Value, busy: bool) -> Check {
+    if busy {
+        same(&v["simulation"]["status"], json!("completed"))?;
+        same(&v["simulation"]["completed_replications"], json!(2))?;
+        same(&v["scenario"]["name"], json!("BusyDaySmoke"))?;
+        same(
+            &v["scenario"]["arrivals"],
+            json!({"form":"fixed_every","every":4,"from":0,"until":48,"count":12}),
+        )?;
+        same(&v["scenario"]["horizon"], json!(960))?;
+        same(&v["scenario"]["drain"], json!({"from":44,"until":960}))?;
+        if !list(&v["diagnostics"])?
+            .iter()
+            .any(|d| d["code"] == "W-CONTEST-1")
+            || !list(&v["properties"])?.iter().any(|p| {
+                p["excluded"] == "scenario_contest_not_filed" && p["verdict"] == "inconclusive"
+            })
+            || !v["metrics"]["overall"]["work"]["mean"]
+                .as_str()
+                .is_some_and(|work| work != "0")
+        {
+            return Err("missing explicit exclusion or measured BusyDay work".into());
+        }
+        return Ok(());
+    }
     same(&v["verdict"], json!("unsupported"))?;
     if !list(&v["diagnostics"])?.iter().any(|d| {
         d["code"] == "U-SEM-0"
@@ -199,29 +223,7 @@ fn simulation_refusal(v: &Value, busy: bool) -> Check {
     ] {
         same(&v["simulation"][key], expected)?;
     }
-    if busy {
-        same(&v["scenario"]["name"], json!("BusyDay"))?;
-        same(
-            &v["scenario"]["arrivals"],
-            json!({"form":"fixed_every","every":4,"from":0,"until":480,"count":120}),
-        )?;
-        same(&v["scenario"]["horizon"], json!(960))?;
-        same(&v["scenario"]["drain"], json!({"from":476,"until":960}))?;
-        if v.get("quality").is_some() {
-            return Err("undeclared quality".into());
-        }
-        same(&v["metrics"]["overall"]["work"], sample_aborted())?;
-        same(
-            &v["metrics"]["overall"]["named_people_work"],
-            sample_aborted(),
-        )?;
-        for count in ["completed", "unfinished", "rejected", "cut_off"] {
-            same(
-                &v["metrics"]["overall"]["counts"][count],
-                json!({"stats":sample_aborted(),"observed_total":null}),
-            )?;
-        }
-    } else {
+    {
         let q = &v["quality"];
         same(&q["checked"], json!([]))?;
         names(
@@ -269,7 +271,10 @@ fn simulation_refusal(v: &Value, busy: bool) -> Check {
     Ok(())
 }
 fn compare_refusal(v: &Value, busy: bool) -> Check {
-    same(&v["verdict"], json!("unsupported"))?;
+    same(
+        &v["verdict"],
+        json!(if busy { "inconclusive" } else { "unsupported" }),
+    )?;
     names(&v["plans"], "configuration", &["AsIs", "ToBeP", "ToBeA"])?;
     for p in list(&v["plans"])? {
         simulation_refusal(&p["report"], busy)?;
@@ -322,7 +327,7 @@ fn f1_simulation_entries_refuse_without_fabricating_samples() {
             &v,
             |v| simulation_refusal(v, true),
             &[
-                ("/scenario/arrivals/count", json!(119)),
+                ("/scenario/arrivals/count", json!(11)),
                 ("/metrics/overall/work/mean", json!("0")),
             ],
         );
@@ -1011,7 +1016,18 @@ fn busy_ast(src: &str) -> Check {
             "reentry [contest Vendor -> Clerk.recheck, review cut quarterly by cfo]",
             "reentry [contest Vendor -> Clerk.recheck, review cut quarterly by cfo]\nhorizon receipt..resolution within 60min\nhorizon contest within 5d structural_only",
         ),
-        ("window 60min", "window 960min"),
+        (
+            "defer Resubmission reason \"one receipt only\" loses \"ultimate settlement\"",
+            "exclude Resubmission reason \"one receipt only\" loses \"ultimate settlement\"",
+        ),
+        (
+            "defer Vendor.contest_rate reason \"structure only\" loses \"frequency and effort\"",
+            "",
+        ),
+        (
+            "metrics { window 60min; currency \"JPY\" }",
+            "metrics { window 960min; currency \"JPY\" }\npolicy observable fifo tie_by case_id then call_order assign first_idle dispatch after_finishes",
+        ),
     ] {
         expected = change(&expected, from, to);
     }
@@ -1021,16 +1037,24 @@ fn busy_ast(src: &str) -> Check {
             !matches!(i, ast::Item::Bounds(_) | ast::Item::Simulation(_))
         })?,
     )?;
-    let scenario = r#"model Expected version "0.2" { scenario BusyDay {
-        arrivals fixed_every 4min during [0min,480min)
-        queue capacity 200 on_overflow reject
-        bounds { cases 120; live_tasks 2; clock 960min }
-        horizon 960min
-        simulation replications 1000 seed 41020 confidence 0.95
-    } }"#;
+    let mut scenario = String::from("model Expected version \"0.2\" {");
+    for (name, until, cases, replications) in
+        [("BusyDay", 480, 120, 100), ("BusyDaySmoke", 48, 12, 2)]
+    {
+        scenario.push_str(&format!(r#"
+            scenario {name} {{
+                arrivals fixed_every 4min during [0min,{until}min)
+                queue capacity 200 on_overflow reject
+                bounds {{ cases {cases}; live_tasks 2; clock 960min }}
+                horizon 960min
+                simulation replications {replications} seed 41020 confidence 0.95
+                contest_not_filed Vendor on end.returned reason "contest frequency and effort are not known; structure only"
+            }}"#));
+    }
+    scenario.push('}');
     ast_equal(
         ast_items(src, |i| matches!(i, ast::Item::Scenario(_)))?,
-        ast_items(scenario, |_| true)?,
+        ast_items(&scenario, |_| true)?,
     )
 }
 #[test]
@@ -1039,6 +1063,20 @@ fn f5_rules_and_busyday_ast_have_only_individually_enumerated_differences() {
     rule_ast(&rules).unwrap();
     let busy = source("busyday");
     busy_ast(&busy).unwrap();
+    let smoke_only_change = busy.replacen("[0min,48min)", "[0min,44min)", 1);
+    assert_ne!(smoke_only_change, busy);
+    assert!(busy_ast(&smoke_only_change).is_err());
+    let smoke_only_change = busy.replacen(
+        "simulation replications 2 seed 41020",
+        "simulation replications 2 seed 41021",
+        1,
+    );
+    assert_ne!(smoke_only_change, busy);
+    assert!(busy_ast(&smoke_only_change).is_err());
+    let ast = relca_core::syntax::parse(&busy).unwrap();
+    for cfg in ["AsIs", "ToBeP", "ToBeA"] {
+        relca_core::lower::lower_with_selection(&ast, Some(cfg), Some("BusyDay")).unwrap();
+    }
     assert!(rule_ast(&change(&rules, "0.85: Entry", "0.84: Entry")).is_err());
     assert!(busy_ast(&change(&busy, "0.4: pass", "0.3: pass")).is_err());
     // Atomic, requires and per_case are not globally masked by either seam.

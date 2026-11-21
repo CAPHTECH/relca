@@ -1241,6 +1241,8 @@ pub enum Basis {
 #[serde(deny_unknown_fields)]
 pub struct PropertyValue {
     pub verdict: Verdict,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<report::PropertyExclusion>,
     pub probability: Option<ProbabilityRange>,
     pub basis: Option<Basis>,
     pub hits: Option<u64>,
@@ -1253,6 +1255,7 @@ impl PropertyValue {
     fn exhaustive(verdict: Verdict, probability: Option<ProbabilityRange>) -> Self {
         Self {
             verdict,
+            excluded: None,
             probability,
             basis: None,
             hits: None,
@@ -1585,6 +1588,11 @@ pub(crate) fn exhaustive(r: &report::Report, m: &ir::Model) -> Result<View> {
             case_ids(&cases, &view.arrivals)?;
             values.extend(cases.into_iter().map(|(k, v)| (Some(k), v)));
         }
+        if let Some(excluded) = p.excluded {
+            for value in values.values_mut() {
+                value.excluded = Some(excluded);
+            }
+        }
         view.properties.push(Property {
             id: p.id.clone(),
             aggregate: p.verdict,
@@ -1789,6 +1797,7 @@ impl SampleFields {
         }
         Ok(PropertyValue {
             verdict: self.verdict,
+            excluded: None,
             probability: None,
             basis: Some(self.basis),
             hits: self.hits,
@@ -1837,6 +1846,7 @@ enum SampleProperty {
     Cases {
         #[serde(default, deserialize_with = "report::deserialize_notes")]
         notes: Option<Vec<String>>,
+        excluded: Option<report::PropertyExclusion>,
         id: String,
         verdict: Verdict,
         cases: Vec<SampleCase>,
@@ -1980,6 +1990,7 @@ pub(crate) fn simulation(r: &report::SimulationReport, m: &ir::Model) -> Result<
                 verdict,
                 cases,
                 notes,
+                excluded,
             } => {
                 require(
                     notes == report::notes_for_id(m, &id),
@@ -1989,11 +2000,34 @@ pub(crate) fn simulation(r: &report::SimulationReport, m: &ir::Model) -> Result<
                     !sample_global_safety_id(m, &id) && structural(m, &id).is_none(),
                     "global property has cases",
                 )?;
+                let contest_excluded = m.verify.iter().any(|v| {
+                    m.contest_response_excluded(v.property)
+                        && matches!(v.property, ir::Property::Contract(c) if m.contracts[c.0].property_id(c) == id)
+                });
+                require(
+                    excluded.is_some() == contest_excluded
+                        && (!contest_excluded
+                            || verdict
+                                == if aborted {
+                                    Verdict::Unsupported
+                                } else {
+                                    Verdict::Inconclusive
+                                }),
+                    "invalid simulation property exclusion",
+                )?;
                 let mut rows = BTreeMap::new();
                 for c in cases {
                     let (case_id, arrival, fields) = c.split();
-                    let value =
+                    if contest_excluded && !aborted {
+                        require(
+                            fields.verdict == Verdict::Inconclusive
+                                && fields.basis == Basis::Sample,
+                            "excluded contest response must be inconclusive",
+                        )?;
+                    }
+                    let mut value =
                         fields.value(n, aborted, id.starts_with("probability reached #"))?;
+                    value.excluded = excluded;
                     insert_case(&mut rows, &view.arrivals, case_id, arrival, value)?;
                 }
                 case_ids(&rows, &view.arrivals)?;

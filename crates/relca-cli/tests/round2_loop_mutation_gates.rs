@@ -1,12 +1,17 @@
 use std::{path::PathBuf, process::Command};
 #[test]
-fn new_mutation_scopes_do_not_open_the_bounded_repetition_gate() {
+fn mutation_scopes_do_not_open_a_fork_inside_bounded_repetition() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let dir = root
         .join(".tmp")
         .join(format!("round2-loop-gates-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let source = include_str!("../../relca-core/tests/bounded_repetition/models/L1.relca");
+    assert_eq!(source.matches("r = Rev.review()").count(), 1);
+    let source = source.replace(
+        "r = Rev.review()",
+        "fork f { r = Rev.review() }; join all f",
+    );
     let source = format!(
         "{} configuration Plan {{cut C;process P}} }}",
         source.trim_end().strip_suffix('}').unwrap()
@@ -44,7 +49,9 @@ fn new_mutation_scopes_do_not_open_the_bounded_repetition_gate() {
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|d| d["code"] == "U-SEM-0" && d["message"].as_str().unwrap().contains("loop")),
+                .any(|d| d["code"] == "U-SEM-0"
+                    && d["message"]
+                        == "loop_feature_combination: repeat mutation sites are not connected"),
             "{args:?}: {value}"
         );
     }

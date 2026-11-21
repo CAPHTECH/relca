@@ -16,6 +16,7 @@ fn setup(m: &Model) -> (Tree<'_>, World<'_>) {
         first_hits: Vec::new(),
         first_closed: Vec::new(),
         first_trees: Vec::new(),
+        mean_hits: Vec::new(),
         resource_worlds: Some(Vec::new()),
         depth: 0,
         m,

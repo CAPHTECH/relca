@@ -34,6 +34,7 @@ pub fn model(kind: &str) -> ir::Model {
         }
         "f_diagnostics" | "s_diagnostics" | "f_diagnostics_renamed" | "s_diagnostics_renamed" => {
             m.diagnostics = vec![diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::E_TYPE_0.into(),
                 severity: diag::Severity::Error,
                 message: if kind.ends_with("renamed") {
@@ -47,6 +48,7 @@ pub fn model(kind: &str) -> ir::Model {
         }
         "f_unsupported" | "s_unsupported" => {
             m.diagnostics = vec![diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "not the reason vocabulary".into(),

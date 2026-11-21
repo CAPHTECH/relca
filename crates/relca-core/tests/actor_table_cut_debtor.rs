@@ -151,7 +151,7 @@ fn skeleton_diagnostics_match(src: &str, actual: &Value) -> bool {
     let model = relca_core::lower::lower(&ast).ok();
     let expected = model
         .as_ref()
-        .map(|m| json!(responsibility_oracle::expected(m)))
+        .map(|m| json!(responsibility_oracle::expected_wire(m, src)))
         .unwrap_or_else(|| json!([]));
     let Ok(diagnostics) =
         relca_test_support::fixture_match::legacy_defer_diagnostics(actual, src, None)

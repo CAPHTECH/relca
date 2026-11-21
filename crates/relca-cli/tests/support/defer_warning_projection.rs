@@ -6,6 +6,24 @@ pub fn legacy_defer_diagnostics(
     source: &str,
     selection: Option<&str>,
 ) -> Result<Vec<Value>, String> {
+    defer_diagnostics(report, source, selection, true)
+}
+
+#[allow(dead_code)]
+pub fn legacy_defer_internal_diagnostics(
+    report: &Value,
+    source: &str,
+    selection: Option<&str>,
+) -> Result<Vec<Value>, String> {
+    defer_diagnostics(report, source, selection, false)
+}
+
+fn defer_diagnostics(
+    report: &Value,
+    source: &str,
+    selection: Option<&str>,
+    projected: bool,
+) -> Result<Vec<Value>, String> {
     use relca_core::ast;
     use std::collections::{BTreeMap, BTreeSet};
     let mut expected = Vec::new();
@@ -66,10 +84,22 @@ pub fn legacy_defer_diagnostics(
                     .filter(|(a, _)| actors.contains(a))
                     .map(|(a, c)| format!(" (Actor {a} has no capability {c})"))
                     .unwrap_or_default();
+                let location = if projected {
+                    let at = |byte| {
+                        let prefix = &source[..byte];
+                        (prefix.split('\n').count(), prefix.rsplit('\n').next().unwrap().chars().count() + 1)
+                    };
+                    let (line, column) = at(e.target.span.start);
+                    let (end_line, end_column) = at(e.target.span.end);
+                    serde_json::json!({"line":line,"column":column,"end_line":end_line,"end_column":end_column})
+                } else {
+                    Value::Null
+                };
                 expected.push(serde_json::json!({
                     "code":"W-CUT-2", "severity":"warning",
                     "message":format!("defer {target} matches no Actor or Actor.capability{hint}: every metrics and quality value is withdrawn as not_configured"),
-                    "span":{"start":e.target.span.start,"end":e.target.span.end}
+                    "span":{"start":e.target.span.start,"end":e.target.span.end},
+                    "location":location,"detail":null
                 }));
             }
         }

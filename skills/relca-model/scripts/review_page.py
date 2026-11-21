@@ -27,8 +27,10 @@ import hashlib
 import html
 import json
 import os
+import re
 import sys
 import traceback
+from fractions import Fraction
 
 MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"
 # 2026-11-11 に jsdelivr と unpkg の実体の sha384 が一致し、jsdelivr API の sha256 とも一致した値
@@ -218,6 +220,145 @@ def short(value, n=160):
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
+# 診断の補足は verdict や既存の理由語を変えない。
+DIAGNOSTIC_KINDS = {
+    "rewrite": "書き方で直る。示された文を見直す。",
+    "analysis_not_connected": "この機能の組合せは、この分析では扱えない。局所の書き直しで直るとは限らない。",
+    "property_undecided": "この性質だけ判定できていない。",
+}
+DIAGNOSTIC_ROLES = {
+    "conditional_source": "候補の根拠源",
+    "target_call": "対象の呼出し",
+    "excluded_edge": "静的な系譜で数えなかった辺",
+    "exit": "繰り返しの出口",
+    "degradation": "縮退の宣言",
+    "recovery_handler": "回復処理",
+    "response": "応答",
+    "join_any": "fork と join any",
+    "non_result_call": "操作結果でない値を渡す呼出し",
+    "repeat": "繰り返しの導入箇所",
+    "feature": "併用した機能・文",
+    "record": "記録 Actor の宣言",
+    "registrar": "登録する操作の宣言",
+    "reader": "記録を読む操作の宣言",
+    "call": "操作の呼出し",
+    "contest_route": "異議の経路",
+    "merge_binding": "合流値の定義",
+    "source_binding": "合流元の値の定義",
+    "reference": "合流値・合流元への参照",
+    "recovery": "回復処理の導入箇所",
+    "contest": "異議の宣言",
+    "quantile": "分位点の宣言",
+}
+DIAGNOSTIC_CAUSES = {
+    "degradation": "この分析は縮退経路との併用に対応していない。",
+    "recovery": "この分析は回復経路との併用に対応していない。",
+    "response": "応答の機構と版を合わせて分析できない。",
+    "join_any": "先着合流 (join any) との併用は扱えない。",
+    "non_result_argument": "操作結果ではない値が版の照合に渡されている。",
+    "nested_repeat": "繰り返しが入れ子になっている。",
+    "value_returning_if": "繰り返しの中に値を返す if がある。",
+    "response_or_retry": "応答喪失・再送との併用は扱えない。",
+    "on_limit_statement": "上限到達後の処理に未対応の文がある。",
+    "degradation_in_repeat": "繰り返しの中の縮退経路は扱えない。",
+    "repeat_in_degradation": "縮退経路の中の繰り返しは扱えない。",
+    "repeat_in_recovery": "回復処理の中の繰り返しは扱えない。",
+    "contest": "異議との併用は扱えない。",
+    "record_evidence_path": "繰り返しが供給する値が、記録を経由して根拠源の契約の対象に届く。",
+    "receipt_query": "繰り返しと応答の照会の併用は扱えない。",
+    "repeat_body_statement": "繰り返しの本体に未対応の文がある。",
+    "mutate_repeat_fork": "mutate では並行分岐を含む繰り返しを扱えない。",
+    "mutate_repeat_wait_until": "mutate では条件待ちを含む繰り返しを扱えない。",
+    "mutate_repeat_quantile": "mutate では繰り返しと分位点の併用を扱えない。",
+    "mutate_repeat_evidence_basis": "mutate では繰り返しと根拠源の契約の併用を扱えない。",
+    "mutate_repeat_registration": "mutate では繰り返しと記録への登録の併用を扱えない。",
+    "mutate_repeat_response_or_retry": "mutate では繰り返しと応答喪失・再送の併用を扱えない。",
+    "diff_repeat_projection": "diff ではこの繰り返しを差分に反映できない。",
+    "sensitivity_repeat_projection": "sensitivity ではこの繰り返しを感度分析に反映できない。",
+    "conform_repeat_log": "conform では繰り返しのあるモデルをログと照合できない。",
+    "shared_record": "案件をまたぐ共有記録の登録・読取りは扱えない。",
+    "start_writes": "操作の開始時の書込みと登録の併用は扱えない。",
+    "contest_route": "異議の経路での記録の登録・読取りは扱えない。",
+    "multiple_finish_results": "登録する操作に複数の正常終了結果がある。",
+    "merged_evidence_input": "根拠源の契約の対象に合流値が入力されている。",
+    "unconnected_reference": "この箇所から合流値を参照する形は扱えない。",
+    "unstable_merge_source": "合流元の結果は、この合流では扱えない。",
+    "merge_in_recovery": "回復処理の中で値を合流させる形は扱えない。",
+    "merge_in_degradation": "縮退経路の中で値を合流させる形は扱えない。",
+    "quantile": "分位点との併用は扱えない。",
+    "mutate_merge_sites": "mutate では合流を含むモデルの変異箇所を選べない。",
+    "compare_merge_projection": "compare では合流を含む案を比較できない。",
+    "diff_merge_projection": "diff では合流を含む構成の差分を出せない。",
+    "sensitivity_merge_projection": "sensitivity では合流のある対象の感度を分析できない。",
+    "conform_merge_log": "conform では合流のあるモデルをログと照合できない。",
+    "query_response_channel": "回復の照会に応答喪失・再送を指定できない。",
+    "query_outside_recovery": "回復処理の外では応答を照会できない。",
+    "fork_recovery": "並行分岐の枝では回復・照会を扱えない。",
+    "unmodeled_recovery_mechanism": "回復に必要な処理機構を確認できない。",
+    "handler_response_channel": "回復処理の中の呼出しに応答喪失・再送を指定できない。",
+    "mutate_recovery": "mutate では回復処理を含むモデルの変異箇所を選べない。",
+    "version_check": "版確認付き操作に再送を指定した形は扱えない。",
+    "exhaustive_stochastic_arrivals": "check・explain の網羅検査では確率的な到着分布を扱えない。",
+    "compare_exhaustive_stochastic_arrivals": "compare の網羅モードでは確率的な到着分布を扱えない。",
+    "compare_simulation_stochastic_arrivals": "compare の標本モードでは確率的な到着分布を扱えない。",
+    "quality": "品質の宣言との併用は扱えない。",
+    "condition_wait": "条件待ちとの併用は扱えない。",
+    "cut_defer": "Cut の保留宣言との併用は扱えない。",
+    "manifest_schema": "感度分析のマニフェストの形式または範囲が未対応。",
+    "manifest_target_kind": "感度分析が指定された対象の種別に対応していない。",
+    "non_policy_actor": "優先順による版確認の解決は方策の Actor に限る。",
+    "empty_version_scope": "優先順による版確認の解決には対象の状態が必要。",
+    "unshared_version_scope": "優先順による版確認の解決は自分の共有観測状態に限る。",
+    "merge": "値の合流との併用は扱えない。",
+    "verify_priority": "verify は優先規律を外部の検証エンジンに渡さない。",
+    "compare_priority_mismatch": "compare は優先規律や入力が異なる案を比較できない。",
+    "diff_priority_mismatch": "diff は優先規律や入力が異なる構成の差分を出せない。",
+    "diff_condition_wait": "diff は条件待ちを含む構成の差分を判定できない。",
+    "fork_response_channel": "並行分岐の枝に応答喪失・再送を指定した形は扱えない。",
+    "commit_target": "commit を対象とする異議の率は分析できない。",
+    "sensitivity_exhaustive_stochastic_arrivals": "感度分析の網羅モードでは確率的な到着分布を扱えない。",
+    "sensitivity_simulation_completion": "感度分析の標本モードでは構造的完了を判定できない。",
+    "sensitivity_degradation_projection": "感度分析の契約投影が縮退に対応していない。",
+    "sensitivity_calendar_projection": "感度分析の契約投影がカレンダーに対応していない。",
+    "sensitivity_shared_resolution_projection": "感度分析の契約投影が共有状態の解決に対応していない。",
+    "sensitivity_fallback_projection": "感度分析の契約投影が代替操作に対応していない。",
+    "sensitivity_contest_projection": "感度分析の契約投影が異議に対応していない。",
+    "unresolved_choices": "標本実行の選択が解決されていない。",
+    "fork_read_write": "並行分岐で読取りと書込みが競合している。",
+    "fork_shared_write": "並行分岐の枝が同じ状態へ書き込む。",
+    "cross_case_shared_write": "複数案件で共有する状態への競合書込みを解決できない。",
+    "argument_result": "引数に渡す結果が必ず得られるとは確認できない。",
+    "condition_result": "条件が参照する結果が必ず得られるとは確認できない。",
+    "contract_result": "契約が参照する結果がすべての対象呼出しで得られるとは確認できない。",
+    "merge_result": "合流の元になる結果が必ず得られるとは確認できない。",
+    "contract_executor": "契約の検査に実行者を識別できる宣言が必要。",
+    "executor_reference": "実行者を参照するには実行者の宣言が必要。",
+    "unsupported_token": "この位置では示された構文を扱えない。",
+    "log_model_feature": "指定のログ照合範囲ではモデルの機能を扱えない。",
+    "log_contract_kind": "指定のログ照合範囲ではこの種類の契約を扱えない。",
+    "log_verify_kind": "指定のログ照合範囲ではこの種類の検証要求を扱えない。",
+    "log_cancel_semantics": "ログ照合がこの取消の意味に対応していない。",
+    "log_capability_field": "ログからこの Capability の動作を照合できない。",
+    "log_approval_profiles": "指定された承認負担のプロファイル構成を扱えない。",
+    "log_approval_semantics": "指定された承認負担の計算の意味を扱えない。",
+    "log_scope": "指定されたログ照合範囲に対応していない。",
+    "log_schema": "ログの形式に対応していない。",
+    "log_time_unit": "ログの時刻単位に対応していない。",
+    "log_approval_schema": "承認負担の補助入力の形式に対応していない。",
+}
+DIAGNOSTIC_POSITION_KEYS = ("line", "column", "end_line", "end_column")
+
+
+def positive_int(value):
+    return type(value) is int and value > 0
+
+
+def diagnostic_range(position):
+    start, end = position[:2], position[2:]
+    at = "%d:%d" % start
+    return at if start == end else at + "–%d:%d" % end
+
+
 def canon_verdict(raw):
     """(扱う verdict, 注記)。未知・欠落は unsupported に寄せる。"""
     if isinstance(raw, str) and raw in EXIT_OF:
@@ -303,12 +444,20 @@ class Source:
 
     # バイト位置(relca の span)から行・列
     def line_col(self, byte_offset):
-        if not isinstance(byte_offset, int) or byte_offset < 0:
+        if type(byte_offset) is not int or not 0 <= byte_offset <= len(self.raw):
             return None
         head = self.raw[:byte_offset]
         line = head.count(b"\n") + 1
-        col = len(head[head.rfind(b"\n") + 1 :].decode("utf-8", "replace")) + 1
-        return line, col
+        try:
+            col = len(head[head.rfind(b"\n") + 1 :].decode("utf-8")) + 1
+            return line, col
+        except UnicodeDecodeError:
+            return None
+
+    def span_position(self, span):
+        start = self.line_col(get(span, "start"))
+        end = self.line_col(get(span, "end"))
+        return start + end if start and end and start <= end else None
 
     def line_text(self, line):
         lines = self.text.split("\n")
@@ -826,6 +975,148 @@ def mermaid_flow(stmts, executors_of):
 
 # ---------------------------------------------------------------- 入力
 
+def load_estimate(path, exit_code, model_sha, configuration, declared):
+    """Validate the rows used for provenance, without recomputing estimates."""
+    statuses = {"derived", "withheld", "not_derivable", "not_requested"}
+    absent_statuses = {"withheld", "not_derivable"}
+    exits = {"satisfied": 0, "inconclusive": 2, "invalid": 3, "unsupported": 4}
+
+    def obj(value):
+        if not isinstance(value, dict):
+            raise ValueError("object が必要")
+        return value
+
+    def window(value):
+        v = obj(value)
+        a, b = v.get("from"), v.get("to")
+        if type(a) is not int or type(b) is not int or not 0 <= a <= b:
+            raise ValueError("ログの窓が不正")
+        return a, b
+
+    def probability(value):
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,12}(?:/[0-9]{1,12})?", value):
+            raise ValueError("確率は既約分数の文字列が必要")
+        p = Fraction(value)
+        if str(p) != value or not 0 <= p <= 1:
+            raise ValueError("確率の型・範囲が不正")
+        return p
+
+    def stats(row, kind):
+        status = row.get("status")
+        if status not in statuses:
+            raise ValueError("スロットの status が不正")
+        comp = row.get("declared_vs_candidate")
+        if comp is not None:
+            comp = obj(comp)
+            for key in ("matches", "within_interval"):
+                if key not in comp or (comp[key] is not None and type(comp[key]) is not bool):
+                    raise ValueError("宣言値との比較欄が不正")
+        cand = row.get("candidate")
+        if cand is None:
+            if status in absent_statuses and not isinstance(row.get("reason"), str):
+                raise ValueError("候補を出せない理由が無い")
+            return False
+        n = row.get("n")
+        exact_only = status == "withheld" and row.get("reason") == "dsl_precision_insufficient"
+        if (status != "derived" and not exact_only) or not isinstance(cand, list) or not cand or type(n) is not int or n < 1:
+            raise ValueError("候補の status・値・標本数が不正")
+        unknown, censored = row.get("unknown"), row.get("censored")
+        if (type(unknown) is not int or type(censored) is not int or not 0 <= censored <= unknown < n
+                or row.get("coverage") not in ("complete", "partial")):
+            raise ValueError("候補の既知・未知・打切りの件数または coverage が不正")
+        if kind not in ("duration", "kernel_row"):
+            raise ValueError("非対応のスロットに候補がある")
+        key = "minutes" if kind == "duration" else "result"
+        masses = [probability(obj(c).get("exact")) for c in cand]
+        if exact_only and (row["coverage"] != "partial" or any("dsl" not in c or c["dsl"] is not None for c in cand)):
+            raise ValueError("DSL の桁不足の行に転記用の値が残っている")
+        bins = [c.get(key) for c in cand]
+        if sum(masses) != 1 or any(p <= 0 for p in masses) or any(
+                (type(b) is not int or b < 1) if key == "minutes" else not isinstance(b, str) or not b for b in bins):
+            raise ValueError("候補の確率と値が不正")
+        bounds = row.get("interval")
+        if len(set(bins)) != len(bins) or not isinstance(bounds, list) or len(bounds) != len(bins):
+            raise ValueError("区間と候補が対応しない")
+        for b, interval in zip(bins, bounds):
+            interval = obj(interval)
+            if ((key == "minutes" and interval.get(key) != b)
+                    or probability(interval.get("lower")) > probability(interval.get("upper"))):
+                raise ValueError("区間が不正")
+        source = obj(row.get("provenance"))
+        digest = log.get("sha256")
+        if (not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
+                or source.get("log_sha256") != digest or window(source.get("window")) != window(log.get("window"))):
+            raise ValueError("候補の出所をログと対応づけられない")
+        if comp is None or type(comp.get("matches")) is not bool or type(comp.get("within_interval")) is not bool:
+            raise ValueError("候補と宣言値の比較が無い")
+        return True
+
+    with open(path, encoding="utf-8") as f:
+        data = obj(json.load(f))
+    if data.get("schema") != "relca-estimate/v1":
+        raise ValueError("relca-estimate/v1 ではない")
+    if not model_sha or obj(data.get("model")).get("sha256") != model_sha:
+        raise ValueError("モデルの sha256 が違うか不明")
+    if "configuration" not in data or data["configuration"] != configuration:
+        raise ValueError("モデルの構成が違うか不明")
+    verdict = data.get("verdict")
+    if verdict not in exits or (exit_code is not None and exit_code != exits[verdict]):
+        raise ValueError("verdict と exit を照合できない")
+    log = obj(data.get("log"))
+    rows = data.get("slots")
+    if not isinstance(rows, list) or type(data.get("truncated")) is not bool:
+        raise ValueError("スロット表または切断欄が不正")
+    seen, by_target = set(), {}
+    display, absent, outside = {}, [], []
+    allow_values = not data["truncated"] and verdict != "invalid"
+    for item in rows:
+        row = obj(item)
+        slot = obj(row.get("slot"))
+        identifier, target, kind = slot.get("id"), slot.get("target"), slot.get("kind")
+        if not all(isinstance(x, str) and x for x in (identifier, target, kind)) or identifier in seen:
+            raise ValueError("スロット ID が不正または重複")
+        seen.add(identifier)
+        candidate = stats(row, kind)
+        if candidate and (not allow_values or target not in declared):
+            raise ValueError("切断・不正入力、またはモデルの宣言に対応しない候補")
+        by_target.setdefault(target, []).append(candidate and estimate_complete(row)
+                                                and row["declared_vs_candidate"]["matches"])
+        if row["status"] in absent_statuses:
+            absent.append((identifier, row["status"], row["reason"], row.get("occurrences_per_case")))
+        if (row.get("declared_vs_candidate") or {}).get("within_interval") is False:
+            outside.append(identifier)
+        if candidate:
+            display.setdefault(target, []).append((identifier, row))
+        rounds = row.get("rounds")
+        if rounds is None:
+            continue
+        if not isinstance(rounds, list):
+            raise ValueError("回別の表が不正")
+        previous = 0
+        for child in rounds:
+            sub = obj(child)
+            number = sub.get("round")
+            if type(number) is not int or number <= previous:
+                raise ValueError("反復回の番号が不正")
+            previous = number
+            label = "%s（第%d回）" % (identifier, number)
+            if stats(sub, kind):
+                if not allow_values or target not in declared:
+                    raise ValueError("回別の候補が不正")
+                if not candidate:
+                    display.setdefault(target, []).append((label, sub))
+            if not candidate and (sub.get("declared_vs_candidate") or {}).get("within_interval") is False:
+                outside.append(label)
+            if sub["status"] in absent_statuses and not candidate:
+                absent.append((label, sub["status"], sub["reason"], None))
+    return display, {t for t, matches in by_target.items() if all(matches)}, absent, outside
+
+
+def estimate_complete(row):
+    return (row["status"] == "derived" and row["coverage"] == "complete"
+            and row["unknown"] == 0 and row["censored"] == 0)
+
+
 class Run:
     def __init__(self, role, path, exit_code, stderr_path):
         self.role = role
@@ -886,17 +1177,62 @@ class Run:
 # これ以外の最上位の鍵は「読まなかった鍵」としてページに出す。
 SCAN_KEYS = {"verdict", "cut", "bounds", "properties", "diagnostics", "unchecked", "agency", "repetition",
              "explanation", "mismatch", "model", "ledger", "mode", "contract_scope"}
+MODEL_REPORT_KINDS = {"main", "simulate", "plan", "diff_side", "mutate_original"}
+RUN_ROLES = ("check", "simulate", "compare", "diff", "mutate")
 SHOWN_KEYS = {
     "main": {"actors", "cut_context", "metrics", "responsibilities", "assumptions", "uncertainty", "terminals", "unit",
              "response_receipts", "response_analysis", "case_outcomes"},
     "simulate": {"simulation", "terminals", "unit"},
     "plan": {"actors", "terminals"},
+    "diff_side": {"actors", "terminals"},
     "mutate_original": set(),
-    "compare": {"analysis", "plans", "tables", "assumptions"},
+    "compare": {"analysis", "plans", "tables", "assumptions", "evaluation"},
+    "diff": {"from", "to"},
     "mutate": {"set", "original", "original_verdict", "run", "mutations", "assumptions"},
 }
+NUMERICAL_KEYS = {"quality", "metric_checks", "metrics", "admission"}
+BASIS_JA = {"exact": "厳密 (exact)", "per_case_relaxation": "案件ごとの緩和区間 (per_case_relaxation)",
+            "lower_bound": "下限 (lower_bound)", "statistical": "信頼区間 (statistical)",
+            "path_range": "到達経路の最小〜最大 (path_range、期待値ではない)",
+            "with_undetermined": "未確定を両端に含む保守的な区間 (with_undetermined)",
+            "sample": "標本内の検査 (sample)", "witness": "反例を観測 (witness)"}
+VALUE_REASONS = set("""not_configured truncated undetermined beyond_reached_mass denominator_may_be_zero
+    zero_denominator aborted no_samples no_statistical_bound refused not_refused no_terminal rejected
+    no_task_started never_created cancelled_before_start unfinished deadlock zero_capacity no_capacity
+    range_stopped join_any""".split())
+NO_APPLICABLE_VALUE = {
+    "no_terminal": "この終端での完了を観測していない",
+    "rejected": "受付拒否の区分には完了までの時間を定義しない",
+    "not_refused": "資源待ちの拒否が発生していない",
+    "never_created": "操作が作られていない",
+    "cancelled_before_start": "開始前に取り消された",
+    "no_task_started": "開始した操作がない",
+    "no_capacity": "容量を持たない対象の稼働率は定義しない",
+    "zero_capacity": "容量が0の対象の稼働率は定義しない",
+    "join_any": "先着合流にはこの待ちの内訳を定義しない",
+}
+PLAN_STATUS_JA = {"admissible": "採用候補", "excluded": "条件を満たさず採用候補外",
+                  "undetermined": "採否を確定できない"}
+PARETO_REASONS = {"simulation_estimates": "標本推定のため", "no_objectives": "目的の宣言がないため",
+                  "no_admissible_plans": "採用候補がないため", "missing_value": "目的の値がないため",
+                  "overlapping_intervals": "目的の区間が重なるため"}
+MEASURE_JA = {"elapsed": "経過時間", "work": "占有作業時間", "named_people_work": "名前付き実行者の占有時間",
+              "cost": "費用"}
+FORM_JA = {"all_arrivals": "全流入あたり", "reached_only": "到達した案件のみ"}
+EXCLUSION_JA = {"scenario_contest_not_filed": "異議を起票しないシナリオのため"}
+CONTEST_NOTE = "この異議が起票されない場合の値。異議の頻度、再確認の作業、応答の期限は評価していない。"
+LOAD_ASSUMPTIONS = {
+    "simulation.same_time": "同じ時刻の出来事の順序が結果に効かないことを確かめた。対象はこの実行で確認できた時刻と観測に限る。",
+    "policy.dispatch": "方策による開始は、同じ時刻の終了と ack を処理した後に決める。",
+    "scenario.contest_not_filed": CONTEST_NOTE,
+}
+MUTATION_REASON_JA = {
+    "loop_control": "繰り返しがあるため、割り当てた検査では変異を判定できない",
+    "loop_feature_combination": "繰り返しとの組合せでは、この種類の変異は未対応",
+}
 UNCHECKED_PATHS = (("unchecked",), ("agency", "unchecked"), ("cut", "unchecked"), ("explanation", "unchecked"),
-                   ("response_analysis", "unchecked"), ("repetition", "unchecked"))
+                   ("response_analysis", "unchecked"), ("repetition", "unchecked"), ("quality", "unchecked"),
+                   ("metrics", "unchecked"))
 # --assumptions は AI が書くファイル。confirmed / measured も AI の申告であり、確認済みとして見せない。
 # 緑(ok)・decl のバッジは使わない。
 AI_STATUS = {
@@ -916,7 +1252,7 @@ def ai_label(a):
 
 
 def fold_report(data):
-    """crates/relca-core/src/report.rs fold_verdict の写し。性質・error 診断・deadlock を畳む。"""
+    """report.rs の fold_verdict と、後段の指標条件の畳み込み。"""
     props = [p for p in as_list(get(data, "properties")) if isinstance(p, dict)]
     diags = [d for d in as_list(get(data, "diagnostics")) if isinstance(d, dict)]
     vs = [canon_verdict(p.get("verdict"))[0] for p in props]
@@ -925,8 +1261,8 @@ def fold_report(data):
             vs.append("unsupported" if str(d.get("code", "")).startswith("U-") else "invalid")
     if props:
         vs += ["violated" for d in diags if d.get("code") == "W-DEADLOCK-0"]
-    if not vs:
-        return "unsupported"
+    vs = vs or ["unsupported"]
+    vs.extend(canon_verdict(m.get("verdict"))[0] for m in as_list(data.get("metric_checks")) if isinstance(m, dict))
     return max(vs, key=lambda v: RANK[v])
 
 
@@ -938,11 +1274,139 @@ def mermaid_label(text):
 
 # ---------------------------------------------------------------- ページ
 
+class DiagnosticView:
+    """診断1件を表示する。未知の情報は隠さず、診断とは別の未確認として記録する。"""
+
+    def __init__(self, page, origin, subject):
+        self.page, self.origin, self.subject = page, origin, subject
+        self.raw_fields = []
+
+    @staticmethod
+    def raw(value):
+        return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+    def unparsed(self, path, value, why, *, show=True):
+        raw = self.raw(value)
+        self.page.unv(self.origin, self.subject, "未解釈", "%s: %s (%s)" % (path, raw, why))
+        if show:
+            self.raw_fields.append([esc(path), "<code>%s</code>" % esc(raw)])
+
+    def extra_fields(self, path, obj, known):
+        for key, value in as_dict(obj).items():
+            if key not in known:
+                self.unparsed(path + "." + key if path else key, value, "未知の鍵")
+
+    def position(self, value, path):
+        if value is None:
+            return None
+        self.extra_fields(path, value, DIAGNOSTIC_POSITION_KEYS)
+        pos = tuple(get(value, key) for key in DIAGNOSTIC_POSITION_KEYS)
+        if all(positive_int(x) for x in pos) and pos[:2] <= pos[2:]:
+            return pos
+        self.unparsed(path, value, "行・列の区間を読めない")
+        return None
+
+    def location(self, d, src):
+        self.extra_fields("", d, ("code", "severity", "message", "span", "location", "detail"))
+        self.extra_fields("span", d.get("span"), ("start", "end"))
+        from_span = src.span_position(d.get("span")) if src is not None else None
+        if "location" not in d:
+            where = diagnostic_range(from_span) + " (旧形式: span から換算)" if from_span else "位置なし (旧形式)"
+            return where, src.line_text(from_span[0]) if from_span and src is not None else ""
+
+        pos = self.position(d["location"], "location")
+        where = diagnostic_range(pos) if pos else ("位置なし" if d["location"] is None else "位置を読めない")
+        if src is not None and (pos is not None or d["location"] is None) and pos != from_span:
+            computed = diagnostic_range(from_span) if from_span else "位置なし"
+            self.page.unv(self.origin, self.subject, "位置の不一致",
+                          "span と location が食い違う (span: %s、location: %s)。location を表示した。" % (computed, where))
+        return where, src.line_text(pos[0]) if pos and src is not None else ""
+
+    def label(self, value, path, labels):
+        if isinstance(value, str) and value in labels:
+            return labels[value]
+        self.unparsed(path, value, "未知の語", show=False)
+        return self.raw(value)
+
+    def exit_label(self, value, path):
+        self.extra_fields(path, value, ("loop_name", "round", "phase", "leave_site"))
+        name, round_no, phase = (get(value, k) for k in ("loop_name", "round", "phase"))
+        if not isinstance(name, str) or not positive_int(round_no) or (
+                "leave_site" in as_dict(value) and not positive_int(value["leave_site"])):
+            self.unparsed(path, value, "出口を読めない", show=False)
+            return self.raw(value)
+        phase_text = self.label(phase, path + ".phase", {"body": "本体", "on_limit": "上限到達後"})
+        text = "%s・%d 回目・%s" % (name, round_no, phase_text)
+        if "leave_site" in value:
+            text += "・leave %d 番目" % value["leave_site"]
+        return text
+
+    def blocker_rows(self, blockers):
+        if not isinstance(blockers, list):
+            self.unparsed("detail.blockers", blockers, "一覧を読めない")
+            return []
+        rows = []
+        for i, blocker in enumerate(blockers):
+            path = "detail.blockers[%d]" % i
+            if not isinstance(blocker, dict):
+                self.unparsed(path, blocker, "関係する箇所を読めない")
+                continue
+            self.extra_fields(path, blocker, ("role", "name", "location", "exits", "rounds"))
+            role = self.label(blocker.get("role"), path + ".role", DIAGNOSTIC_ROLES)
+            name = blocker.get("name")
+            pos = self.position(blocker.get("location"), path + ".location")
+            exits = blocker.get("exits", [])
+            if not isinstance(exits, list):
+                self.unparsed(path + ".exits", exits, "出口の一覧を読めない")
+                exits = []
+            labels = [esc(self.exit_label(value, "%s.exits[%d]" % (path, j))) for j, value in enumerate(exits)]
+            rounds = blocker.get("rounds", [])
+            if not isinstance(rounds, list) or not all(positive_int(n) for n in rounds):
+                self.unparsed(path + ".rounds", rounds, "回の一覧を読めない")
+                rounds_text = "読めない"
+            else:
+                rounds_text = "、".join(map(str, rounds)) + " 回目" if rounds else "—"
+            rows.append([esc(role), esc(self.raw(name)) if name is not None else "—",
+                         diagnostic_range(pos) if pos else "位置なし", "<br>".join(labels) or "—", esc(rounds_text)])
+        return rows
+
+    def detail(self, detail):
+        if not isinstance(detail, dict):
+            self.unparsed("detail", detail, "詳細の形を読めない")
+            return ""
+        self.extra_fields("detail", detail, ("reason", "kind", "cause", "blockers", "see"))
+        kind = detail.get("kind")
+        kind_text = self.label(kind, "detail.kind", DIAGNOSTIC_KINDS)
+        cause, see = detail.get("cause"), detail.get("see")
+        see_name = (see.partition("#")[2] or see) if isinstance(see, str) else see
+        rows = [["読み方", esc(kind_text)], ["理由語", esc(self.raw(detail.get("reason")))],
+                ["原因", esc(self.raw(cause)) if cause is not None else "—"],
+                ["利用ガイドの節", '<span title="%s">%s</span>' % (esc(see), esc(see_name))]]
+        if cause is not None:
+            if isinstance(cause, str) and cause in DIAGNOSTIC_CAUSES:
+                rows.insert(3, ["原因の意味", esc(DIAGNOSTIC_CAUSES[cause])])
+            else:
+                self.unparsed("detail.cause", cause, "未知の語", show=False)
+        html_text = self.page.table(["項目", "説明"], rows)
+        if kind == "rewrite" and see_name:
+            html_text += '<p class="note">直し方は利用ガイドの「%s」を参照。</p>' % esc(see_name)
+        blockers = self.blocker_rows(detail.get("blockers"))
+        if blockers:
+            html_text += "<h5>関係する箇所</h5>" + self.page.table(["役割", "名前", "行:列", "出口", "繰り返しの回"], blockers)
+        elif detail.get("blockers") == []:
+            html_text += '<p class="muted">関係する箇所なし</p>'
+        if any(get(b, "role") == "excluded_edge" for b in as_list(detail.get("blockers"))):
+            html_text += '<p class="note">ここに示した辺は静的な系譜で数えなかったもの。今回どの辺が候補の根拠源を運んだかは確定していない。</p>'
+        return html_text
+
+
 class Page:
     def __init__(self, args):
         self.args = args
         self.alerts = []          # (重さ, 文)
         self.unverified = []      # (出所, 対象, 扱い, 理由)
+        self.na_quantities = set()  # (出所, 対象): 該当なしと未確認を混ぜない
+        self.terminal_exclusions = set()  # 他終端や受付拒否は観測済みでも集計対象外。
         self.self_unchecked = {}  # 項目 -> [出所]
         self.relca_diags = []     # (出所, diagnostic, Source)
         self.not_derived = []     # (出所, path, 理由)
@@ -967,7 +1431,8 @@ class Page:
         self.model_sha = None
         self.src = None
         try:
-            with open(args.model, "r", encoding="utf-8") as f:
+            # span は元ファイルのバイト区間。CRLF を LF に変換しない。
+            with open(args.model, "r", encoding="utf-8", newline="") as f:
                 text = f.read()
             self.model_sha = sha256_file(args.model)
             self.src = Source(text)
@@ -977,23 +1442,33 @@ class Page:
         self.compare_sha = None
         if args.compare_model:
             try:
-                with open(args.compare_model, "r", encoding="utf-8") as f:
+                with open(args.compare_model, "r", encoding="utf-8", newline="") as f:
                     self.compare_src = Source(f.read())
                 self.compare_sha = sha256_file(args.compare_model)
             except Exception as e:  # noqa: BLE001
                 self.alert("error", "compare のモデルを読めない: %s" % e)
-        for role in ("check", "simulate", "compare", "mutate"):
+        self.diff_src, self.diff_sha = self.src, self.model_sha
+        if args.diff_model:
+            self.diff_src = self.diff_sha = None
+            try:
+                with open(args.diff_model, "r", encoding="utf-8", newline="") as f:
+                    self.diff_src = Source(f.read())
+                self.diff_sha = sha256_file(args.diff_model)
+            except Exception as e:  # noqa: BLE001
+                self.alert("error", "diff のモデルを読めない: %s" % e)
+        for role in RUN_ROLES:
             path = getattr(args, role)
             if path:
                 self.runs.append(Run(role, path, getattr(args, role + "_exit"),
                                      getattr(args, role + "_stderr")))
-            elif role != "check":
+            elif role not in ("check", "diff"):  # diff は診断の追加入力。無くても既存の確認範囲を変えない。
                 self.not_run.append("%s(入力に渡されていない)" % role)
         self.main = self.runs[0] if self.runs and self.runs[0].role in ("check", "explain") else None
         if self.main is not None and self.main.role == "check":
-            self.not_run.append("explain(check の JSON なので反例と DSL 位置が無い)")
+            self.not_run.append("explain(check の JSON なので反例とその DSL 位置が無い)")
         self._load_ai_assumptions()
-        claimed = {a["target"] for a in self.ai_assumptions}
+        self.estimate_sources, self.estimate_matched, self.estimate_absent = self._load_estimate()
+        claimed = {a["target"] for a in self.ai_assumptions} | self.estimate_matched
         self.unprovenanced = [d for d in self.declarations() if d[0] not in claimed]
         self._check_runs()
         for r in self.runs:
@@ -1051,11 +1526,47 @@ class Page:
                 self.alert("warn", "--assumptions の target %s がモデルの数値・選択の宣言に対応しない" % short(target, 80))
             self.ai_assumptions.append(dict(it, status=status, target=target))
 
+    def _load_estimate(self):
+        path = getattr(self.args, "estimate", None)
+        exit_code = getattr(self.args, "estimate_exit", None)
+        blank = {}, set(), []
+        if not path:
+            if exit_code is not None:
+                self.alert("warn", "--estimate が無いので --estimate-exit は使わない")
+            return blank
+        main = self.main.data if self.main else None
+        configuration = get(main, "ledger", "execution", "selection", "effective", "configuration", "value")
+        declared = {d[0] for d in self.declarations()}
+        try:
+            sources, matched, absent, outside = load_estimate(path, exit_code, self.model_sha, configuration, declared)
+        except (OSError, ValueError, TypeError, ArithmeticError) as e:
+            self.alert("warn", "estimate: 出所に使わない（%s）" % short(str(e), 180))
+            return blank
+        for identifier in outside:
+            self.alert("warn", "estimate: %s の宣言値はログから導いた区間の外" % identifier)
+        return sources, matched, absent
+
     def ai_status_of(self, target):
         found = [a for a in self.ai_assumptions if a["target"] == target]
-        if found:
-            return " ".join(ai_label(a) for a in found)
-        return '<span class="badge warn">出所の申告なし</span>'
+        parts = [ai_label(a) for a in found]
+        if not parts and target not in self.estimate_matched:
+            parts.append('<span class="badge warn">出所の申告なし</span>')
+        for identifier, row in self.estimate_sources.get(target, []):
+            win = row["provenance"]["window"]
+            bounds = ", ".join("[%s, %s]" % (a["lower"], a["upper"]) for a in row["interval"])
+            n, unknown, censored = row["n"], row["unknown"], row["censored"]
+            known = n - unknown
+            if estimate_complete(row):
+                heading = "relca がログから導出"
+            else:
+                heading = "ログからの候補あり(一部未確定: 既知 %d 件 / %d 件、打切り %d 件)" % (known, n, censored)
+                if row.get("reason") == "dsl_precision_insufficient":
+                    heading += "・厳密値のみ（DSL の桁不足）"
+            label = ("%s: %s(n=%d、既知 %d 件、unknown=%d、censored=%d、coverage=%s、区間 %s、ログの窓 %d〜%d 分)。"
+                     "ログの真正性と代表性は人が未確認" % (
+                         identifier, heading, n, known, unknown, censored, row["coverage"], bounds, win["from"], win["to"]))
+            parts.append('<span class="note">%s</span>' % esc(label))
+        return "<br>".join(parts) if self.estimate_sources.get(target) else " ".join(parts)
 
     def declarations(self):
         """モデルにある数値と選択の宣言を source から列挙する。(target, 種類, 宣言, 行)。
@@ -1228,6 +1739,10 @@ class Page:
                     if self.compare_sha and js != self.compare_sha:
                         self.alert("error", "compare の案 %s: model.sha256 が --compare-model と違う" % short(get(pl, "configuration"), 60))
             for line in r.stderr.splitlines():
+                # 詳細は JSON から描画する。stderr の字下げされた補足は診断行ではない。
+                if line.startswith(("  at ", "  kind: ", "  cause: ", "  blocked by: ",
+                                    "  not counted: ", "  provenance: ", "  see: ")):
+                    continue
                 code = line.split(":", 1)[0].strip()
                 tail = code.split(" ")[-1] if code else ""
                 if tail.startswith(("E-", "U-")) or (": E-" in line) or (": U-" in line):
@@ -1246,6 +1761,18 @@ class Page:
             for pl in as_list(r.data.get("plans")):
                 name = get(pl, "configuration")
                 self.scan("compare 案 %s" % short(name, 40), get(pl, "report"), "plan", self.compare_src)
+        elif r.role == "diff":
+            self.scan("diff", r.data, "diff", None)
+            for side in ("from", "to"):
+                if side not in r.data:  # 最上位の拒否だけで終わった場合は構成別 report がない。
+                    continue
+                name = get(r.data, side, "configuration")
+                report = get(r.data, side, "report")
+                origin = "diff %s %s" % (side, short(name, 40))
+                matches = self.diff_sha and get(report, "model", "sha256") == self.diff_sha
+                if isinstance(report, dict) and not matches:
+                    self.alert("warn", "%s: モデルの sha256 を照合できない。添付した source は表示位置の照合に使わない" % origin)
+                self.scan(origin, report, "diff_side", self.diff_src if matches else None)
         elif r.role == "mutate":
             self.scan("mutate", r.data, "mutate", None)
             self.scan("mutate original", r.data.get("original"), "mutate_original", self.src)
@@ -1263,18 +1790,23 @@ class Page:
         elif v in UNVERIFIED:
             self.unv(origin, "結果全体", v, self._reason_of(data))
         # 全体の判定の照合
-        if kind in ("main", "simulate", "plan", "mutate_original"):
+        if kind in MODEL_REPORT_KINDS:
             folded = fold_report(data)
             self._compare_fold(origin, v, folded, "性質と診断をまとめた判定")
         elif kind == "compare":
             plan_vs = [canon_verdict(get(pl, "report", "verdict"))[0] for pl in as_list(data.get("plans"))]
-            if plan_vs:
-                self._compare_fold(origin, v, max(plan_vs, key=lambda x: RANK[x]), "各案をまとめた判定")
+            hard_vs = [canon_verdict(get(cell, "verdict"))[0] for h in as_list(get(data, "evaluation", "hard"))
+                       for cell in as_list(get(h, "values")) if get(cell, "excluded") is None]
+            summary_vs = [canon_verdict(get(row, k))[0] for row in as_list(get(data, "evaluation", "plans"))
+                          for k in ("verify_verdict", "hard_verdict") if get(row, k) is not None]
+            if plan_vs or hard_vs or summary_vs:
+                self._compare_fold(origin, v, max(plan_vs + hard_vs + summary_vs, key=lambda x: RANK[x]),
+                                   "各案をまとめた判定 (必須条件と採否の判定を含む)")
             else:
                 self.unv(origin, "plans", "unsupported", "案が一つも無い")
         # Cut
         diags = [d for d in as_list(data.get("diagnostics")) if isinstance(d, dict)]
-        if kind in ("main", "simulate", "plan", "mutate_original"):
+        if kind in MODEL_REPORT_KINDS:
             cut = data.get("cut")
             model = data.get("model")
             cut_warning = any(d.get("code") == "W-CUT-0" for d in diags)
@@ -1317,8 +1849,13 @@ class Page:
                     continue
                 pv, pnote = canon_verdict(p.get("verdict"))
                 pid = str(p.get("id"))
-                if pv in UNVERIFIED or pnote:
-                    reason = pnote or ", ".join(map(str, as_list(p.get("notes")))) or VERDICT_JA[pv]
+                if pnote:
+                    self.unreadable(origin, pid + ".verdict", "未解釈: " + pnote)
+                if p.get("excluded") is not None:
+                    self._excluded_badge(origin, pid, p)
+                elif pv in UNVERIFIED or pnote:
+                    reason = (pnote or self._evidence_unverified_reason(data, p)
+                              or ", ".join(map(str, as_list(p.get("notes")))) or VERDICT_JA[pv])
                     self.unv(origin, pid, pv, reason)
                 case_vs = []
                 for c in as_list(p.get("cases")):
@@ -1335,6 +1872,7 @@ class Page:
                                  "性質は %s だが cases[] に %s(case %s)がある" % (pv, worst, wid))
                 if "mechanism_unmodeled" in as_list(p.get("notes")):
                     self.mechanism.append((origin, pid))
+                self._case_unknown_html(origin, data, pid, as_list(p.get("cases")))
         # mismatch
         if "contract_scope" in data:
             if kind == "mutate" and isinstance(data.get("original"), dict):
@@ -1381,6 +1919,8 @@ class Page:
                          "; ".join(map(str, as_list(rep.get("unchecked")))) or "繰り返しの回数表を導出できていない")
         # 読まなかった鍵
         read = SCAN_KEYS | SHOWN_KEYS.get(kind, set())
+        if kind in MODEL_REPORT_KINDS:
+            read |= NUMERICAL_KEYS
         for k in data:
             if k not in read:
                 self.unread.setdefault(str(k), []).append(origin)
@@ -1530,6 +2070,26 @@ class Page:
         if status and status != "complete":
             msgs.append("simulation status %s" % status)
         return "; ".join(msgs) if msgs else "理由は JSON の diagnostics と stderr を参照"
+
+    @staticmethod
+    def _evidence_unverified_reason(data, prop):
+        pid = str(prop.get("id", ""))
+        if prop.get("verdict") != "unsupported" or not pid.endswith(" evidence_basis"):
+            return ""
+        prefix = pid + ": "
+        for d in as_list(get(data, "diagnostics")):
+            msg = get(d, "message")
+            if get(d, "code") == "U-SEM-0" and isinstance(msg, str) and msg.startswith(prefix):
+                if msg == prefix + "evidence_basis_conditional_snapshot":
+                    return "届きうるが確かめられない源があるため未対応 (evidence_basis_conditional_snapshot)"
+                return msg[len(prefix):]
+        if "explanation" in data:
+            # explain の report が理由を持たないときに、特定の原因を補わない。
+            selection = as_dict(get(data, "ledger", "execution", "selection", "requested"))
+            options = "".join(" --%s %s" % (key, selection[key]) for key in ("configuration", "scenario")
+                              if isinstance(selection.get(key), str) and selection[key])
+            return "理由の記録なし。反例は出ていません。同じモデルを check%s で調べ、診断を確認してください。" % options
+        return ""
 
     @staticmethod
     def _props_of(data):
@@ -2029,6 +2589,8 @@ class Page:
             out.append(self.table(["対象", "値", "出所(AI の申告)", "根拠・説明"], rows))
             out.append('<p class="note">このファイルは AI が書いた申告で、確認済み・実測もそのままでは確かめられていない。'
                        'confirmed は confirmed_by、measured は source が無ければ仮置きとして扱う。人が確認者や出典に当たって確かめること。</p>')
+        elif getattr(self.args, "estimate", None):
+            out.append('<p class="note">AI の出所申告は渡されていない。ログ由来の候補は宣言の表で区別する。</p>')
         else:
             out.append('<div class="alert warn">渡されていない。モデルの所要時間・確率が業務の実測か AI の仮置きかを、このページは区別できない。</div>')
         out.append("<h4>モデルの数値・選択の宣言と出所(%d 件)</h4>" % len(self.declarations()))
@@ -2037,6 +2599,11 @@ class Page:
             for t, k, x, l in self.declarations()]))
         out.append('<p class="note">「出所の申告なし」は、業務の実測か AI の仮置きか分からない値。'
                    'bounds と simulation は計算の設定なので上限の表に出す。</p>')
+        if self.estimate_absent:
+            out.append("<h4>ログから候補を出せなかった欄</h4>")
+            out.append(self.table(["スロット", "状態", "理由", "回を割り当てない件数"], [
+                ["<code>%s</code>" % esc(identifier), esc(status), esc(reason), esc(short(counts, 160)) if counts is not None else "—"]
+                for identifier, status, reason, counts in self.estimate_absent]))
         if self.response_decls():
             out.append("<h4>再送と応答喪失の宣言(source と JSON の対応)</h4>")
             out.append(self.guarded("再送の宣言", self._response_decls_html))
@@ -2142,7 +2709,13 @@ class Page:
         """新しい欄の型違い・欠落・未知の語。補わずに、読めなかった情報として警告する。"""
         self.unreadable_rows.append((str(origin), str(where), str(why)))
         self.alert("warn", "%s: %s を読めなかった(%s)。この欄は補わず、確かめられていないものとして扱う"
-                   % (origin, where, why))
+                    % (origin, where, why))
+
+    def _uninterpreted(self, origin, path, detail):
+        why = "未解釈: " + detail
+        self.unreadable(origin, path, why)
+        self.unv(origin, path, "unsupported", why)
+        return esc(why)
 
     def typed(self, origin, obj, key, types, what=None):
         """(状態, 値)。状態は absent(欄なし)・null(明示の null)・ok・bad(型違い。警告に出す)。"""
@@ -2459,6 +3032,7 @@ class Page:
                                    "receipt_resolution": res, "truncated": trunc})
         out.append(self.table(["案件", "業務の End に届いた終端", "未確認で止まった終端", "receipt_resolution",
                                "bounds.truncated", "読み方"], summary))
+        out.append(self._contest_note(data))
         out.append(self.table(["案件", "終端の種類", "End", "完了(completed_at・elapsed・work)",
                                "止まるまでの観測(observed_*)", "確率", "読み方"], rows))
         out.append('<p class="note">receipt_unknown は、応答が届いたか分からないまま案件が止まった終端で、業務の End ではない。'
@@ -2549,15 +3123,28 @@ class Page:
         return "%d:%d" % lc, src.line_text(lc[0])
 
     def _diagnostics_html(self):
-        rows = []
-        for origin, d, src in self.relca_diags:
-            where, text = self.loc(d.get("span"), src) if src is not None else ("—", "")
+        rows, details = [], []
+        for number, (origin, d, src) in enumerate(self.relca_diags, 1):
+            code, message = d.get("code"), d.get("message")
+            subject = "診断 %d %s: %s" % (number, code, message)
+            diagnostic = DiagnosticView(self, origin, subject)
+            where, text = diagnostic.location(d, src)
+            raw_detail = d.get("detail")
+            detail_html = diagnostic.detail(raw_detail) if raw_detail is not None else ""
+            link = "—"
+            if detail_html or diagnostic.raw_fields:
+                anchor = "diagnostic-%d" % number
+                link = '<a href="#%s">詳細 %d</a>' % (anchor, number)
+                details.append('<h4 id="%s">%s (%s)</h4>' % (anchor, esc(subject), esc(origin)))
+                details.append(detail_html)
+                if diagnostic.raw_fields:
+                    details.extend(["<h5>未解釈の欄</h5>", self.table(["JSON の欄", "元の値"], diagnostic.raw_fields)])
             sev = d.get("severity")
             rows.append([esc(origin),
                          '<span class="badge %s">%s</span>' % ("bad" if sev == "error" else "warn", esc(sev)),
-                         "<code>%s</code>" % esc(d.get("code")), esc(d.get("message")), esc(where),
-                         "<code>%s</code>" % esc(short(text, 120)) if text else ""])
-        return self.table(["出所", "重さ", "コード", "内容", "行:列", "source"], rows)
+                         "<code>%s</code>" % esc(code), esc(message), esc(where),
+                         "<code>%s</code>" % esc(short(text, 120)) if text else "", link])
+        return self.table(["出所", "重さ", "コード", "内容", "行:列 (終点は含まない)", "source", "詳細"], rows) + "".join(details)
 
     # ---- 2. 結論
     def clause_text(self, prop_id, src=None):
@@ -2717,6 +3304,397 @@ class Page:
             out.append(self.table(["instance", "loop", "call_site", "round", "phase", "元の行:列"], sites))
         return "".join(out)
 
+    @staticmethod
+    def _load_note(data):
+        rows = [a for a in as_list(get(data, "assumptions")) if isinstance(a, dict)]
+        return "".join('<p class="note"><code>%s</code> (%s): %s %s</p>' %
+                       (esc(a["field"]), esc(a.get("value")), LOAD_ASSUMPTIONS[a["field"]], esc(a.get("affects") or ""))
+                       for a in rows if isinstance(a.get("field"), str) and a["field"] in LOAD_ASSUMPTIONS)
+
+    @staticmethod
+    def _contest_note(data):
+        names = [str(get(a, "value")) for a in as_list(get(data, "assumptions"))
+                 if get(a, "field") == "scenario.contest_not_filed"]
+        return '<p class="note">%s 対象: %s</p>' % (CONTEST_NOTE, esc(", ".join(names))) if names else ""
+
+    def _records(self, origin, obj, key, path=""):
+        if key not in obj:
+            return
+        rows = obj[key]
+        if not isinstance(rows, list):
+            self._uninterpreted(origin, path + key, "配列が必要: " + short(rows))
+            return
+        for i, row in enumerate(rows):
+            if isinstance(row, dict):
+                yield row
+            else:
+                self._uninterpreted(origin, "%s%s[%d]" % (path, key, i), "object が必要: " + short(row))
+
+    @staticmethod
+    def _units(data):
+        time = get(data, "unit")
+        currency = get(data, "metrics", "currency")
+        return (" 分" if time == "min" else (" " + time if isinstance(time, str) else ""),
+                " %s の最小単位" % currency if isinstance(currency, str) else "")
+
+    @staticmethod
+    def _number(value):
+        return type(value) is int or (isinstance(value, str) and re.fullmatch(r"-?\d+(?:/[1-9]\d*|\.\d+)?", value))
+
+    def _nonzero_count(self, obj):
+        stats = as_dict(get(obj, "stats", default=obj))
+        return any(self._number(n) and Fraction(n) > 0 for n in
+                   [get(obj, "observed_total")] + [stats.get(k) for k in ("max", "upper", "mean")])
+
+    def _row_word(self, origin, name, key, token, labels):
+        if isinstance(token, str) and token in labels:
+            return esc(labels[token])
+        self.unreadable(origin, name + "." + key, "未解釈: " + short(token))
+        self.unv(origin, name, "uninterpreted", "この行に未解釈の欄がある")
+        return "未解釈: " + esc(json.dumps(token, ensure_ascii=False))
+
+    def _value_cell(self, origin, name, value, unit, *, lower=None, basis=False, censor=False,
+                    null_upper=False, reason_required=True, count_reason=True):
+        """表示だけ。区間や標本から、別の値・判定を計算しない。"""
+        def bad(key, detail):
+            return self._row_word(origin, name, key, detail, {})
+
+        if not isinstance(value, dict):
+            return bad("value", "値の欄なし・型違い: " + short(value))
+        why = value.get("reason")
+        raw_basis = value.get("basis")
+        parts = []
+        if why is not None and (not isinstance(why, str) or why not in VALUE_REASONS):
+            parts.append(self._row_word(origin, name, "reason", why, {}))
+        elif reason_required and "reason" not in value:
+            parts.append(bad("reason", "欄なし"))
+        basis_label = ""
+        if raw_basis is not None:
+            basis_label = self._row_word(origin, name, "basis", raw_basis, BASIS_JA)
+        sample = "point" in value or "observations" in value or "censored" in value
+        stats_sample = "mean" in value
+        keys = ("point",) if sample else (("mean", "min", "max") if stats_sample else
+               (("lower", "upper") if basis or "lower" in value or "upper" in value else ("min", "max")))
+        nums = [value.get(k, ABSENT) for k in keys]
+        for key, val in zip(keys, nums):
+            if val is ABSENT or (val is not None and not self._number(val)):
+                parts.append(bad(key, "欄なし" if val is ABSENT else "数値でない: " + short(val)))
+        counts = []
+        for key, label, suffix in (("observations", "観測数", ""), ("censored", "打切り", " 件"),
+                                   ("samples", "標本数", "")):
+            if key not in value and not (sample and key != "samples" and censor):
+                continue
+            n = value.get(key)
+            if type(n) is not int or n < 0:
+                parts.append(bad(key, "件数が無い・不正: " + short(n)))
+            else:
+                counts.append("%s %s%s" % (label, n, suffix))
+        if basis and not sample and any(n is not None and n is not ABSENT for n in nums) and raw_basis is None:
+            parts.append(bad("basis", "根拠なし"))
+        rendered = ""
+        n = value.get("censored", 0)
+        censored = censor and (type(n) is not int or n > 0)
+        if not censored and all(self._number(n) for n in nums):
+            if sample:
+                rendered = ("標本平均: " if censor else "標本値: ") + str(nums[0]) + unit
+            elif stats_sample:
+                rendered = "標本平均: %s%s (観測範囲 %s 〜 %s%s)" % (nums[0], unit, nums[1], nums[2], unit)
+            else:
+                rendered = "%s 〜 %s%s" % (*nums, unit)
+        elif not censored and null_upper and self._number(nums[0]) and nums[1] is None:
+            rendered = "下限: %s%s (上限なし)" % (nums[0], unit)
+        if not rendered:
+            if why is None:
+                parts.append(bad("value", "算出なしの理由が記録されていない"))
+            elif isinstance(why, str) and why in NO_APPLICABLE_VALUE:
+                self.na_quantities.add((origin, name))
+                rendered = "該当なし: %s (%s)" % (NO_APPLICABLE_VALUE[why], why)
+            elif isinstance(why, str) and why in VALUE_REASONS:
+                if count_reason:
+                    self.unv(origin, name, "not_reported", why)
+                rendered = "算出なし: " + why
+        elif why:
+            if isinstance(why, str) and why in VALUE_REASONS:
+                if count_reason:
+                    self.unv(origin, name, "not_reported", why)
+                rendered += " (%s)" % why
+        if lower is not None:
+            if not self._number(lower):
+                parts.append(bad("lower_bound", "数値でない: " + short(lower)))
+            else:
+                rendered += " / 下限: %s%s" % (lower, unit)
+        if not rendered and not censored and any(v is not ABSENT and v is not None for v in nums):
+            parts.append("JSON の値: " + esc(json.dumps({k: value[k] for k in keys if k in value}, ensure_ascii=False)))
+        return " / ".join(x for x in (esc(rendered), basis_label, *map(esc, counts), *parts) if x)
+
+    def _excluded_badge(self, origin, path, row):
+        reason = row.get("excluded")
+        if reason is None:
+            return ""
+        if isinstance(reason, str) and reason in EXCLUSION_JA:
+            label = esc("%s (%s)" % (EXCLUSION_JA[reason], reason))
+        else:
+            label = self._row_word(origin, path, "excluded", reason, EXCLUSION_JA)
+        self.unv(origin, path, "excluded", "評価から外した: %s" % short(reason))
+        return '<span class="badge warn">評価から外した</span> ' + label
+
+    def _verdict_for_row(self, origin, name, row, exclusion=""):
+        raw = row.get("verdict")
+        v, note = canon_verdict(raw)
+        badge = ('<span class="badge warn">記録上は %s (評価対象外)</span>' % esc(raw)
+                 if exclusion and v == "satisfied" else verdict_badge(v, raw))
+        if note:
+            label = ("未解釈: " + esc(json.dumps(raw, ensure_ascii=False))
+                     if (origin, name, "unsupported", note) in self.unverified else
+                     self._row_word(origin, name, "verdict", raw, {}))
+            badge = '<span class="badge warn">%s</span>' % label
+        return (exclusion + " / " if exclusion else "") + badge
+
+    @staticmethod
+    def _unknown_reason(data):
+        return ("計算切断または観測終了までに未確定" if get(data, "bounds", "truncated") or
+                get(data, "simulation", "truncated_replications") else "観測終了までに未確定")
+
+    def _quality_unknown(self, origin, data, name, item):
+        count = item.get("unknown_count")
+        if self._nonzero_count(count):
+            reason = self._unknown_reason(data)
+            self.unv(origin, name, "not_reported", reason)
+            return "<br>未確定件数 (%s): " % esc(reason) + self._value_cell(origin, name + ".unknown_count", count, " 件")
+        cases = [(c.get("case_id"), c.get("reason")) for c in as_list(item.get("cases"))
+                 if get(c, "reason") in ("truncated", "undetermined")]
+        if cases:
+            return "<br>未確定を含む案件: " + esc("、".join("%s (%s)" % c for c in cases))
+        return ""
+
+    def _quality_html(self, origin, data):
+        q = get(data, "quality")
+        if not isinstance(q, dict):
+            return self._uninterpreted(origin, "quality", "object が必要") if "quality" in data else ""
+        time, cost = self._units(data)
+        out = ["<h4>品質の指標 (quality)</h4>", self._contest_note(data)]
+        if q.get("analysis") == "simulation" and q.get("means"):
+            out.append('<p class="note">平均は観測できた案件の標本平均。合否の根拠ではない。</p>')
+        properties = {get(p, "name"): p for p in as_list(q.get("properties")) if isinstance(get(p, "name"), str)}
+        rows = []
+        for key, prefix in (("means", "mean"), ("quantiles", "quantile"), ("cohort", "cohort")):
+            for item in self._records(origin, q, key, "quality."):
+                name = "%s.%s" % (prefix, item.get("name"))
+                detail, unit = [], time
+                if key == "cohort":
+                    unit = " (比率)"
+                    denom = as_dict(item.get("denominator"))
+                    form = self._row_word(origin, name, "form", item.get("form"), {"ratio_of_expected_counts": "期待件数の比"})
+                    dn = denom.get("property")
+                    label = (esc("%s 件の流入" % denom.get("count")) if denom.get("kind") == "arrivals" else
+                             esc(dn) if denom.get("kind") == "property" else
+                             self._row_word(origin, name, "denominator.kind", denom.get("kind"), {}))
+                    detail.append("%s: %s / %s" % (form, esc(item.get("numerator")), label))
+                    if denom.get("covers") is not None:
+                        detail.append("分母に含む終端: " + esc(", ".join(map(str, as_list(denom["covers"])))))
+                    if denom.get("reason") is not None:
+                        detail.append(self._row_word(origin, name, "denominator.reason", denom["reason"],
+                                                     {"state_condition": "状態条件の分母なので終端の一覧なし (state_condition)"}))
+                else:
+                    form = item.get("form")
+                    detail.append(self._row_word(origin, name, "form", form, FORM_JA))
+                    if item.get("property") is not None:
+                        detail.append(esc("case." + str(item["property"])))
+                    if key == "means":
+                        measure = str(item.get("measure"))
+                        unit = (cost if measure == "cost" else time if measure in MEASURE_JA else "") or " (単位の記載なし)"
+                        detail.append(self._row_word(origin, name, "measure", item.get("measure"), MEASURE_JA))
+                    else:
+                        detail.append(esc("分位: %s (比率)" % item.get("p")))
+                val = item.get("value")
+                cell = self._value_cell(origin, name, val, unit, lower=item.get("lower_bound"),
+                                        basis=True, censor=key == "means")
+                if key == "cohort" and item.get("bounds_with_undetermined") is not None:
+                    cell += "<br>未確定を含む境界: " + self._value_cell(
+                        origin, name + ".bounds_with_undetermined", item["bounds_with_undetermined"], unit,
+                        reason_required=False)
+                if key == "cohort":
+                    for label, key_ in (("分子", item.get("numerator")), ("分母", dn)):
+                        if isinstance(key_, str) and key_ in properties:
+                            src = properties[key_]
+                            cell += "<br>" + label + "の既知件数: " + self._value_cell(
+                                origin, name + "." + label, src.get("expected_count"), " 件", count_reason=False)
+                            cell += self._quality_unknown(origin, data, name, src)
+                excluded = self._excluded_badge(origin, name, item)
+                if excluded:
+                    cell = excluded + "<br>" + cell
+                rows.append([esc(name), " / ".join(detail), cell])
+        for item in self._records(origin, q, "properties", "quality."):
+            name = "case.%s" % item.get("name")
+            detail = esc(item.get("condition"))
+            if item.get("within") is not None:
+                detail += " / 期限: " + esc(str(item["within"]) + time)
+            status = self._excluded_badge(origin, name, item)
+            rows.append([esc(name), detail, "期待件数 (既知の到達): " + self._value_cell(
+                origin, name, item.get("expected_count"), " 件") + self._quality_unknown(origin, data, name, item)
+                + ("<br>" + status if status else "")])
+        for item in self._records(origin, q, "outcomes_per_arrival", "quality."):
+            name = "outcomes_per_arrival.%s" % (item.get("end") or item.get("kind"))
+            kind = item.get("kind")
+            status = {"cut_off": "観測の打切り", "unfinished": "観測終了時に未完了", "receipt_unknown": "応答不明"}.get(str(kind))
+            if status and self._nonzero_count(item.get("expected_count")):
+                self.unv(origin, name, "not_reported", status)
+            rows.append([esc(name), "観測終了時の分類。将来の到達確率ではない。" + (esc(status) if status else ""),
+                         self._value_cell(origin, name + ".expected_count", item.get("expected_count"), " 件") + " / " +
+                         self._value_cell(origin, name + ".rate", item.get("rate"), " (比率)")])
+        out.append(self.table(["指標", "対象・集計の前提", "値・根拠"], rows))
+        return "".join(out)
+
+    def _indicator_unit(self, data, name):
+        time, cost = self._units(data)
+        if name.startswith("mean."):
+            for row in as_list(get(data, "quality", "means")):
+                if name == "mean.%s" % get(row, "name"):
+                    m = get(row, "measure")
+                    return cost if m == "cost" else time if str(m) in MEASURE_JA else ""
+        if name.startswith("quantile."):
+            return time
+        if name.startswith("cohort."):
+            return " (比率)"
+        return {"metrics.overall.work": time, "metrics.overall.named_people_work": time,
+                "metrics.overall.peak_tasks": " 件", "metrics.overall.observed_cost_total": cost,
+                "metrics.overall.observed_cost_per_arrival": cost}.get(name, "")
+
+    def _metric_check_cells(self, origin, data, row):
+        condition = row.get("constraint")
+        name = condition.split()[0] if isinstance(condition, str) and condition.split() else "metric_checks"
+        unit = self._indicator_unit(data, name) or " (単位の記載なし)"
+        why = row.get("reason")
+        source_reason = row.get("source_reason")
+        v, note = canon_verdict(row.get("verdict"))
+        excluded = self._excluded_badge(origin, str(condition), row)
+        if not excluded and not note and v in UNVERIFIED:
+            self.unv(origin, str(condition), v, why or VERDICT_JA[v])
+        interval = row.get("interval")
+        if interval is None:
+            value = "算出なし: " + esc(why) if why else self._uninterpreted(origin, str(condition), "区間も理由も無い")
+            if why and v not in UNVERIFIED and not excluded:
+                self.unv(origin, str(condition), "not_reported", why)
+            for key, token, allowed in (("basis", row.get("basis"), BASIS_JA), ("reason", why, VALUE_REASONS)):
+                if token is not None and (not isinstance(token, str) or token not in allowed):
+                    value += " / " + self._row_word(origin, str(condition), key, token, allowed)
+        elif isinstance(interval, dict):
+            value = self._value_cell(origin, str(condition), dict(interval, basis=row.get("basis"), reason=why), unit,
+                                     basis=True, null_upper=row.get("basis") == "lower_bound",
+                                     count_reason=v not in UNVERIFIED and not excluded)
+        else:
+            value = self._uninterpreted(origin, str(condition) + ".interval", "object が必要: " + short(interval))
+        if source_reason:
+            value += " / 元指標の理由: " + self._row_word(origin, str(condition), "source_reason", source_reason,
+                                                             {k: k for k in VALUE_REASONS})
+        if row.get("alpha") is not None:
+            value += " / 片側の誤り率: " + esc(row["alpha"])
+        badge = self._verdict_for_row(origin, str(condition), row, excluded)
+        if "未解釈:" in value and not excluded:
+            badge = '<span class="badge warn">記録上は %s (根拠は未解釈)</span>' % esc(row.get("verdict"))
+        return [esc(str(condition) + unit), value, badge]
+
+    def _load_metrics_html(self, origin, data):
+        m = as_dict(get(data, "metrics"))
+        time, cost = self._units(data)
+        rows, waits = [], []
+
+        def add(rows, subject, obj, fields, excluded="", uncertain=None):
+            for key, label, unit in fields:
+                if key not in obj:
+                    continue
+                name = "metrics.%s.%s" % (subject, key)
+                value = obj[key]
+                if key in ("window", "rejected_count", "capacity") and self._number(value):
+                    cell = esc(str(value) + unit)
+                elif key == "rejected_count" and isinstance(value, dict) and all(
+                        self._number(value.get(bound)) for bound in ("min", "max")):
+                    cell = esc("%s 〜 %s%s" % (value["min"], value["max"], unit))
+                else:
+                    cell = self._value_cell(origin, name, get(value, "stats", default=value), unit)
+                    total = get(value, "observed_total")
+                    if self._number(total):
+                        cell += " / 観測合計: " + esc(str(total) + unit)
+                if uncertain and key in uncertain and self._nonzero_count(value):
+                    self.unv(origin, name, "not_reported", uncertain[key])
+                    cell += " / " + esc(uncertain[key])
+                rows.append([esc(subject), label, (excluded + "<br>" if excluded else "") + cell])
+
+        overall = as_dict(m.get("overall"))
+        admission = []
+        add(admission, "全体", as_dict(get(data, "admission")), [("rejected_count", "受付拒否", " 件")])
+        if not m:
+            return "<h4>受付 (admission)</h4>" + self.table(["対象", "量", "値"], admission) if admission else ""
+        rows.extend(admission)
+        add(rows, "全体", m, [("window", "観測窓", time)])
+        add(rows, "全体", overall, [("observed_until", "観測終了", time), ("work", "作業時間", time),
+                                    ("named_people_work", "名前付き実行者の作業", time),
+                                    ("peak_tasks", "最大同時 Task 数", " 件"),
+                                    ("queue_wait_observed", "観測された待ち時間", time)] +
+            [(k, label, cost) for k, label in (("occupancy_cost", "占有費"), ("start_cost", "開始費"),
+                                              ("observed_cost_total", "観測費用の合計"),
+                                              ("observed_cost_per_arrival", "流入あたりの観測費用"))])
+        counts = as_dict(overall.get("counts"))
+        uncertain = {"cut_off": "業務上の打切り", "unfinished": "観測終了時に未完了", "receipt_unknown_count": "応答不明"}
+        add(rows, "全体", counts, [(k, label, " 件") for k, label in (
+            ("offered", "流入件数"), ("received", "受付件数"), ("completed", "処理件数 (完了)"),
+            ("rejected", "拒否件数"), ("unfinished", "未完了件数"), ("deadlocked", "行き詰まり件数"),
+            ("not_arrived", "未到着件数"), ("cut_off", "打切り件数"), ("receipt_unknown_count", "応答不明件数"))],
+            uncertain=uncertain)
+        for item in self._records(origin, counts, "end_counts", "metrics.overall.counts."):
+            add(rows, "end %s" % item.get("end"), item, [("count", "処理件数 (終端別)", " 件")])
+        for group, key in (("actors", "actor"), ("resources", "resource"), ("people", "person"),
+                           ("capabilities", "capability")):
+            for item in self._records(origin, m, group, "metrics."):
+                name = "%s: %s" % (key, item.get(key))
+                excluded = self._excluded_badge(origin, "metrics." + name, item)
+                add(rows, name, item, [("utilization", "稼働率", " (比率)"), ("work", "作業時間", time),
+                                       ("starts", "開始回数", " 回"), ("capacity", "容量", ""),
+                                       ("occupancy_cost", "占有費", cost), ("start_cost", "開始費", cost)], excluded)
+                add(rows, name, as_dict(item.get("queue")), [("wait_total", "待ち時間の合計", time),
+                    ("length_max", "待ち行列の最大長", " 件"), ("length_time_average", "待ち行列の時間平均長", " 件")])
+        for item in self._records(origin, m, "cases", "metrics."):
+            name = "案件 %s" % item.get("case_id")
+            add(waits, name, item, [("first_start_wait", "最初の開始までの待ち時間", time), ("work", "作業時間", time)])
+            c = as_dict(item.get("counts"))
+            add(waits, name, c, [(k, label, " 件") for k, label in uncertain.items()
+                                 if self._nonzero_count(c.get(k))], uncertain=uncertain)
+            for t in self._records(origin, item, "tasks", "metrics.cases."):
+                add(waits, "%s / %s (%s)" % (name, t.get("binding"), t.get("capability")), t,
+                    [("wait", "待ち時間", time), ("work", "作業時間", time)])
+            for t in self._records(origin, item, "terminals", "metrics.cases."):
+                subject = "%s / %s" % (name, t.get("end") or {"rejected": "受付拒否の区分", "overflow": "容量超過の区分"}.get(t.get("kind"), t.get("kind")))
+                counts = as_dict(t.get("excluded"))
+                excluded = self._excluded_badge(origin, "metrics." + subject, t) if not counts and t.get("excluded") != {} else ""
+                add(waits, subject, t,
+                    [("lead_time", "終端までの経過時間", time), ("cost_per_case", "完了した案件あたりの費用", cost)], excluded)
+                exclusions = [(k, "この終端の集計対象外: " + label, " 件") for k, label in (
+                    ("cut_off", "打切り"), ("unfinished", "未完了"), ("deadlocked", "行き詰まり"),
+                    ("rejected", "受付拒否"), ("other_end", "他の終端")) if self._nonzero_count(counts.get(k))]
+                add(waits, subject, counts, exclusions, uncertain=uncertain)
+                self.terminal_exclusions.update((origin, subject, k) for k, _, _ in exclusions)
+        if not (rows or waits):
+            return ""
+        head = ["対象", "量", "値"]
+        out = ["<h4>負荷・時間・費用 (metrics)</h4>", self._contest_note(data),
+               '<p class="note">処理件数は観測窓の出力であり、件数から単位時間あたりの処理能力は計算していない。'
+               '観測範囲: %s / %s</p>' % (esc(m.get("observation_scope") or "未記録"), esc(m.get("estimate_note") or "")),
+               self.table(head, rows)]
+        if waits:
+            out.append("<details><summary>案件・操作ごとの待ち時間と作業</summary>%s%s</details>" %
+                       (self._contest_note(data), self.table(head, waits)))
+        return "".join(out)
+
+    def _numerical_html(self, origin, data):
+        if not isinstance(data, dict):
+            return ""
+        out = [self._load_note(data), self._quality_html(origin, data), self._load_metrics_html(origin, data)]
+        rows = [self._metric_check_cells(origin, data, row) for row in self._records(origin, data, "metric_checks")]
+        if rows:
+            out.extend(["<h4>指標の条件 (metric_checks)</h4>", self._contest_note(data),
+                        self.table(["条件と閾値", "判定に使った値・根拠", "判定"], rows)])
+        return "".join(out)
+
     def _run_conclusion(self, r):
         data = r.data
         out = ['<h3>2.%s %s の結論 %s</h3>' % ({"check": 2, "explain": 2, "simulate": 3}.get(r.role, 4), esc(r.role),
@@ -2730,7 +3708,10 @@ class Page:
             out.append(self.table(["項目", "値"], [
                 [esc(k), esc(short(sim.get(k), 120))] for k in
                 ("status", "replications", "attempted_replications", "completed_replications", "seed",
-                 "confidence", "nondeterminism") if k in sim]))
+                  "confidence", "nondeterminism", "truncated_replications", "cut_off_replications") if k in sim]))
+            multi = as_dict(sim.get("multiplicity"))
+            if multi:
+                out.append(self._multiplicity_html("誤り率の割当て", multi, "rows"))
         if data is None:
             return "".join(out) + '<div class="alert error">JSON を読めない。</div>'
         props = self._props_of(data)
@@ -2740,7 +3721,8 @@ class Page:
         groups = {"unverified": [], "violated": [], "satisfied": []}
         for p in props:
             v, note = canon_verdict(p.get("verdict"))
-            g = "violated" if v == "violated" else ("satisfied" if v == "satisfied" else "unverified")
+            g = ("unverified" if p.get("excluded") is not None else
+                 "violated" if v == "violated" else "satisfied" if v == "satisfied" else "unverified")
             groups[g].append((p, v, note))
         titles = [("unverified", "確かめられていない性質"), ("violated", "破れる性質"), ("satisfied", "満たす性質")]
         for g, title in titles:
@@ -2755,9 +3737,13 @@ class Page:
                 extra = ", ".join(notes)
                 if "mechanism_unmodeled" in notes:
                     extra += "(仕組みをモデル化していない。現実の機構を認定しない: ADR 0056)"
-                rows.append(["<code>%s</code>" % esc(p.get("id")), verdict_badge(v, p.get("verdict")),
-                             "<code>%s</code>" % esc(clause) if clause else '<span class="muted">source 対応なし</span>',
-                             esc(" / ".join(x for x in (prob_s, extra, note or "") if x))])
+                pid = str(p.get("id"))
+                badge = self._excluded_badge(r.role, pid, p)
+                unknown = self._case_unknown_html(r.role, data, pid, as_list(p.get("cases")))
+                rows.append(["<code>%s</code>" % esc(pid), self._verdict_for_row(r.role, pid, p, badge),
+                              "<code>%s</code>" % esc(clause) if clause else '<span class="muted">source 対応なし</span>',
+                              esc(" / ".join(x for x in (prob_s, extra, note or "",
+                                                          self._evidence_unverified_reason(data, p)) if x)) + unknown])
             out.append("<h4>%s(%d)</h4>" % (title, len(rows)))
             out.append(self.table(["性質", "verdict", "source の宣言", "値・注記"], rows,
                                   "unverified" if g == "unverified" else ""))
@@ -2786,14 +3772,48 @@ class Page:
                           esc("%s 〜 %s" % (get(t, "elapsed", "min"), get(t, "elapsed", "max"))),
                           esc("%s 〜 %s" % (get(t, "work", "min"), get(t, "work", "max")))])
         out.append("<h4>終端ごとの値(単位 %s)</h4>" % esc(get(data, "unit") or "?"))
+        out.append(self._contest_note(data))
         out.append(self.table(["終端", "確率", "経過時間", "作業時間"], trows))
-        out.append('<p class="note">min〜max は上限内の到達可能な全経路の範囲。確率の min/max は完全情報の緩和境界で、実現できる方策の値ではない。</p>')
+        if r.role == "simulate":
+            out.append('<p class="note">標本中の値。上限内の全経路の範囲を示したものではない。</p>')
+        else:
+            out.append('<p class="note">min〜max は上限内の到達可能な全経路の範囲。確率の min/max は完全情報の緩和境界で、実現できる方策の値ではない。</p>')
         if r.role in ("check", "explain"):
             resp = self._response_html(data)
             if resp:
                 out.append('<p class="note">この表は End に届いた終端だけ。応答が届いたか分からないまま止まった案件は、下の case_outcomes に出す。</p>')
                 out.append(resp)
+        else:
+            rows = []
+            for c in self._records(r.role, data, "case_outcomes"):
+                counts = [(k, label, c.get(k)) for k, label in
+                          (("cut_off_count", "業務上の打切り"), ("unfinished_count", "未完了"))]
+                counts.extend(("receipt_unknown", "応答不明 (未完了の内数)", t.get("count")) for t in
+                              self._records(r.role, c, "terminals", "case_outcomes.") if t.get("kind") == "receipt_unknown")
+                for k, label, n in counts:
+                    if type(n) is int and n > 0:
+                        rows.append([esc(c.get("case_id")), label, esc(n)])
+                        self.unv(r.role, "case_outcomes.%s.%s" % (c.get("case_id"), k), "not_reported", label)
+            if rows:
+                out.extend(["<h4>観測終了時に確定しなかった案件 (case_outcomes)</h4>", self._contest_note(data),
+                            self.table(["案件", "理由", "標本件数"], rows)])
+        out.append(self.guarded("数値の結果 %s" % r.role, lambda: self._numerical_html(r.role, data)))
         return "".join(out)
+
+    def _case_unknown_html(self, origin, data, name, cases):
+        uncertain = [(get(c, "case_id"), c["unknown"], get(c, "trials")) for c in cases
+                     if type(get(c, "unknown")) is int and c["unknown"] > 0]
+        if not uncertain:
+            return ""
+        reason = self._unknown_reason(data)
+        self.unv(origin, name, "not_reported", reason)
+        return "<br>未確定の標本件数 (%s): %s" % (esc(reason), esc("、".join(
+            "案件 %s: %s / %s" % (case, n, trials if trials is not None else "標本数なし") for case, n, trials in uncertain)))
+
+    def _multiplicity_html(self, title, multi, rows_key):
+        why = "対象の条件がない" if multi.get(rows_key) == 0 else "実効値の記録なし"
+        return self.table([title, "値"], [[esc(k), esc(multi[k] if multi[k] is not None else "算出なし: " + why)]
+            for k in ("method", rows_key, "alpha_before", "alpha_after", "alpha") if k in multi])
 
     def _counterexample_html(self, cx):
         rows = []
@@ -2883,7 +3903,9 @@ class Page:
             return ""
         evidence = cx["evidence"]
         keys = {"binding", "actor", "capability", "required", "sources", "missing", "excluded_edges"}
-        if not is_basis or cx.get("status") != "verified" or not isinstance(evidence, dict) or set(evidence) != keys:
+        optional = {"conditional_sources", "repetition", "repetition_exits"}
+        if (not is_basis or cx.get("status") != "verified" or not isinstance(evidence, dict)
+                or not keys <= set(evidence) <= keys | optional):
             raise ValueError("evidence の種類・状態・鍵が対応範囲外")
         for key in ("binding", "actor", "capability"):
             if not isinstance(evidence[key], str) or not evidence[key].strip():
@@ -2893,30 +3915,161 @@ class Page:
                 or steps[-1].get("kind") != "finish"
                 or any(steps[-1].get(key) != evidence[key] for key in ("binding", "actor", "capability"))):
             raise ValueError("evidence の呼出しが反例の最後の Finish と一致しない")
-        for key in ("required", "sources", "missing", "excluded_edges"):
+        for key in ("required", "sources", "missing", "excluded_edges", "conditional_sources"):
+            if key not in evidence:
+                continue
             values = evidence[key]
             if (not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values)
                     or values != sorted(set(values))):
                 raise ValueError("evidence.%s は重複のない昇順の文字列配列が必要" % key)
-        if (not evidence["required"] or not evidence["missing"]
-                or set(evidence["missing"]) != set(evidence["required"]) - set(evidence["sources"])):
-            raise ValueError("evidence の要求・数えた源・不足した源が整合しない")
+        required, counted, missing = (set(evidence[k]) for k in ("required", "sources", "missing"))
+        conditional = set(evidence.get("conditional_sources", []))
+        if (not required or not missing or not conditional <= required or counted & conditional
+                or missing != required - counted - conditional):
+            raise ValueError("evidence の要求・数えた源・不足した源・条件付きの源が整合しない")
         rows = [["呼出し", "<code>%s = %s.%s</code>" % (
             esc(evidence["binding"]), esc(evidence["actor"]), esc(evidence["capability"]))]]
         main = getattr(self, "main", None)
         has_records = any(isinstance(o, dict) and "via_records" in o
                           for o in as_list(get(main.data if main else None, "agency", "origin")))
         for key, title in (("required", "要求した源"), ("sources", "照合に数えた源"),
-                            ("missing", "不足した源"), ("excluded_edges", "数えなかった読取りの辺" if has_records else "数えなかった観測変数の辺")):
-            rows.append([title, "<code>%s</code>" % esc(", ".join(evidence[key]) or "(なし)")])
+                            ("missing", "不足した源"), ("conditional_sources", "届きうるが確かめられない源"),
+                            ("excluded_edges", "数えなかった読取りの辺" if has_records else "数えなかった観測変数の辺")):
+            if key in evidence:
+                rows.append([title, "<code>%s</code>" % esc(", ".join(evidence[key]) or "(なし)")])
+        if "repetition" in evidence:
+            site = evidence["repetition"]
+            name, round_label, phase = self._evidence_repeat_site(site, exit_site=False)
+            rows.append(["繰り返し内の呼出し", esc(" / ".join(part for part in
+                         (name, round_label, phase, "元の呼出し " + site["call_site"]) if part))])
+        exits = ""
+        if "repetition_exits" in evidence:
+            records = evidence["repetition_exits"]
+            if not isinstance(records, list) or not records:
+                raise ValueError("evidence.repetition_exits は空でない配列が必要")
+            exit_rows = []
+            for site in records:
+                name, round_label, phase = self._evidence_repeat_site(site, exit_site=True)
+                leave = "%s 番目の leave" % site["leave_site"] if "leave_site" in site else "番号の記録なし"
+                exit_rows.append(list(map(esc, (name, round_label, phase, leave))))
+            exits = ("<h5>反例で通った繰り返しの出口</h5>"
+                     + self.table(["繰り返し", "回", "出口の場所", "出口番号"], exit_rows)
+                     + '<p class="note">出口番号は本体と上限到達後の処理の leave を、ソースに書かれた順に数えた番号です。</p>')
         return ("<h5>モデルの根拠源の証跡</h5>" + self.table(["項目", "値"], rows)
-                + '<p class="note">reads の宣言とデータの系譜の照合であり、実際の資料アクセスを観測したログではない。'
-                '数えなかった辺を、読んだことにして補完しない。</p>')
+                 + exits
+                 + '<p class="note">reads の宣言とデータの系譜の照合であり、実際の資料アクセスを観測したログではない。'
+                   '数えなかった辺を、読んだことにして補完しない。</p>')
+
+    @staticmethod
+    def _evidence_repeat_site(site, *, exit_site):
+        keys = {"loop_name", "round", "phase"}
+        required = keys if exit_site else keys | {"call_site"}
+        allowed = keys | {"leave_site"} if exit_site else required
+        if not isinstance(site, dict) or not required <= set(site) <= allowed:
+            raise ValueError("evidence の繰り返しの情報の鍵が対応範囲外")
+        for key in ("loop_name",) if exit_site else ("loop_name", "call_site"):
+            if not isinstance(site[key], str) or not site[key].strip():
+                raise ValueError("evidence の繰り返しの %s は空でない文字列が必要" % key)
+        phase, rnd = site["phase"], site["round"]
+        if phase not in ("body", "on_limit"):
+            raise ValueError("evidence の繰り返しの phase が対応範囲外")
+        if phase == "on_limit" and not exit_site:
+            if rnd is not None:
+                raise ValueError("evidence.repetition の on_limit の round は null が必要")
+        elif type(rnd) is not int or rnd < 1:
+            raise ValueError("evidence の繰り返しの round は正の整数が必要")
+        if "leave_site" in site and (type(site["leave_site"]) is not int or site["leave_site"] < 1):
+            raise ValueError("evidence の leave_site は正の整数が必要")
+        return site["loop_name"], "%d 回目" % rnd if rnd is not None else "", (
+            "上限到達後の処理 (on_limit)" if phase == "on_limit" else "本体")
+
+    def _evaluation_html(self, data, reports):
+        if "evaluation" not in data or data["evaluation"] is None:
+            return ""
+        evaluation = data["evaluation"]
+        if not isinstance(evaluation, dict):
+            return self._uninterpreted("compare", "evaluation", "object が必要")
+        out = ['<p class="note">必須条件と目的は別に読む。目的の値で必須条件や性質の違反を相殺しない。</p>']
+        hard, objectives = [], []
+        for row in self._records("compare", evaluation, "hard", "evaluation."):
+            for cell in self._records("compare", row, "values", "evaluation.hard."):
+                name = str(cell.get("configuration"))
+                origin = "compare 案 " + name
+                rep = reports.get(name, {})
+                cells = self._metric_check_cells(origin, rep, dict(cell, constraint=row.get("constraint")))
+                if self._number(cell.get("point")):
+                    target = str(row.get("constraint") or "unknown").split(maxsplit=1)[0]
+                    cells[2] += "<br>参考の標本値 (判定に使わない): " + esc(str(cell["point"]) + self._indicator_unit(rep, target))
+                hard.append([esc(name) + self._contest_note(rep)] + cells)
+        for row in self._records("compare", evaluation, "objectives", "evaluation."):
+            objective = str(row.get("objective"))
+            target = objective.partition(" ")[2]
+            for cell in self._records("compare", row, "values", "evaluation.objectives."):
+                name = str(cell.get("configuration"))
+                rep = reports.get(name, {})
+                unit = self._indicator_unit(rep, target) or " (単位の記載なし)"
+                value = self._value_cell("compare 案 " + name, objective, cell.get("sample", cell), unit,
+                                         basis="point" not in cell and "sample" not in cell)
+                objectives.append([esc(name) + self._contest_note(rep), esc(objective), value])
+        out.extend(["<h4>必須条件 (hard)</h4>", self.table(["案", "条件と閾値", "判定に使った値・根拠", "判定"], hard),
+                    "<h4>目的 (objectives)</h4>", self.table(["案", "目的", "値・根拠"], objectives)])
+        status_rows = []
+        for row in self._records("compare", evaluation, "plans", "evaluation."):
+            name = str(row.get("configuration"))
+            status = row.get("status")
+            origin = "compare 案 " + name
+            label = self._row_word(origin, "evaluation.plans", "status", status, PLAN_STATUS_JA)
+            reasons = []
+            for item in self._records(origin, row, "reasons", "evaluation.plans."):
+                why = item.get("reason")
+                condition = item.get("constraint") or "性質の検査"
+                reasons.append(esc(condition) + ": " + self._verdict_for_row(origin, "evaluation.plans", item)
+                               + (" / " + self._row_word(origin, "evaluation.plans", "reason", why,
+                                                          {r: r for r in VALUE_REASONS}) if why is not None else ""))
+            if status == "undetermined":
+                self.unv(origin, "evaluation.plans", status, "性質または必須条件の判定を確認")
+            status_rows.append([esc(name), label, "<br>".join(reasons) or "該当する理由なし"])
+        if status_rows:
+            out.append(self.table(["案", "採用候補の判定", "理由"], status_rows))
+        stats = as_dict(evaluation.get("statistics"))
+        if stats:
+            out.append(self.table(["hard の統計設定", "値"], [[esc(k), esc(stats[k])] for k in
+                ("confidence", "interval_method") if k in stats]))
+            out.append(self._multiplicity_html("hard の誤り率の割当て", as_dict(stats.get("multiplicity")), "m"))
+        if isinstance(evaluation.get("pareto"), dict):
+            out.append(self._pareto_html(evaluation["pareto"]))
+        return "".join(out)
+
+    def _pareto_html(self, p):
+        out = ['<h4>目的の優劣 (Pareto、順位ではない)</h4>']
+        status = self._row_word("compare", "evaluation.pareto", "status", p.get("status"),
+                                {"computed": "比較を実施", "not_computed": "優劣は計算していない"})
+        why = p.get("reason")
+        if p.get("status") == "not_computed":
+            reason = self._row_word("compare", "evaluation.pareto", "reason", why, PARETO_REASONS)
+            self.unv("compare", "evaluation.pareto", "not_computed", why)
+            status += "。算出なし: " + reason
+        rows = [["計算状態", status]]
+        if p.get("status") == "computed":
+            rows.extend([label, esc(", ".join(map(str, as_list(p.get(k)))) or "該当なし")] for k, label in
+                        (("among", "比較対象"), ("non_dominated", "確実に劣るとはいえない案")))
+        for item in self._records("compare", p, "dominated", "evaluation.pareto."):
+            rows.append([esc(item.get("configuration")), "優位と判断された案: " + esc(", ".join(map(str, as_list(item.get("dominated_by")))))])
+        for item in self._records("compare", p, "undetermined_pairs", "evaluation.pareto."):
+            pair = "%s / %s" % (item.get("from"), item.get("to"))
+            why = item.get("reason")
+            self.unv("compare", "evaluation.pareto " + pair, "inconclusive", why)
+            rows.append([esc(pair), "優劣は未確定: " + self._row_word("compare", "evaluation.pareto " + pair, "reason", why, PARETO_REASONS)])
+        for item in self._records("compare", p, "not_evaluated", "evaluation.pareto."):
+            name = str(item.get("configuration"))
+            rows.append([esc(name), "比較対象外: " + self._row_word("compare 案 " + name, "evaluation.plans", "status", item.get("status"), PLAN_STATUS_JA)])
+        out.append(self.table(["項目・案", "結果"], rows))
+        return "".join(out)
 
     def _compare_html(self, r):
         data = r.data
         out = ['<h3>2.4 compare の結論 %s</h3>' % verdict_badge(r.verdict, r.raw_verdict)]
-        out.append('<p class="note">analysis: %s。compare は案を並べるだけで、順位・総合点は出さない。</p>'
+        out.append('<p class="note">analysis: %s。順位・総合点は出さない。宣言があれば必須条件と目的を評価する。</p>'
                    % esc(get(data, "analysis")))
         if get(data, "mismatch") is not None:
             out.append('<div class="alert error">比較条件が合わない: <code>%s</code></div>' % esc(short(get(data, "mismatch"), 400)))
@@ -2925,6 +4078,7 @@ class Page:
         out.append(self.table(["compare の仮定", "値", "影響"], arows))
         rows = []
         plans = [p for p in as_list(get(data, "plans")) if isinstance(p, dict)]
+        reports = {str(p.get("configuration")): as_dict(p.get("report")) for p in plans}
         for pl in plans:
             rep = as_dict(pl.get("report"))
             v, note = canon_verdict(rep.get("verdict"))
@@ -2932,10 +4086,10 @@ class Page:
             term = []
             for t in as_list(rep.get("terminals")):
                 if isinstance(t, dict):
-                    term.append("end %s: %s〜%s" % (t.get("end"), get(t, "elapsed", "min"), get(t, "elapsed", "max")))
+                    term.append("end %s: %s〜%s%s" % (t.get("end"), get(t, "elapsed", "min"), get(t, "elapsed", "max"), self._units(rep)[0]))
             b = rep.get("bounds")
             rows.append(["<b>%s</b>" % esc(pl.get("configuration")), "<code>%s</code>" % esc(proc),
-                         verdict_badge(v, rep.get("verdict")), esc("; ".join(term)), esc(short(b, 100))])
+                         verdict_badge(v, rep.get("verdict")), esc("; ".join(term)) + self._contest_note(rep), esc(short(b, 100))])
         out.append(self.table(["案", "process", "verdict", "終端ごとの経過時間", "bounds"], rows))
         prow = []
         for p in as_list(get(data, "tables", "properties")):
@@ -2948,15 +4102,28 @@ class Page:
                         raise ValueError("比較の非適用セルに verdict がある、または理由が違う")
                     cells.append('<span class="badge warn">非適用(not_applicable、verdict なし)</span>')
                     continue
-                v, _ = canon_verdict(get(val, "verdict"))
                 prob = get(val, "probability")
-                cells.append(verdict_badge(v, get(val, "verdict")) +
-                             (" %s" % esc(short(prob, 60)) if prob else ""))
+                name = str(get(val, "configuration"))
+                prop = next((row for row in self._props_of(reports.get(name, {}))
+                             if row.get("id") == p.get("id")), {})
+                exclusion = self._excluded_badge("compare 案 " + name, str(p.get("id")),
+                                                val if get(val, "excluded") is not None else prop)
+                target = str(p.get("id"))
+                cases = [dict(val, case_id=p.get("case_id"))] if isinstance(val, dict) else []
+                cells.append(self._verdict_for_row("compare 案 " + name, target, as_dict(val), exclusion) +
+                             (" %s" % esc(short(prob, 60)) if prob else "") +
+                             self._case_unknown_html("compare 案 " + name, reports.get(name, {}), target, cases))
             prow.append(["<code>%s</code>" % esc(p.get("id"))] + cells)
         heads = ["性質"] + [str(pl.get("configuration")) for pl in plans]
         out.append("<h4>性質を案ごとに(tables.properties)</h4>")
         out.append(self.table(heads, [row + [""] * (len(heads) - len(row)) for row in prow]))
         out.append('<p class="note">確かめられていないものの収集は tables ではなく各案の report を走査して行う。</p>')
+        out.append(self.guarded("比較の必須条件と目的", lambda: self._evaluation_html(data, reports)))
+        for name, rep in reports.items():
+            origin = "compare 案 " + name
+            body = self.guarded(origin, lambda: self._numerical_html(origin, rep))
+            if body:
+                out.append("<details><summary>%s の数値結果</summary>%s</details>" % (esc(origin), body))
         if self.compare_src:
             out.append("<h4>案ごとの流れ(--compare-model の source)</h4>")
             for pl in plans:
@@ -2988,6 +4155,10 @@ class Page:
                   esc(short(get(data, "run"), 200)))]
         out.append('<p class="note">検出・未検出は弱点の候補で、検出率・網羅率・モデルの強さではない。'
                    '未完了の変異体は検出にも未検出にも数えない。変異体ごとの report は走査していない(壊したモデルの判定であり、元のモデルについての結論ではないため)。</p>')
+        run = as_dict(get(data, "run"))
+        if run:
+            out.append(self.table(["実行の範囲", "記録"], [[esc(k), esc(run[k] if run[k] is not None else "算出なし")]
+                for k in ("completion", "reason", "mutant_limit", "candidates_total") if k in run]))
         rows = []
         details = []
         for m in as_list(get(data, "mutations")):
@@ -3001,23 +4172,31 @@ class Page:
                 operation = esc(get(mt, "operator"))
                 if isinstance(record, str):
                     operation += "<br>記録の読取りの削除: " + esc(record)
+                reason = get(mt, "reason")
                 details.append(["<code>%s</code>" % esc(get(mt, "id")), operation,
                                 '<span class="badge %s">%s</span>' % (
-                                    {"detected": "ok", "undetected": "bad"}.get(res, "warn"), esc(res)),
-                                esc(get(mt, "reason") or "")])
+                                    {"detected": "ok", "undetected": "bad"}.get(res, "warn"),
+                                    esc("未対応 (unsupported)" if res == "unsupported" else res)),
+                                esc(" / ".join(x for x in (reason, MUTATION_REASON_JA.get(str(reason))) if x))])
             status = m.get("status")
+            reason = m.get("reason")
             badge = "ok" if status == "generated" else "warn"
             rows.append([esc(m.get("name")), "<code>%s</code>" % esc(m.get("kind")),
-                         '<span class="badge %s">%s</span>' % (badge, esc(status)), esc(m.get("reason") or ""),
+                          '<span class="badge %s">%s</span>' % (badge, esc("未対応 (unsupported)" if status == "unsupported" else status)),
+                          esc(" / ".join(x for x in (reason, MUTATION_REASON_JA.get(str(reason))) if x)),
+                          esc(m.get("candidates") if m.get("candidates") is not None else "算出なし"),
                          esc(", ".join(map(str, as_list(m.get("assigned_checks"))))),
                          str(counts.get("detected", 0)), str(counts.get("undetected", 0)),
                          esc(", ".join("%s %d" % kv for kv in counts.items() if kv[0] not in ("detected", "undetected"))) or "0"])
-        out.append(self.table(["種類", "kind", "生成", "理由", "割り当てた検査", "検出", "未検出", "その他"], rows))
+        out.append(self.table(["種類", "kind", "生成", "理由", "候補数", "割り当てた検査", "検出", "未検出", "その他"], rows))
         out.append("<details><summary>変異体ごと(%d 件)</summary>%s</details>"
                    % (len(details), self.table(["id", "操作", "結果", "理由"], details)))
         arows = [["<code>%s</code>" % esc(get(a, "field")), esc(short(get(a, "value"), 80)), esc(get(a, "affects"))]
                  for a in as_list(get(data, "assumptions")) if isinstance(a, dict)]
         out.append(self.table(["mutate の仮定", "値", "影響"], arows))
+        original = self.guarded("mutate original", lambda: self._numerical_html("mutate original", get(data, "original")))
+        if original:
+            out.append("<details><summary>元のモデルの数値結果</summary>%s</details>" % original)
         return "".join(out)
 
     # ---- 冒頭
@@ -3028,6 +4207,9 @@ class Page:
         if self.args.compare_model and self.compare_sha:
             rows.append(["compare model", "<code>%s</code>" % esc(self.args.compare_model),
                          "<code>%s</code>" % self.compare_sha, "—", "—", "—", "—", "—"])
+        if self.args.diff_model and self.diff_sha:
+            rows.append(["diff model", "<code>%s</code>" % esc(self.args.diff_model),
+                         "<code>%s</code>" % self.diff_sha, "—", "—", "—", "—", "—"])
         if self.args.assumptions and os.path.exists(self.args.assumptions):
             rows.append(["assumptions", "<code>%s</code>" % esc(self.args.assumptions),
                          "<code>%s</code>" % sha256_file(self.args.assumptions), "—", "—", "—", "—", "—"])
@@ -3065,24 +4247,40 @@ class Page:
         rows += [(o, p, "basis unknown") for o, p in self.basis_unknown]
         return list(dict.fromkeys(rows))
 
+    def unverified_groups(self):
+        groups = {}
+        for origin, what, how, why in dict.fromkeys(self.unverified):
+            shared_cause = how == "not_reported"
+            groups.setdefault((origin, how, why, None if shared_cause else what), []).append(what)
+        return groups
+
     def unverified_count(self):
-        """One count for the page and terminal; retain the category data separately."""
-        return len(dict.fromkeys(self.unverified)) + len(self.agency_unverified_rows())
+        """表示と端末は同じ集計。数値の算出なしは出所・理由でまとめる。"""
+        return len(self.unverified_groups()) + len(self.agency_unverified_rows())
 
     def alerts_html(self):
         out = ['<section id="unverified"><h2>確かめられていないもの・警告</h2>']
         if self.top_empty():
             out.append('<p class="ok-line">この入力の範囲で検出されたものは無い。</p>')
-        uniq = list(dict.fromkeys(self.unverified))
+        groups = self.unverified_groups()
         count = self.unverified_count()
         if count:
             out.append('<div class="alert error"><b>確かめられていないもの %d 件。</b>'
                        'inconclusive・unsupported・invalid・vacuous・exit 未確認・Cut 未宣言・'
                        '繰り返しの未導出・Agency の未導出・根拠不明は合格ではない。</div>' % count)
-        if uniq:
-            rows = [[esc(src), "<code>%s</code>" % esc(what), verdict_badge(v) if v in EXIT_OF else
-                     '<span class="badge warn">%s</span>' % esc(v), esc(why)] for src, what, v, why in uniq]
+        if groups:
+            rows = []
+            for (src, v, why, _), subjects in groups.items():
+                subject = "<code>%s</code>" % esc(subjects[0]) if len(subjects) == 1 else (
+                    '<details><summary>同じ理由の数値 %d 行</summary><ul>%s</ul></details>' %
+                    (len(subjects), "".join("<li><code>%s</code></li>" % esc(w) for w in subjects)))
+                rows.append([esc(src), subject, verdict_badge(v) if v in EXIT_OF else
+                             '<span class="badge warn">%s</span>' % esc(v), esc(why)])
             out.append(self.table(["出所", "対象", "扱い", "理由"], rows, "unverified"))
+        if self.na_quantities:
+            out.append('<p id="not-applicable-values">該当なしで値が無い行 %d 件 (未確認には含めない)。</p>' % len(self.na_quantities))
+        if self.terminal_exclusions:
+            out.append('<p>終端別の集計対象外 %d 行 (案件数の合計ではない)。</p>' % len(self.terminal_exclusions))
         if self.not_run:
             out.append('<h3>回していない・渡されていないもの</h3><ul id="not-run">%s</ul>'
                        % "".join("<li>%s</li>" % esc(x) for x in self.not_run))
@@ -3106,8 +4304,7 @@ class Page:
                 ["<code>%s</code>" % esc(t), esc(k), esc(l)] for t, k, x, l in self.unprovenanced]))
         if self.unreadable_rows:
             rows = [[esc(o), esc(w), esc(y)] for o, w, y in dict.fromkeys(self.unreadable_rows)]
-            label = "再送・応答・繰り返し" if self.repetitions else "再送・応答"
-            out.append('<h3 id="unreadable">%sの欄で読めなかった情報 %d 件</h3>' % (label, len(rows)))
+            out.append('<h3 id="unreadable">数値・構造・再送・応答の欄で読めなかった情報 %d 件</h3>' % len(rows))
             out.append(self.table(["出所", "欄", "理由"], rows, "unverified"))
         if self.self_unchecked:
             rows = [["<code>%s</code>" % esc(k), esc(", ".join(dict.fromkeys(v)))] for k, v in self.self_unchecked.items()]
@@ -3152,6 +4349,8 @@ class Page:
         summary = {
             "unverified": [list(x) for x in dict.fromkeys(self.unverified)],
             "unverified_count": self.unverified_count(),
+            "not_applicable_value_count": len(self.na_quantities),
+            "terminal_exclusion_row_count": len(self.terminal_exclusions),
             "alerts": [list(x) for x in dict.fromkeys(self.alerts)],
             "not_run": self.not_run,
             "self_unchecked": self.self_unchecked,
@@ -3223,10 +4422,14 @@ def parse_args(argv):
     ap.add_argument("--simulate", help="relca simulate の stdout(JSON)")
     ap.add_argument("--compare", help="relca compare の stdout(JSON)")
     ap.add_argument("--compare-model", help="compare に渡したモデルの path(案ごとの流れと sha256 照合)")
+    ap.add_argument("--diff", help="relca diff の stdout(JSON)。最上位と各構成の診断を読む")
+    ap.add_argument("--diff-model", help="diff に渡したモデルの path(構成別診断の位置を照合。省略時は --model)")
     ap.add_argument("--mutate", help="relca mutate の stdout(JSON)")
+    ap.add_argument("--estimate", help="relca estimate の stdout(JSON)。モデルの宣言と候補・出所を照合する")
+    ap.add_argument("--estimate-exit", type=int, help="relca estimate の終了コード")
     ap.add_argument("--assumptions", help="AI が置いた値の JSON(list か {\"assumptions\": list})。"
                                           "要素は target・value・basis・status(placeholder|confirmed|measured)")
-    for role in ("check", "simulate", "compare", "mutate"):
+    for role in RUN_ROLES:
         ap.add_argument("--%s-exit" % role, type=int, help="%s の終了コード" % role)
         ap.add_argument("--%s-stderr" % role, help="%s の stderr を保存したファイル" % role)
     ap.add_argument("--no-mermaid", action="store_true", help="Mermaid の script を入れない(完全にオフライン)")

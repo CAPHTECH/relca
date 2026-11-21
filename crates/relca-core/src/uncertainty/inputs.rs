@@ -12,9 +12,9 @@ fn value(m: &ir::Model, variable: &ir::StateVariable, v: ir::StateValue) -> Opti
 }
 
 fn assignment(m: &ir::Model, id: ir::StateVarId, v: ir::StateValue) -> Option<Assignment> {
-    let variable = m.state_variables.get(id.0)?;
+    let variable = m.declared_state_variable(id)?;
     Some(Assignment {
-        variable: variable.name.clone(),
+        variable: m.declared_state_name(id)?,
         value: value(m, variable, v)?,
     })
 }
@@ -57,7 +57,7 @@ pub(super) fn collect(m: &ir::Model) -> Option<Vec<Evidence>> {
             let given = kernel
                 .given
                 .iter()
-                .map(|id| m.state_variables.get(id.0).map(|v| v.name.clone()))
+                .map(|id| m.declared_state_name(*id))
                 .collect::<Option<Vec<_>>>()?;
             let rows = kernel
                 .rows

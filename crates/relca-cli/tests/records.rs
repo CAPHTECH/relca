@@ -435,8 +435,10 @@ fn t09_label_normalizer_and_its_negative_controls_are_calibrated_on_legacy_scaff
     .unwrap();
     let source = cases["rec-approval"].as_str().unwrap();
     let renamed = cases["rec-label"].as_str().unwrap();
-    let a = serde_json::to_value(relca_core::report::check(source)).unwrap();
-    let b = serde_json::to_value(relca_core::report::check(renamed)).unwrap();
+    let mut a = serde_json::to_value(relca_core::report::check(source)).unwrap();
+    let mut b = serde_json::to_value(relca_core::report::check(renamed)).unwrap();
+    relca_test_support::diagnostic::check_and_clear_locations(source, &mut a);
+    relca_test_support::diagnostic::check_and_clear_locations(renamed, &mut b);
     assert_eq!(a["verdict"], "satisfied");
     assert_eq!(b["verdict"], "satisfied");
     let map = label_byte_map(source, renamed);
@@ -457,8 +459,8 @@ fn t09_label_normalizer_and_its_negative_controls_are_calibrated_on_legacy_scaff
 }
 #[test]
 fn t09_full_report_label_comparison_only_maps_declared_names_grain_hash_and_bytes() {
-    let (_, a) = run(&["check", "fixtures/rec-approval/model.relca"]);
-    let (_, b) = run(&["check", "fixtures/rec-label/model.relca"]);
+    let (_, mut a) = run(&["check", "fixtures/rec-approval/model.relca"]);
+    let (_, mut b) = run(&["check", "fixtures/rec-label/model.relca"]);
     assert_eq!(a["verdict"], "satisfied");
     assert_eq!(b["verdict"], "satisfied");
     assert_ne!(a["model"]["sha256"], b["model"]["sha256"]);
@@ -466,6 +468,8 @@ fn t09_full_report_label_comparison_only_maps_declared_names_grain_hash_and_byte
     let renamed = hand::source("rec-label");
     assert_eq!(a["model"]["sha256"], sha(source.as_bytes()));
     assert_eq!(b["model"]["sha256"], sha(renamed.as_bytes()));
+    relca_test_support::diagnostic::check_and_clear_locations(&source, &mut a);
+    relca_test_support::diagnostic::check_and_clear_locations(&renamed, &mut b);
     let map = label_byte_map(&source, &renamed);
     assert_eq!(
         label_projection(b.clone(), &a, &map, &source),

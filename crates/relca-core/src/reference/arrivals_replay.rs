@@ -1101,6 +1101,7 @@ fn global_instant<'a>(
                     let s = Stage {
                         source: None,
                         evidence_sources: None,
+                        evidence_exits: None,
                         saved_key: None,
                         evidence_ref: None,
                         command: None,

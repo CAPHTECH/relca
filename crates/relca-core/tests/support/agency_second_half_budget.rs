@@ -49,7 +49,8 @@ pub fn effects(mut run: impl FnMut(&str, &str, &str, usize) -> Value) {
     // people p1/p2/p3 have no duty, so A's complete warning remains known.
     let actor = model.actors.iter().find(|a| a.name == "A").unwrap();
     let responsibility = json!([{"code":"W-RESP-0","severity":"warning",
-        "message":"A has no declared responsibility","span":actor.span}]);
+        "message":"A has no declared responsibility","span":actor.span,
+        "location": {"line":7,"column":3,"end_line":11,"end_column":4}, "detail":null}]);
     let notice = format!(
         "responsibility_default_candidates: process {}: U/E not_derived (derivation_limit)",
         model.process.name

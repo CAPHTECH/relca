@@ -92,7 +92,12 @@ fn invoke_source(name: &str, mode: &str, src: &str, args: &[&str]) -> (Value, i3
         _ => diagnostics(&v, ""),
     };
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
+        // Skill assignment is the subject; diagnostic_details covers presentation.
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         stderr,
         "{name}/{mode}"
     );

@@ -93,6 +93,7 @@ pub(crate) fn derive_for_model(
         Err(Error::InvalidIr(reason)) => Err(Error::InvalidIr(reason).diagnostic()),
         Err(Error::Limit(limit)) => {
             let warning = diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_AGY_4.into(),
                 severity: diag::Severity::Warning,
                 message: limit.to_string(),

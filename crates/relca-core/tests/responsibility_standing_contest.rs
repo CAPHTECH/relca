@@ -679,7 +679,7 @@ fn r_cross_cut_origin_refusal_party_and_static_boundaries() {
         // every accepted cross-cut input, including the people-free model.
         let ast = relca_core::syntax::parse(&s).unwrap();
         let model = relca_core::lower::lower(&ast).unwrap();
-        responsibility_oracle::assert_report(&model, &v);
+        responsibility_oracle::assert_report(&model, &s, &v);
         match label.as_str() {
             "cut-rates" | "cut-reentry" | "cut-reason-text" | "cut-dead-end" => {
                 assert_eq!(code_count(&v, "W-CONTEST-0"), 1)

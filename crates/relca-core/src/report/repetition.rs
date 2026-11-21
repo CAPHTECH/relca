@@ -45,6 +45,33 @@ pub struct Case {
     pub excluded_samples: Option<u64>,
     pub observed_on_limit: Option<u64>,
 }
+
+/// The observations shared by a case's report row and its comparison cell.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CaseValue {
+    pub rounds: Option<outcome::Range>,
+    pub distribution: Vec<Frequency>,
+    pub on_limit: Option<outcome::Range>,
+    pub on_limit_probability: Option<crate::probability::ProbabilityRange>,
+    pub samples: Option<u64>,
+    pub excluded_samples: Option<u64>,
+    pub observed_on_limit: Option<u64>,
+}
+
+impl From<&Case> for CaseValue {
+    fn from(row: &Case) -> Self {
+        Self {
+            rounds: row.rounds,
+            distribution: row.distribution.clone(),
+            on_limit: row.on_limit,
+            on_limit_probability: row.on_limit_probability.clone(),
+            samples: row.samples,
+            excluded_samples: row.excluded_samples,
+            observed_on_limit: row.observed_on_limit,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Frequency {

@@ -22,9 +22,10 @@ fn definite_missing_source_keeps_the_excluded_conditional_edge_visible() {
         serde_json::json!(["Missing", "PurchaseOrder"])
     );
     assert_eq!(evidence["sources"], serde_json::json!(["Invoice"]));
+    assert_eq!(evidence["missing"], serde_json::json!(["Missing"]));
     assert_eq!(
-        evidence["missing"],
-        serde_json::json!(["Missing", "PurchaseOrder"])
+        evidence["conditional_sources"],
+        serde_json::json!(["PurchaseOrder"])
     );
     assert_eq!(evidence["excluded_edges"], serde_json::json!(["p -> a"]));
 }

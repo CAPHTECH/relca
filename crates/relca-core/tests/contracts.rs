@@ -35,7 +35,8 @@ fn adr0002_example_round_trips_without_added_or_missing_keys() {
             },
             "assumptions": [{ "field": "…", "value": "…", "affects": "…" }],
             "diagnostics": [{
-                "code": "W-CUT-0", "severity": "warning", "message": "…", "span": null
+                 "code": "W-CUT-0", "severity": "warning", "message": "…", "span": null,
+                 "location": null, "detail": null
             }],
             "bounds": { "cases": 1, "live_tasks": 2, "clock": 10, "truncated": false },
             "properties": [{ "id": "reachable end.done", "verdict": "satisfied" }],
@@ -123,6 +124,7 @@ fn diagnostic_vocabulary_and_byte_span_wire_shape_are_fixed() {
         ]
     );
     let diagnostic = diag::Diagnostic {
+        presentation: Default::default(),
         code: diag::E_SYN_0.into(),
         severity: diag::Severity::Error,
         message: "invalid token".into(),

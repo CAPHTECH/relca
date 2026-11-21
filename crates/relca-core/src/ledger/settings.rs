@@ -153,12 +153,21 @@ pub fn refusal(mode: &str, verdict: crate::Verdict) -> Refusal {
 }
 
 pub fn unsupported(mode: &str, message: &str) -> Refusal {
+    unsupported_with(mode, message, None)
+}
+
+pub fn unsupported_with(mode: &str, message: &str, detail: Option<(&str, &str)>) -> Refusal {
     let mut r = refusal(mode, crate::Verdict::Unsupported);
-    r.diagnostics.push(crate::diag::Diagnostic {
+    let diagnostic = crate::diag::Diagnostic {
+        presentation: Default::default(),
         code: crate::diag::U_SEM_0.into(),
         severity: crate::diag::Severity::Error,
         message: message.into(),
         span: None,
+    };
+    r.diagnostics.push(match detail {
+        Some((reason, cause)) => diagnostic.unconnected(reason, cause, Vec::new()),
+        None => diagnostic,
     });
     let host = serde_json::to_value(&r).expect("unsupported refusal wire");
     complete(&mut r.ledger, &host, &mut r.verdict, &mut r.diagnostics);

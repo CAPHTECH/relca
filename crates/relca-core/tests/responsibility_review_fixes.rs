@@ -62,7 +62,13 @@ fn old_syntax_responsibility_targets_keep_their_previous_diagnostics() {
             "[{\"code\": \"E-SYN-0\", \"severity\": \"error\", \"message\": \"mixed && and || require parentheses\", \"span\": {\"start\": 690, \"end\": 692}}]",
         ),
     ] {
-        let expected: Value = serde_json::from_str(expected).unwrap();
+        let expected: Vec<Value> = serde_json::from_str(expected).unwrap();
+        let expected = Value::Array(
+            expected
+                .into_iter()
+                .map(|row| relca_test_support::diagnostic::expected_row(src, row))
+                .collect(),
+        );
         assert_eq!(errors(&check(src)), expected, "{src}");
     }
 }

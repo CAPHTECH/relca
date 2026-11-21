@@ -157,10 +157,11 @@ impl Lower {
         flow: &mut Flow,
     ) -> Option<ir::Stmt> {
         if self.loop_context.is_some() {
-            self.unsupported("loop_feature_combination", name.span);
+            self.loop_refusal("value_returning_if", name.span, None);
         }
         if self.in_recovery_handler {
             self.unsupported("merge_feature_combination", name.span);
+            self.describe_merge_refusal("merge_in_recovery", name, name.span);
         }
         for body in [then_body, else_body] {
             if !body
@@ -275,11 +276,14 @@ impl Lower {
         };
         if self.unstable_merge_sources.contains(&source.value) {
             self.unsupported("merge_feature_combination", source.span);
+            self.describe_merge_refusal("unstable_merge_source", source, source.span);
         }
         if self.check_flow && !flow.available.contains(&id) {
-            self.unsupported(
+            self.result_refusal(
                 "result is not definitely available (not yet defined or possibly cancelled)",
-                source.span,
+                "merge_result",
+                source,
+                id,
             );
         }
         Some(ir::Stmt::MergeCopy {
@@ -289,25 +293,28 @@ impl Lower {
     }
 
     pub(super) fn merge_condition_forbidden(&mut self, c: &ast::Spanned<ast::Cond>) -> bool {
-        fn reads(c: &ast::Cond, l: &Lower) -> bool {
+        fn reads<'a>(c: &'a ast::Cond, l: &Lower) -> Option<&'a ast::Ident> {
             match c {
                 ast::Cond::Eq { binding, .. } | ast::Cond::Compare { binding, .. } => {
-                    l.merge_names.contains(&binding.value)
+                    l.merge_names.contains(&binding.value).then_some(binding)
                 }
-                ast::Cond::LocalEq { actor, .. } => {
-                    l.merge_names.contains(&actor.value)
-                        && !l.actor_names.contains_key(&actor.value)
-                }
+                ast::Cond::LocalEq { actor, .. } => (l.merge_names.contains(&actor.value)
+                    && !l.actor_names.contains_key(&actor.value))
+                .then_some(actor),
                 ast::Cond::Group(c) => reads(&c.value, l),
-                ast::Cond::And(cs) | ast::Cond::Or(cs) => cs.iter().any(|c| reads(&c.value, l)),
-                _ => false,
+                ast::Cond::And(cs) | ast::Cond::Or(cs) => {
+                    cs.iter().find_map(|c| reads(&c.value, l))
+                }
+                _ => None,
             }
         }
-        let forbidden = reads(&c.value, self);
-        if forbidden {
+        if let Some(reference) = reads(&c.value, self) {
+            let reference = reference.clone();
             self.unsupported("merge_feature_combination: merge_read_position", c.span);
+            self.describe_merge_refusal("unconnected_reference", &reference, c.span);
+            return true;
         }
-        forbidden
+        false
     }
 
     pub(super) fn merge_read_name_forbidden(&mut self, name: &ast::Ident) -> bool {
@@ -317,8 +324,42 @@ impl Lower {
             });
         if forbidden {
             self.unsupported("merge_feature_combination: merge_read_position", name.span);
+            self.describe_merge_refusal("unconnected_reference", name, name.span);
         }
         forbidden
+    }
+
+    pub(super) fn describe_merge_refusal(
+        &mut self,
+        cause: &str,
+        reference: &ast::Ident,
+        span: Span,
+    ) {
+        let name = reference
+            .value
+            .split('.')
+            .next()
+            .unwrap_or(&reference.value);
+        let mut blockers = vec![diag::Blocker::at(
+            "reference",
+            Some(reference.value.clone()),
+            Some(span),
+        )];
+        if let Some(b) = self
+            .binding_names
+            .get(name)
+            .and_then(|id| self.bindings.get(id.0))
+        {
+            let role = if self.merge_names.contains(name) {
+                "merge_binding"
+            } else {
+                "source_binding"
+            };
+            blockers.push(diag::Blocker::at(role, Some(b.name.clone()), Some(b.span)));
+        }
+        if let Some(last) = self.errors.last_mut() {
+            *last = last.clone().merge_detail(cause, blockers);
+        }
     }
 
     /// A value domain may be unioned; an evidence lineage may not. Keep this

@@ -102,7 +102,12 @@ impl Rejection {
     }
     pub fn diagnostics(self) -> Value {
         let s = self.source();
-        let error = |code: &str, message: &str, start: usize, len: usize| json!({"code":code,"severity":"error","message":message,"span":{"start":start,"end":start+len}});
+        let error = |code: &str, message: &str, start: usize, len: usize| {
+            relca_test_support::diagnostic::expected_row(
+                &s,
+                json!({"code":code,"severity":"error","message":message,"span":{"start":start,"end":start+len}}),
+            )
+        };
         let token_after = |anchor: &str, token: &str| {
             let start = s.find(anchor).unwrap() + anchor.len();
             start + s[start..].find(token).unwrap()

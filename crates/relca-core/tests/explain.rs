@@ -102,8 +102,11 @@ fn twelve_hand_paths_and_first_violation_locations() {
         .unwrap();
         let v = explain(&src);
         let model = relca_core::lower::lower(&relca_core::syntax::parse(&src).unwrap()).unwrap();
-        responsibility_oracle::assert_report(&model, &v);
-        matches(&responsibility_oracle::with_diagnostics(&model, &e), &v);
+        responsibility_oracle::assert_report(&model, &src, &v);
+        matches(
+            &responsibility_oracle::with_diagnostics(&model, &src, &e),
+            &v,
+        );
         check_locations(&src, &v["explanation"]);
         for c in v["explanation"]["counterexamples"].as_array().unwrap() {
             count += 1;

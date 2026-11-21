@@ -25,12 +25,12 @@ pub fn run(args: &[String]) -> Verdict {
             && let Some(report) = &point.report
         {
             for d in report.diagnostics() {
-                eprintln!("point {}: {}: {}", point.id, d.code, d.message);
+                super::print_diagnostic(format_args!("point {}: ", point.id), d);
             }
         }
     }
     for d in &result.diagnostics {
-        eprintln!("sensitivity: {}: {}", d.code, d.message);
+        super::print_diagnostic(format_args!("sensitivity: "), d);
     }
     println!(
         "{}",

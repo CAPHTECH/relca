@@ -111,11 +111,13 @@ q1 の責務は present_via_record、段 b の direct は空、missing は Know 
   記録自身は値も独立の根拠源も持たない。source record は独立の原本のままで、自動で読み替えない。
 - 全候補に共通する源だけ via_records に出す。条件付きだけの源は indirect の上近似に残す。
   evidence_basis には must、direct 契約には source reads だけを使う。Notes 自体は要求できない。
+  記録経由の要求源は、登録者に確かに届き記録にも確かに残れば satisfied、どちらかが候補にしかなければ
+  `U-SEM-0 evidence_basis_conditional_snapshot` の unsupported、候補にも無ければ violated。記録を挟まない場合と同じ。
 - 正常終了の結果が複数なら registration_result_dependent。
-  repeat 内は loop_feature_combination、応答喪失/再送/recovery/縮退/異議内や start 効果との登録の併用、
+  repeat の中の登録は扱える(前の回で正常に終わった登録を次の回の読取りへ引き継ぐ)。応答喪失/再送/recovery/縮退/異議内や start 効果との登録の併用、
   印の無い記録で複数案件は registration_feature_combination。同じ記録の fork 兄弟での登録/読取りも拒否する。
 - 除外した記録への登録/読取りは E-CUT-1。
-  check/explain/simulate/mutate で扱い、compare/diff/sensitivity は registration_unsupported_command。
+  check/explain/simulate/mutate/compare/diff/sensitivity で扱う。repeat を含むモデルの mutate との併用は loop_feature_combination。
   conform は登録の由来を照合せず unchecked に registration_provenance を残す。
 - 記録の由来は同じ版の証明ではない。呼出し結果の版の一致は same_version で別に要求する。
 
@@ -142,8 +144,11 @@ contract Basis { evidence_basis Clerk.match_po [Invoice,PurchaseOrder] }
   引数の源は実際の呼出し引数から計算するので、readsに引数名を重ねても増えない。
 - 正常終了の無い対象は vacuous。計算切断は inconclusive。異議経路の対象はその性質だけ evidence_basis_contest_route でunsupportedとし、他の性質は残す。契約の追加を Agency や責務の補完に使わない。
 - Cutで除外したsourceの要求は、既存の範囲外Actor参照と同じE-CUT-1で静的に拒否する。
-- repeat は `loop_feature_combination`、縮退/recovery は `evidence_basis_feature_combination`、
-  compare/diff/sensitivity は `evidence_basis_unsupported_command` で拒否する。
+- repeat の中の対象操作は扱える(正常終了する回すべてで根拠源を求める)。compare/diff/sensitivity でも扱う。
+  repeat の結果を引数や観測変数で受ける、repeat の外の対象操作も扱える。leave した出口ごとに調べ、書き下した版と同じ判定
+  (ある出口で確かに欠ければ violated、確かめられない出口があれば unsupported)。
+  結果が記録への登録と読取りを経由して対象へ届く形は `loop_feature_combination`。縮退/recovery は `evidence_basis_feature_combination` で拒否する。
+  同じ回に again が複数ある形と、対象が別名を受けずに繰り返しの中で書かれた観測変数を読む形は、書き下した版で violated でも unsupported になることがある。
   conform は読取りを観測しないため U-LOG-1 の unsupported。
 
 `mutate --kinds evidence_missing` はこの行も検査に使い、全文例の2削除はどちらもdetected。
@@ -174,10 +179,10 @@ applies_toは他の契約と同じ。check/explainに対応、simulateは標本�
 合流・join allは利用でき、観測変数で渡す値の版は対象外。
 対象引数のcase.idと観測case変数（同名の呼出し結果やその合流を含む）はsame_version_feature_combinationで拒否する。
 定数やprocess入力を直接渡す構文も無い。対象でない別の引数のcase.idは、この契約を妨げない。
-repeatはloop_feature_combination、join any・応答喪失/再送/recovery/縮退との併用はsame_version_feature_combination。
+repeatの中でも外でも判定する(繰り返しを抜けた後に使う結果は、最後に実行した回の版を引き継ぐ)。join any・応答喪失/再送/recovery/縮退との併用はsame_version_feature_combination。
 異議経路の対象はその性質だけsame_version_contest_route。
-compare/diff/sensitivityはsame_version_unsupported_command、conformはU-LOG-1。
-合流/繰り返しを含むmutateの範囲も広げない。
+compare/diff/sensitivityでも判定する。conformはU-LOG-1。
+合流を含むmutateは拒否する。繰り返しを含むmutateは、種類によって使えるものと拒否されるものがある(下の「繰り返し」)。
 [構文の詳細](../../../docs/guide/dsl.md#確かめた版と使う版を揃える)、[三つの版と証跡](results.md#値の版と証跡)を参照。
 
 ## process
@@ -224,7 +229,7 @@ check・explain・simulate、指標・品質、複数案件に接続する。com
 `U-SEM-0 merge_feature_combination`、conformは`U-LOG-1`で閉じる。
 契約・requires・joinのwhere・property・metricでの合流値の参照、contest・quantileとの併用、
 recovery handlerや縮退経路内の合流も未対応。
-repeatのbody・on_limit内は`loop_feature_combination`。
+repeatのbody・on_limit内に値を返す`if`(合流)を置く形は`loop_feature_combination`。
 repeatや応答喪失・再送・recoveryの公開結果をyieldする形も未対応である。
 合流前に固定した値を、その後のrepeatのcall引数に渡すことはできる。
 観測状態や定数のyieldは`merge_source_unsupported`、潜在は`E-POL-LATENT`。
@@ -248,12 +253,23 @@ repeatや応答喪失・再送・recoveryの公開結果をyieldする形も未�
 `given` にだけ使える。宣言が外でも、値を使う呼出しは body 内に置く。
 後続、別の繰り返し、`on_limit` からは読めない。観測と潜在は回をまたいで保持する。
 
-body の fork/join、条件待ち、縮退経路、response_loss/retry/recovery、
-入れ子、`over`、再到着、無限反復は未対応。繰り返しモデルの
-compare/diff/sensitivity/mutate/conform、およびcontest宣言・quantile指標との併用も閉じる。
+body には、操作の呼出し、`if`、固定 `wait`、`wait until`、`fork` と `join all` を書ける。
+繰り返しを含むモデルで、compare/diff/sensitivity、quantile、`metric mean.…` と `verify metric`、
+契約(evidence_basis・same_version・registers)、simulate を使える。
+simulate では、同じ時刻の出来事の順序が結果に効かないことを確かめられた場合だけ進む。
+方策(`policy`)とも併用できる。`then call_order` の順は、回 1 → 回 2 → … → on_limit → 繰り返しの後の文で、書き下した版と同じになる。
 
-上限の回数が小さければ、repeat を使わず、回ごとに `if` で書き下せる。最後の `else` が `on_limit` に当たる。
-書き下した版には repeat が無いので、body に fork/join を置けるし、evidence_basis・same_version・mutate も使える。
+未対応(名前つきで拒否される):
+- `join any`、縮退経路、response_loss/retry/recovery、入れ子、`over`、再到着、無限反復。
+- contest 宣言との併用、conform。
+- repeat の結果を引数に取る、repeat の外の操作を対象にした evidence_basis。
+- mutate は種類で分かれる。使えるのは evidence_missing・hold_delayed・summary_reused・refusal_path_cut。
+  authority_expired・command_resent・receipt_unknown・old_promise_denominator_removed・original_access_removed と、
+  本体に fork がある構成、`wait until`・quantile・evidence_basis・registers との併用は `loop_feature_combination`。
+  種類を選ばずに回すと全体は unsupported(exit 4)になるので、変異ごとの行を読む。
+
+未対応の組合せに当たり、上限の回数が小さければ、repeat を使わず、回ごとに `if` で書き下せる。最後の `else` が `on_limit` に当たる。
+書き下した版には repeat が無いので、上の制限は掛からない。
 回数に比例してモデルが長くなる、回ごとに束縛の名前を変える、回をまたいで値を更新できない、が代償である。
 例と、repeat 版と値が一致することの確認は [relca-design の記録](../../relca-design/references/rework-unrolling.md)。
 短い全入力と、code/reasonの一覧は[利用ガイド](../../../docs/guide/dsl.md#利用できる範囲と診断)を参照。
@@ -463,6 +479,24 @@ verify は全域のままで、適用する要求が0件なら unsupported / exi
 空の reason は Cut の除外理由と同様に構文上は受理するが、理由を記入して使う。
 全構成の列挙は受理し、警告しない。
 詳しい構文・診断・保持宣言との関係は[利用ガイド](../../../docs/guide/dsl.md#契約を適用する構成を選ぶ)を参照。
+
+## 期待値の指標と負荷の評価
+
+2026-11 に入った構文。正本は[利用ガイドの「追加の記述」](../../../docs/guide/dsl.md#追加の記述)と[「制約と分析範囲」](../../../docs/guide/dsl.md#制約と分析範囲)。ここには形だけを書く。
+
+| 構文 | 意味 | 注意 |
+|---|---|---|
+| `metric mean.Lead = mean(elapsed, case.Done)` | 到着から性質に初めて到達するまでの経過時間の期待値 | 分母は全流入。到達した分だけを分母にするなら `given reached` を付ける。`mean(elapsed)` は受理されない |
+| `metric mean.Work = mean(work)`、`mean(named_people_work)`、`mean(cost)` | 案件が閉じた時点までの作業・人の作業・費用の期待値 | `metrics` の宣言が要る。単価が1つでも欠けると費用は `not_configured`(0 円にはならない) |
+| `verify metric mean.Lead <= 30min`、`verify metric cohort.OnTime >= 0.95` | 1案の指標に上限・下限を付ける | 時間の閾値には単位が要る。これだけでは検証要求にならないので、通常の `verify` か契約も書く |
+| `compare [A, B] hard { mean.Lead <= 30min } objectives { minimize mean.Cost }` | 必須条件で候補を絞り、目的で比べる | 分位点は目的に使えるが hard には使えない |
+| `policy fifo tie_by case_id then call_order dispatch after_finishes` | その時刻に終わった仕事と取消の応答を先に処理してから、方策の区分の仕事を始める | 実際の運用がそうである場合にだけ書く。非決定を消すためだけに足さない |
+| scenario の中の `contest_not_filed Vendor on end.returned reason "…"` | 発生率を入れていない異議を、この評価では起票しないと宣言する | 理由は必須。外した異議への応答の契約は `inconclusive` のままで、合格にならない |
+
+- 非決定の分岐があると、期待値は1つの値でなく区間 `[lower, upper]` で出る。区間が閾値をまたぐと `verify metric` は `inconclusive` になる。区間の両端を平均して1つの値にしない。
+- `simulate` の mean は標本の平均(点推定)で、打切りのある反復が1つでもあれば値を出さない。点推定だけでは合否を出さない(`unsupported`、`no_statistical_bound`)。
+- `simulate` は、同じ時刻に残った出来事の順序を全部試し、時刻を閉じた状態と観測が一致するときだけ進む。一致しなければ `unsupported` で止まる。順序を乱数や固定の順で選ぶことはしない。
+- 実行して確かめた例は `examples/invoice/busyday.relca`(方策の延長と `contest_not_filed`)と `fixtures/mean-*`(期待値)。
 
 ## 宣言させないもの
 

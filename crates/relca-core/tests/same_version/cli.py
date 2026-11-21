@@ -470,24 +470,43 @@ def static_test(source, code, reason):
 for _name, _source, _code, _reason in hand.static_cases():
     setattr(Static, 'test_' + _name, static_test(_source, _code, _reason))
 for _name, _source, _reason in hand.combinations():
-    setattr(Static, 'test_combination_' + _name, static_test(_source, 'U-SEM-0', _reason))
+    if _name != 'repeat':  # Still a refusal for mutate, not for check since ADR 0080 R5.
+        setattr(Static, 'test_combination_' + _name, static_test(_source, 'U-SEM-0', _reason))
 
 
 class Gates(unittest.TestCase):
+    def test_repeat_reuses_the_executed_draft_in_check(self):
+        source = next(s for name, s, _ in hand.combinations() if name == 'repeat')
+        out, value = invoke(source)
+        verdict(out, value, 'satisfied')
+        assert property_row(value)['verdict'] == 'satisfied'
+
     def test_compare(self):
         source = hand.add(hand.configured(hand.deterministic(hand.CASES['a2_reuse'][0])), 'simulation replications 4 seed 7 confidence 0.5')
         for mode in ('exhaustive', 'simulation'):
             with self.subTest(mode=mode):
-                refuse(source, 'U-SEM-0', 'same_version_unsupported_command', 'compare', ('--plans', 'A,B', '--mode', mode))
+                out, value = invoke(source, 'compare', ('--plans', 'A,B', '--mode', mode))
+                expected = 'satisfied' if mode == 'exhaustive' else 'inconclusive'
+                verdict(out, value, expected)
+                row, = (r for r in value['tables']['properties'] if r['id'] == hand.ID)
+                assert [c['verdict'] for c in row['values']] == [expected, expected], row
+                assert 'contract_witnesses' in value['unchecked']
 
     def test_diff(self):
-        refuse(hand.configured(hand.CASES['a2_reuse'][0]), 'U-SEM-0', 'same_version_unsupported_command', 'diff', ('--from', 'A', '--to', 'B'))
+        out, value = invoke(hand.configured(hand.CASES['a2_reuse'][0]), 'diff', ('--from', 'A', '--to', 'B'))
+        verdict(out, value, 'satisfied')
+        row = property_row(value)
+        assert row['from'] == row['to'] == 'satisfied', row
+        assert 'contract_witnesses' in value['unchecked']
 
     def test_sensitivity(self):
         source = hand.add(hand.deterministic(hand.CASES['a2_reuse'][0]), 'verify probability reached end.done >= 1\nsimulation replications 4 seed 7 confidence 0.5')
         for mode in ('exhaustive', 'simulation'):
             with self.subTest(mode=mode):
-                refuse(source, 'U-SEM-0', 'same_version_unsupported_command', 'sensitivity', ('--mode', mode), manifest=hand.manifest(mode))
+                out, value = invoke(source, 'sensitivity', ('--mode', mode), manifest=hand.manifest(mode))
+                expected = 'satisfied' if mode == 'exhaustive' else 'inconclusive'
+                verdict(out, value, expected)
+                assert property_row(value['points'][0]['report'])['verdict'] == expected
 
     def test_conform_event_contracts_is_explicitly_unchecked(self):
         source = hand.CASES['a2_reuse'][0].replace('  verify reachable end.done\n', '')
@@ -507,10 +526,15 @@ class Gates(unittest.TestCase):
         backend = value['ledger']['backends']['external']
         assert backend['status'] == 'not_connected' and backend['reason'] == 'external_backend_not_connected'
 
-    def test_mutate_keeps_merge_and_loop_boundary(self):
+    def test_mutate_keeps_merge_boundary_and_tests_original_repeat_site(self):
         refuse(hand.CASES['a3_recheck'][0], 'U-SEM-0', 'merge_feature_combination', 'mutate', ('--kinds', 'summary_reused'))
         source = next(s for name, s, _ in hand.combinations() if name == 'repeat')
-        refuse(source, 'U-SEM-0', 'loop_feature_combination', 'mutate', ('--kinds', 'summary_reused'))
+        out, value = invoke(source, 'mutate', ('--kinds', 'summary_reused'))
+        verdict(out, value, 'satisfied')
+        row, = (r for r in value['mutations'] if r['kind'] == 'summary_reused')
+        mutant, = row['mutants']
+        assert mutant['site']['statement_path'] == 'body/0/repeat/0'
+        assert mutant['result'] == 'detected'
 
 
 class RecordedResult(unittest.TextTestResult):

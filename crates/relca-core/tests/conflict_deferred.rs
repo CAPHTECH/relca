@@ -626,6 +626,8 @@ fn a4_marker_words_after_a_default_and_newline_remain_declaration_names() {
         "  type T = enum { ok }\n  type Unused = record { level: enum { high, low } }\n",
     );
     let mut b = check(&with_record);
+    relca_test_support::diagnostic::check_and_clear_locations(s, &mut a);
+    relca_test_support::diagnostic::check_and_clear_locations(&with_record, &mut b);
     without_spans(&mut a);
     without_spans(&mut b);
     // The source hash differs by construction; the model name does not.

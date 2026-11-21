@@ -80,6 +80,7 @@ fn binding_responsibilities_never_disappear_in_unselected_processes() {
             assert_eq!(
                 ds,
                 vec![crate::diag::Diagnostic {
+                    presentation: Default::default(),
                     code: "U-SEM-0".into(),
                     severity: crate::diag::Severity::Error,
                     message: "probability conditions require state".into(),

@@ -101,7 +101,7 @@ pub fn assert_report(name: &str, actual: &Value) {
             None,
         )
         .unwrap();
-        responsibility_oracle::assert_report(&model, actual);
+        responsibility_oracle::assert_report(&model, &source(name), actual);
         got.retain(|code| *code != "W-RESP-0");
         want.retain(|code| *code != "W-RESP-0");
     }

@@ -1,0 +1,13 @@
+model ConditionalArrivals version "0.2" {
+  type T = enum { ok }
+  actor A { capacity 1; capability run() -> T { duration {2min:0.5,4min:0.5}; result nondet { ok } } }
+  process P { x=A.run(); end done }
+  cut C { include [A] }
+  arrivals fixed [0min,0min]
+  policy fifo tie_by case_id
+  bounds { cases 2; live_tasks 2; clock 20min }
+  verify reachable end.done
+  property case.OnTime = reached(end.done) within 1min
+  metric mean.Lead = mean(elapsed, case.OnTime given reached)
+  metric cohort.Rate = expected(count(case.OnTime)) / arrivals
+}

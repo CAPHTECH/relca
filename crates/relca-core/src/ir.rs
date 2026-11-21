@@ -76,6 +76,7 @@ pub struct Model {
     /// Configuration intent only; never consulted by either interpreter.
     pub fallback_capabilities: Vec<CapabilityId>,
     pub quality: Option<QualitySpec>,
+    pub metric_checks: Vec<MetricConstraint>,
     pub comparison: Option<ComparisonSpec>,
     pub resources: Vec<Resource>,
     pub metrics: Option<MetricsSpec>,
@@ -95,6 +96,10 @@ pub struct Model {
     pub initial_distributions: Vec<Vec<(StateValue, crate::probability::Rational)>>,
     pub probability_queries: Vec<ProbabilityQuery>,
     pub state_variables: Vec<StateVariable>,
+    /// Declaration-only round domains for unselected processes. IDs follow
+    /// executable state IDs, but never receive runtime values. Lower checks
+    /// process calls (including handlers/expansion) and synthetic contest routes.
+    pub static_loop_rounds: Vec<StateVariable>,
     pub people: Vec<Person>,
     pub authorities: Vec<Authority>,
     /// Applicable clauses, including inactive clauses within the selected scope.
@@ -294,10 +299,21 @@ pub struct ComparisonSpec {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HardConstraint {
-    pub cohort: usize,
-    pub op: HardComparison,
-    pub bound: crate::probability::Rational,
+    pub constraint: MetricConstraint,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricConstraint {
+    pub target: MetricRef,
+    pub op: HardComparison,
+    pub bound: crate::metrics::MetricNumber,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MetricRef {
+    Cohort(usize),
+    Mean(usize),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HardComparison {
@@ -332,6 +348,7 @@ pub struct Objective {
 pub enum ObjectiveRef {
     Cohort(usize),
     Quantile(usize),
+    Mean(usize),
     Overall(OverallObjective),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -358,6 +375,7 @@ impl OverallObjective {
 pub struct ScenarioRecord {
     pub name: String,
     pub span: Span,
+    pub contests_not_filed: std::collections::BTreeMap<usize, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -365,6 +383,40 @@ pub struct QualitySpec {
     pub properties: Vec<QualityProperty>,
     pub metrics: Vec<CohortMetric>,
     pub quantiles: Vec<QuantileMetric>,
+    pub means: Vec<MeanMetric>,
+}
+impl QualitySpec {
+    pub(crate) fn first_hit_count(&self) -> usize {
+        if self.quantiles.is_empty() && self.means.is_empty() {
+            0
+        } else {
+            self.properties.len()
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeanMeasure {
+    Elapsed,
+    Work,
+    NamedPeopleWork,
+    Cost,
+}
+impl MeanMeasure {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Elapsed => "elapsed",
+            Self::Work => "work",
+            Self::NamedPeopleWork => "named_people_work",
+            Self::Cost => "cost",
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeanMetric {
+    pub name: String,
+    pub measure: MeanMeasure,
+    pub property: Option<usize>,
+    pub given_reached: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuantileMetric {
@@ -428,6 +480,7 @@ pub struct StartPolicy {
     pub observable: bool,
     pub call_order: bool,
     pub assign_first_idle: bool,
+    pub dispatch_after_finishes: bool,
     /// Execution classification, independent of display-only ActorMetadata.
     pub classes: Option<PolicyClasses>,
     /// Source executors order, indexed by Actor, only for extended policies.
@@ -465,7 +518,10 @@ pub struct CasePriority {
 
 impl StartPolicy {
     pub fn extended(&self) -> bool {
-        self.priority.is_some() || self.call_order || self.assign_first_idle
+        self.priority.is_some()
+            || self.call_order
+            || self.assign_first_idle
+            || self.dispatch_after_finishes
     }
     pub fn controls(&self, actor: ActorId) -> bool {
         self.classes
@@ -584,6 +640,25 @@ impl Model {
             .as_ref()
             .map_or(&[], |m| m.contests.as_slice())
     }
+
+    pub fn contest_not_filed(&self, id: usize) -> bool {
+        self.scenario
+            .as_ref()
+            .is_some_and(|s| s.contests_not_filed.contains_key(&id))
+    }
+
+    pub(crate) fn valid_contest_exclusions(&self) -> bool {
+        self.scenario.as_ref().is_none_or(|s| s.contests_not_filed.iter().all(|(id, reason)| {
+            !reason.trim().is_empty() && self.contests().get(*id).is_some_and(|c| {
+                c.rates.is_none() && matches!(c.target, crate::contest::ContestTarget::End(e) if e.0 < self.ends.len())
+            })
+        }))
+    }
+
+    pub(crate) fn contest_response_excluded(&self, property: Property) -> bool {
+        matches!(property, Property::Contract(id) if matches!(self.contracts[id.0].kind,
+            ContractKind::ContestResponse { contest } if self.contest_not_filed(contest)))
+    }
     /// Synthetic invocation sites occupy a disjoint suffix; these are not
     /// process result slots and must never index Process::bindings/results.
     pub(crate) fn contest_site(&self, contest: usize) -> BindingId {
@@ -606,7 +681,12 @@ impl Model {
     /// ':' cannot occur in a source binding, so commands and attempts cannot
     /// alias ordinary calls or the separate contest: namespace.
     pub(crate) fn comparison_site_name(&self, site: BindingId) -> String {
-        if let Some(r) = self.response_attempt(site) {
+        if let Some(origin) = self.loop_site(site) {
+            match origin.round {
+                Some(k) => format!("loop:{}:round{k}", origin.call_site),
+                None => format!("loop:{}:on_limit", origin.call_site),
+            }
+        } else if let Some(r) = self.response_attempt(site) {
             format!(
                 "response:{}:attempt{}",
                 self.site_name(r.command),
@@ -733,8 +813,9 @@ impl Model {
         let routes: std::collections::BTreeSet<_> = self
             .contests()
             .iter()
-            .filter(|c| c.target.active(self))
-            .map(|c| c.route)
+            .enumerate()
+            .filter(|(id, c)| !self.contest_not_filed(*id) && c.target.active(self))
+            .map(|(_, c)| c.route)
             .collect();
         Some(
             cut.defer
@@ -1205,6 +1286,28 @@ pub struct Atomic {
 }
 
 impl Capability {
+    pub(crate) fn reads_state_variable(&self, id: StateVarId, atomic: bool) -> bool {
+        fn reads(c: &Cond, id: StateVarId) -> bool {
+            match c {
+                Cond::IntCompare { variable, .. } => *variable == id,
+                Cond::StateEq(s) => s.variable == id,
+                Cond::Contains { set, .. } => *set == id,
+                Cond::And(cs) | Cond::Or(cs) => cs.iter().any(|c| reads(c, id)),
+                Cond::Eq(_) => false,
+            }
+        }
+        self.result_kernels().any(|k| k.given.contains(&id))
+            || self
+                .requires
+                .as_ref()
+                .is_some_and(|r| reads(&r.condition, id))
+            || atomic
+                && self
+                    .atomic
+                    .as_ref()
+                    .is_some_and(|a| reads(&a.condition, id))
+    }
+
     /// Declared probabilistic sources, not a runtime selector or fallback.
     pub fn result_kernels(&self) -> impl Iterator<Item = &Kernel> {
         self.kernel
@@ -1375,6 +1478,31 @@ impl Model {
             })
         }
         contains(&self.process.body)
+    }
+    pub(crate) fn condition_wait_blockers(&self) -> Vec<crate::diag::Blocker> {
+        fn walk(body: &Block, blockers: &mut Vec<crate::diag::Blocker>) {
+            for statement in body {
+                match &statement.kind {
+                    Stmt::WaitUntil(_) => blockers.push(crate::diag::Blocker::at(
+                        "feature",
+                        None,
+                        Some(statement.span),
+                    )),
+                    Stmt::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        walk(then_body, blockers);
+                        walk(else_body, blockers);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut blockers = Vec::new();
+        walk(&self.process.body, &mut blockers);
+        blockers
     }
     pub fn has_metric_wait(&self) -> bool {
         fn walk(m: &Model, b: &Block, inside: bool) -> bool {
@@ -1580,7 +1708,7 @@ pub struct LoopSite {
     pub phase: LoopPhase,
     pub call_site: String,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoopPhase {
     Body,
@@ -1938,6 +2066,27 @@ pub struct EvidenceCall {
     pub conditional_sources: Vec<ActorId>,
     /// Lexical snapshot edges excluded because the writer does not dominate.
     pub excluded_edges: Vec<String>,
+    /// A loop result flows into this call. Only non-direct clauses consult
+    /// exit-specific provenance; direct clauses use this for exit evidence.
+    pub alias_input: bool,
+    pub exit_scopes: Vec<EvidenceScope>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceScope {
+    pub exits: Vec<EvidenceExit>,
+    pub sources: Vec<ActorId>,
+    pub possible_sources: Vec<ActorId>,
+    pub conditional_sources: Vec<ActorId>,
+    pub excluded_edges: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EvidenceExit {
+    pub variable: StateVarId,
+    pub round: u64,
+    pub on_limit: bool,
+    pub leave_site: Option<u64>,
 }
 
 /// Verification source order is also outcome property order (one per request).
@@ -2042,6 +2191,13 @@ pub enum WriteSource {
 pub use crate::ast::{AssignmentOp, IntComparison};
 
 impl StateVariable {
+    pub(crate) fn loop_round_declaration_name(&self) -> String {
+        self.name
+            .strip_prefix("@loop:")
+            .and_then(|s| s.strip_suffix(":round"))
+            .map_or_else(|| self.name.clone(), |name| format!("{name}.round"))
+    }
+
     pub fn cardinality(&self, types: &[EnumType]) -> u128 {
         if let Some(n) = self.case_set_size {
             return 1u128.checked_shl(u32::from(n)).unwrap_or(0);
@@ -2098,7 +2254,7 @@ impl StateVariable {
         self.loop_role() == Some("round")
     }
 
-    fn loop_role(&self) -> Option<&str> {
+    pub(crate) fn loop_role(&self) -> Option<&str> {
         let (name, role) = self.name.strip_prefix("@loop:")?.split_once(':')?;
         (!name.is_empty() && matches!(role, "round" | "active" | "limit" | "continue" | "started"))
             .then_some(role)
@@ -2106,10 +2262,64 @@ impl StateVariable {
 }
 
 impl Model {
+    /// Loop control state is declared only for this model's selected process.
     pub fn has_loops(&self) -> bool {
         self.state_variables
             .iter()
             .any(StateVariable::is_loop_round)
+    }
+
+    /// An exit chooses the proof for its continuation. A malformed expanded
+    /// program may not replace that choice by executing another leave.
+    pub(crate) fn apply_loop_updates(
+        &self,
+        state: &mut [StateValue],
+        updates: &[(StateVarId, StateValue)],
+    ) -> Result<(), &'static str> {
+        for (id, value) in updates {
+            let variable = self
+                .state_variables
+                .get(id.0)
+                .ok_or("repetition state out of range")?;
+            let slot = state.get_mut(id.0).ok_or("repetition state out of range")?;
+            if variable.loop_role() == Some("active") && *slot != StateValue::Integer(1) {
+                return Err("repetition exit already selected");
+            }
+            *slot = *value;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn reads_static_loop_round(&self, cap: &Capability) -> bool {
+        self.static_loop_rounds.iter().enumerate().any(|(i, _)| {
+            cap.reads_state_variable(StateVarId(self.state_variables.len() + i), true)
+        })
+    }
+
+    /// Resolve a declaration reference, including an unselected loop's domain.
+    /// Runtime readers must use state_variables, not this metadata lookup.
+    pub fn declared_state_variable(&self, id: StateVarId) -> Option<&StateVariable> {
+        self.state_variables.get(id.0).or_else(|| {
+            self.static_loop_rounds
+                .get(id.0.checked_sub(self.state_variables.len())?)
+                .filter(|v| {
+                    v.is_loop_round()
+                        && v.kind == StateKind::ObservedCase
+                        && v.integer_max.is_some_and(|n| (1..=32).contains(&n))
+                        && !v.optional
+                        && v.case_set_size.is_none()
+                        && v.initial == InitialValue::Fixed(StateValue::Integer(1))
+                })
+        })
+    }
+
+    pub(crate) fn declared_state_name(&self, id: StateVarId) -> Option<String> {
+        let v = self.declared_state_variable(id)?;
+        Some(if id.0 >= self.state_variables.len() {
+            v.loop_round_declaration_name()
+        } else {
+            v.name.clone()
+        })
     }
 
     pub(crate) fn is_loop_guard(&self, c: &Cond) -> bool {

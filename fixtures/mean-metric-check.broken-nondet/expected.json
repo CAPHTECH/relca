@@ -1,0 +1,1 @@
+{"verdict":"inconclusive","metric_checks":[{"constraint":"mean.Cost <= 50","verdict":"inconclusive","basis":"per_case_relaxation","interval":{"lower":"31","upper":"93"},"reason":null}]}

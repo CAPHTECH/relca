@@ -52,6 +52,10 @@ fn contract_scope_fixtures_match_binary_reports_and_exit_codes() {
 fn intent_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(48);
 }
+#[test]
+fn mean_fixtures_match_binary_reports_and_exit_codes() {
+    run_fixtures(51);
+}
 
 #[test]
 fn executor_fixtures_match_binary_reports_and_exit_codes() {
@@ -183,6 +187,40 @@ fn fixed_policy_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(30);
 }
 
+const LOAD_FIXTURES: &[&str] = &[
+    "ld-after-finishes",
+    "ld-after-finishes.broken-off",
+    "ld-contest-not-filed",
+    "ld-contest-not-filed.broken-duplicate",
+    "ld-contest-not-filed.broken-empty-reason",
+    "ld-contest-not-filed.broken-other-end",
+    "ld-contest-not-filed.broken-outside",
+    "ld-contest-not-filed.broken-rates",
+    "ld-contest-not-filed.broken-undeclared",
+    "ld-defer-not-filed",
+    "ld-defer-not-filed.broken-undeclared",
+    "ld-confluent",
+    "ld-confluent.broken-people",
+    "ld-environment-start",
+    "ld-environment-start.broken-controlled",
+    "ld-instant-observation",
+    "ld-instant-observation.broken-transient",
+    "ld-late-enqueue",
+    "ld-late-enqueue.broken-off",
+    "ld-legacy-fork",
+    "ld-legacy-fork.broken-same-actor",
+    "ld-priority-admission",
+    "ld-priority-admission.broken-one-slot",
+    "ld-priority-dispatch",
+    "ld-priority-dispatch.broken-duplicate",
+    "ld-priority-dispatch.broken-off",
+];
+
+#[test]
+fn load_simulation_fixtures_match_binary_reports_and_exit_codes() {
+    run_fixtures(50);
+}
+
 #[test]
 fn state_invariant_fixtures_match_binary_reports_and_exit_codes() {
     run_fixtures(31);
@@ -312,7 +350,7 @@ fn run_fixtures(group: usize) {
         }
     }
     assert!(layout.is_empty(), "fixture layout:\n{}", layout.join("\n"));
-    let mut populations = [0; 50];
+    let mut populations = [0; 52];
     for name in &names {
         let groups = [
             fixture_match::LEGACY_FIXTURES.contains(&name.as_str()),
@@ -365,6 +403,8 @@ fn run_fixtures(group: usize) {
             fixture_match::CONTRACT_SCOPE_FIXTURES.contains(&name.as_str()),
             fixture_match::intent_fixture(name),
             fixture_match::agency_limit_fixture(name),
+            LOAD_FIXTURES.contains(&name.as_str()),
+            fixture_match::MEAN_FIXTURES.contains(&name.as_str()),
         ];
         assert_eq!(
             groups.iter().filter(|&&yes| yes).count(),
@@ -462,6 +502,8 @@ fn run_fixtures(group: usize) {
     assert_eq!(populations[47], 10);
     assert_eq!(populations[48], fixture_match::INTENT_FIXTURES.len());
     assert_eq!(populations[49], fixture_match::AGENCY_LIMIT_FIXTURES.len());
+    assert_eq!(populations[50], LOAD_FIXTURES.len());
+    assert_eq!(populations[51], fixture_match::MEAN_FIXTURES.len());
     assert_eq!(
         names.len(),
         355 + 32
@@ -492,15 +534,21 @@ fn run_fixtures(group: usize) {
             + 2
             + 10
             + fixture_match::INTENT_FIXTURES.len()
-            + fixture_match::AGENCY_LIMIT_FIXTURES.len(),
-        "50 disjoint exhaustive groups; all 49 historical groups unchanged"
+            + fixture_match::AGENCY_LIMIT_FIXTURES.len()
+            + LOAD_FIXTURES.len()
+            + fixture_match::MEAN_FIXTURES.len(),
+        "52 disjoint exhaustive groups; all 50 historical groups unchanged"
     );
     let mut failures = Vec::new();
     let mut undetected = Vec::new();
     for directory in directories {
         let name = directory.file_name().unwrap().to_string_lossy();
         let legacy = fixture_match::LEGACY_FIXTURES.contains(&name.as_ref());
-        let current = if fixture_match::agency_limit_fixture(&name) {
+        let current = if LOAD_FIXTURES.contains(&name.as_ref()) {
+            50
+        } else if fixture_match::MEAN_FIXTURES.contains(&name.as_ref()) {
+            51
+        } else if fixture_match::agency_limit_fixture(&name) {
             49
         } else if fixture_match::intent_fixture(&name) {
             48

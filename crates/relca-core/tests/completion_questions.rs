@@ -39,11 +39,12 @@ pub fn subset(e: &Value, a: &Value) {
     }
 }
 pub fn assert_fixture_report(name: &str, actual: &Value) {
-    let model = lower::lower(&syntax::parse(&source(name)).unwrap()).unwrap();
+    let source = source(name);
+    let model = lower::lower(&syntax::parse(&source).unwrap()).unwrap();
     // ADR 0054 "範囲" / "意味": lexical unreachable commits still carry E.
-    responsibility_oracle::assert_report(&model, actual);
+    responsibility_oracle::assert_report(&model, &source, actual);
     subset(
-        &responsibility_oracle::with_diagnostics(&model, &expected(name)),
+        &responsibility_oracle::with_diagnostics(&model, &source, &expected(name)),
         actual,
     );
 }

@@ -1908,6 +1908,7 @@ mod legacy_census {
                     && !crate::mutation::review_fixture(name)
                     && !crate::evaluation_population::fixture(name)
                     && !crate::quantile_population::fixture(name)
+                    && !include!("../tests/support/mean_names.rs").contains(&name)
                     && !include!("../tests/support/acceptance_gap_names.rs").contains(&name)
                     && !crate::state_invariant_population::fixture(name)
                     && !super::limits_population::fixture(name)
@@ -1967,6 +1968,7 @@ mod legacy_census {
             .filter(|p| !comparison_fixture(p.file_name().unwrap().to_str().unwrap()))
             .filter(|p| !SIMULATION_FIXTURES.contains(&p.file_name().unwrap().to_str().unwrap()))
             .filter(|p| !ARRIVALS_FIXTURES.contains(&p.file_name().unwrap().to_str().unwrap()))
+            .filter(|p| !p.file_name().unwrap().to_str().unwrap().starts_with("ld-"))
             .collect();
         assert_eq!(all_dirs.len(), 124);
         assert_eq!(
@@ -2198,9 +2200,9 @@ pub fn explore_with_budget(model: &ir::Model, max_states: usize) -> outcome::Out
         return out;
     }
     let mut out = if !model.legacy_route() {
-        arrivals::explore(model, max_states)
+        arrivals::explore_reported(model, max_states)
     } else {
-        attach_legacy_quality(run(model, true, max_states), model, max_states)
+        attach_legacy_quality(run(model, true, max_states, true), model, max_states)
     };
     if let Some(metrics) = &mut out.metrics {
         metrics.apply_deferred(model);
@@ -2208,8 +2210,6 @@ pub fn explore_with_budget(model: &ir::Model, max_states: usize) -> outcome::Out
     if let Some(quality) = &mut out.quality {
         quality.apply_deferred(model);
     }
-    out.diagnostics
-        .extend(evidence::diagnostics(model, &out.properties));
     out
 }
 fn attach_legacy_quality(
@@ -2405,6 +2405,87 @@ fn quality_legacy_with_bits(m: &ir::Model, budget: usize, bits: u64) -> crate::q
             .collect();
         match rows {
             Ok(rows) => q.quantiles = Some(rows),
+            Err(_) => return quality_aborted(m),
+        }
+    }
+    if !spec.means.is_empty() && !m.actors.iter().any(|a| a.metadata.rule.is_some()) {
+        let rows: EngineResult<Vec<_>> = spec
+            .means
+            .iter()
+            .map(|c| {
+                let p = c.property.map(|i| &spec.properties[i]);
+                let views = nodes
+                    .iter()
+                    .map(|n| {
+                        let s = &n.state;
+                        let end = n.end.map(|e| {
+                            (
+                                e,
+                                s.contest
+                                    .as_ref()
+                                    .and_then(|c| c.business.as_ref())
+                                    .map_or(s.time, |b| b.at),
+                            )
+                        });
+                        // A business end can still branch into a contest. Only a
+                        // complete leaf settles the legacy case's closed reward.
+                        let settled = n.actions.is_empty() && !n.unknown && !n.numeric;
+                        let hit = match p {
+                            Some(p) => quality_hit(p, s, end, 0)?.then(|| match p.target {
+                                ir::QualityTarget::Ends(_) => end.unwrap().1 as u128,
+                                _ => s.time as u128,
+                            }),
+                            None => settled.then_some(s.time as u128),
+                        };
+                        let first = crate::quality::FirstView {
+                            hit,
+                            closed: p.is_some_and(|p| {
+                                end.is_some() && matches!(p.target, ir::QualityTarget::Ends(_))
+                                    || p.within.is_some_and(|d| s.time > d)
+                            }),
+                            censor: (n.unknown || n.numeric).then(|| {
+                                crate::quality::Arrival::censor(
+                                    if n.cut_reason == ProbabilityCut::Clock {
+                                        m.bounds.clock as u128 + 1
+                                    } else {
+                                        s.time as u128
+                                    },
+                                    p.and_then(|p| p.within).map(u128::from),
+                                    true,
+                                )
+                            }),
+                        };
+                        Ok(if c.measure == ir::MeanMeasure::Elapsed {
+                            crate::quality::MeanView::elapsed(first)
+                        } else {
+                            crate::quality::MeanView {
+                                first,
+                                amount: metrics::mean_amount(
+                                    m,
+                                    Some(s),
+                                    if hit.is_none() && n.cut_reason == ProbabilityCut::Clock {
+                                        m.bounds.clock
+                                    } else {
+                                        s.time
+                                    },
+                                    c.measure,
+                                ),
+                            }
+                        })
+                    })
+                    .collect::<EngineResult<Vec<_>>>()?;
+                let (v, lb) = crate::quality::graph_mean(
+                    c,
+                    &order,
+                    |i| nodes[i].actions.clone(),
+                    &[views],
+                    bits,
+                );
+                Ok(crate::quality::mean_row(m, c, v, lb))
+            })
+            .collect();
+        match rows {
+            Ok(rows) => q.means = Some(rows),
             Err(_) => return quality_aborted(m),
         }
     }
@@ -3447,7 +3528,7 @@ impl State {
     fn initial(model: &ir::Model, pc: usize) -> Self {
         Self {
             version: crate::same_version::present(model).then(version::History::default),
-            evidence: crate::evidence_basis::present(model).then(evidence::History::default),
+            evidence: crate::evidence_basis::present(model).then(|| evidence::History::new(model)),
             response: (!model.response_attempts().is_empty())
                 .then(|| response::History::for_model(model)),
             lost_updates: Vec::new(),
@@ -3836,11 +3917,19 @@ fn emit_in(
         }
     }
     refresh_contests(state, model, state.time, false);
-    evidence::event(state, bundle, binding, model);
+    evidence::event(state, bundle, binding, model)?;
     version::event(state, bundle, binding, model)?;
     update_state_invariants(state, model, case_index)?;
     let ledger = update_debts(state, bundle, binding, model);
-    let result = update_monitors(state, bundle, binding, model, case_index).and(ledger);
+    let result = update_monitors(
+        state,
+        bundle,
+        binding,
+        model,
+        case_index,
+        exploration.snapshot_findings.as_mut(),
+    )
+    .and(ledger);
     exploration.contracts(state);
     if result.is_err() {
         if model
@@ -3901,11 +3990,12 @@ fn update_monitors(
     binding: Option<ir::BindingId>,
     model: &ir::Model,
     case_index: usize,
+    mut snapshot_findings: Option<&mut evidence::Findings>,
 ) -> EngineResult<()> {
     // A clause error aborts exploration, not observation of this bundle. Keep
     // the first error while collecting every independently established fact.
     let mut error = None;
-    for (m, clause) in state.monitors.iter_mut().zip(&model.contracts) {
+    for (i, (m, clause)) in state.monitors.iter_mut().zip(&model.contracts).enumerate() {
         match &clause.kind {
             ir::ContractKind::Excludes { before, start } => {
                 if bundle.event(*start, model) {
@@ -3954,14 +4044,22 @@ fn update_monitors(
             ir::ContractKind::EvidenceBasis {
                 capability,
                 sources,
-                ..
+                calls,
+                direct,
             } if matches!(bundle, Bundle::Finish(c, _, _) if c == *capability) => {
                 m.activated = true;
                 if binding.is_some_and(|b| model.site_contest(b).is_some()) {
                     m.evidence_issue = Some(evidence::Issue::Contest);
                     continue;
                 }
-                match binding.and_then(|b| state.evidence.as_ref().and_then(|h| h.values.get(&b))) {
+                match binding.and_then(|b| {
+                    state.evidence.as_ref().and_then(|h| {
+                        h.finished(
+                            b,
+                            !direct && calls.iter().any(|c| c.binding == b && c.alias_input),
+                        )
+                    })
+                }) {
                     Some(value) => {
                         let direct = matches!(
                             clause.kind,
@@ -3986,6 +4084,22 @@ fn update_monitors(
                             .any(|s| !roots.contains(s) && !unknown.contains(s));
                         if sources.iter().any(|s| unknown.contains(s)) {
                             m.evidence_issue = Some(evidence::Issue::Snapshot);
+                            if let (Some(findings), Some(b)) =
+                                (snapshot_findings.as_deref_mut(), binding)
+                            {
+                                let exits = if calls.iter().any(|c| c.binding == b && c.alias_input)
+                                {
+                                    crate::evidence_basis::exits(model, &state.state_values)
+                                } else {
+                                    Vec::new()
+                                };
+                                findings
+                                    .entry((ir::ClauseId(i), b, exits))
+                                    .or_default()
+                                    .extend(
+                                        sources.iter().copied().filter(|s| unknown.contains(s)),
+                                    );
+                            }
                         }
                     }
                     None => {
@@ -4259,8 +4373,9 @@ fn expire_debts(state: &mut State, horizon: u64, inclusive: bool) {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Exploration {
+    snapshot_findings: Option<evidence::Findings>,
     evidence_issues: BTreeMap<ir::ClauseId, evidence::Issue>,
     lost_updates: BTreeSet<ir::StateVarId>,
     // A valid emitted bundle may be followed by an independent clause error.
@@ -4833,6 +4948,7 @@ impl Exploration {
             .into_iter()
             .filter(|(raised, ..)| *raised)
             .map(|(_, code, message)| diag::Diagnostic {
+                presentation: Default::default(),
                 code: code.into(),
                 severity: diag::Severity::Warning,
                 message: message.into(),
@@ -4843,6 +4959,10 @@ impl Exploration {
         out.diagnostics.extend(warnings);
         if let Some(g) = completion {
             crate::completion::apply(&mut out, model, &g, false);
+        }
+        if let Some(findings) = self.snapshot_findings {
+            out.diagnostics
+                .extend(evidence::diagnostics(model, &out.properties, [&findings]));
         }
         out
     }
@@ -4881,6 +5001,7 @@ impl Exploration {
             })
             .collect();
         let mut diagnostics = vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: message.into(),
@@ -4888,6 +5009,7 @@ impl Exploration {
         }];
         if self.deadlock {
             diagnostics.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: diag::W_DEADLOCK_0.into(),
                 severity: diag::Severity::Warning,
                 message: "a reachable nonterminal state has no enabled transition".into(),
@@ -4929,6 +5051,10 @@ impl Exploration {
         if let Some(g) = completion {
             crate::completion::apply(&mut out, model, &g, true);
         }
+        if let Some(findings) = self.snapshot_findings {
+            out.diagnostics
+                .extend(evidence::diagnostics(model, &out.properties, [&findings]));
+        }
         out
     }
 }
@@ -4938,11 +5064,22 @@ fn extend(range: &mut outcome::Range, value: u64) {
     range.max = range.max.max(value);
 }
 
-fn run(model: &ir::Model, deduplicate: bool, max_states: usize) -> outcome::Outcome {
+fn run(
+    model: &ir::Model,
+    deduplicate: bool,
+    max_states: usize,
+    report_evidence: bool,
+) -> outcome::Outcome {
     if model.uses_probability() {
-        return run_probability(model, max_states);
+        return run_probability_traced(model, max_states, None, report_evidence).0;
     }
-    run_initialized(model, deduplicate, max_states, std::convert::identity)
+    run_initialized(
+        model,
+        deduplicate,
+        max_states,
+        std::convert::identity,
+        report_evidence,
+    )
 }
 
 // The normal entry uses the initial state unchanged. Tests can inject a broken
@@ -4952,8 +5089,12 @@ fn run_initialized(
     deduplicate: bool,
     max_states: usize,
     initialize: impl FnOnce(State) -> State,
+    report_evidence: bool,
 ) -> outcome::Outcome {
-    let mut exploration = Exploration::default();
+    let mut exploration = Exploration {
+        snapshot_findings: report_evidence.then(Default::default),
+        ..Exploration::default()
+    };
     match explore_into(model, deduplicate, max_states, initialize, &mut exploration) {
         Ok(()) => exploration.outcome(model),
         Err(Halt::Budget) => {
@@ -5300,11 +5441,11 @@ mod actor_metadata_tests {
         let m = crate::lower::lower_configuration(&crate::syntax::parse(src).unwrap(), "AsIs")
             .unwrap()
             .model;
-        let before = run(&m, true, DEFAULT_STATE_BUDGET);
+        let before = run(&m, true, DEFAULT_STATE_BUDGET, false);
         let quality = quality_legacy_with_bits(&m, DEFAULT_STATE_BUDGET, 1);
         assert_eq!(quality.cohort[0]["value"]["reason"], "truncated");
         assert!(quality.cohort[0]["value"]["lower"].is_null());
-        let after = run(&m, true, DEFAULT_STATE_BUDGET);
+        let after = run(&m, true, DEFAULT_STATE_BUDGET, false);
         assert_eq!(before, after);
         assert!(!after.truncated);
         assert!(after.diagnostics.iter().all(|d| d.code != diag::W_BUDGET_0));
@@ -5508,6 +5649,14 @@ mod rule_tests;
 mod rule_integration_tests;
 
 fn validate(model: &ir::Model) -> EngineResult<()> {
+    if !model.valid_contest_exclusions() {
+        return Err("invalid scenario contest exclusion".into());
+    }
+    if model.quality.as_ref().is_some_and(|q| !q.means.is_empty())
+        && (model.has_merges() || !model.response_attempts().is_empty())
+    {
+        return Err("mean_feature_combination".into());
+    }
     work_profiles::validate(model)?;
     if model.uses_work_profiles()
         && (model.arrival_distribution.is_some()
@@ -5765,8 +5914,7 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
                 }
                 ir::Cond::IntCompare { variable, .. } => {
                     if !m
-                        .state_variables
-                        .get(variable.0)
+                        .declared_state_variable(*variable)
                         .is_some_and(|v| v.kind.is_observed() && v.integer_max.is_some())
                     {
                         return Err("invalid integer requires".into());
@@ -5938,7 +6086,9 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
                 validate_kernel(k, model)?;
                 ok(
                     k.given.iter().all(|id| {
-                        model.state_variables[id.0].kind == ir::StateKind::ObservedCase
+                        model
+                            .declared_state_variable(*id)
+                            .is_some_and(|v| v.kind == ir::StateKind::ObservedCase)
                             || read_ids.contains(id)
                     }),
                     "missing latent read",
@@ -6089,7 +6239,7 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
     let mut blocks = vec![&model.process.body];
     if let Some(q) = &model.quality {
         ok(
-            !q.properties.is_empty() || !q.metrics.is_empty(),
+            !q.properties.is_empty() || !q.metrics.is_empty() || !q.means.is_empty(),
             "invalid quality declaration",
         )?;
         let mut names = std::collections::BTreeSet::new();
@@ -6139,6 +6289,16 @@ fn validate(model: &ir::Model) -> EngineResult<()> {
             }
         }
         names.clear();
+        for c in &q.means {
+            ok(
+                !c.name.is_empty()
+                    && names.insert(&c.name)
+                    && c.property.is_none_or(|i| i < q.properties.len())
+                    && (c.measure != ir::MeanMeasure::Elapsed || c.property.is_some())
+                    && (!c.given_reached || c.property.is_some()),
+                "invalid mean declaration",
+            )?;
+        }
         for c in &q.quantiles {
             ok(
                 !c.name.is_empty()
@@ -6776,8 +6936,7 @@ fn validate_kernel(k: &ir::Kernel, model: &ir::Model) -> EngineResult<()> {
     let mut count = num_bigint::BigUint::from(1u8);
     for id in &k.given {
         let v = model
-            .state_variables
-            .get(id.0)
+            .declared_state_variable(*id)
             .ok_or("kernel given index")?;
         if v.case_set_size.is_some()
             || model
@@ -6814,7 +6973,13 @@ fn validate_kernel(k: &ir::Kernel, model: &ir::Model) -> EngineResult<()> {
             return Err("invalid kernel row shape".into());
         }
         for (id, x) in k.given.iter().zip(&r.values) {
-            if !valid_state_value(&model.state_variables[id.0], *x, model) {
+            if !valid_state_value(
+                model
+                    .declared_state_variable(*id)
+                    .ok_or("kernel given index")?,
+                *x,
+                model,
+            ) {
                 return Err("invalid kernel row value".into());
             }
         }
@@ -7158,9 +7323,19 @@ fn query_hit(
     end: Option<(ir::EndId, u64)>,
     arrival: u64,
 ) -> EngineResult<bool> {
+    query_hit_at(q, s, s.time, end, arrival)
+}
+
+fn query_hit_at(
+    q: &ir::ProbabilityQuery,
+    s: &State,
+    now: u64,
+    end: Option<(ir::EndId, u64)>,
+    arrival: u64,
+) -> EngineResult<bool> {
     match &q.condition {
-        ir::ProbabilityCondition::State(c) => Ok(s.time >= arrival
-            && q.within.is_none_or(|d| s.time - arrival <= d)
+        ir::ProbabilityCondition::State(c) => Ok(now >= arrival
+            && q.within.is_none_or(|d| now - arrival <= d)
             && condition_at(c, &s.results, &s.state_values, 0)?),
         ir::ProbabilityCondition::End(e) => Ok(end.is_some_and(|(actual, t)| {
             actual == *e && t >= arrival && q.within.is_none_or(|d| t - arrival <= d)
@@ -7194,9 +7369,26 @@ fn finish_site(
             route.violation = Some("cancelled");
         }
     } else {
-        state.results[site.0] = result;
-        if let Some(alias) = model.loop_alias(site) {
-            state.results[alias.0] = result;
+        bind_result(state, site, result, model);
+    }
+}
+
+fn bind_result(
+    state: &mut State,
+    site: ir::BindingId,
+    result: Option<ir::ValueId>,
+    model: &ir::Model,
+) {
+    state.results[site.0] = result;
+    if let Some(alias) = model.loop_alias(site) {
+        state.results[alias.0] = result;
+        if let Some(history) = &mut state.version {
+            history.adopt(alias, site);
+        }
+        if let Some(history) = &mut state.evidence {
+            // A result from requires refusal has no roots. A successful
+            // Finish installs its actual roots in evidence::event.
+            history.adopt(alias, site);
         }
     }
 }
@@ -7299,6 +7491,13 @@ fn contest_control(
         .enumerate()
         .find(|(id, _)| c.routes[*id].target_at.is_some() && c.routes[*id].filed.is_none())
     {
+        if model.contest_not_filed(id) {
+            room.take(1)?;
+            let mut next = state.clone();
+            next.contest.as_mut().unwrap().routes[id].filed = Some(false);
+            capture_end_open(&mut next, model);
+            return Ok(Some(Step::Next(vec![next])));
+        }
         if declaration.rates.is_none()
             && let Some(sample) = room.sampling()
         {
@@ -7509,9 +7708,7 @@ fn step_observed_inner(
                 return Ok(Step::Next(vec![state]));
             }
             Instruction::LoopControl { updates, next } => {
-                for (id, value) in updates {
-                    state.state_values[id.0] = *value;
-                }
+                model.apply_loop_updates(&mut state.state_values, updates)?;
                 state.pc = *next;
                 room.take(1)?;
                 return Ok(Step::Next(vec![state]));
@@ -7843,10 +8040,7 @@ fn step_observed_inner(
                         refused
                             .results
                             .resize(refused.results.len().max(task.binding.0 + 1), None);
-                        refused.results[task.binding.0] = Some(req.otherwise);
-                        if let Some(alias) = model.loop_alias(task.binding) {
-                            refused.results[alias.0] = Some(req.otherwise);
-                        }
+                        bind_result(&mut refused, task.binding, Some(req.otherwise), model);
                     }
                     record_refusal(
                         &mut refused,
@@ -8299,6 +8493,29 @@ fn overwrites(source: ir::WriteSource) -> bool {
     )
 }
 
+fn observes_write(cap: &ir::Capability, w: &ir::StateWrite, m: &ir::Model) -> bool {
+    cap.version_check
+        .as_ref()
+        .is_some_and(|v| v.variables.contains(&w.variable))
+        || (m.state_variables[w.variable.0].last_write_wins
+            && cap
+                .start_writes
+                .iter()
+                .chain(cap.finish_writes())
+                .any(|x| x.variable == w.variable))
+}
+
+fn needs_write_notification(state: &State, writes: &[ir::StateWrite], m: &ir::Model) -> bool {
+    state.tasks.iter().any(|task| {
+        task.lifecycle.running()
+            && (!task.stale.is_sorted()
+                || writes.iter().any(|w| {
+                    !task.stale.contains(&w.variable)
+                        && observes_write(&m.capabilities[task.capability.0], w, m)
+                }))
+    })
+}
+
 fn notify_writes(
     state: &mut State,
     own: Option<ir::BindingId>,
@@ -8311,17 +8528,7 @@ fn notify_writes(
         }
         let cap = &m.capabilities[task.capability.0];
         for w in writes {
-            let checked = cap
-                .version_check
-                .as_ref()
-                .is_some_and(|v| v.variables.contains(&w.variable));
-            let lww = m.state_variables[w.variable.0].last_write_wins
-                && cap
-                    .start_writes
-                    .iter()
-                    .chain(cap.finish_writes())
-                    .any(|x| x.variable == w.variable);
-            if (checked || lww) && !task.stale.contains(&w.variable) {
+            if observes_write(cap, w, m) && !task.stale.contains(&w.variable) {
                 task.stale.push(w.variable);
             }
         }
@@ -8400,7 +8607,7 @@ fn kernel_complete_in(
                 .given
                 .iter()
                 .zip(&row.values)
-                .all(|(id, x)| state.state_values[id.0] == *x)
+                .all(|(id, x)| state.state_values.get(id.0) == Some(x))
         })
         .ok_or("missing kernel row")?;
     let branches: Vec<_> = row
@@ -8550,7 +8757,7 @@ fn sample_kernel_in(
                 .given
                 .iter()
                 .zip(&row.values)
-                .all(|(id, x)| state.state_values[id.0] == *x)
+                .all(|(id, x)| state.state_values.get(id.0) == Some(x))
         })
         .ok_or("missing kernel row")?;
     let site = simulation::Sample::task_site(model, task.binding, "kernel");
@@ -8828,17 +9035,15 @@ fn probability_initial(
     Ok(out)
 }
 
-fn run_probability(model: &ir::Model, budget: usize) -> outcome::Outcome {
-    run_probability_traced(model, budget, None).0
-}
-
 fn run_probability_traced(
     model: &ir::Model,
     budget: usize,
     trace: Option<trace::Capture>,
+    report_evidence: bool,
 ) -> (outcome::Outcome, Option<trace::Capture>) {
     let mut e = Exploration {
         trace,
+        snapshot_findings: report_evidence.then(Default::default),
         ..Exploration::default()
     };
     let abort = |mut e: Exploration, message| {
@@ -10552,6 +10757,7 @@ mod tests {
             case_priority: None,
             performances: Vec::new(),
             comparison: None,
+            metric_checks: Vec::new(),
             concurrency_resolutions: Vec::new(),
             resource_time: None,
             arrival_distribution: None,
@@ -10573,6 +10779,7 @@ mod tests {
             initial_distributions: Vec::new(),
             probability_queries: Vec::new(),
             state_variables: Vec::new(),
+            static_loop_rounds: Vec::new(),
             people: Vec::new(),
             authorities: Vec::new(),
             contracts: Vec::new(),
@@ -10826,6 +11033,7 @@ mod tests {
             expected
                 .iter()
                 .map(|(code, message)| diag::Diagnostic {
+                    presentation: Default::default(),
                     code: (*code).into(),
                     severity: diag::Severity::Warning,
                     message: format!("process Check: {message}"),
@@ -10911,7 +11119,7 @@ mod tests {
     fn drain_does_not_cancel_and_keeps_both_adoption_extrema_after_state_merge() {
         let model = base(1, Some(any(ir::Remaining::Drain)));
         let out = explore(&model);
-        assert_eq!(out, run(&model, false, DEFAULT_STATE_BUDGET));
+        assert_eq!(out, run(&model, false, DEFAULT_STATE_BUDGET, false));
         let t = &out.terminals[0];
         assert_eq!(t.elapsed, fixed(8));
         assert_eq!(t.work, fixed(8));
@@ -11472,7 +11680,7 @@ mod tests {
         });
         *tie = ir::Tie::By(vec![B(0), B(1), B(2)]);
         let out = explore(&model);
-        assert_eq!(out, run(&model, false, DEFAULT_STATE_BUDGET));
+        assert_eq!(out, run(&model, false, DEFAULT_STATE_BUDGET, false));
         assert_eq!(out.terminals[0].elapsed, outcome::Range { min: 4, max: 6 });
         assert_eq!(out.terminals[0].work, outcome::Range { min: 11, max: 15 });
         // Explicitly check the same-time extrema, not only the global extrema.
@@ -11522,11 +11730,17 @@ mod tests {
 
         let mut model = model;
         model.bounds.clock = 4; // injected tasks finish beyond clock
-        let out = run_initialized(&model, true, DEFAULT_STATE_BUDGET, |mut initial| {
-            initial.waiting = true;
-            initial.tasks = state.tasks;
-            initial
-        });
+        let out = run_initialized(
+            &model,
+            true,
+            DEFAULT_STATE_BUDGET,
+            |mut initial| {
+                initial.waiting = true;
+                initial.tasks = state.tasks;
+                initial
+            },
+            false,
+        );
         assert!(out.truncated);
         assert!(out.terminals.is_empty());
         assert!(out.diagnostics.is_empty());
@@ -11929,23 +12143,29 @@ mod tests {
         );
         // A violation found before the budget is still a violation.
         let mut broken = with_safety(base(1, Some(ir::Join::All)));
-        let out = run_initialized(&broken, true, 2, |mut initial| {
-            initial.waiting = true;
-            initial.tasks = (0..2)
-                .map(|i| Task {
-                    frozen_performance: None,
-                    stale: Vec::new(),
-                    executor: None,
-                    binding: B(i),
-                    capability: C(i),
-                    lifecycle: Lifecycle::Running {
-                        finish: 3 + 2 * i as u64,
-                        ack: None,
-                    },
-                })
-                .collect();
-            initial
-        });
+        let out = run_initialized(
+            &broken,
+            true,
+            2,
+            |mut initial| {
+                initial.waiting = true;
+                initial.tasks = (0..2)
+                    .map(|i| Task {
+                        frozen_performance: None,
+                        stale: Vec::new(),
+                        executor: None,
+                        binding: B(i),
+                        capability: C(i),
+                        lifecycle: Lifecycle::Running {
+                            finish: 3 + 2 * i as u64,
+                            ack: None,
+                        },
+                    })
+                    .collect();
+                initial
+            },
+            false,
+        );
         assert!(out.truncated);
         assert_eq!(out.properties[0].verdict, Verdict::Violated);
         broken.bounds.clock = 8;

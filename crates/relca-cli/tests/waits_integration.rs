@@ -53,7 +53,12 @@ fn invoke(s: &str, args: &[&str]) -> (Value, std::process::Output) {
         diagnostics(&v["diagnostics"], "")
     };
     assert_eq!(
-        String::from_utf8(out.stderr.clone()).unwrap(),
+        // This oracle concerns waiting, not the presentation checked in diagnostic_details.
+        String::from_utf8(relca_test_support::diagnostic::stderr_facts(
+            &out.stderr,
+            &v
+        ))
+        .unwrap(),
         stderr,
         "closed ordered stderr diagnostics"
     );

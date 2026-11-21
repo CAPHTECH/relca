@@ -221,7 +221,23 @@ pub enum DiffValue {
     Readers(Vec<String>),
     Qualification(Vec<String>),
     Contests(Vec<ContestValue>),
+    Record(RecordValue),
+    Repetition(RepetitionValue),
     Inactive,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepetitionValue {
+    pub at_most: u64,
+    pub gap: u64,
+    pub sites: Vec<String>,
+    pub on_limit_ends: Vec<String>,
+}
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordValue {
+    pub registrars: Vec<String>,
+    pub readers: Vec<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -234,11 +250,13 @@ pub struct ProducerValue {
 enum ProducerField {
     #[default]
     Missing,
+    Inactive,
     Value(ProducerValue),
 }
 impl<'de> Deserialize<'de> for ProducerField {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        ProducerValue::deserialize(deserializer).map(Self::Value)
+        Option::<ProducerValue>::deserialize(deserializer)
+            .map(|p| p.map_or(Self::Inactive, Self::Value))
     }
 }
 
@@ -319,7 +337,7 @@ difference_wire! {
     Resource(Nullable<ResourceValue>), Time(Vec<CallMode>), Visibility(Vec<String>), Contest(Vec<ContestValue>),
     Rule(RuleValue),
     Qualification(Nullable<Vec<String>>), Performance(Nullable<report::work_profiles::Profile>),
-    Degradation(Nullable<DegradationValue>),
+    Degradation(Nullable<DegradationValue>), Record(RecordValue), Repetition(Nullable<RepetitionValue>),
 }
 impl TryFrom<DifferenceWire> for Difference {
     type Error = &'static str;
@@ -415,6 +433,68 @@ impl TryFrom<DifferenceWire> for Difference {
                 Some(from.map_or(DiffValue::Inactive, DiffValue::Degradation)),
                 Some(to.map_or(DiffValue::Inactive, DiffValue::Degradation))
             ),
+            DifferenceWire::Record {
+                target,
+                change,
+                reason,
+                loses,
+                annotations,
+                covered_by,
+                from,
+                to,
+            } => {
+                if !identifier(&target)
+                    || [&from, &to].into_iter().any(|v| {
+                        [&v.registrars, &v.readers].into_iter().any(|names| {
+                            names.iter().any(|n| !producer_name(n))
+                                || !names.windows(2).all(|w| w[0] < w[1])
+                        })
+                    })
+                {
+                    return Err("invalid record difference inventory");
+                }
+                row!(
+                    Record,
+                    target,
+                    change,
+                    reason,
+                    loses,
+                    (annotations, covered_by),
+                    Some(DiffValue::Record(from)),
+                    Some(DiffValue::Record(to))
+                )
+            }
+            DifferenceWire::Repetition {
+                target,
+                change,
+                reason,
+                loses,
+                annotations,
+                covered_by,
+                from,
+                to,
+            } => {
+                let from = from.map_or(DiffValue::Inactive, DiffValue::Repetition);
+                let to = to.map_or(DiffValue::Inactive, DiffValue::Repetition);
+                if !identifier(&target) || [&from, &to].into_iter().any(|side| {
+                    matches!(side, DiffValue::Repetition(r) if !(1..=32).contains(&r.at_most)
+                        || r.sites.iter().chain(&r.on_limit_ends).any(|s| !identifier(s))
+                        || r.sites.iter().collect::<BTreeSet<_>>().len() != r.sites.len()
+                        || r.on_limit_ends.iter().collect::<BTreeSet<_>>().len() != r.on_limit_ends.len())
+                }) {
+                    return Err("invalid repetition inventory");
+                }
+                row!(
+                    Repetition,
+                    target,
+                    change,
+                    reason,
+                    loses,
+                    (annotations, covered_by),
+                    Some(from),
+                    Some(to)
+                )
+            }
             DifferenceWire::Rule {
                 target,
                 change,
@@ -472,6 +552,20 @@ impl TryFrom<DifferenceWire> for Difference {
             } => {
                 let (from, to) = match (from, to) {
                     (ProducerField::Missing, ProducerField::Missing) => (None, None),
+                    (ProducerField::Inactive, ProducerField::Value(to))
+                        if change == Change::Added
+                            && identifier(&target)
+                            && producer_name(&to.producer) =>
+                    {
+                        (Some(DiffValue::Inactive), Some(DiffValue::Producer(to)))
+                    }
+                    (ProducerField::Value(from), ProducerField::Inactive)
+                        if change == Change::Removed
+                            && identifier(&target)
+                            && producer_name(&from.producer) =>
+                    {
+                        (Some(DiffValue::Producer(from)), Some(DiffValue::Inactive))
+                    }
                     (ProducerField::Value(from), ProducerField::Value(to))
                         if change == Change::Modified
                             && identifier(&target)
@@ -644,6 +738,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 Kind::Meaning => DiffValue::Meaning(false),
                 Kind::Visibility => DiffValue::Readers(vec![]),
                 Kind::Contest => DiffValue::Contests(vec![]),
+                Kind::Record => DiffValue::Record(RecordValue::default()),
                 Kind::ContractScope
                 | Kind::Actor
                 | Kind::Relation
@@ -653,6 +748,7 @@ impl TryFrom<DifferenceWire> for Difference {
                 | Kind::Rule
                 | Kind::Qualification
                 | Kind::Performance
+                | Kind::Repetition
                 | Kind::Degradation => DiffValue::Inactive,
             };
             let expected = if matches!(d.kind, Kind::Time | Kind::Visibility) {
@@ -829,6 +925,7 @@ impl DiffReport {
 
     fn diagnostic(&mut self, code: &str, message: String, span: Option<diag::Span>) {
         self.diagnostics.push(diag::Diagnostic {
+            presentation: Default::default(),
             code: code.into(),
             severity: diag::severity_of(code).expect("registered diff diagnostic"),
             message,
@@ -852,6 +949,7 @@ impl DiffReport {
             .unchecked
             .iter()
             .any(|x| x == crate::comparison_projection::RECEIPT_NOT_APPLICABLE);
+        let contract_witnesses = self.unchecked.iter().any(|x| x == "contract_witnesses");
         use crate::agency::{ComparisonSide, DifferenceReason, Differences};
         self.agency.differences = if self.agency.from.is_none() || self.agency.to.is_none() {
             Differences::unavailable(DifferenceReason::AgencyUnavailable)
@@ -893,9 +991,18 @@ impl DiffReport {
             .collect();
         self.unchecked
             .push("stage_observation(stage_correspondence_not_defined)".into());
+        if !self.from.report.metric_checks.is_empty() || !self.to.report.metric_checks.is_empty() {
+            self.unchecked.push("metric_constraints".into());
+        }
         if receipt_not_applicable {
             self.unchecked
                 .push(crate::comparison_projection::RECEIPT_NOT_APPLICABLE.into());
+        }
+        if contract_witnesses {
+            self.unchecked.push("contract_witnesses".into());
+        }
+        if self.from.report.repetition.is_some() || self.to.report.repetition.is_some() {
+            self.unchecked.push("repetition_tables".into());
         }
         if let Some(rows) = &self.metrics {
             if rows.is_empty() {
@@ -950,6 +1057,7 @@ impl DiffReport {
         self.verdict = report::fold_verdict(
             &[
                 report::Property {
+                    excluded: None,
                     notes: None,
                     cases: None,
                     probability: None,
@@ -957,6 +1065,7 @@ impl DiffReport {
                     verdict: self.from.report.verdict,
                 },
                 report::Property {
+                    excluded: None,
                     notes: None,
                     cases: None,
                     probability: None,
@@ -967,6 +1076,7 @@ impl DiffReport {
             &self.diagnostics,
         );
         let mut verdicts = vec![report::Property {
+            excluded: None,
             notes: None,
             cases: None,
             probability: None,
@@ -977,6 +1087,7 @@ impl DiffReport {
             for a in &d.annotations {
                 if let Annotation::Override { verdict, .. } = a {
                     verdicts.push(report::Property {
+                        excluded: None,
                         notes: None,
                         cases: None,
                         probability: None,
@@ -1009,6 +1120,12 @@ pub fn diff(src: &str, from: &str, to: &str) -> DiffReport {
 }
 
 pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str>) -> DiffReport {
+    let mut result = diff_raw(src, from, to, scenario);
+    diag::locate(src, &mut result.diagnostics);
+    result
+}
+
+fn diff_raw(src: &str, from: &str, to: &str, scenario: Option<&str>) -> DiffReport {
     let analyze =
         |name| report::check_selected_scenario_using(src, name, scenario, crate::engine::explore);
     let (from_report, from_model) = analyze(from);
@@ -1023,20 +1140,33 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
             report: report::finite_driver(to_report, crate::engine::DEFAULT_STATE_BUDGET),
         },
     );
-    if crate::syntax::parse(src).is_ok_and(|m| m.has_merges()) {
+    let ast = crate::syntax::parse(src).ok();
+    if let Some(m) = ast.as_ref().filter(|m| m.has_merges()) {
         result.diagnostic(
             diag::U_SEM_0,
             "merge_feature_combination: merge diff projection is not connected".into(),
             None,
         );
+        let last = result.diagnostics.last_mut().unwrap();
+        *last = last
+            .clone()
+            .merge_detail("diff_merge_projection", m.merge_blockers());
         result.finish();
         result.verdict = Verdict::Unsupported;
         return result;
+    }
+    if [&from_model, &to_model]
+        .into_iter()
+        .filter_map(Option::as_ref)
+        .any(|m| crate::evidence_basis::present(&m.model) || crate::same_version::present(&m.model))
+    {
+        result.unchecked.push("contract_witnesses".into());
     }
     let (Some(from_model), Some(mut to_model)) = (from_model, to_model) else {
         if crate::syntax::parse(src).is_ok_and(|m| m.items.iter().any(|i| matches!(i, ast::Item::Actor(a) if a.items.iter().any(|f| matches!(f, ast::ActorItem::Decides(_)))))) {
             result.unchecked.push("rule".into());
         }
+        result.seal();
         return result;
     };
     let pair = to_model
@@ -1062,57 +1192,6 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
     if let Some(p) = pair {
         to_model.intent = p.items.clone();
     }
-    if crate::registration::present(&from_model.model)
-        || crate::registration::present(&to_model.model)
-    {
-        result.diagnostic(
-            diag::U_SEM_0,
-            "registration_unsupported_command".into(),
-            None,
-        );
-        result.finish();
-        result.verdict = Verdict::Unsupported;
-        result.seal();
-        return result;
-    }
-    if crate::evidence_basis::present(&from_model.model)
-        || crate::evidence_basis::present(&to_model.model)
-    {
-        result.diagnostic(
-            diag::U_SEM_0,
-            "evidence_basis_unsupported_command".into(),
-            None,
-        );
-        result.finish();
-        // The native side checks can establish violations, but no evidence
-        // comparison was performed. Retain those facts without making this
-        // unsupported command look like a supported, violated comparison.
-        result.verdict = Verdict::Unsupported;
-        result.seal();
-        return result;
-    }
-    if crate::same_version::present(&from_model.model)
-        || crate::same_version::present(&to_model.model)
-    {
-        result.diagnostic(
-            diag::U_SEM_0,
-            "same_version_unsupported_command".into(),
-            None,
-        );
-        result.finish();
-        result.verdict = Verdict::Unsupported;
-        result.seal();
-        return result;
-    }
-    if from_model.model.has_loops() || to_model.model.has_loops() {
-        result.diagnostic(
-            diag::U_SEM_0,
-            "loop_feature_combination: repeat diff projection is not connected".into(),
-            None,
-        );
-        result.finish();
-        return result;
-    }
     if from_model.model.response_attempts().is_empty()
         != to_model.model.response_attempts().is_empty()
     {
@@ -1127,6 +1206,12 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
                 .into(),
             None,
         );
+        let last = result.diagnostics.last_mut().unwrap();
+        *last = last.clone().unconnected(
+            "priority_feature_combination",
+            "diff_priority_mismatch",
+            Vec::new(),
+        );
         result.finish();
         return result;
     }
@@ -1137,6 +1222,12 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
             diag::U_SEM_0,
             "condition_wait_diff_unsupported".into(),
             None,
+        );
+        let last = result.diagnostics.last_mut().unwrap();
+        *last = last.clone().unconnected(
+            "condition_wait_diff_unsupported",
+            "diff_condition_wait",
+            Vec::new(),
         );
         result.finish();
         return result;
@@ -1211,6 +1302,30 @@ pub fn diff_with_scenario(src: &str, from: &str, to: &str, scenario: Option<&str
         &from_model.model,
         &to_model.model,
     ));
+    if from_model.model.has_loops() || to_model.model.has_loops() {
+        let Some(rows) = ast.as_ref().and_then(|ast| {
+            static_projection::repetition_differences(ast, &from_model.model, &to_model.model)
+        }) else {
+            result.diagnostic(
+                diag::U_SEM_0,
+                "loop_feature_combination: repeat diff projection is not connected".into(),
+                None,
+            );
+            let last = result
+                .diagnostics
+                .last_mut()
+                .expect("just appended diagnostic");
+            *last = last.clone().loop_detail(
+                "diff_repeat_projection",
+                diag::DetailKind::AnalysisNotConnected,
+                None,
+                None,
+            );
+            result.finish();
+            return result;
+        };
+        result.differences.extend(rows);
+    }
     result
         .differences
         .extend(response_differences(&from_model.model, &to_model.model));

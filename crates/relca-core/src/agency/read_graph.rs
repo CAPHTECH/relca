@@ -18,27 +18,37 @@ fn writes(c: &ir::Capability, v: ir::StateVarId) -> bool {
     crate::evidence_basis::writes(c, v)
 }
 
-pub(crate) fn concurrent_read(body: &ir::Block, caps: &[ir::Capability]) -> Option<diag::Span> {
+pub(crate) fn concurrent_read<'a>(
+    body: &'a ir::Block,
+    caps: &[ir::Capability],
+) -> Option<(&'a ir::Call, &'a ir::Call)> {
     for s in body {
         match &s.kind {
             ir::Stmt::Response(_, _) => {} // This query concerns fork-sibling reads only.
             ir::Stmt::Fork { branches, .. } => {
                 for c in branches {
                     let cap = caps.get(c.capability.0)?;
-                    if cap.read_variables.iter().any(|v| {
-                        branches.iter().any(|w| {
-                            w.binding != c.binding
-                                && caps.get(w.capability.0).is_some_and(|cap| writes(cap, *v))
+                    let writer = cap
+                        .read_variables
+                        .iter()
+                        .find_map(|v| {
+                            branches.iter().find(|w| {
+                                w.binding != c.binding
+                                    && caps.get(w.capability.0).is_some_and(|cap| writes(cap, *v))
+                            })
                         })
-                    }) || cap.read_records.iter().any(|r| {
-                        branches.iter().any(|w| {
-                            w.binding != c.binding
-                                && caps
-                                    .get(w.capability.0)
-                                    .is_some_and(|cap| cap.registers.contains(r))
-                        })
-                    }) {
-                        return Some(c.span);
+                        .or_else(|| {
+                            cap.read_records.iter().find_map(|r| {
+                                branches.iter().find(|w| {
+                                    w.binding != c.binding
+                                        && caps
+                                            .get(w.capability.0)
+                                            .is_some_and(|cap| cap.registers.contains(r))
+                                })
+                            })
+                        });
+                    if let Some(writer) = writer {
+                        return Some((c, writer));
                     }
                 }
             }

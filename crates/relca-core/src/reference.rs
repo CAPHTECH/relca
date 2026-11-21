@@ -665,6 +665,7 @@ pub fn simulate(model: &Model) -> SimulationRun {
                     .filter(|_| validate(model, Limits::default()).is_ok())
                     .map(|_| quality::simulation(model, &[], true)),
                 diagnostics: vec![diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::U_SEM_0.into(),
                     severity: diag::Severity::Error,
                     message: "simulation cannot check structural completion questions".into(),
@@ -1146,6 +1147,7 @@ fn explore_unprojected(model: &Model, limits: Limits, projection: Projection) ->
 
 fn diagnostic(code: &str, message: &str) -> diag::Diagnostic {
     diag::Diagnostic {
+        presentation: Default::default(),
         code: code.into(),
         severity: if code.starts_with("W-") {
             diag::Severity::Warning
@@ -1339,6 +1341,7 @@ fn validate_rules(m: &Model) -> Execution {
 }
 
 fn validate(m: &Model, limits: Limits) -> Execution {
+    require(m.valid_contest_exclusions())?;
     work_profiles::validate(m)?;
     if m.uses_work_profiles() {
         require(
@@ -1551,8 +1554,7 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                         },
                 )?,
                 Cond::IntCompare { variable, .. } => require(
-                    m.state_variables
-                        .get(variable.0)
+                    m.declared_state_variable(*variable)
                         .is_some_and(|v| v.integer_max.is_some() && v.kind.is_observed()),
                 )?,
                 Cond::StateEq(x) => {
@@ -1694,7 +1696,8 @@ fn validate(m: &Model, limits: Limits) -> Execution {
                 reference_kernel(k, m)?;
                 for id in &k.given {
                     require(
-                        m.state_variables[id.0].kind == StateKind::ObservedCase
+                        m.declared_state_variable(*id)
+                            .is_some_and(|v| v.kind == StateKind::ObservedCase)
                             || read_set.contains(id),
                     )?;
                 }
@@ -1758,7 +1761,8 @@ fn validate(m: &Model, limits: Limits) -> Execution {
         }
     }
     if let Some(q) = &m.quality {
-        require(!q.properties.is_empty() || !q.metrics.is_empty())?;
+        require(q.means.is_empty() || !(m.has_merges() || !m.response_attempts().is_empty()))?;
+        require(!q.properties.is_empty() || !q.metrics.is_empty() || !q.means.is_empty())?;
         let mut pnames = BTreeSet::new();
         for p in &q.properties {
             require(
@@ -1794,6 +1798,15 @@ fn validate(m: &Model, limits: Limits) -> Execution {
             }
         }
         let mut cnames = BTreeSet::new();
+        for c in &q.means {
+            require(
+                !c.name.is_empty()
+                    && cnames.insert(&c.name)
+                    && c.property.is_none_or(|i| i < q.properties.len())
+                    && (c.measure != MeanMeasure::Elapsed || c.property.is_some())
+                    && (!c.given_reached || c.property.is_some()),
+            )?;
+        }
         for c in &q.quantiles {
             require(
                 !c.name.is_empty()
@@ -2780,8 +2793,7 @@ fn reference_kernel(k: &Kernel, m: &Model) -> Execution {
     require(refs.len() == k.given.len())?;
     for id in &k.given {
         let v = m
-            .state_variables
-            .get(id.0)
+            .declared_state_variable(*id)
             .ok_or(StopReason::SemanticAbort)?;
         if v.name.starts_with("@loop:") && v.name.ends_with(":round") {
             require(
@@ -2805,7 +2817,12 @@ fn reference_kernel(k: &Kernel, m: &Model) -> Execution {
         require(row.values.len() == k.given.len() && !row.branches.is_empty())?;
         require(!k.rows[..i].iter().any(|r| r.values == row.values))?;
         for (x, id) in row.values.iter().zip(&k.given) {
-            require(reference_value_valid(m, &m.state_variables[id.0], *x))?;
+            require(reference_value_valid(
+                m,
+                m.declared_state_variable(*id)
+                    .ok_or(StopReason::SemanticAbort)?,
+                *x,
+            ))?;
         }
         let mut mass = Rational::zero();
         for branch in &row.branches {
@@ -3071,6 +3088,28 @@ struct Interpreter<'a> {
     evidence: Evidence,
     terminals: BTreeMap<EndId, TerminalOutcome>,
     statistics: Statistics,
+}
+
+impl Interpreter<'_> {
+    fn fork_sample(&self) -> Self {
+        debug_assert!(self.run_work.is_none() && self.probability_stack.is_empty());
+        Self {
+            case_index: self.case_index,
+            probability_stack: Vec::new(),
+            run_work: None,
+            probability_result: self.probability_result.clone(),
+            probability_scheduler: self.probability_scheduler,
+            probability_chance: self.probability_chance,
+            denominator_bits: self.denominator_bits,
+            duration_numeric_cut: self.duration_numeric_cut,
+            contract_facts: self.contract_facts.clone(),
+            model: self.model,
+            limits: self.limits,
+            evidence: self.evidence.clone(),
+            terminals: self.terminals.clone(),
+            statistics: self.statistics.clone(),
+        }
+    }
 }
 
 mod degradation;
@@ -4669,11 +4708,11 @@ impl<'a> Interpreter<'a> {
                                     None,
                                 )?;
                             }
-                            Stmt::LoopControl(control) => {
-                                for (id, x) in &control.updates {
-                                    f.state_values[id.0] = *x;
-                                }
-                            }
+                            Stmt::LoopControl(control) => require(
+                                self.model
+                                    .apply_loop_updates(&mut f.state_values, &control.updates)
+                                    .is_ok(),
+                            )?,
                             Stmt::Query(call, _) => {
                                 self.create(&mut f, std::slice::from_ref(call), None)?
                             }
@@ -4756,10 +4795,9 @@ impl<'a> Interpreter<'a> {
                                     .rows
                                     .iter()
                                     .find(|r| {
-                                        r.values
-                                            .iter()
-                                            .enumerate()
-                                            .all(|(j, x)| f.state_values[kernel.given[j].0] == *x)
+                                        r.values.iter().enumerate().all(|(j, x)| {
+                                            f.state_values.get(kernel.given[j].0) == Some(x)
+                                        })
                                     })
                                     .ok_or(StopReason::SemanticAbort)?;
                                 let mut weights = Vec::new();
@@ -5072,11 +5110,11 @@ impl<'a> Interpreter<'a> {
                         None,
                     )?;
                 }
-                Stmt::LoopControl(control) => {
-                    for (id, x) in &control.updates {
-                        f.state_values[id.0] = *x;
-                    }
-                }
+                Stmt::LoopControl(control) => require(
+                    self.model
+                        .apply_loop_updates(&mut f.state_values, &control.updates)
+                        .is_ok(),
+                )?,
                 Stmt::Query(call, _) => self.create(&mut f, std::slice::from_ref(call), None)?,
                 Stmt::ResolveEffect { command, evidence } => {
                     let event = recovery::resolve(

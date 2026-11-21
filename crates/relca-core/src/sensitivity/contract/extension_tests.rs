@@ -55,6 +55,7 @@ fn quality_denominators_and_metrics_are_part_of_the_question() {
             denominator: ir::Denominator::Arrivals,
         }],
         quantiles: vec![],
+        means: vec![],
     });
     let base = Contract::from_model(&m).unwrap();
     let mut changed = m.clone();

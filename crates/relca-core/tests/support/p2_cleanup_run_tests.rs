@@ -31,6 +31,7 @@ pub(super) fn child_or_else(produce: impl FnOnce() -> AnalysisReport) -> Analysi
             None,
             None,
             vec![Diagnostic {
+                presentation: Default::default(),
                 code: diag::U_SEM_0.into(),
                 severity: diag::Severity::Error,
                 message: "injected postbarrier refusal".into(),

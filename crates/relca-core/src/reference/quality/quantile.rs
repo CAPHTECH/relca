@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 #[derive(Clone, Default)]
 pub(in crate::reference) struct FirstTree {
     pub views: Vec<Vec<FirstView>>,
+    pub means: Vec<Vec<crate::quality::MeanView>>,
     pub random: bool,
     pub children: Vec<(Rational, FirstTree)>,
 }

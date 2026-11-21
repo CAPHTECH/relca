@@ -1,6 +1,59 @@
 use relca_core::{Verdict, compare, diag, diff, explain, mutation, report};
 mod conform;
+mod estimate;
 mod sensitivity;
+
+fn print_diagnostic(prefix: std::fmt::Arguments<'_>, d: &diag::Diagnostic) {
+    use std::fmt::Write as _;
+    let mut text = format!("{prefix}{}: {}\n", d.code, d.message);
+    if let Some(detail) = &d.presentation.detail {
+        if let Some(loc) = &d.presentation.location {
+            writeln!(text, "  at {}:{}", loc.line, loc.column).unwrap();
+        }
+        writeln!(text, "  kind: {}", detail.kind.as_str()).unwrap();
+        if let Some(cause) = &detail.cause {
+            writeln!(text, "  cause: {cause}").unwrap();
+        }
+        for b in &detail.blockers {
+            match b.role.as_str() {
+                "excluded_edge" => write!(text, "  not counted: {}", b.role).unwrap(),
+                "exit" => write!(text, "  provenance:").unwrap(),
+                _ => write!(text, "  blocked by: {}", b.role).unwrap(),
+            }
+            if let Some(name) = &b.name {
+                write!(text, " {name}").unwrap();
+            }
+            if let Some((first, rest)) = b.rounds.split_first() {
+                write!(text, " (rounds {first}").unwrap();
+                for round in rest {
+                    write!(text, ", {round}").unwrap();
+                }
+                text.push(')');
+            }
+            for exit in &b.exits {
+                let phase = match exit.phase {
+                    relca_core::ir::LoopPhase::Body => "body",
+                    relca_core::ir::LoopPhase::OnLimit => "on_limit",
+                };
+                write!(
+                    text,
+                    " in exit {} round {} {phase}",
+                    exit.loop_name, exit.round
+                )
+                .unwrap();
+                if let Some(leave) = exit.leave_site {
+                    write!(text, " leave {leave}").unwrap();
+                }
+            }
+            if let Some(loc) = &b.location {
+                write!(text, " at {}:{}", loc.line, loc.column).unwrap();
+            }
+            text.push('\n');
+        }
+        writeln!(text, "  see: {}", detail.see).unwrap();
+    }
+    eprint!("{text}");
+}
 
 const COMMANDS: &[&str] = &[
     "check",
@@ -12,10 +65,14 @@ const COMMANDS: &[&str] = &[
     "mutate",
     "sensitivity",
     "conform",
+    "estimate",
 ];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "estimate") {
+        estimate::run(&args);
+    }
     if args.iter().any(|a| a == "--agency-limit-scale")
         && !matches!(
             args.first().map(String::as_str),
@@ -51,7 +108,7 @@ fn main() {
                 _ => explain::argument_failure(agency_usage(&args, "explain")),
             };
             for diagnostic in &result.report.diagnostics {
-                eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+                print_diagnostic(format_args!(""), diagnostic);
             }
             if !args.iter().any(|a| a == "--configuration")
                 && result
@@ -63,7 +120,7 @@ fn main() {
                 eprintln!("hint: relca explain <path> --configuration NAME [--scenario NAME]");
             }
             for diagnostic in &result.explanation.diagnostics {
-                eprintln!("explain: {}: {}", diagnostic.code, diagnostic.message);
+                print_diagnostic(format_args!("explain: "), diagnostic);
             }
             println!(
                 "{}",
@@ -126,20 +183,20 @@ fn main() {
             };
             if let Some(original) = &result.original {
                 for d in &original.diagnostics {
-                    eprintln!("original: {}: {}", d.code, d.message);
+                    print_diagnostic(format_args!("original: "), d);
                 }
             }
             for row in &result.mutations {
                 for mutant in &row.mutants {
                     if let Some(report) = &mutant.report {
                         for d in &report.diagnostics {
-                            eprintln!("{}: {}: {}", mutant.id, d.code, d.message);
+                            print_diagnostic(format_args!("{}: ", mutant.id), d);
                         }
                     }
                 }
             }
             for d in &result.diagnostics {
-                eprintln!("mutate: {}: {}", d.code, d.message);
+                print_diagnostic(format_args!("mutate: "), d);
             }
             println!(
                 "{}",
@@ -165,7 +222,7 @@ fn main() {
                 _ => input_failure(agency_usage(&args, "check").into()),
             };
             for diagnostic in &result.diagnostics {
-                eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+                print_diagnostic(format_args!(""), diagnostic);
             }
             println!(
                 "{}",
@@ -196,7 +253,7 @@ fn main() {
                 _ => report::simulation_input_failure(agency_usage(&args, "simulate")),
             };
             for diagnostic in &result.diagnostics {
-                eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+                print_diagnostic(format_args!(""), diagnostic);
             }
             println!(
                 "{}",
@@ -221,14 +278,14 @@ fn main() {
             };
             for plan in &result.plans {
                 for diagnostic in plan.report.diagnostics() {
-                    eprintln!(
-                        "configuration {}: {}: {}",
-                        plan.configuration, diagnostic.code, diagnostic.message
+                    print_diagnostic(
+                        format_args!("configuration {}: ", plan.configuration),
+                        diagnostic,
                     );
                 }
             }
             for diagnostic in &result.diagnostics {
-                eprintln!("compare: {}: {}", diagnostic.code, diagnostic.message);
+                print_diagnostic(format_args!("compare: "), diagnostic);
             }
             println!(
                 "{}",
@@ -265,7 +322,7 @@ fn main() {
                     ("diff", &result.diagnostics),
                 ] {
                     for diagnostic in diagnostics {
-                        eprintln!("{side}: {}: {}", diagnostic.code, diagnostic.message);
+                        print_diagnostic(format_args!("{side}: "), diagnostic);
                     }
                 }
                 println!(
@@ -284,12 +341,13 @@ fn main() {
                 .and_then(|src| relca_core::syntax::parse(&src).ok())
                 .is_some_and(|m| m.uses_priority())
             {
-                let r = relca_core::ledger::unsupported(
+                let r = relca_core::ledger::unsupported_with(
                     "verify",
                     "priority_feature_combination: verify backend is not connected to priority disciplines",
+                    Some(("priority_feature_combination", "verify_priority")),
                 );
                 for d in &r.diagnostics {
-                    eprintln!("{}: {}", d.code, d.message);
+                    print_diagnostic(format_args!(""), d);
                 }
                 println!(
                     "{}",
@@ -318,7 +376,7 @@ fn main() {
     };
     let result = relca_core::ledger::refusal(mode, verdict);
     for diagnostic in &result.diagnostics {
-        eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+        print_diagnostic(format_args!(""), diagnostic);
     }
     println!(
         "{}",
@@ -461,6 +519,7 @@ fn input_failure(message: String) -> report::Report {
         response_analysis: None,
         scenario: None,
         quality: None,
+        metric_checks: Vec::new(),
         state_range_violations: Vec::new(),
         capability_refusals: None,
         unchecked: Vec::new(),
@@ -486,6 +545,7 @@ fn input_failure(message: String) -> report::Report {
         cut: report::Cut::Status(report::CutStatus::Unresolved),
         assumptions: Vec::new(),
         diagnostics: vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::E_SYN_0.into(),
             severity: diag::Severity::Error,
             message,

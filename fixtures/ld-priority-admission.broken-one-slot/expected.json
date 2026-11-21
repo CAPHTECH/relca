@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"unsupported","simulation":{"status":"unsupported","completed_replications":0},"diagnostics":[{"code":"U-SEM-0","message":"unresolved simulation nondeterminism: priority_tie_remaining: replication 1, time 2, cases [], sites []; at least two distinct successor actions remain"}]}

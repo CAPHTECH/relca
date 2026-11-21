@@ -28,6 +28,45 @@ pub struct Model {
 }
 
 impl Model {
+    pub(crate) fn merge_blockers(&self) -> Vec<crate::diag::Blocker> {
+        fn collect(b: &Block, out: &mut Vec<crate::diag::Blocker>) {
+            for s in b {
+                match &s.value {
+                    Stmt::Merge {
+                        binding,
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        out.push(crate::diag::Blocker::at(
+                            "merge_binding",
+                            Some(binding.value.clone()),
+                            Some(binding.span),
+                        ));
+                        collect(then_body, out);
+                        collect(else_body, out);
+                    }
+                    Stmt::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        collect(then_body, out);
+                        collect(else_body, out);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for item in &self.items {
+            if let Item::Process(p) = item {
+                collect(&p.body, &mut out);
+            }
+        }
+        out
+    }
+
     pub fn has_merges(&self) -> bool {
         fn block(b: &Block) -> bool {
             b.iter().any(|s| match &s.value {
@@ -107,6 +146,7 @@ pub enum Item {
     QualityProperty(QualityProperty),
     CohortMetric(CohortMetric),
     QuantileMetric(QuantileMetric),
+    MeanMetric(MeanMetric),
     Resource(ResourceDecl),
     Metrics(MetricsDecl),
     Responsible(Responsible),
@@ -128,6 +168,7 @@ pub enum Item {
     Process(Process),
     Bounds(Bounds),
     Verify(Verify),
+    VerifyMetric(Box<MetricConstraint>),
     Cut(CutDecl),
     Configuration(Configuration),
     PairIntent(PairIntent),
@@ -145,10 +186,21 @@ pub struct CompareDecl {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HardRow {
-    pub cohort: Ident,
-    pub op: crate::ir::HardComparison,
-    pub bound: Ident,
+    pub constraint: MetricConstraint,
     pub span: Span,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricConstraint {
+    pub target: Ident,
+    pub mean: bool,
+    pub op: crate::ir::HardComparison,
+    pub bound: MetricBound,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetricBound {
+    Number(Ident),
+    Time(Duration),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Objective {
@@ -160,6 +212,7 @@ pub struct Objective {
 pub enum ObjectiveRef {
     Cohort(Ident),
     Quantile(Ident),
+    Mean(Ident),
     Overall(crate::ir::OverallObjective),
 }
 
@@ -208,7 +261,17 @@ pub struct QuantileMetric {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeanMetric {
+    pub name: Ident,
+    pub measure: crate::ir::MeanMeasure,
+    pub property: Option<Ident>,
+    pub given_reached: bool,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScenarioItem {
+    ContestNotFiled(ContestNotFiled),
     ArrivalsDistribution(ArrivalDistribution),
     ArrivalsFixed(Spanned<Vec<Duration>>),
     ArrivalsEvery(Spanned<FixedEveryDecl>),
@@ -218,6 +281,14 @@ pub enum ScenarioItem {
     Bounds(Bounds),
     Simulation(SimulationDecl),
     Horizon(Duration),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContestNotFiled {
+    pub party: Ident,
+    pub end: Ident,
+    pub reason: Spanned<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -312,6 +383,7 @@ pub struct StartPolicy {
 pub enum PolicyExtension {
     CallOrder,
     FirstIdle,
+    AfterFinishes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -591,6 +663,8 @@ pub enum DiffKind {
     Qualification,
     Performance,
     Degradation,
+    Record,
+    Repetition,
 }
 
 impl DiffKind {
@@ -609,6 +683,8 @@ impl DiffKind {
             Self::Qualification => "qualification",
             Self::Performance => "performance",
             Self::Degradation => "degradation",
+            Self::Record => "record",
+            Self::Repetition => "repetition",
         }
     }
     pub fn parse(name: &str) -> Option<Self> {
@@ -962,6 +1038,37 @@ pub type Block = Vec<Spanned<Stmt>>;
 
 impl Model {
     pub fn has_repetition(&self) -> bool {
+        self.items
+            .iter()
+            .any(|i| matches!(i, Item::Process(p) if p.has_repetition()))
+    }
+
+    /// Resolve only the lexical command scope. An unresolved selection keeps
+    /// the conservative gate; it must not weaken an existing refusal merely
+    /// because full lowering also rejects the request.
+    pub(crate) fn has_repetition_for_configuration(&self, selection: Option<&str>) -> bool {
+        let processes: Vec<_> = self
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Configuration(c) if Some(c.name.value.as_str()) == selection => {
+                    Some(&c.process.value)
+                }
+                _ => None,
+            })
+            .collect();
+        if processes.is_empty() {
+            return self.has_repetition();
+        }
+        self.items.iter().any(|i| {
+            matches!(i, Item::Process(p)
+            if processes.contains(&&p.name.value) && p.has_repetition())
+        })
+    }
+}
+
+impl Process {
+    pub fn has_repetition(&self) -> bool {
         fn block(b: &Block) -> bool {
             b.iter().any(|s| match &s.value {
                 Stmt::Repeat { .. } => true,
@@ -979,9 +1086,7 @@ impl Model {
                 _ => false,
             })
         }
-        self.items
-            .iter()
-            .any(|i| matches!(i, Item::Process(p) if block(&p.body)))
+        block(&self.body)
     }
 }
 

@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 mod links;
 mod settings;
-pub use settings::{Refusal, refusal, unsupported};
+pub use settings::{Refusal, refusal, unsupported, unsupported_with};
 
 pub(crate) fn source_reports(host: &Value, mode: &str) -> Vec<String> {
     links::sources(host, mode)
@@ -57,6 +57,7 @@ pub(crate) fn complete(
             .any(|d| d.code == crate::diag::U_LEDGER_0)
         {
             diagnostics.push(crate::diag::Diagnostic {
+                presentation: Default::default(),
                 code: crate::diag::U_LEDGER_0.into(),
                 severity: crate::diag::Severity::Error,
                 message,

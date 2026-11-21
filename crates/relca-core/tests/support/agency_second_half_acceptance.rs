@@ -114,7 +114,7 @@ pub fn assert_report(row: &Value, actual: &Value) {
                 None,
             )
             .unwrap();
-            responsibility_oracle::assert_report(&model, actual);
+            responsibility_oracle::assert_report(&model, &source(name), actual);
             let responsibilities = responsibility_oracle::expected(&model);
             expected.retain(|code| *code != "W-RESP-0");
             let at = expected

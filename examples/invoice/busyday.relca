@@ -58,20 +58,29 @@ model InvoiceBPRBusyDay version "0.2" {
     include [Invoice,PurchaseOrder,ReceiptRecord,Clerk,Extractor,Approver,Ledger,Vendor]
     exclude Payment reason "separate payment domain" loses "payment errors"
     exclude VendorMaster reason "master data out of scope" loses "master data correlation"
-    defer Resubmission reason "one receipt only" loses "ultimate settlement"
-    defer Vendor.contest_rate reason "structure only" loses "frequency and effort"
+    exclude Resubmission reason "one receipt only" loses "ultimate settlement"
     externality [Vendor.dispute_effort]
     reentry [contest Vendor -> Clerk.recheck, review cut quarterly by cfo]
     horizon receipt..resolution within 60min
     horizon contest within 5d structural_only
   }
   metrics { window 960min; currency "JPY" }
+  policy observable fifo tie_by case_id then call_order assign first_idle dispatch after_finishes
   scenario BusyDay {
     arrivals fixed_every 4min during [0min,480min)
     queue capacity 200 on_overflow reject
     bounds { cases 120; live_tasks 2; clock 960min }
     horizon 960min
-    simulation replications 1000 seed 41020 confidence 0.95
+    simulation replications 100 seed 41020 confidence 0.95
+    contest_not_filed Vendor on end.returned reason "contest frequency and effort are not known; structure only"
+  }
+  scenario BusyDaySmoke {
+    arrivals fixed_every 4min during [0min,48min)
+    queue capacity 200 on_overflow reject
+    bounds { cases 12; live_tasks 2; clock 960min }
+    horizon 960min
+    simulation replications 2 seed 41020 confidence 0.95
+    contest_not_filed Vendor on end.returned reason "contest frequency and effort are not known; structure only"
   }
   verify safety no_resource_overcommit
   verify probability reached registered == true && extraction_correct == false <= 0.001

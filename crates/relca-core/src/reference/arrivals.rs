@@ -250,6 +250,7 @@ struct Tree<'a> {
     response_exercise: BTreeMap<CapabilityId, (usize, usize)>,
     response_receipts: Vec<crate::outcome::ResponseReceipt>,
     first_hits: Vec<Vec<Option<u128>>>,
+    mean_hits: Vec<Vec<Option<Rational>>>,
     first_closed: Vec<Vec<bool>>,
     first_trees: Vec<super::quality::FirstTree>,
     #[cfg(test)]
@@ -826,7 +827,7 @@ impl<'a> Tree<'a> {
         Ok(())
     }
     fn observe_first(&mut self, w: &World<'a>) -> Execution {
-        if self.first_hits.is_empty() {
+        if self.first_hits.is_empty() && self.mean_hits.is_empty() {
             return Ok(());
         }
         let spec = self.m.quality.as_ref().unwrap();
@@ -877,7 +878,104 @@ impl<'a> Tree<'a> {
                 &views,
             );
         }
+        for (i, c) in spec.means.iter().enumerate() {
+            if c.measure == MeanMeasure::Elapsed {
+                continue;
+            }
+            for k in 0..self.times.len() {
+                if self.mean_hits[i][k].is_some() {
+                    continue;
+                }
+                let hit = match c.property {
+                    Some(p) => self.first_hits[p][k].is_some(),
+                    None => {
+                        matches!(w.cases[k], CaseSlot::Declined | CaseSlot::Overflow(_))
+                            || w.cases[k].payload().is_some_and(|c| c.stopped(self.m))
+                    }
+                };
+                if hit {
+                    self.mean_hits[i][k] = super::metrics::mean_amount(
+                        self.m,
+                        w.cases[k].payload().map_or(&[], |c| &c.frame.tasks),
+                        w.now,
+                        c.measure,
+                    );
+                }
+            }
+        }
         Ok(())
+    }
+    fn mean_views(
+        &self,
+        w: &World<'a>,
+        cut: ReferenceCut,
+        views: &[Vec<crate::quality::FirstView>],
+    ) -> Vec<Vec<crate::quality::MeanView>> {
+        use crate::quality::{Arrival, FirstView, MeanView};
+        self.m
+            .quality
+            .as_ref()
+            .unwrap()
+            .means
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                (0..self.times.len())
+                    .map(|k| {
+                        let first = match c.property {
+                            Some(p) => views[p][k].clone(),
+                            None => {
+                                let stopped = cut == ReferenceCut::None
+                                    || matches!(
+                                        w.cases[k],
+                                        CaseSlot::Declined | CaseSlot::Overflow(_)
+                                    )
+                                    || w.cases[k].payload().is_some_and(|c| c.stopped(self.m));
+                                FirstView {
+                                    hit: stopped.then_some(0),
+                                    closed: false,
+                                    censor: (!stopped).then_some(Arrival::Censored {
+                                        earliest: 0,
+                                        latest: None,
+                                        computational: cut != ReferenceCut::Horizon,
+                                    }),
+                                }
+                            }
+                        };
+                        if c.measure == MeanMeasure::Elapsed {
+                            let elapsed = match (first.hit, &first.censor) {
+                                (Some(t), _) => t,
+                                (None, Some(Arrival::Censored { earliest, .. })) => *earliest,
+                                _ => 0,
+                            };
+                            MeanView {
+                                first,
+                                amount: Some(Rational(num_rational::BigRational::from_integer(
+                                    elapsed.into(),
+                                ))),
+                            }
+                        } else {
+                            let until = if first.hit.is_none() && cut == ReferenceCut::Clock {
+                                self.m.bounds.clock
+                            } else {
+                                w.now
+                            };
+                            MeanView {
+                                first,
+                                amount: self.mean_hits[i][k].clone().or_else(|| {
+                                    super::metrics::mean_amount(
+                                        self.m,
+                                        w.cases[k].payload().map_or(&[], |c| &c.frame.tasks),
+                                        until,
+                                        c.measure,
+                                    )
+                                }),
+                            }
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
     }
     fn first_observations(
         &self,
@@ -1058,10 +1156,10 @@ impl<'a> Tree<'a> {
             .m
             .quality
             .as_ref()
-            .is_some_and(|q| !q.quantiles.is_empty())
+            .is_some_and(|q| !q.quantiles.is_empty() || !q.means.is_empty())
         {
             self.observe_first(w)?;
-            let views = self
+            let views: Vec<Vec<crate::quality::FirstView>> = self
                 .first_observations(w, cut)
                 .into_iter()
                 .map(|row| {
@@ -1084,6 +1182,7 @@ impl<'a> Tree<'a> {
                 })
                 .collect();
             self.first_trees.push(super::quality::FirstTree {
+                means: self.mean_views(w, cut, &views),
                 views,
                 ..Default::default()
             });
@@ -1416,7 +1515,7 @@ impl<'a> Tree<'a> {
             .m
             .quality
             .as_ref()
-            .is_some_and(|q| !q.quantiles.is_empty())
+            .is_some_and(|q| !q.quantiles.is_empty() || !q.means.is_empty())
         {
             let subtrees = self
                 .first_trees
@@ -2061,6 +2160,9 @@ impl<'a> Tree<'a> {
             if let Some(id) = c.frame.contest_pending(self.m) {
                 let mut out = Vec::new();
                 for filed in [false, true] {
+                    if filed && self.m.contest_not_filed(id) {
+                        continue;
+                    }
                     if !filed
                         && self.m.contests()[id]
                             .rates
@@ -2204,9 +2306,11 @@ impl<'a> Tree<'a> {
                 )?;
             }
             Stmt::LoopControl(control) => {
-                for (id, x) in &control.updates {
-                    c.frame.state_values[id.0] = *x;
-                }
+                require(
+                    self.m
+                        .apply_loop_updates(&mut c.frame.state_values, &control.updates)
+                        .is_ok(),
+                )?;
             }
             Stmt::ResolveEffect { command, evidence } => {
                 let event =
@@ -2303,6 +2407,7 @@ impl<'a> Tree<'a> {
                 self.depth + 1,
                 self.first_hits.clone(),
                 self.first_closed.clone(),
+                self.mean_hits.clone(),
             ));
         }
         self.walk_iterative(w)
@@ -2609,9 +2714,11 @@ impl<'a> Tree<'a> {
                         )?;
                     }
                     Stmt::LoopControl(control) => {
-                        for (id, x) in &control.updates {
-                            c.frame.state_values[id.0] = *x;
-                        }
+                        require(
+                            self.m
+                                .apply_loop_updates(&mut c.frame.state_values, &control.updates)
+                                .is_ok(),
+                        )?;
                     }
                     Stmt::ResolveEffect { command, evidence } => {
                         let frame = &w.cases[k].payload().ok_or(StopReason::SemanticAbort)?.frame;
@@ -2807,7 +2914,7 @@ impl<'a> Tree<'a> {
                                         r.values
                                             .iter()
                                             .zip(&kernel.given)
-                                            .all(|(x, id)| *x == vals[id.0])
+                                            .all(|(x, id)| vals.get(id.0) == Some(x))
                                     })
                                     .ok_or(StopReason::SemanticAbort)?;
                                 row.branches
@@ -3172,21 +3279,26 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
         response_receipts: Vec::new(),
         first_closed: vec![
             vec![false; n];
-            m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                0
-            } else {
-                q.properties.len()
+            m.quality.as_ref().map_or(0, |q| {
+                if q.quantiles.is_empty() && q.means.is_empty() {
+                    0
+                } else {
+                    q.properties.len()
+                }
             })
         ],
         first_hits: vec![
             vec![None; n];
-            m.quality.as_ref().map_or(0, |q| if q.quantiles.is_empty() {
-                0
-            } else {
-                q.properties.len()
+            m.quality.as_ref().map_or(0, |q| {
+                if q.quantiles.is_empty() && q.means.is_empty() {
+                    0
+                } else {
+                    q.properties.len()
+                }
             })
         ],
         first_trees: Vec::new(),
+        mean_hits: vec![vec![None; n]; m.quality.as_ref().map_or(0, |q| q.means.len())],
         #[cfg(test)]
         resource_worlds: None,
         depth: 0,
@@ -3353,6 +3465,13 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
                             || tree.terminals[k].contains_key(&Kind::Overflow(e)) =>
                     {
                         Verdict::Satisfied
+                    }
+                    p if m.contest_response_excluded(p) => {
+                        if stop == StopReason::Complete {
+                            Verdict::Inconclusive
+                        } else {
+                            Verdict::Unsupported
+                        }
                     }
                     Property::Contract(id) if tree.cases[k].contract_facts[id.0].1 => {
                         Verdict::Violated
@@ -3630,6 +3749,7 @@ pub(super) fn explore_projected(m: &Model, limits: Limits, projection: Projectio
                     let abort = stop != StopReason::Complete;
                     let mut out = super::quality::exhaustive(m, &ps, &os, abort);
                     super::quality::add_tree_quantiles(&mut out, m, tree.first_trees.last(), abort);
+                    super::quality::add_tree_means(&mut out, m, tree.first_trees.last(), abort);
                     out
                 }),
             state_range_violations: tree
@@ -4294,6 +4414,7 @@ mod arrivals_tests {
             first_closed: Vec::new(),
             walk_work: None,
             first_trees: Vec::new(),
+            mean_hits: Vec::new(),
             overflows: None,
             external_peaks: None,
             admissions: vec![None; n],

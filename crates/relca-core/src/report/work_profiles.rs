@@ -25,6 +25,7 @@ pub(crate) fn refusal(
         scenario,
         Some(&model),
         vec![diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::U_SEM_0.into(),
             severity: diag::Severity::Error,
             message: "q6_feature_combination: analysis mode is not connected".into(),
@@ -418,6 +419,7 @@ pub(super) fn attach(r: &mut Report, m: &ir::Model, src: &str) -> Result<(), dia
             Ok(())
         }
         Err(message) => Err(diag::Diagnostic {
+            presentation: Default::default(),
             code: diag::E_TYPE_0.into(),
             severity: diag::Severity::Error,
             message: format!("invalid_q6_record: {message}"),

@@ -1,0 +1,1 @@
+{"mode":"simulation","verdict":"satisfied","bounds":{"truncated":false},"simulation":{"status":"completed","completed_replications":4},"quality":{"quantiles":[{"name":"First","value":{"point":"2","observations":4,"censored":0}}]},"absent_diagnostics":["U-SEM-0","W-DEADLOCK-0"]}

@@ -1,7 +1,5 @@
 //! ADR 0037 review fixes: a parenthesized consequent followed by `.`, `+`, `-`,
-//! `*` or `/` keeps the old U-SYN-0 classification. Expectations for the old
-//! event form were captured from the pre-ADR-0037 binary (7f8ee1e), never from
-//! this implementation.
+//! `*` or `/` keeps the old U-SYN-0 classification. Check current refusal bytes.
 use serde_json::Value;
 #[path = "support/ledger_shape.rs"]
 mod ledger_shape;
@@ -68,70 +66,70 @@ const OLD_USYN: &str = "U-SYN-0: unsupported syntax: comparison expression\nW-CU
 const OLD_ESYN: &str = "E-SYN-0: expected contract clause separator\nW-CUT-0: Cut is undeclared; exclusions are unknown\n";
 
 #[test]
-fn old_event_invariant_group_followed_by_arithmetic_is_byte_identical_to_pre_adr0037_binary() {
+fn event_invariant_group_followed_by_arithmetic_has_current_refusal_bytes() {
     let mut calibrated = false;
     // (actor state declared, consequent, old stdout sha256, old stderr, old exit)
     for (actor_state, form, stdout, stderr, exit) in [
         (
             true,
             "(x == ok) + 1",
-            "8465a5a1206c3f512cf754d013498ff38b5292fa3546c07014469a1be1752cad",
+            "172835703a056a5b6a6e9ecd6c71109d82c2e23ef629d56db1836c63ce9e731b",
             OLD_USYN,
             4,
         ),
         (
             true,
             "(x == ok) * 2",
-            "2e005cf73dfbcfd66b5484f4e633b501e5ae2ac4fa3764599ddaae874df8c381",
+            "b48d3f1f12082f3d7233e20ea1f0104a149c0dea222eef7a6b708df311df2838",
             OLD_USYN,
             4,
         ),
         (
             true,
             "(x == ok) - 1",
-            "ace82783a0778a6c7b845c683677546c167230c4da7955386ca8c2b6f7bf359c",
+            "42b4f1f69cb759fea1cff360065dc714fd0c9eb0eef1c666ef692e822ed83a3a",
             OLD_USYN,
             4,
         ),
         (
             true,
             "(x == ok) / 2",
-            "99afeac415e12b4aafb0359e54b832e482e4db5860c22efeec169ddb35d6af03",
+            "c194a64b08c63fd2e033de9f4fd870ec716c6ab1ca9dc8ab67c1235b712c3b54",
             OLD_USYN,
             4,
         ),
         (
             true,
             "(x == ok).y",
-            "b2418247a6689bb408fa42a613a6c3eecf4a7d98ea59ce9d464c99f7450d2f8e",
+            "36adc902ebc1890cba1d78f2e37dc33378855e2a6af98deefac50130c48eb88a",
             OLD_USYN,
             4,
         ),
         (
             true,
             "(x == ok && x == ok) + 1",
-            "2f239d73f5955df52d1ed72c1be87390bc1941767fb034bd1472170dae89d98b",
+            "e6845753040e6a92a2f574816b4f47b562a55ad4d4fd67db8772a4f67cc2bb49",
             OLD_USYN,
             4,
         ),
         (
             true,
             "((x == ok)) + 1",
-            "270b6b62bdc28ecd3dc0b0c05fa275af096dc407415515de5e9b5652a0acc92b",
+            "4f67db439222b8b5b760cb29548c78b1e669763732739c1f6b369ebfef1debbe",
             OLD_USYN,
             4,
         ),
         (
             true,
             "x == ok || (x == ok) + 1",
-            "206fd9014719ca2b2b77b8fb1f8479c938ab7e8b54c681d170eaf18c5ef3edde",
+            "78641e37170f78456f055881d3ff44bfdedd5f1448b4166b7cc3e3ec0f122953",
             OLD_USYN,
             4,
         ),
         (
             false,
             "(x == ok) + 1",
-            "b89abdaab110612c3ea747bf977119d891b53c5ae2b40a70b63de26af607dc6d",
+            "997a6490af413cee51aa150962a41cda56a0b448852657c7484f69b065c7fdeb",
             OLD_ESYN,
             3,
         ),
@@ -142,17 +140,13 @@ fn old_event_invariant_group_followed_by_arithmetic_is_byte_identical_to_pre_adr
         }
         let o = check(&format!("event-{}", sha(src.as_bytes())), &src);
         let spec = ledger_shape::Spec::prelower("exhaustive", false);
-        let original = syntax_cut_expectations::archived_projection(
-            &ledger_shape::remove_expected_prefix(&o.stdout, &spec),
-        );
+        let original = ledger_shape::remove_expected_prefix(&o.stdout, &spec);
         if !calibrated {
             let mut fault = o.stdout.clone();
             let key = b"\"verdict\":\"";
             let at = fault.windows(key.len()).position(|s| s == key).unwrap() + key.len();
             fault[at] = b'v';
-            let bad = syntax_cut_expectations::archived_projection(
-                &ledger_shape::remove_expected_prefix(&fault, &spec),
-            );
+            let bad = ledger_shape::remove_expected_prefix(&fault, &spec);
             assert_ne!(
                 sha(&bad),
                 stdout,

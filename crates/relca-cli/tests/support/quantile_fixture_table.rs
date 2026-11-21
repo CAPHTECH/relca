@@ -177,7 +177,7 @@ fn validate_quantiles<'a>(
     {
         return Err("quantile checked/unchecked inventory".into());
     }
-    if !aborted && q[key].as_array().unwrap().last() != Some(&serde_json::json!("quantiles")) {
+    if !aborted && q[key].as_array().unwrap().iter().rfind(|x| *x!="means") != Some(&serde_json::json!("quantiles")) {
         return Err("quantiles follows old checked inventory".into());
     }
     Ok(())

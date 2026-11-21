@@ -34,10 +34,40 @@ fn injected(s: &str, block: &str, dimension: &str, n: usize, config: bool) -> Va
     // withdrawal and executors retention. The adapter must not recreate those
     // rules itself: doing so would mask a defect in production finalization.
     let original_lower = m.diagnostics.clone();
-    assert_eq!(
-        &r.diagnostics[..original_lower.len()],
-        original_lower.as_slice()
-    );
+    let at = |byte: usize| {
+        let mut line = 1;
+        let mut column = 1;
+        for ch in s[..byte].chars() {
+            if ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+        (line, column)
+    };
+    for (reported, lowered) in r.diagnostics[..original_lower.len()]
+        .iter()
+        .zip(&original_lower)
+    {
+        assert_eq!(reported.code, lowered.code);
+        assert_eq!(reported.severity, lowered.severity);
+        assert_eq!(reported.message, lowered.message);
+        assert_eq!(reported.span, lowered.span);
+        assert_eq!(reported.presentation.detail, lowered.presentation.detail);
+        let expected = lowered.span.map(|span| {
+            let (line, column) = at(span.start);
+            let (end_line, end_column) = at(span.end);
+            diag::Location {
+                line,
+                column,
+                end_line,
+                end_column,
+            }
+        });
+        assert_eq!(reported.presentation.location.as_deref(), expected.as_ref());
+    }
     let (agency, warnings) = derive_with_new_limits(&m, DEFAULT, limits, effect_limit).unwrap();
     m.agency = agency.into();
     m.diagnostics.retain(|d| {
@@ -57,6 +87,7 @@ fn injected(s: &str, block: &str, dimension: &str, n: usize, config: bool) -> Va
     m.diagnostics.extend(warnings);
     crate::responsibility::derive(&mut m).unwrap();
     r.diagnostics.splice(..original_lower.len(), m.diagnostics);
+    diag::locate(s, &mut r.diagnostics);
     r.agency = Some(m.agency);
     serde_json::to_value(r).unwrap()
 }

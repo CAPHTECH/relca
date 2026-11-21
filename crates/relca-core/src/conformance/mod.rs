@@ -206,13 +206,46 @@ fn diagnostic(
     message: impl Into<String>,
     span: Option<diag::Span>,
 ) -> LogDiagnostic {
+    let diagnostic = diag::Diagnostic {
+        presentation: Default::default(),
+        code: code.into(),
+        severity: diag::severity_of(code).expect("registered conformance code"),
+        message: message.into(),
+        span,
+    };
+    // `reason` comes from the typed log check or input refusal, not message
+    // text. A log or sidecar refusal does not point into the model source.
+    let detail = match (code, reason) {
+        (diag::U_LOG_1, "unsupported_q1_model_feature") => Some((reason, "log_model_feature")),
+        (diag::U_LOG_1, "unsupported_contract") => Some((reason, "log_contract_kind")),
+        (diag::U_LOG_1, "unsupported_verify") => Some((reason, "log_verify_kind")),
+        (diag::U_LOG_1, "unsupported_cancel_semantics") => Some((reason, "log_cancel_semantics")),
+        (diag::U_LOG_1, "unsupported_approval_profiles") => Some((reason, "log_approval_profiles")),
+        (diag::U_LOG_1, "unsupported_approval_semantics") => {
+            Some((reason, "log_approval_semantics"))
+        }
+        (diag::U_LOG_1, field) if field.starts_with("unsupported_capability_") => {
+            Some(("unsupported_capability_lifecycle", "log_capability_field"))
+        }
+        (diag::U_LOG_0, "scope") => Some((reason, "log_scope")),
+        (diag::U_LOG_0, "schema") => Some((reason, "log_schema")),
+        (diag::U_LOG_0, "time_unit") => Some((reason, "log_time_unit")),
+        (diag::U_LOG_0, "approval_spec_schema") => Some((reason, "log_approval_schema")),
+        _ => None,
+    };
+    let diagnostic = if let Some((reason, cause)) = detail {
+        diagnostic.unconnected(
+            reason,
+            cause,
+            span.into_iter()
+                .map(|s| diag::Blocker::at("feature", None, Some(s)))
+                .collect(),
+        )
+    } else {
+        diagnostic
+    };
     LogDiagnostic {
-        diagnostic: diag::Diagnostic {
-            code: code.into(),
-            severity: diag::severity_of(code).expect("registered conformance code"),
-            message: message.into(),
-            span,
-        },
+        diagnostic,
         reason: Some(reason.into()),
     }
 }
@@ -405,7 +438,12 @@ pub fn conform(
     configuration: Option<&str>,
     scenario: Option<&str>,
 ) -> ConformanceReport {
-    conform_raw(src, reader, configuration, scenario, None).seal()
+    let mut result = conform_raw(src, reader, configuration, scenario, None).seal();
+    diag::locate(
+        src,
+        result.diagnostics.iter_mut().map(|d| &mut d.diagnostic),
+    );
+    result
 }
 /// ADR 0061's composite observed-event scope. Sidecar reading and analysis have
 /// no access to any execution engine; the old entry point remains unchanged.
@@ -416,14 +454,19 @@ pub fn conform_approval(
     configuration: Option<&str>,
     scenario: Option<&str>,
 ) -> ConformanceReport {
-    conform_raw(
+    let mut result = conform_raw(
         src,
         reader,
         configuration,
         scenario,
         Some(&mut approval_spec),
     )
-    .seal()
+    .seal();
+    diag::locate(
+        src,
+        result.diagnostics.iter_mut().map(|d| &mut d.diagnostic),
+    );
+    result
 }
 fn conform_raw(
     src: &str,
@@ -505,22 +548,39 @@ fn conform_raw(
     r.ledger.execution["limits"]["state_budget"] = crate::ledger::na("no_analysis");
     if m.has_merges() {
         r.verdict = Verdict::Unsupported;
-        r.diagnostics.push(diagnostic(
+        let mut row = diagnostic(
             diag::U_LOG_1,
             "unsupported_merge_model_feature",
             "merge_feature_combination: merged values are not observable in event logs",
             Some(m.process.span),
-        ));
+        );
+        row.diagnostic = row.diagnostic.merge_detail(
+            "conform_merge_log",
+            m.process
+                .bindings
+                .iter()
+                .filter(|b| b.merge.is_some())
+                .map(|b| diag::Blocker::at("merge_binding", Some(b.name.clone()), Some(b.span)))
+                .collect(),
+        );
+        r.diagnostics.push(row);
         return r;
     }
     if m.has_loops() {
         r.verdict = Verdict::Unsupported;
-        r.diagnostics.push(diagnostic(
+        let mut row = diagnostic(
             diag::U_LOG_1,
             "unsupported_loop_model_feature",
             "loop_feature_combination: repeated Task log matching is not connected",
             Some(m.process.span),
-        ));
+        );
+        row.diagnostic = row.diagnostic.loop_detail(
+            "conform_repeat_log",
+            diag::DetailKind::AnalysisNotConnected,
+            None,
+            None,
+        );
+        r.diagnostics.push(row);
         return r;
     }
     if m.uses_work_profiles() {

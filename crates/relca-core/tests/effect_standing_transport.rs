@@ -318,7 +318,7 @@ fn label_and_grain_full_report_comparison_maps_source_bytes_independently() {
             _ => {}
         }
     }
-    let a = check("sov-basic");
+    let mut a = check("sov-basic");
     let mut b = check("sov-label");
     assert_eq!(a["verdict"], "satisfied");
     assert_eq!(b["verdict"], "satisfied");
@@ -335,6 +335,8 @@ fn label_and_grain_full_report_comparison_maps_source_bytes_independently() {
         assert_eq!(row["grain"], json!({"status":"declared","value":grain}));
         row["grain"] = json!({"status":"default","value":null});
     }
+    relca_test_support::diagnostic::check_and_clear_locations(&base, &mut a);
+    relca_test_support::diagnostic::check_and_clear_locations(&labelled, &mut b);
     normalize(&mut b, &positions);
     assert_eq!(
         a, b,

@@ -184,6 +184,7 @@ fn validate_value(view: &str, item: &str, value: &Value) -> std::result::Result<
             .map_err(|e| e.to_string())
     }
     match (view, item) {
+        ("origin", "via_records") => typed::<Vec<super::RecordProvenance>>(value),
         ("observation", _) | ("origin", _) => typed::<Vec<String>>(value),
         ("framing", "reachable") | ("retention", "contest_route" | "join_any_cancellation") => {
             typed::<bool>(value)
@@ -349,7 +350,7 @@ const TABLES: &[Table] = &[
         viewpoint: "origin",
         collection: "",
         key: "actor",
-        items: &["direct", "indirect"],
+        items: &["direct", "indirect", "via_records"],
     },
     Table {
         viewpoint: "framing",
@@ -718,6 +719,9 @@ fn compare(
     let mut z = size(&stage_projection::AgencyView(z), b)?;
     // Work only on the already budgeted comparison copies. Child reports and
     // raw metrics, trace labels and sampler keys retain their own IR namespace.
+    let with_records = models.is_some_and(|(from, to)| {
+        crate::registration::present(from) || crate::registration::present(to)
+    });
     if let Some((from, to)) = models {
         response::normalize(&mut a, from, b)?;
         response::normalize(&mut z, to, b)?;
@@ -747,6 +751,9 @@ fn compare(
             keys.push(MeaningKey::default());
         }
         for item in t.items {
+            if *item == "via_records" && !with_records {
+                continue;
+            }
             for key in &keys {
                 b.work()?;
                 let x = cell(&a, key, t, item);

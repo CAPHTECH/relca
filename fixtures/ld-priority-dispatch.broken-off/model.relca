@@ -1,0 +1,17 @@
+model PriorityDispatch version "0.2" {
+  type T = enum { ok }
+  people [c1,c2]
+  actor Clerk { executors [c1,c2]
+    capability enter() -> T { duration fixed 3min; result nondet { ok } }
+    capability check() -> T { duration fixed 2min; result nondet { ok } }
+  }
+  process P { e = Clerk.enter(); k = Clerk.check(); end done }
+  cut C { include [Clerk] }
+  metrics { window 20min; currency "JPY" }
+  bounds { cases 3; live_tasks 8; clock 20min }
+  arrivals fixed [0min,0min,1min]
+  case_priority fixed [0,0,0]
+  policy observable priority descending tie fifo tie_by case_id then call_order assign first_idle
+  simulation replications 2 seed 0 confidence 0.5
+  verify reachable end.done
+}

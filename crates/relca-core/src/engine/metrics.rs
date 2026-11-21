@@ -2,8 +2,10 @@
 use super::{Lifecycle, State};
 use crate::ir;
 mod calendar;
+mod mean;
 mod tariff;
 mod waits;
+pub(super) use mean::{MeanPath, MeanSamples, mean_amount};
 #[cfg(test)]
 mod waits_tests;
 

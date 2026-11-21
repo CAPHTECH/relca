@@ -56,6 +56,11 @@ fn assert_refusal(out: &Output) -> Value {
     value
 }
 fn baseline(kind: &str, command: &str, out: &Output) {
+    let source = match kind {
+        "inline" => INLINE,
+        "invoice" => include_str!("../../../examples/invoice/to-be-c.relca"),
+        _ => panic!("unregistered refusal source"),
+    };
     let saved = Command::new("gzip")
         .arg("-dc")
         .arg(root().join(format!(
@@ -75,13 +80,17 @@ fn baseline(kind: &str, command: &str, out: &Output) {
     assert_eq!(data.len(), lengths.iter().sum::<usize>());
     assert_eq!(
         out.stdout,
-        data[..lengths[0]],
-        "{kind} {command} stdout changed from c3cad291"
+        relca_test_support::diagnostic::extend_saved_stdout(
+            source,
+            std::str::from_utf8(&data[..lengths[0]]).unwrap()
+        )
+        .as_bytes(),
+        "{kind} {command} current stdout"
     );
     assert_eq!(
         out.stderr,
         data[lengths[0]..lengths[0] + lengths[1]],
-        "{kind} {command} stderr changed from c3cad291"
+        "{kind} {command} current stderr"
     );
     assert_eq!(
         format!("{}\n", out.status.code().unwrap()).as_bytes(),

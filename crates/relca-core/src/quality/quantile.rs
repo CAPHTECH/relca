@@ -563,7 +563,11 @@ pub(super) fn quantile_wire(q: &Quality) -> Result<(), &'static str> {
         .count()
         != 1
         || other.iter().any(|s| s == "quantiles")
-        || !missing && inventory.last().is_none_or(|s| s != "quantiles")
+        || !missing
+            && inventory
+                .iter()
+                .rfind(|s| s.as_str() != "means")
+                .is_none_or(|s| s != "quantiles")
     {
         return Err("quantile checked/unchecked inventory");
     }

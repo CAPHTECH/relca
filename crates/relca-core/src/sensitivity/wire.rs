@@ -189,6 +189,8 @@ pub struct SensitivityReport {
     pub scope: Scope,
     pub points: Vec<PointResult>,
     pub summaries: Vec<Summary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unchecked: Option<[Unchecked; 1]>,
     pub uncertainty: Uncertainty,
     pub verdict: Verdict,
     pub diagnostics: Vec<Diagnostic>,
@@ -202,9 +204,16 @@ struct ReportWire {
     scope: Scope,
     points: Vec<PointResult>,
     summaries: Vec<Summary>,
+    #[serde(default)]
+    unchecked: Option<[Unchecked; 1]>,
     uncertainty: Uncertainty,
     verdict: Verdict,
     diagnostics: Vec<Diagnostic>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unchecked {
+    MetricConstraints,
 }
 impl TryFrom<ReportWire> for SensitivityReport {
     type Error = String;
@@ -216,6 +225,7 @@ impl TryFrom<ReportWire> for SensitivityReport {
             scope: r.scope,
             points: r.points,
             summaries: r.summaries,
+            unchecked: r.unchecked,
             uncertainty: r.uncertainty,
             verdict: r.verdict,
             diagnostics: r.diagnostics,
@@ -234,6 +244,7 @@ impl SensitivityReport {
             scope: Scope::unavailable(),
             points: vec![],
             summaries: vec![],
+            unchecked: None,
             uncertainty: Uncertainty::not_lowered(),
             verdict: Verdict::Unsupported,
             diagnostics: vec![],
@@ -261,6 +272,17 @@ impl SensitivityReport {
             self.scope.all_points_evaluated = Some(n == self.points.len());
         }
         self.summaries = summary::collect(self.mode.analysis(), targets, &self.summary_inputs());
+        if self
+            .points
+            .iter()
+            .filter_map(|p| p.report.as_ref())
+            .any(|r| match r {
+                AnalysisReport::Exhaustive(r) => !r.metric_checks.is_empty(),
+                AnalysisReport::Simulation(r) => !r.metric_checks.is_empty(),
+            })
+        {
+            self.unchecked = Some([Unchecked::MetricConstraints]);
+        }
         self.verdict = self.fold_verdict();
         let host = json!(self);
         self.uncertainty = Uncertainty::aggregate(&host, self.mode.as_str());

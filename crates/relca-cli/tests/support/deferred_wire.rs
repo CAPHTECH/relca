@@ -288,6 +288,9 @@ fn deferred_wire_scope(v: &Value) -> Result<DeferredWireScope, String> {
                     && c["capability"]
                         .as_str()
                         .is_some_and(|n| s.capabilities.contains(n))
+                    && (!v["metrics"]["capabilities"].as_array().is_some_and(|caps| caps.iter().any(|row| {
+                        row["capability"] == c["capability"] && row["excluded"] == "scenario_contest_not_filed"
+                    })) || cut["defer_effects"]["process"] == true)
             })
         })
         || calls.is_none()
@@ -769,6 +772,7 @@ pub fn validate_deferred_metrics_with_source(
             | ast::Item::PairIntent(_)
             | ast::Item::CohortMetric(_)
             | ast::Item::QuantileMetric(_)
+            | ast::Item::MeanMetric(_)
             | ast::Item::Resource(_)
             | ast::Item::Responsible(_)
             | ast::Item::Simulation(_)
@@ -787,6 +791,7 @@ pub fn validate_deferred_metrics_with_source(
             | ast::Item::Type(_)
             | ast::Item::Bounds(_)
             | ast::Item::Verify(_)
+            | ast::Item::VerifyMetric(_)
             | ast::Item::Contract(_) => {}
         }
     }

@@ -227,6 +227,10 @@ class Pitfalls(unittest.TestCase):
 SPLIT = EX / "split-first.relca"
 SPLIT_REPEAT = EX / "split-first-repeat.relca"
 AT_END = EX / "check-at-end.relca"
+AT_END_REPEAT = EX / "check-at-end-repeat.relca"
+# split-first-repeat.relca は crates/relca-core/tests/repetition_regressions.rs も読む。契約は試験の中で足す。
+SEPARATION = "    separation Lead.split.finish, Reviewer.check.finish\n"
+SAME_VERSION = "    same_version Dev.refine_a(p), Reviewer.check(p)\n    same_version Dev.refine_b(p), Reviewer.check(p)\n"
 
 
 def ends(report):
@@ -275,43 +279,71 @@ class Unrolling(unittest.TestCase):
         sv = [p["verdict"] for i, p in props(r).items() if "same_version" in i]
         self.assertEqual(sv, ["violated", "violated"])
 
-    def test_repeat_refuses_fork_and_contracts(self):
-        contracts = (
-            "    evidence_basis direct Reviewer.check [Spec]\n"
-            "    same_version Dev.refine_a(p), Reviewer.check(p)\n"
-        )
-        anchor = "    separation Lead.split.finish, Reviewer.check.finish\n"
-        with tempfile.TemporaryDirectory() as tmp:
-            with_contracts = edited(tmp, SPLIT_REPEAT, "eb.relca", anchor, anchor + contracts)
-            code, _, err = run("check", with_contracts)
-            self.assertEqual(code, 4)
-            self.assertIn("loop_feature_combination", err)
-            text = SPLIT_REPEAT.read_text()
-            start = text.index("    repeat planning")
-            body = (
-                "    repeat rounds at_most 2 {\n"
-                "      p = Lead.split()\n"
-                "      fork w { a = Dev.refine_a(p); b = Dev.refine_b(p) }\n"
-                "      join all w\n"
-                "      x = Lead.integrate(a,b)\n"
-                "      v = Reviewer.check(p,x)\n"
-                "      if v == pass { r = Lead.release(x); end delivered } else { again }\n"
-                "    } on_limit { end escalated }\n"
-                "  }\n"
-            )
-            end = text.index("  cut SplitCut")
-            fork_in_repeat = Path(tmp) / "fork.relca"
-            fork_in_repeat.write_text(text[:start] + body + text[end:])
-            code, _, err = run("check", fork_in_repeat)
-        self.assertEqual(code, 4)
-        self.assertIn("loop_feature_combination", err)
+    def test_check_at_end_repeat_matches_unrolled(self):
+        """並行を含むやり直しを repeat で書いた版が、書き下した版・手計算と一致する。"""
+        _, a, _ = run("check", AT_END)
+        code, b, err = run("check", AT_END_REPEAT)
+        self.assertEqual(code, 1, err)
+        self.assertEqual(ends(a), ends(b))
+        self.assertEqual(prob(b), (Fraction(783, 20000),) * 2)
+        self.assertEqual(ends(b)["delivered"][0], Fraction("0.906975"))
+        kinds = [p["verdict"] for i, p in props(b).items() if "evidence_basis" in i or "same_version" in i]
+        self.assertEqual(kinds, ["satisfied"] * 3)
 
-    def test_mutate_runs_only_when_unrolled(self):
+    def test_stale_plan_breaks_same_version_in_repeat(self):
+        """repeat の中でも、確認した版と使った版の食い違いを same_version が捕まえる。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = edited(
+                tmp,
+                AT_END_REPEAT,
+                "stale.relca",
+                "      v = Reviewer.check(p,x)\n",
+                "      q = Lead.split()\n      v = Reviewer.check(q,x)\n",
+            )
+            code, r, err = run("check", bad)
+        self.assertEqual(code, 1, err)
+        sv = [p["verdict"] for i, p in props(r).items() if "same_version" in i]
+        self.assertEqual(sv, ["violated", "violated"])
+
+    def test_repeat_keeps_same_version_across_the_loop(self):
+        """repeat の結果を後段で使う形でも same_version は判定される。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            with_sv = edited(tmp, SPLIT_REPEAT, "sv.relca", SEPARATION, SEPARATION + SAME_VERSION)
+            code, r, err = run("check", with_sv)
+        self.assertEqual(code, 0, err)
+        sv = [p["verdict"] for i, p in props(r).items() if "same_version" in i]
+        self.assertEqual(sv, ["satisfied", "satisfied"])
+
+    def test_evidence_basis_on_a_call_fed_by_repeat_matches_unrolled(self):
+        """repeat の結果を引数に取る、repeat の外の呼出しを evidence_basis の対象にできる。書き下した版と同じ判定。"""
+        for line in ("evidence_basis direct Reviewer.check [Spec]", "evidence_basis Reviewer.check [Spec]"):
+            with self.subTest(line=line), tempfile.TemporaryDirectory() as tmp:
+                verdicts = []
+                for src in (SPLIT_REPEAT, SPLIT):
+                    path = edited(tmp, src, src.name, SEPARATION, SEPARATION + f"    {line}\n")
+                    code, r, err = run("check", path)
+                    self.assertEqual(code, 0, err)
+                    basis = {p["verdict"] for i, p in props(r).items() if "evidence_basis" in i}
+                    self.assertTrue(basis, src)
+                    verdicts.append(basis)
+                self.assertEqual(verdicts, [{"satisfied"}, {"satisfied"}])
+
+    def test_mutate_on_repeat(self):
         code, r, _ = run("mutate", AT_END)
         self.assertEqual(code, 4)
         results = [mu["result"] for m in r["mutations"] for mu in m["mutants"]]
         self.assertEqual((results.count("detected"), results.count("undetected")), (11, 11))
-        code, _, err = run("mutate", SPLIT_REPEAT)
+        # repeat 版でも回る。種類ごとに、使えるものと、名前つきで拒否されるものに分かれる。
+        code, r, _ = run("mutate", SPLIT_REPEAT)
+        self.assertEqual(code, 4)
+        status = {m["kind"]: (m["status"], m["reason"]) for m in r["mutations"]}
+        for kind in ("evidence_missing", "hold_delayed", "summary_reused", "refusal_path_cut"):
+            self.assertEqual(status[kind], ("generated", None), kind)
+            self.assertTrue([m for m in r["mutations"] if m["kind"] == kind][0]["mutants"], kind)
+        for kind in ("authority_expired", "command_resent", "receipt_unknown", "original_access_removed"):
+            self.assertEqual(status[kind], ("unsupported", "loop_feature_combination"), kind)
+        # repeat の本体に fork がある形は、mutate ではまだ拒否される。
+        code, _, err = run("mutate", AT_END_REPEAT)
         self.assertEqual(code, 4)
         self.assertIn("loop_feature_combination", err)
 

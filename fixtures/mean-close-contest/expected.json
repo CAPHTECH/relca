@@ -1,0 +1,6 @@
+{"verdict":"satisfied","quality":{"means":[
+  {"name":"AtEnd", "measure":"work", "property":"Returned", "form":"all_arrivals", "value":{"lower":"1","upper":"1","basis":"exact","reason":null}, "lower_bound":null},
+  {"name":"Work", "measure":"work", "property":null, "form":"all_arrivals", "value":{"lower":"1","upper":"3","basis":"per_case_relaxation","reason":null}, "lower_bound":null},
+  {"name":"People", "measure":"named_people_work", "property":null, "form":"all_arrivals", "value":{"lower":"1","upper":"3","basis":"per_case_relaxation","reason":null}, "lower_bound":null},
+  {"name":"Cost", "measure":"cost", "property":null, "form":"all_arrivals", "value":{"lower":"1","upper":"3","basis":"per_case_relaxation","reason":null}, "lower_bound":null}
+]}}

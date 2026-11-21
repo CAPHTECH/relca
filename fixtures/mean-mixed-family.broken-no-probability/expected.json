@@ -1,0 +1,1 @@
+{"verdict":"inconclusive","simulation":{"multiplicity":{"rows":1,"alpha_before":"1/40","alpha_after":"1/40"}},"metric_checks":[{"constraint":"cohort.OnTime >= 9/10","verdict":"satisfied","basis":"statistical","alpha":"1/40"}]}

@@ -1,0 +1,1 @@
+一次処理は case 1 が [0,2)、case 2 が [2,4)。到着0分・1分を引いたリードタイムは2・3分、approve の待ちは0・1分、Approver の作業は4分。両方 returned で起票の除外に当たり、Clerk の作業は0分。構造の権限と contest の性質は維持され、応答は未評価で inconclusive。安全性も simulate では標本だけなので inconclusive。

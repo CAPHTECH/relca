@@ -316,7 +316,7 @@ fn cancelled_result_is_not_definitely_available_as_an_argument() {
 }
 
 #[test]
-fn fallback_degradation_and_repetition_aliases_remain_explicitly_unsupported() {
+fn fallback_degradation_remains_unsupported_but_repetition_aliases_work() {
     let base = include_str!("evidence_basis/m0.relca");
     let src = edit(
         base,
@@ -336,11 +336,13 @@ fn fallback_degradation_and_repetition_aliases_remain_explicitly_unsupported() {
         "e = Clerk.enter()",
         "repeat attempt at_most 1 { e = Clerk.enter(); leave } on_limit { end returned }",
     );
-    let ds =
-        lower::lower(&syntax::parse(&basis(&src, "Approver.approve", "PurchaseOrder")).unwrap())
-            .unwrap_err();
-    assert!(
-        ds.iter()
-            .any(|d| d.message.contains("loop_feature_combination"))
+    // The shared argument imports Invoice, but not PurchaseOrder.
+    pair(
+        &basis(&src, "Approver.approve", "PurchaseOrder"),
+        Verdict::Violated,
+    );
+    pair(
+        &basis(&src, "Approver.approve", "Invoice"),
+        Verdict::Satisfied,
     );
 }

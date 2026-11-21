@@ -793,7 +793,7 @@ fn rows_shared(
         };
         if single_actor.yes() || single_person.yes() {
             b.copy(1)?;
-            warnings.push(diag::Diagnostic { code:diag::W_AGY_2.into(), severity:diag::Severity::Warning,
+            warnings.push(diag::Diagnostic { presentation: Default::default(), code:diag::W_AGY_2.into(), severity:diag::Severity::Warning,
                 message:format!("{effect} の判定・拒否・実行が {} に集まる(兆候)。想定機構: 単独の主体が自ら判定して実行する。確認: モデル外の統制とログ",if single_actor.yes() { "Actor" } else { "人" }),span:Some(c.span) });
         }
         let u = if known {

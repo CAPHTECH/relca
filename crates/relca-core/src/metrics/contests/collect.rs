@@ -109,13 +109,19 @@ pub(crate) fn summarize(
         .ok_or("missing contest simulation configuration")?
         .replications;
     if !aborted {
+        // The sampling driver records non-filed clauses too, for its audit.
+        // Only clauses with declared rates belong to the rate summary below.
+        let excluded = m
+            .scenario
+            .as_ref()
+            .map_or(0, |s| s.contests_not_filed.len());
         ensure(
             sampled.completed_replications == trials && sampled.replications.len() as u64 == trials,
         )?;
         for (i, rep) in sampled.replications.iter().enumerate() {
             ensure(
                 rep.replication == i as u64 + 1
-                    && rep.contests.len() as u64 == ids.len() as u64 * m.bounds.cases,
+                    && rep.contests.len() as u64 == (ids.len() + excluded) as u64 * m.bounds.cases,
             )?;
         }
     }

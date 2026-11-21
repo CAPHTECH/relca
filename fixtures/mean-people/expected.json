@@ -1,0 +1,5 @@
+{"verdict":"satisfied","bounds":{"truncated":false},"quality":{"means":[
+  {"name":"People","measure":"named_people_work","property":null,"form":"all_arrivals","value":{"lower":"2","upper":"2","basis":"exact","reason":null},"lower_bound":null},
+  {"name":"Work","measure":"work","property":null,"form":"all_arrivals","value":{"lower":"5","upper":"5","basis":"exact","reason":null},"lower_bound":null},
+  {"name":"Cost","measure":"cost","property":"Done","form":"all_arrivals","value":{"lower":"83","upper":"83","basis":"exact","reason":null},"lower_bound":null}
+]}}

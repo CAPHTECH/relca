@@ -246,6 +246,7 @@ pub fn validate_rule_diff_cell_wire(v: &Value) -> Result<(), String> {
 #[path = "../tests/support/evaluation_wire.rs"]
 mod evaluation_wire;
 include!("../tests/support/quantile_fixture_table.rs");
+include!("../tests/support/mean_fixture_table.rs");
 include!("../tests/support/deferred_wire.rs");
 include!("../tests/support/defer_warning_projection.rs");
 
@@ -391,6 +392,7 @@ fn quality_schema(sampled: bool) -> Ty {
             "business_value",
             "rework_loss",
             "quantiles",
+            "means",
         ])))
     };
     Obj(vec![
@@ -418,6 +420,10 @@ fn quality_schema(sampled: bool) -> Ty {
         (
             "quantiles",
             OptionalField(Box::new(Arr(Box::new(quantile_schema(sampled))))),
+        ),
+        (
+            "means",
+            OptionalField(Box::new(Arr(Box::new(mean_schema(sampled))))),
         ),
         (
             "outcomes_per_arrival",
@@ -710,6 +716,7 @@ pub fn validate_quality_wire(q: &Value, sampled: bool) -> Result<(), String> {
         }
     }
     validate_quantiles(q, sampled, &names, &mut metrics)?;
+    validate_means(q, sampled, &names, &mut metrics)?;
     let mut outcomes = std::collections::BTreeSet::new();
     for o in q["outcomes_per_arrival"].as_array().unwrap() {
         if !outcomes.insert((o["kind"].as_str(), o["end"].as_str())) {
@@ -1344,6 +1351,7 @@ pub fn validate_completion_wire(v: &Value) -> Result<(), String> {
                 || (!simulation && word == "completion_graph")
                 || (simulation && word == "obligation_outcomes")
                 || word == "dynamic_authority_revocation"
+                || (!simulation && word == "metric_constraints")
                 || scope_wire::marker(word))
             {
                 return Err("unknown completion unchecked word".into());
@@ -3879,6 +3887,7 @@ fn mutation_schema() -> Ty {
                     "undetected",
                     "inconclusive",
                     "invalid_mutant",
+                    "unsupported",
                     "not_run",
                     "not_selected",
                 ]),
@@ -3892,6 +3901,7 @@ fn mutation_schema() -> Ty {
                     "runtime_unsupported",
                     "original_truncated",
                     "assigned_check_unavailable",
+                    "loop_control",
                     "static_invalid",
                     "static_unsupported",
                     "mutant_limit",
@@ -3970,6 +3980,7 @@ fn mutation_schema() -> Ty {
                         "rule_version_unavailable",
                         "receipt_unknown_semantics_unavailable",
                         "quality_denominator_unavailable",
+                        "loop_feature_combination",
                         "state_condition",
                         "no_matching_site",
                         "no_time_elapse",
@@ -4004,6 +4015,11 @@ fn mutation_schema() -> Ty {
                                 ]),
                             ),
                         ]),
+                        Obj(vec![
+                            ("site", site()),
+                            ("status", Lit(&["unsupported"])),
+                            ("reason", Lit(&["loop_feature_combination"])),
+                        ]),
                     ]))))),
                 ),
                 (
@@ -4014,6 +4030,7 @@ fn mutation_schema() -> Ty {
                         ("existing_response_loss", OptionalField(Box::new(Int))),
                         ("fork_branch", OptionalField(Box::new(Int))),
                         ("unsupported_input", OptionalField(Box::new(Int))),
+                        ("loop_feature_combination", OptionalField(Box::new(Int))),
                     ]))),
                 ),
             ]))),
@@ -4198,6 +4215,17 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
         "quality_changes",
     ];
     let all_unchecked = v["unchecked"].as_array().unwrap();
+    let metric_marker = |rows: &Value| {
+        rows.as_array()
+            .into_iter()
+            .flatten()
+            .filter(|s| **s == "metric_constraints")
+            .count()
+    };
+    let declared_metric_marker = metric_marker(&v["original"]["unchecked"]);
+    if declared_metric_marker > 1 || metric_marker(&v["unchecked"]) != declared_metric_marker {
+        return Err("mutation metric constraints marker mismatch".into());
+    }
     if all_unchecked.iter().any(|w| {
         w.as_str()
             .and_then(|s| s.strip_prefix("mutation.kind."))
@@ -4211,6 +4239,7 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
             !w.as_str().unwrap_or("").starts_with("mutation.kind.")
                 && !w.as_str().unwrap_or("").starts_with("mutation.site.")
                 && !scope_wire::marker(w)
+                && **w != "metric_constraints"
         })
         .cloned()
         .collect();
@@ -4340,7 +4369,21 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
                 return Err("dynamic response mutation wire is outside this Phase 1 fixture validator; use the ADR0056 typed transport and hand oracle".into());
             }
         }
-        if let Some((_, reason)) = MUTATION_UNSUPPORTED
+        if v["original"].get("repetition").is_some()
+            && matches!(i, 1 | 3 | 6 | 7 | 9)
+            && row["status"] != "blocked"
+            && row["reason"] != "loop_feature_combination"
+        {
+            return Err("repeat family must be explicitly refused".into());
+        }
+        if v["original"].get("repetition").is_some()
+            && matches!(i, 1 | 3 | 6 | 7 | 9)
+            && row["reason"] == "loop_feature_combination"
+        {
+            if row["status"] != "unsupported" || !ms.is_empty() || !row["candidates"].is_null() {
+                return Err("repeat family refusal has candidates".into());
+            }
+        } else if let Some((_, reason)) = MUTATION_UNSUPPORTED
             .iter()
             .find(|(n, _)| *n == i)
             .filter(|_| !response_kind)
@@ -4373,7 +4416,7 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
             } else if m["result"] != "not_selected" {
                 trials += 1;
             }
-            incomplete |= ["not_run", "inconclusive", "invalid_mutant"]
+            incomplete |= ["not_run", "inconclusive", "invalid_mutant", "unsupported"]
                 .contains(&m["result"].as_str().unwrap());
             let id = m["id"].as_str().unwrap();
             if !ids.insert(id) || !id.starts_with(&format!("{}:", MUTATION_KINDS[i])) {
@@ -4422,6 +4465,7 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
             } else if i == 4 {
                 let p = site["process"].as_str().ok_or("summary process")?;
                 let path = site["statement_path"].as_str().ok_or("summary path")?;
+                validate_mutant_body_path(path, &v["original"])?;
                 let bs = site["affected_bindings"].as_array().unwrap();
                 if bs.len() != 2
                     || site["actor"].as_str().is_none()
@@ -4467,6 +4511,7 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
                 {
                     return Err("guard identity/site mismatch".into());
                 }
+                validate_mutant_body_path(path, &v["original"])?;
             } else {
                 return Err("guard site lacks path".into());
             }
@@ -4474,6 +4519,40 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
             validate_completion_changes(&m["assigned_changes"], true)?;
             validate_completion_changes(&m["other_changes"], false)?;
             let worsened = changes.iter().any(|c| c["direction"] == "worsened");
+            let loop_refusal_unavailable = i == 8
+                && v["original"].get("repetition").is_some()
+                && v["original"]["agency"]["unchecked"]
+                    .as_array()
+                    .is_some_and(|rows| rows.iter().any(|r| r == "loop_control"));
+            let loop_summary_unavailable = i == 4 && {
+                let consumer = &site["affected_bindings"][1];
+                let lineage = |name: &Value| {
+                    v["original"]["agency"]["lineage"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .any(|row| row["call"] == *name)
+                };
+                !lineage(consumer)
+                    && v["original"]["repetition"]["sites"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .any(|s| s["origin"]["call_site"] == *consumer && lineage(&s["instance"]))
+            };
+            let loop_check_unavailable = loop_refusal_unavailable || loop_summary_unavailable;
+            if m["reason"] == "loop_control" && !loop_check_unavailable
+                || m["result"] == "undetected"
+                    && loop_check_unavailable
+                    && m["reason"] != "independence_credited"
+            {
+                return Err(if i == 4 {
+                    "mutant loop_control must match unavailable summary lineage"
+                } else {
+                    "mutant loop_control must match withdrawn process refusal"
+                }
+                .into());
+            }
             if i == 4 && m["reason"] == "independence_credited" {
                 let consumer = site["affected_bindings"][1].as_str().unwrap();
                 let line = |report: &Value| {
@@ -4631,6 +4710,11 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
                     ]
                     .contains(&m["reason"].as_str().unwrap_or(""))
                         && !m["report"].is_null() => {}
+                "unsupported"
+                    if loop_check_unavailable
+                        && !worsened
+                        && m["reason"] == "loop_control"
+                        && !m["report"].is_null() => {}
                 _ => return Err("inconsistent mutant result/reason/report".into()),
             }
             if !m["report"].is_null() {
@@ -4785,7 +4869,19 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
             return Err("blocked row reason differs from run".into());
         }
     } else {
-        let expected = if rows.iter().any(|r| r["status"] == "unsupported") {
+        let expected = if rows.iter().any(|r| {
+            r["status"] == "unsupported"
+                || r["skipped_sites"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|s| s["status"] == "unsupported")
+                || r["mutants"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|m| m["result"] == "unsupported")
+        }) {
             "unsupported"
         } else if incomplete {
             "inconclusive"
@@ -4824,6 +4920,41 @@ pub fn validate_mutation_wire(v: &Value) -> Result<(), String> {
         if v["run"]["completion"] != completion || v["run"]["reason"] != reason {
             return Err("run completion/reason inconsistent".into());
         }
+    }
+    Ok(())
+}
+
+fn valid_mutant_body_path(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("body/") else {
+        return false;
+    };
+    let mut parts = rest.split('/');
+    while let Some(index) = parts.next() {
+        if index.parse::<usize>().is_err() {
+            return false;
+        }
+        match parts.next() {
+            None => return true,
+            Some("then" | "else" | "repeat" | "on_limit") => {}
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn validate_mutant_body_path(path: &str, original: &Value) -> Result<(), String> {
+    if !valid_mutant_body_path(path) {
+        return Err("invalid mutation statement path".into());
+    }
+    let repeat_steps = path
+        .split('/')
+        .filter(|p| matches!(*p, "repeat" | "on_limit"))
+        .count();
+    if repeat_steps > 1 {
+        return Err("mutation statement path has nested repeat steps".into());
+    }
+    if repeat_steps == 1 && original.get("repetition").is_none() {
+        return Err("mutation statement path requires repeat context".into());
     }
     Ok(())
 }
@@ -5342,7 +5473,22 @@ pub fn validate_expected(expected: &Value) -> Result<(), String> {
 }
 
 pub fn validate_diff_expected(expected: &Value) -> Result<(), String> {
-    check(expected, &diff_schema(), "$")
+    check(expected, &diff_schema(), "$")?;
+    for row in expected["differences"].as_array().into_iter().flatten() {
+        if row["kind"] == "relation"
+            && ["from", "to"]
+                .iter()
+                .any(|k| row.get(k).is_some_and(Value::is_null))
+            && (!row["target"].as_str().is_some_and(valid_plan_name)
+                || !matches!(row["change"].as_str(), Some("added" | "removed")))
+        {
+            return Err(
+                "nullable relation producer requires a binding and explicit addition/removal"
+                    .into(),
+            );
+        }
+    }
+    Ok(())
 }
 
 pub fn compare_diff_report(expected: &Value, actual: &Value) -> Result<(), String> {
@@ -5380,8 +5526,9 @@ pub fn compare_diff_report(expected: &Value, actual: &Value) -> Result<(), Strin
     for field in ["checked", "unchecked"] {
         if actual[field].as_array().is_some_and(|a| {
             a.iter().any(|x| {
-                x.as_str()
-                    .is_some_and(|s| s == "metrics" || s.starts_with("metric_"))
+                x.as_str().is_some_and(|s| {
+                    s == "metrics" || s.starts_with("metric_") && s != "metric_constraints"
+                })
             })
         }) {
             return Err("metric diff words without metric table".into());
@@ -5679,6 +5826,7 @@ fn business_metrics_schema() -> Ty {
                     Arr(Box::new(Obj(vec![
                         ("binding", Str),
                         ("capability", Str),
+                        ("repetition", OptionalField(Box::new(loop_site_schema()))),
                         ("wait", scalar()),
                         ("wait_causes", OptionalField(Box::new(wait_causes_schema()))),
                         (
@@ -5732,6 +5880,10 @@ fn business_metrics_schema() -> Ty {
             "capabilities",
             Arr(Box::new(Obj(vec![
                 ("capability", Str),
+                (
+                    "excluded",
+                    OptionalField(Box::new(Lit(&["scenario_contest_not_filed"]))),
+                ),
                 ("starts", scalar()),
                 ("start_cost", scalar()),
             ]))),
@@ -6003,15 +6155,21 @@ pub fn validate_waiting_wire(v: &Value) -> Result<(), String> {
     {
         return Err("waiting assumption value/text/inventory".into());
     }
-    for (i, r) in assumptions.iter().enumerate() {
-        let f = r["field"].as_str().ok_or("assumption field")?;
-        if f == "quality.quantile" || f == "probability.scheduler" {
-            if i <= rows[0].0 {
-                return Err("waiting assumption must precede quantile/scheduler".into());
-            }
-        } else if f != "metrics.waiting" && i >= rows[0].0 {
-            return Err("waiting assumption must follow existing rows".into());
+    let first_hit = ["quality.quantile", "quality.mean", "probability.scheduler"];
+    if assumptions[..rows[0].0]
+        .iter()
+        .any(|a| a["field"].as_str().is_some_and(|f| first_hit.contains(&f)))
+    {
+        return Err("waiting assumption must precede quantile/scheduler".into());
+    }
+    let mut tail = &assumptions[rows[0].0 + 1..];
+    for (key, field) in [("quantiles", "quality.quantile"), ("means", "quality.mean")] {
+        if v["quality"].get(key).is_some() && tail.first().is_some_and(|a| a["field"] == field) {
+            tail = &tail[1..];
         }
+    }
+    if !quality_assumption_tail(v, tail) {
+        return Err("waiting assumption must follow existing rows".into());
     }
     let checked = m["checked"].as_array().ok_or("waiting checked")?;
     let suffix = serde_json::json!(WAIT_METRIC_CHECKED);
@@ -6400,7 +6558,72 @@ fn without_metrics(v: &Value) -> Value {
 /// Rule state alone cannot withdraw numerical quality on a non-refused run. On success
 /// the report is returned without `quality` and without the block, so every
 /// pre-existing assumption check runs unchanged on the remaining rows.
+fn quality_assumption_tail(report: &Value, rows: &[Value]) -> bool {
+    let rows = if rows
+        .first()
+        .is_some_and(|a| a["field"] == "probability.scheduler")
+    {
+        &rows[1..]
+    } else {
+        rows
+    };
+    rows.is_empty()
+        || report.get("repetition").is_some()
+            && rows.len() == 5
+            && rows[0]["field"] == "via_model_paths"
+            && rows[0]["value"] == "not_derived(loop_control)"
+            && rows[0]["affects"]
+                == "反復制御を含む読取り経路は未導出。結果の別名は追加のTaskでも独立根拠でもない。"
+            && rows[1..]
+                .iter()
+                .zip([
+                    "agency.diagnostics.W-AGY-0",
+                    "agency.diagnostics.W-AGY-2",
+                    "agency.diagnostics.W-LIN-2",
+                    "agency.diagnostics.W-RESP-2",
+                ])
+                .all(|(row, field)| {
+                    row["field"] == field
+                        && row["value"] == "unchecked(loop_control)"
+                        && row["affects"]
+                            == "反復制御はこの警告の導出対象外。警告の不在は検査成功を意味しない。"
+                })
+}
+
 fn without_quality(v: &Value) -> Result<Option<Value>, String> {
+    if v.get("quality").is_some_and(|q| q.get("means").is_some()) {
+        let rows = v["assumptions"]
+            .as_array()
+            .ok_or("mean assumptions missing")?;
+        let positions: Vec<_> = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r["field"] == "quality.mean")
+            .map(|(i, _)| i)
+            .collect();
+        if positions.len() != 1 {
+            return Err("exactly one mean assumption required".into());
+        }
+        let i = positions[0];
+        if rows[i]["value"]
+            != if v["mode"] == "simulation" {
+                "pooled-case-sample-mean"
+            } else {
+                "ratio-of-expected-totals; per-case-bounds"
+            }
+            || !rows[i]["affects"].is_string()
+            || !quality_assumption_tail(v, &rows[i + 1..])
+            || rows[..i]
+                .iter()
+                .any(|r| r["field"] == "probability.scheduler")
+        {
+            return Err("mean assumption fields/order".into());
+        }
+        let mut old = v.clone();
+        old["quality"].as_object_mut().unwrap().remove("means");
+        old["assumptions"].as_array_mut().unwrap().remove(i);
+        return without_quality(&old);
+    }
     // Quantile disclosure follows the old quality block and all other old
     // assumptions. Remove only its exact registered row before the unchanged
     // B6 block validator runs; no prefix-based quality erasure.
@@ -6422,9 +6645,7 @@ fn without_quality(v: &Value) -> Result<Option<Value>, String> {
         let i = positions[0];
         if rows[i]["value"] != "left-inverse-first-hit-no-interpolation"
             || !rows[i]["affects"].is_string()
-            || rows[i + 1..]
-                .iter()
-                .any(|a| a["field"] != "probability.scheduler")
+            || !quality_assumption_tail(v, &rows[i + 1..])
             || rows[..i]
                 .iter()
                 .any(|a| a["field"] == "probability.scheduler")
@@ -6512,7 +6733,7 @@ fn without_quality(v: &Value) -> Result<Option<Value>, String> {
     // The old simulation rows (including metrics.estimation) precede quality.
     // The former simulation-tail exception admitted the c13a4d66 regression;
     // it was not historical behavior (c7onto review ruling, 2026-10-31).
-    if !(rest.is_empty() || rest.len() == 1 && rest[0]["field"] == "probability.scheduler") {
+    if !quality_assumption_tail(v, rest) {
         return Err("quality assumptions must follow existing rows".into());
     }
     // With probability.scheduler present the block sits immediately before it,
@@ -6945,12 +7166,34 @@ pub fn validate_business_metrics_wire(v: &Value) -> Result<(), String> {
         return Err("metrics Rule assumption inventory".into());
     }
     validate_rule_tail_wire(v)?;
-    let tail = if sim { 11 } else { 5 } + rule_fields.len();
+    let same_time = assumptions
+        .iter()
+        .any(|a| a["field"] == "simulation.same_time");
+    let ranks = assumptions
+        .iter()
+        .find(|row| row["field"] == "case_priority");
+    let tail = if sim { 11 + usize::from(same_time) } else { 5 }
+        + rule_fields.len()
+        + usize::from(ranks.is_some());
     // The scheduler assumption of a probability model is appended after the
     // metrics block (report.rs), so the metrics block ends just before it.
     let end = assumptions.len()
+        - assumptions
+            .iter()
+            .rev()
+            .take_while(|a| {
+                v.get("repetition").is_some()
+                    && matches!(
+                        a["value"].as_str(),
+                        Some("unchecked(loop_control)" | "not_derived(loop_control)")
+                    )
+            })
+            .count();
+    let end = end
         - usize::from(
             assumptions
+                .get(..end)
+                .unwrap()
                 .last()
                 .is_some_and(|a| a["field"] == "probability.scheduler"),
         );
@@ -6963,8 +7206,14 @@ pub fn validate_business_metrics_wire(v: &Value) -> Result<(), String> {
         .collect();
     let mut want = METRIC_FIELDS[..5].to_vec();
     want.extend(rule_fields);
+    if ranks.is_some() {
+        want.push("case_priority");
+    }
     if sim {
         want.extend(SIM_FIELDS);
+        if same_time {
+            want.push("simulation.same_time");
+        }
         want.push(METRIC_FIELDS[5]);
     }
     if fields != want {
@@ -7066,6 +7315,16 @@ fn project_metrics(m: &Value) -> Result<MetricProjection, String> {
             }
         }
         for t in c["tasks"].as_array().unwrap() {
+            let subject = if let Some(o) = t.get("repetition") {
+                let site = o["call_site"].as_str().ok_or("repeat call site")?;
+                Some(match (o["phase"].as_str(), o["round"].as_u64()) {
+                    (Some("body"), Some(k)) => format!("loop:{site}:round{k}"),
+                    (Some("on_limit"), None) => format!("loop:{site}:on_limit"),
+                    _ => return Err("repeat task phase/round".into()),
+                })
+            } else {
+                t["binding"].as_str().map(str::to_owned)
+            };
             let mut fields = Vec::new();
             for k in [
                 "wait",
@@ -7078,7 +7337,7 @@ fn project_metrics(m: &Value) -> Result<MetricProjection, String> {
                 leaves(&t[k], k, &mut fields);
             }
             for (k, x) in fields {
-                insert(3, Some(id), None, t["binding"].as_str(), k, x)?;
+                insert(3, Some(id), None, subject.as_deref(), k, x)?;
             }
         }
     }
@@ -7308,6 +7567,78 @@ fn property_value_schema() -> Ty {
     ])
 }
 
+fn loop_site_schema() -> Ty {
+    use Ty::*;
+    Obj(vec![
+        ("loop_name", Str),
+        ("round", Null(Box::new(Int))),
+        ("phase", Lit(&["body", "on_limit"])),
+        ("call_site", Str),
+    ])
+}
+
+fn repetition_observations() -> Vec<(&'static str, Ty)> {
+    use Ty::*;
+    let range = || Null(Box::new(Obj(vec![("min", Int), ("max", Int)])));
+    vec![
+        ("rounds", range()),
+        (
+            "distribution",
+            Arr(Box::new(Obj(vec![
+                ("rounds", Int),
+                ("probability", Null(Box::new(Probability))),
+                ("observed_count", Null(Box::new(Int))),
+            ]))),
+        ),
+        ("on_limit", range()),
+        ("on_limit_probability", Null(Box::new(Probability))),
+        ("samples", Null(Box::new(Int))),
+        ("excluded_samples", Null(Box::new(Int))),
+        ("observed_on_limit", Null(Box::new(Int))),
+    ]
+}
+
+fn repetition_report_schema() -> Ty {
+    use Ty::*;
+    let mut case = vec![("case_id", Int), ("loop_name", Str)];
+    case.extend(repetition_observations());
+    Obj(vec![
+        ("rules", Lit(&["bounded-repetition-1"])),
+        ("coverage", Lit(&["complete", "sampled", "not_derived"])),
+        ("basis", Str),
+        (
+            "sites",
+            Arr(Box::new(Obj(vec![
+                ("instance", Str),
+                ("origin", loop_site_schema()),
+                ("source_span", Obj(vec![("start", Int), ("end", Int)])),
+            ]))),
+        ),
+        ("cases", Arr(Box::new(Obj(case)))),
+        ("unchecked", Arr(Box::new(Str))),
+    ])
+}
+
+fn repetition_comparison_schema() -> Ty {
+    use Ty::*;
+    Arr(Box::new(Obj(vec![
+        ("case_id", Int),
+        ("loop", Str),
+        (
+            "values",
+            Arr(Box::new(Obj(vec![
+                ("configuration", Str),
+                (
+                    "status",
+                    Lit(&["reported", "not_reported", "not_applicable"]),
+                ),
+                ("value", Null(Box::new(Obj(repetition_observations())))),
+                ("reason", OptionalField(Box::new(Str))),
+            ]))),
+        ),
+    ])))
+}
+
 fn compare_schema() -> Ty {
     use Ty::*;
     let strings = || Arr(Box::new(Str));
@@ -7321,6 +7652,10 @@ fn compare_schema() -> Ty {
                 ("configuration", Str),
                 ("verdict", Verdict),
                 ("probability", Null(Box::new(Probability))),
+                (
+                    "excluded",
+                    OptionalField(Box::new(Lit(&["scenario_contest_not_filed"]))),
+                ),
                 (
                     "basis",
                     Null(Box::new(Lit(&[
@@ -7395,6 +7730,10 @@ fn compare_schema() -> Ty {
             Obj(vec![
                 ("properties", Arr(Box::new(property))),
                 ("terminals", Arr(Box::new(terminal))),
+                (
+                    "repetition",
+                    OptionalField(Box::new(repetition_comparison_schema())),
+                ),
                 (
                     "quality",
                     OptionalField(Box::new(quality_table_schema(true))),
@@ -7559,6 +7898,47 @@ fn validate_compare_metric_end_inventory(v: &Value) -> Result<(), String> {
 pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
     let projected = stage_projection::root_unchecked(v);
     let v = projected.as_ref().unwrap_or(v);
+    if let Some(table) = v["tables"].get("repetition") {
+        let schema = repetition_comparison_schema();
+        check(table, &schema, "compare repetition")?;
+        complete(table, &schema, "compare repetition")?;
+        let plans = v["plans"].as_array().ok_or("plans")?;
+        let mut previous = None;
+        for row in table.as_array().unwrap() {
+            let key = (
+                row["case_id"].as_u64().ok_or("repetition case id")?,
+                row["loop"].as_str().unwrap(),
+            );
+            if previous.is_some_and(|prior| prior >= key) {
+                return Err("repetition key order/duplicate".into());
+            }
+            previous = Some(key);
+            let cells = row["values"].as_array().unwrap();
+            if cells.len() != plans.len() {
+                return Err("repetition table not rectangular".into());
+            }
+            for (i, (cell, plan)) in cells.iter().zip(plans).enumerate() {
+                if cell["configuration"] != plan["configuration"]
+                    || (cell["status"] == "reported") == cell["value"].is_null()
+                {
+                    return Err("repetition cell order/status".into());
+                }
+                if cell["status"] == "not_reported" {
+                    let pointer = format!("/plans/{i}/report/repetition/unchecked");
+                    if cell["reason"] != pointer
+                        || !v
+                            .pointer(&pointer)
+                            .and_then(Value::as_array)
+                            .is_some_and(|xs| !xs.is_empty())
+                    {
+                        return Err("missing repetition reason reference".into());
+                    }
+                } else if cell.get("reason").is_some() {
+                    return Err("unexpected repetition reason reference".into());
+                }
+            }
+        }
+    }
     for pair in v["tables"]["agency"].as_array().into_iter().flatten() {
         let actors = |side: &str| {
             v["plans"]
@@ -7669,6 +8049,29 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
         .iter()
         .any(|p| p["report"].get("responsibilities").is_some());
     let mut feature_words = Vec::new();
+    if plans.iter().any(|plan| {
+        plan["report"]["properties"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|row| {
+                row["id"].as_str().is_some_and(|id| {
+                    id.starts_with("contract ")
+                        && (id.ends_with(" evidence_basis") || id.ends_with(" same_version"))
+                })
+            })
+    }) {
+        feature_words.push("contract_witnesses");
+    }
+    if plans.iter().any(|p| {
+        p["report"]["agency"]["origin"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|a| a.get("via_records").is_some())
+    }) {
+        feature_words.push("record_differences");
+    }
     if feature {
         feature_words.extend(["responsibility", "contest"]);
     }
@@ -7719,6 +8122,12 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
     .collect();
     if checked.contains(&serde_json::json!("contract_scope")) {
         applicable.push("contract_scope");
+    }
+    if plans
+        .iter()
+        .any(|p| p["report"].get("repetition").is_some())
+    {
+        applicable.push("repetition_tables");
     }
     let fixed = [
         "ranking",
@@ -7823,12 +8232,11 @@ pub fn validate_compare_wire(v: &Value) -> Result<(), String> {
             "invalid"
         });
     }
-    if v["verdict"]
-        != verdicts
-            .into_iter()
-            .max_by_key(|s| rank(s))
-            .unwrap_or("unsupported")
-    {
+    let expected_verdict = verdicts
+        .into_iter()
+        .max_by_key(|s| rank(s))
+        .unwrap_or("unsupported");
+    if v["verdict"] != expected_verdict {
         return Err("compare verdict fold".into());
     }
     let properties = v["tables"]["properties"].as_array().unwrap();
@@ -8293,6 +8701,7 @@ fn validate_diff_cases(v: &Value) -> Result<(), String> {
 enum Ty {
     Ledger,
     Uncertainty,
+    PriorityPolicy,
     Str,
     Int,
     Bool,
@@ -8550,6 +8959,13 @@ fn diff_row_schema() -> Ty {
         ]))),
         "time" => Arr(Box::new(Lit(&["sequential", "fork"]))),
         "visibility" => strings(),
+        "record" => Obj(vec![("registrars", strings()), ("readers", strings())]),
+        "repetition" => Null(Box::new(Obj(vec![
+            ("at_most", Int),
+            ("gap", Int),
+            ("sites", strings()),
+            ("on_limit_ends", strings()),
+        ]))),
         "rule" => rule_diff_cell_schema(),
         "contest" => Keyed(
             "id",
@@ -8575,6 +8991,8 @@ fn diff_row_schema() -> Ty {
             "visibility",
             "contest",
             "rule",
+            "record",
+            "repetition",
         ]
         .into_iter()
         .map(|kind| {
@@ -8591,6 +9009,8 @@ fn diff_row_schema() -> Ty {
                 "visibility" => &["visibility"],
                 "contest" => &["contest"],
                 "rule" => &["rule"],
+                "record" => &["record"],
+                "repetition" => &["repetition"],
                 _ => unreachable!(),
             };
             let mut fields = vec![
@@ -8624,12 +9044,12 @@ fn diff_row_schema() -> Ty {
         .chain(std::iter::once(Obj(vec![
             ("kind", Lit(&["relation"])),
             ("target", Str),
-            ("change", Lit(&["modified"])),
+            ("change", Lit(&["modified", "added", "removed"])),
             ("reason", Null(Box::new(Str))),
             ("loses", Null(Box::new(Str))),
             ("covered_by", OptionalField(Box::new(covered_by_schema()))),
-            ("from", Obj(vec![("producer", Str)])),
-            ("to", Obj(vec![("producer", Str)])),
+            ("from", Null(Box::new(Obj(vec![("producer", Str)])))),
+            ("to", Null(Box::new(Obj(vec![("producer", Str)])))),
             (
                 "annotations",
                 OptionalField(Box::new(Arr(Box::new(diff_annotation_schema())))),
@@ -8696,8 +9116,10 @@ fn validate_diff_extensions(v: &Value) -> Result<(), String> {
         "visibility",
         "contest",
         "rule",
+        "record",
+        "repetition",
     ];
-    let producer_row = |row: &Value| row["kind"] == "relation" && row["change"] == "modified";
+    let producer_row = |row: &Value| row["kind"] == "relation" && row.get("from").is_some();
     let limited_words = ["relation_state_producers", "relation_binding_identity"];
     let unchecked = v["unchecked"].as_array().unwrap();
     // ADR0051: a completed static comparison must disclose both limitations,
@@ -8737,7 +9159,12 @@ fn validate_diff_extensions(v: &Value) -> Result<(), String> {
         } else {
             kinds.iter().position(|k| *k == kind).unwrap()
         };
-        if producer && !valid_plan_name(row["target"].as_str().unwrap()) {
+        if producer
+            && (!valid_plan_name(row["target"].as_str().unwrap())
+                || row["change"] != "modified"
+                    && v["from"]["report"].get("repetition").is_none()
+                    && v["to"]["report"].get("repetition").is_none())
+        {
             return fail("producer relation requires a bare binding target");
         }
         let phase = if rank < 2 {
@@ -8759,6 +9186,10 @@ fn validate_diff_extensions(v: &Value) -> Result<(), String> {
             let absent = |x: &Value| match kind {
                 "meaning" => *x == false,
                 "contest" => x.as_array().unwrap().is_empty(),
+                "record" => {
+                    x["registrars"].as_array().unwrap().is_empty()
+                        && x["readers"].as_array().unwrap().is_empty()
+                }
                 _ => x.is_null(),
             };
             let expected = if absent(a) {
@@ -8773,7 +9204,7 @@ fn validate_diff_extensions(v: &Value) -> Result<(), String> {
             }
             for cell in [a, b] {
                 match kind {
-                    "relation" => {
+                    "relation" if !cell.is_null() => {
                         let parts: Vec<_> = cell["producer"].as_str().unwrap().split('.').collect();
                         if parts.len() != 2 || !parts.iter().all(|p| valid_plan_name(p)) {
                             return fail("producer requires Actor.Capability");
@@ -8789,6 +9220,9 @@ fn validate_diff_extensions(v: &Value) -> Result<(), String> {
                         }
                     }
                     "visibility" if !unique(cell) => return fail("reader set ordering/duplicates"),
+                    "record" if !unique(&cell["registrars"]) || !unique(&cell["readers"]) => {
+                        return fail("record inventory ordering/duplicates");
+                    }
                     "resource"
                         if !cell.is_null()
                             && !cell["executors"].is_null()
@@ -9278,6 +9712,9 @@ fn diff_schema() -> Ty {
                 "waiting_tables",
                 "relation_state_producers",
                 "relation_binding_identity",
+                "metric_constraints",
+                "contract_witnesses",
+                "repetition_tables",
             ]))),
         ),
         ("absent_diagnostics", Arr(Box::new(Code))),
@@ -10039,7 +10476,7 @@ fn effects_schema() -> Ty {
     let unknown = || {
         Obj(vec![
             ("status", Lit(&["not_derived"])),
-            ("reason", Lit(&["state_guards"])),
+            ("reason", Lit(&["state_guards", "loop_control"])),
         ])
     };
     let concentration = |partial: bool| {
@@ -10103,6 +10540,7 @@ fn effects_schema() -> Ty {
             "authority",
             "fallback_path",
             "state_write_effects",
+            "loop_control",
         ])))
     };
     OneOf(vec![
@@ -10123,9 +10561,12 @@ pub fn validate_effects(v: &Value) -> Result<(), String> {
     let schema = effects_schema();
     check(v, &schema, "effects")?;
     complete(v, &schema, "effects")?;
-    if v["unchecked"] != serde_json::json!(["authority", "fallback_path"])
-        && v["unchecked"]
-            != serde_json::json!(["authority", "fallback_path", "state_write_effects"])
+    let words = v["unchecked"].as_array().unwrap();
+    let words = words
+        .strip_suffix(&[serde_json::json!("loop_control")])
+        .unwrap_or(words);
+    if words != ["authority", "fallback_path"]
+        && words != ["authority", "fallback_path", "state_write_effects"]
     {
         return Err("effects closed unchecked sequence".into());
     }
@@ -10219,6 +10660,7 @@ fn agency_differences_schema() -> Ty {
     let unknown_side = |actor_capacity: bool| {
         let reasons = Lit(&[
             "state_guards",
+            "loop_control",
             "resource_infeasible",
             "derivation_limit",
             "agency_unavailable",
@@ -10299,6 +10741,12 @@ fn agency_differences_schema() -> Ty {
         &["direct", "indirect"],
         vec![("actor", Str)],
         strings(),
+    );
+    add(
+        &["origin"],
+        &["via_records"],
+        vec![("actor", Str)],
+        record_provenance_schema(),
     );
     add(&["framing"], &["reachable"], vec![("end", Str)], Bool);
     add(
@@ -10496,7 +10944,7 @@ pub fn validate_agency_differences(v: &Value) -> Result<(), String> {
                 "contest.direct",
             ],
         ),
-        ("origin", &["direct", "indirect"]),
+        ("origin", &["direct", "indirect", "via_records"]),
         (
             "framing",
             &["reachable", "selectors", "read_only", "actors"],
@@ -10609,6 +11057,18 @@ fn viewpoints_schema() -> Ty {
     f_fail.extend(framing_tail());
     let mut l_fail = failed();
     l_fail.extend(retention_tail());
+    let f_loop = Obj(vec![
+        ("status", Lit(&["not_derived"])),
+        ("reason", Lit(&["loop_control"])),
+        ("complete", Bool),
+        ("unchecked", Arr(Box::new(Lit(&["loop_control"])))),
+    ]);
+    let l_loop = Obj(vec![
+        ("status", Lit(&["not_derived"])),
+        ("reason", Lit(&["loop_control"])),
+        ("notice", Str),
+        ("unchecked", Arr(Box::new(Lit(&["loop_control"])))),
+    ]);
     let mut f_ok = vec![
         ("status", Lit(&["derived"])),
         (
@@ -10716,7 +11176,14 @@ fn viewpoints_schema() -> Ty {
                             ("person", Str),
                             (
                                 "normal",
-                                Obj(vec![("direct", strings()), ("indirect", strings())]),
+                                Obj(vec![
+                                    ("direct", strings()),
+                                    ("indirect", strings()),
+                                    (
+                                        "via_records",
+                                        OptionalField(Box::new(record_provenance_schema())),
+                                    ),
+                                ]),
                             ),
                             ("contest", Obj(vec![("direct", strings())])),
                         ]))),
@@ -10726,7 +11193,7 @@ fn viewpoints_schema() -> Ty {
                 Obj(o_fail),
             ]),
         ),
-        ("framing", OneOf(vec![Obj(f_ok), Obj(f_fail)])),
+        ("framing", OneOf(vec![Obj(f_ok), Obj(f_fail), f_loop])),
         (
             "proposal",
             Obj(vec![
@@ -10734,7 +11201,7 @@ fn viewpoints_schema() -> Ty {
                 ("reason", Lit(&["no_proposal_contract"])),
             ]),
         ),
-        ("retention", OneOf(vec![Obj(l_ok), Obj(l_fail)])),
+        ("retention", OneOf(vec![Obj(l_ok), Obj(l_fail), l_loop])),
         ("effects", OptionalField(Box::new(effects_schema()))),
     ])
 }
@@ -10783,11 +11250,24 @@ pub fn validate_viewpoints(v: &Value) -> Result<(), String> {
     }
     unique(v)?;
     let f = &v["framing"];
-    if f["unchecked"] != serde_json::json!(["type_domain_authority", "practical_framing"])
-        || v["retention"]["unchecked"]
-            != serde_json::json!(["fallback_dependency", "retention_basis", "actual_skill"])
-    {
-        return Err("viewpoints exact unchecked order".into());
+    for (section, legacy) in [
+        (
+            f,
+            serde_json::json!(["type_domain_authority", "practical_framing"]),
+        ),
+        (
+            &v["retention"],
+            serde_json::json!(["fallback_dependency", "retention_basis", "actual_skill"]),
+        ),
+    ] {
+        let expected = if section["reason"] == "loop_control" {
+            serde_json::json!(["loop_control"])
+        } else {
+            legacy
+        };
+        if section["unchecked"] != expected {
+            return Err("viewpoints exact unchecked order".into());
+        }
     }
     if f["status"] == "not_derived" {
         if f["complete"] != false {
@@ -10894,6 +11374,27 @@ fn validate_capacity_difference_context(d: &Value, from: &Value, to: &Value) -> 
     Ok(())
 }
 
+fn record_provenance_schema() -> Ty {
+    use Ty::*;
+    Arr(Box::new(Obj(vec![
+        ("record", Str),
+        (
+            "registrars",
+            Arr(Box::new(Obj(vec![
+                ("call", Str),
+                ("people", Arr(Box::new(Str))),
+            ]))),
+        ),
+        (
+            "sources",
+            Arr(Box::new(Obj(vec![
+                ("source", Str),
+                ("route", Lit(&["registrar_direct", "relayed"])),
+            ]))),
+        ),
+    ])))
+}
+
 fn nullable_agency() -> Ty {
     use Ty::*;
     let strings = || Arr(Box::new(Str));
@@ -10980,6 +11481,7 @@ fn nullable_agency() -> Ty {
                 "agency-p1-requires-1",
                 "agency-p1-reads-1",
                 "agency-p1-rule-1",
+                "agency-p2-loop-1",
             ]),
         ),
         (
@@ -10988,6 +11490,10 @@ fn nullable_agency() -> Ty {
                 ("actor", Str),
                 ("direct", strings()),
                 ("indirect", strings()),
+                (
+                    "via_records",
+                    OptionalField(Box::new(record_provenance_schema())),
+                ),
             ]))),
         ),
         (
@@ -11045,6 +11551,7 @@ fn nullable_agency() -> Ty {
                 "contest_real_world_response_time",
                 "contest_acceptance",
                 "contest_remedy",
+                "loop_control",
             ]))),
         ),
     ])))
@@ -11105,18 +11612,7 @@ fn complete(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
             }
         }
         Ty::Diagnostic => {
-            for key in ["code", "severity", "message", "span"] {
-                if value.get(key).is_none() {
-                    return Err(format!("{path}: missing {key}"));
-                }
-            }
-            if !value["span"].is_null() {
-                complete(
-                    &value["span"],
-                    &Ty::Obj(vec![("start", Ty::Int), ("end", Ty::Int)]),
-                    path,
-                )?;
-            }
+            complete(value, &diagnostic_schema(), path)?;
         }
         Ty::OneOf(options) => {
             let option = options
@@ -11230,7 +11726,7 @@ pub fn validate_scenario_wire(v: &Value) -> Result<(), String> {
         let rows = v["assumptions"]
             .as_array()
             .ok_or("scenario assumptions missing")?;
-        let expected = if horizon.is_some() {
+        let mut expected = if horizon.is_some() {
             vec![
                 "scenario",
                 "scenario.horizon",
@@ -11240,6 +11736,13 @@ pub fn validate_scenario_wire(v: &Value) -> Result<(), String> {
         } else {
             vec!["scenario", "scenario.drain", "scenario.aggregation"]
         };
+        let count = rows
+            .iter()
+            .filter(|r| r["field"] == "scenario.contest_not_filed")
+            .count();
+        for _ in 0..count {
+            expected.insert(1, "scenario.contest_not_filed");
+        }
         let observed: Vec<_> = rows
             .iter()
             .filter_map(|r| r["field"].as_str())
@@ -11403,6 +11906,50 @@ fn arrival_value_matches(value: &Value, cases: &[Value]) -> bool {
         })
 }
 
+fn metric_check_schema() -> Ty {
+    use Ty::*;
+    Arr(Box::new(Obj(vec![
+        ("constraint", Str),
+        (
+            "verdict",
+            Lit(&["satisfied", "violated", "unsupported", "inconclusive"]),
+        ),
+        (
+            "basis",
+            Null(Box::new(Lit(&[
+                "exact",
+                "per_case_relaxation",
+                "with_undetermined",
+                "statistical",
+                "lower_bound",
+            ]))),
+        ),
+        (
+            "interval",
+            Null(Box::new(Obj(vec![
+                ("lower", MetricNumber),
+                ("upper", Null(Box::new(MetricNumber))),
+            ]))),
+        ),
+        ("reason", metric_check_reason()),
+        ("alpha", OptionalField(Box::new(RationalText))),
+    ])))
+}
+
+fn metric_check_reason() -> Ty {
+    Ty::Null(Box::new(Ty::Lit(&[
+        "aborted",
+        "no_samples",
+        "no_statistical_bound",
+        "truncated",
+        "undetermined",
+        "zero_denominator",
+        "denominator_may_be_zero",
+        "beyond_reached_mass",
+        "not_configured",
+    ])))
+}
+
 fn report_schema() -> Ty {
     use Ty::*;
     let range = || Obj(vec![("min", Int), ("max", Int)]);
@@ -11425,6 +11972,14 @@ fn report_schema() -> Ty {
         ("verdict", Verdict),
         ("scenario", OptionalField(Box::new(scenario_schema()))),
         ("quality", OptionalField(Box::new(quality_schema(false)))),
+        (
+            "metric_checks",
+            OptionalField(Box::new(metric_check_schema())),
+        ),
+        (
+            "repetition",
+            OptionalField(Box::new(repetition_report_schema())),
+        ),
         ("actors", actor_table_schema()),
         ("cut_context", cut_context_schema()),
         (
@@ -11435,6 +11990,7 @@ fn report_schema() -> Ty {
                     "unreachable",
                     "completion_graph",
                     "dynamic_authority_revocation",
+                    "metric_constraints",
                 ]),
             ]))))),
         ),
@@ -11526,6 +12082,10 @@ fn report_schema() -> Ty {
                     ("id", Str),
                     ("verdict", Verdict),
                     (
+                        "excluded",
+                        OptionalField(Box::new(Lit(&["scenario_contest_not_filed"]))),
+                    ),
+                    (
                         "notes",
                         OptionalField(Box::new(Arr(Box::new(Lit(&["mechanism_unmodeled"]))))),
                     ),
@@ -11601,6 +12161,11 @@ fn check(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
     match ty {
         Ty::Ledger => ledger_shape::validate(value),
         Ty::Uncertainty => ledger_shape::uncertainty_wire::validate(value),
+        Ty::PriorityPolicy => {
+            serde_json::from_value::<relca_core::report::priority::PriorityPolicy>(value.clone())
+                .map(|_| ())
+                .map_err(|e| format!("{path}: {e}"))
+        }
         Ty::MetricNumber => metric_fraction(value).map(|_| ()),
         Ty::RationalText => value
             .as_str()
@@ -11708,17 +12273,7 @@ fn check(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
             Ok(())
         }
         Ty::Diagnostic => {
-            let span = Ty::Null(Box::new(Ty::Obj(vec![
-                ("start", Ty::Int),
-                ("end", Ty::Int),
-            ])));
-            let shape = Ty::Obj(vec![
-                ("code", Ty::Code),
-                ("severity", Ty::Severity),
-                ("message", Ty::Str),
-                ("span", span),
-            ]);
-            check(value, &shape, path)?;
+            check(value, &diagnostic_schema(), path)?;
             // Expected diagnostics are matched by code, so it is required.
             if value.get("code").is_none() {
                 return Err(format!("{path}: missing string identifier code"));
@@ -11743,6 +12298,59 @@ fn check(value: &Value, ty: &Ty, path: &str) -> Result<(), String> {
             }
         }
     }
+}
+
+fn diagnostic_schema() -> Ty {
+    use Ty::*;
+    let location = || {
+        Null(Box::new(Obj(vec![
+            ("line", Int),
+            ("column", Int),
+            ("end_line", Int),
+            ("end_column", Int),
+        ])))
+    };
+    let name = || Null(Box::new(Str));
+    Obj(vec![
+        ("code", Code),
+        ("severity", Severity),
+        ("message", Str),
+        (
+            "span",
+            Null(Box::new(Obj(vec![("start", Int), ("end", Int)]))),
+        ),
+        ("location", location()),
+        (
+            "detail",
+            Null(Box::new(Obj(vec![
+                ("reason", Str),
+                (
+                    "kind",
+                    Lit(&["rewrite", "analysis_not_connected", "property_undecided"]),
+                ),
+                ("cause", name()),
+                (
+                    "blockers",
+                    Arr(Box::new(Obj(vec![
+                        ("role", Str),
+                        ("name", name()),
+                        ("location", location()),
+                        ("rounds", OptionalField(Box::new(Arr(Box::new(Int))))),
+                        (
+                            "exits",
+                            OptionalField(Box::new(Arr(Box::new(Obj(vec![
+                                ("loop_name", Str),
+                                ("round", Int),
+                                ("phase", Lit(&["body", "on_limit"])),
+                                ("leave_site", OptionalField(Box::new(Int))),
+                            ]))))),
+                        ),
+                    ]))),
+                ),
+                ("see", Str),
+            ]))),
+        ),
+    ])
 }
 
 fn simulation_schema() -> Ty {
@@ -11792,6 +12400,10 @@ fn simulation_schema() -> Ty {
             ("verdict", Verdict),
             ("cases", Arr(Box::new(case))),
             (
+                "excluded",
+                OptionalField(Box::new(Lit(&["scenario_contest_not_filed"]))),
+            ),
+            (
                 "notes",
                 OptionalField(Box::new(Arr(Box::new(Lit(&["mechanism_unmodeled"]))))),
             ),
@@ -11815,6 +12427,7 @@ fn simulation_schema() -> Ty {
     });
     fields.extend([
         ("mode", Lit(&["simulation"])),
+        ("priority_policy", OptionalField(Box::new(PriorityPolicy))),
         ("quality", OptionalField(Box::new(quality_schema(true)))),
         (
             "capability_refusals",
@@ -11891,6 +12504,7 @@ fn simulation_schema() -> Ty {
                         ("rows", Int),
                         ("alpha_before", Null(Box::new(RationalText))),
                         ("alpha_after", Null(Box::new(RationalText))),
+                        ("scope", OptionalField(Box::new(Lit(&["suite"])))),
                     ]))),
                 ),
                 (
@@ -12035,21 +12649,100 @@ fn validate_structural_refusal_quality(q: &Value) -> Result<(), String> {
 }
 
 /// No production DTO or arithmetic: closed shape, counts and alpha independently.
-pub fn validate_simulation_wire(v: &Value) -> Result<(), String> {
-    validate_deferred_quantity_positions(v).map_err(|error| format!("simulation wire: {error}"))?;
-    validate_simulation_wire_inner(v)
+fn simulation_metric_rows(v: &Value) -> Result<u64, String> {
+    let Some(checks) = v.get("metric_checks") else {
+        return Ok(0);
+    };
+    check(checks, &metric_check_schema(), "metric_checks")?;
+    complete(checks, &metric_check_schema(), "metric_checks")?;
+    checks
+        .as_array()
+        .unwrap()
+        .iter()
+        .try_fold(0u64, |count, c| {
+            let is_statistical =
+                c["basis"] == "statistical" || c["reason"] == "denominator_may_be_zero";
+            if is_statistical != c.get("alpha").is_some()
+                || c.get("alpha")
+                    .is_some_and(|alpha| alpha != &v["simulation"]["multiplicity"]["alpha_after"])
+            {
+                return Err("metric check alpha differs from family".into());
+            }
+            let Some(name) = c["constraint"]
+                .as_str()
+                .and_then(|s| s.strip_prefix("cohort."))
+                .and_then(|s| s.split_once(' ').map(|(name, _)| name))
+            else {
+                return Ok(count);
+            };
+            let q = v["quality"]["cohort"]
+                .as_array()
+                .and_then(|rows| rows.iter().find(|q| q["name"] == name))
+                .ok_or("missing cohort for metric check")?;
+            count
+                .checked_add(if q["denominator"]["kind"] == "arrivals" {
+                    1
+                } else {
+                    2
+                })
+                .ok_or_else(|| "metric row count overflow".into())
+        })
 }
-fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
+
+pub fn validate_simulation_wire(v: &Value) -> Result<(), String> {
+    validate_simulation_with_family(v, None)
+}
+
+#[allow(dead_code)] // The fixtures/conflicts builds do not exercise sensitivity suites.
+pub fn validate_suite_simulation_wire(v: &Value, planned_rows: u64) -> Result<(), String> {
+    validate_simulation_with_family(v, Some(planned_rows))
+}
+
+fn validate_simulation_with_family(v: &Value, suite: Option<u64>) -> Result<(), String> {
+    if let Some(rows) = v["assumptions"].as_array()
+        && let Some(at) = rows
+            .iter()
+            .position(|a| a["field"] == "simulation.same_time")
+    {
+        if v["mode"] != "simulation"
+            || v["simulation"]["completed_replications"]
+                .as_u64()
+                .unwrap_or(0)
+                == 0
+            || at == 0
+            || rows[at - 1]["field"] != "simulation.guarantee"
+            || rows[at]["value"] != "instant_confluence(max_states=4096)"
+            || rows[at]["affects"]
+                != "同じ時刻に残った行動の順序を全部試し、時刻を閉じた状態と観測が一致した時刻だけ進めた。順序を選んだのではない。他の標本経路と全スケジュールの安全性は確かめていない。"
+            || rows[at + 1..]
+                .iter()
+                .any(|a| a["field"] == "simulation.same_time")
+        {
+            return Err("same-time simulation assumption text, scope or order".into());
+        }
+        let mut projection = v.clone();
+        projection["assumptions"].as_array_mut().unwrap().remove(at);
+        return validate_simulation_with_family(&projection, suite);
+    }
+    validate_deferred_quantity_positions(v).map_err(|error| format!("simulation wire: {error}"))?;
+    let metric_rows = simulation_metric_rows(v)?;
+    validate_simulation_wire_inner(v, metric_rows, suite)
+}
+fn validate_simulation_wire_inner(
+    v: &Value,
+    metric_rows: u64,
+    suite: Option<u64>,
+) -> Result<(), String> {
     // Integration order, as in validate_wire/validate_business_metrics_wire:
     // validate the original waiting rows before projecting them, then require
     // every pre-existing quality row through the unchanged quality validator.
     if waiting_declared(v) {
         validate_waiting_wire(v)?;
-        return validate_simulation_wire_inner(&waiting_projection(v));
+        return validate_simulation_wire_inner(&waiting_projection(v), metric_rows, suite);
     }
     reject_unscoped_waiting(v)?;
     if let Some(old) = without_legacy_refusal_metric_rows(v)? {
-        return validate_simulation_wire_inner(&old);
+        return validate_simulation_wire_inner(&old, metric_rows, suite);
     }
     if let Some(q) = v.get("quality") {
         validate_quality_wire(q, true)?;
@@ -12061,7 +12754,7 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
         }
     }
     if let Some(old) = without_quality(v)? {
-        return validate_simulation_wire_inner(&old);
+        return validate_simulation_wire_inner(&old, metric_rows, suite);
     }
     validate_caseset_notes(v)?;
     if let Some(rows) = v["assumptions"].as_array() {
@@ -12077,7 +12770,7 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
         check(v, &simulation_schema(), "simulation metrics wire")?;
         complete(v, &simulation_schema(), "simulation metrics wire")?;
         validate_scenario_wire(v)?;
-        return validate_simulation_wire_inner(&without_metrics(v));
+        return validate_simulation_wire_inner(&without_metrics(v), metric_rows, suite);
     }
     reject_unscoped_metric_assumptions(v)?;
     validate_responsibility_wire(v)?;
@@ -12202,6 +12895,10 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
         if !["satisfied", "violated", "inconclusive"]
             .iter()
             .any(|x| v["verdict"] == *x)
+            && !(v["verdict"] == "unsupported"
+                && v["metric_checks"]
+                    .as_array()
+                    .is_some_and(|a| a.iter().any(|c| c["verdict"] == "unsupported")))
         {
             return fail("completed simulation verdict");
         }
@@ -12229,9 +12926,18 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
                 .starts_with("probability reached #")
         })
         .count() as u64)
+        .checked_add(metric_rows)
+        .ok_or("row count overflow")?
         .checked_mul(n)
         .ok_or("row count overflow")?;
+    if suite.is_some_and(|total| total < m || m == 0) {
+        return fail("suite family must contain the local statistical rows");
+    }
+    let m = suite.unwrap_or(m);
     let mult = &s["multiplicity"];
+    if suite.is_some() != (mult["scope"] == "suite") {
+        return fail("simulation family scope");
+    }
     if mult["rows"] != m {
         return fail("Bonferroni rows must include all cases");
     }
@@ -12263,7 +12969,8 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
         "sha256-counter-v1; category-bias<=1/18446744073709551616".to_owned(),
         "independent; unit=replication".to_owned(),
         format!(
-            "bonferroni; rows={m}; alpha_before={}; alpha_after={}",
+            "{}bonferroni; rows={m}; alpha_before={}; alpha_after={}",
+            if suite.is_some() { "scope=suite; " } else { "" },
             mult["alpha_before"].as_str().unwrap_or("none"),
             mult["alpha_after"].as_str().unwrap_or("none")
         ),
@@ -12281,6 +12988,9 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
             tail[i]["affects"].as_str().is_some_and(|s| {
                 s.starts_with(SIM_AFFECTS[i]) && s.contains("scenario") && s != SIM_AFFECTS[i]
             })
+        } else if i == 2 && metric_rows != 0 {
+            tail[i]["affects"]
+                == "two one-sided Clopper-Pearson errors are allocated to each probability-query and cohort component case row; the reported confidence is simultaneous across these rows"
         } else {
             tail[i]["affects"] == SIM_AFFECTS[i]
         };
@@ -12293,8 +13003,11 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
     validate_duration_assumptions(&old)?;
     let mut arrival_order = None;
     let limits = limits_declaration(&assumptions)?;
-    validate_policy_rows(&assumptions[..assumptions.len() - 5])
-        .map_err(|e| format!("simulation wire: {e}"))?;
+    validate_policy_rows(
+        &assumptions[..assumptions.len() - 5],
+        v.get("repetition").is_some(),
+    )
+    .map_err(|e| format!("simulation wire: {e}"))?;
     let mut rule_tail = false;
     for a in &assumptions[..assumptions.len() - 5] {
         let field = a["field"].as_str().unwrap();
@@ -12330,7 +13043,10 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
                 _ => {}
             }
         } else if arrival_order.is_some()
-            && !(field == "scenario" || field.starts_with("scenario."))
+            && field != "case_priority"
+            && !(field == "policy.dispatch"
+                || field == "scenario"
+                || field.starts_with("scenario."))
         {
             return fail("old assumption follows arrival rows");
         }
@@ -12511,12 +13227,22 @@ fn validate_simulation_wire_inner(v: &Value) -> Result<(), String> {
             }
         }
         let ds = v["diagnostics"].as_array().unwrap();
-        let violated = properties.iter().any(|p| p["verdict"] == "violated")
+        let verdicts = || {
+            properties
+                .iter()
+                .chain(v["metric_checks"].as_array().into_iter().flatten())
+        };
+        let violated = verdicts().any(|p| p["verdict"] == "violated")
             || ds.iter().any(|d| d["code"] == "W-DEADLOCK-0");
-        let inconclusive = properties.iter().any(|p| p["verdict"] == "inconclusive")
+        let inconclusive = verdicts().any(|p| p["verdict"] == "inconclusive")
             || ds.iter().any(|d| d["code"] == "W-BUDGET-0");
         let expected = if violated {
             "violated"
+        } else if v["metric_checks"]
+            .as_array()
+            .is_some_and(|a| a.iter().any(|p| p["verdict"] == "unsupported"))
+        {
+            "unsupported"
         } else if inconclusive {
             "inconclusive"
         } else {
@@ -12755,6 +13481,7 @@ fn validate_duration_assumptions(actual: &Value) -> Result<(), String> {
             duration_seen = true;
         } else if duration_seen
             && arrival_rank(field).is_none()
+            && field != "policy.dispatch"
             // ADR 0042: the scenario rows follow; their exact inventory and
             // order are checked by the scenario validator.
             && field != "scenario"
@@ -12841,7 +13568,7 @@ fn base_with_suffix(text: &Value, base: &str, suffixes: &[&str]) -> bool {
 /// Validates the policy rows of one assumptions array and returns whether the
 /// report is extended. A legacy (or observable-only) report admits only the
 /// old policy.queue row with the old value and text.
-fn validate_policy_rows(rows: &[Value]) -> Result<bool, String> {
+fn validate_policy_rows(rows: &[Value], repetition: bool) -> Result<bool, String> {
     let fail = |text: &str| Err(format!("wire policy: {text}"));
     let only = |field: &str| -> Result<Option<&Value>, String> {
         let mut found = rows.iter().filter(|r| r["field"] == field);
@@ -12854,20 +13581,42 @@ fn validate_policy_rows(rows: &[Value]) -> Result<bool, String> {
     let queue = only("policy.queue")?;
     let assign = only("policy.assign")?;
     let classes = only("policy.classes")?;
+    let dispatch = only("policy.dispatch")?;
     let extended = classes.is_some();
+    if let Some(row) = dispatch {
+        let prev = if assign.is_some() {
+            "policy.assign"
+        } else {
+            "policy.queue"
+        };
+        if !extended
+            || row["value"] != "after_finishes"
+            || row["affects"]
+                != "方策の区分の開始は、同じ時刻の終了と ack を全部処理した後に決める。採用と開始の同時刻、環境の区分の開始、終了どうしの順は、この延長では決めない。"
+            || !rows
+                .windows(2)
+                .any(|pair| pair[0]["field"] == prev && pair[1]["field"] == "policy.dispatch")
+        {
+            return fail("dispatch scope, order or text");
+        }
+    }
     match queue {
         Some(q) => {
             let value = q["value"].as_str().ok_or("wire policy: queue value")?;
             let body = value.strip_prefix("observable ").unwrap_or(value);
+            let priority = body.starts_with("priority descending tie ");
             let call_order = match body {
-                "fifo tie_by case_id" => false,
-                "fifo tie_by case_id then call_order" => true,
+                "fifo tie_by case_id"
+                | "priority descending tie nondet"
+                | "priority descending tie fifo tie_by case_id" => false,
+                "fifo tie_by case_id then call_order"
+                | "priority descending tie fifo tie_by case_id then call_order" => true,
                 _ => return fail("queue value"),
             };
             if call_order && !extended {
                 return fail("then call_order on a report without policy.classes");
             }
-            if extended && !call_order && assign.is_none() {
+            if extended && !priority && !call_order && assign.is_none() && dispatch.is_none() {
                 return fail("policy.classes without then call_order or policy.assign");
             }
             let affects = if call_order {
@@ -12875,6 +13624,32 @@ fn validate_policy_rows(rows: &[Value]) -> Result<bool, String> {
             } else {
                 ARRIVAL_AFFECTS[2]
             };
+            let mut affects = if priority {
+                if !extended || !rows.iter().any(|r| r["field"] == "case_priority") {
+                    return fail("priority without classes or rank declaration");
+                }
+                let prefix = "policy_queued_only: compare current policy Queued Tasks by descending case rank, with only the explicit tie. Actor/uses predecessors block overtaking even when stopped; people are not reserved. Only executable candidates compete for the next start/refusal. environment/party and cross-class choices remain nondeterministic without an implicit FIFO. ";
+                let tail = if dispatch.is_some() {
+                    "Running work is not reordered. Policy starts and refusals wait for due finishes and acknowledgments, including Tasks queued by those finishes."
+                } else {
+                    "Running work and Tasks created later in the same instant are not reordered."
+                };
+                format!("{prefix}{tail}")
+            } else if dispatch.is_some() && !call_order {
+                "方策の区分では、同じ時刻の終了と ack の後に、Actor の待ちに入った時刻と案件IDで比べる。同じ時刻に待ちに入った Task も鍵で比べる。同じ案件内の同着は非決定のまま残る。".to_owned()
+            } else if dispatch.is_some() {
+                affects.replace(
+                    "同じ時刻に後から待ちに入るTaskは比べない。",
+                    "同じ時刻に待ちに入った Task も鍵で比べる。",
+                )
+            } else {
+                affects.to_owned()
+            };
+            if repetition && call_order {
+                affects.push_str(
+                    "反復の字句順は、1回目から順に各回の呼出しを並べ、on_limit、反復の後続が続く。",
+                );
+            }
             if q["affects"] != affects {
                 return fail("queue affects text");
             }
@@ -12993,7 +13768,9 @@ fn limits_declaration(rows: &[Value]) -> Result<LimitsDeclaration, String> {
         action = Some(treatment.to_owned());
         match treatment {
             "reject" => {}
-            "wait_external fifo" => {
+            "wait_external fifo"
+            | "wait_external priority descending tie nondet"
+            | "wait_external priority descending tie fifo tie_by case_id" => {
                 if n == 0 {
                     return Err("zero wait limit".into());
                 }
@@ -13427,9 +14204,12 @@ fn validate_arrivals_wire(v: &Value) -> Result<(), String> {
     let mut new_seen = false;
     let mut scheduler = false;
     let mut rule_tail = false;
-    validate_policy_rows(rows)?;
-    for row in rows {
+    validate_policy_rows(rows, v.get("repetition").is_some())?;
+    for (i, row) in rows.iter().enumerate() {
         let field = row["field"].as_str().unwrap();
+        if field == "via_model_paths" && quality_assumption_tail(v, &rows[i..]) {
+            break;
+        }
         if field == "concurrency.read_write" || field == "concurrency.read_write_excluded" {
             // Candidate payloads use source pins; excluded disclosure has the
             // separately closed count grammar above. Unknown
@@ -13480,7 +14260,12 @@ fn validate_arrivals_wire(v: &Value) -> Result<(), String> {
             // Rule/amendment and unused rule-change grant rows
             // follow the existing rows and precede the scheduler row.
             rule_tail = true;
-        } else if rule_tail || new_seen && !(field == "scenario" || field.starts_with("scenario."))
+        } else if (rule_tail
+            || new_seen
+                && !(field == "policy.dispatch"
+                    || field == "scenario"
+                    || field.starts_with("scenario.")))
+            && field != "case_priority"
         {
             return fail("old assumption after new assumptions");
         }
@@ -13534,6 +14319,13 @@ fn validate_arrivals_wire(v: &Value) -> Result<(), String> {
     if ledger {
         tail.push("obligation_debtor");
     }
+    let loop_control = unchecked.iter().filter(|x| *x == "loop_control").count();
+    if loop_control != usize::from(v.get("repetition").is_some()) {
+        return fail("Agency repetition unchecked marker");
+    }
+    if loop_control == 1 {
+        tail.push("loop_control");
+    }
     let ends_with_tail = unchecked.len() >= tail.len()
         && unchecked[unchecked.len() - tail.len()..]
             .iter()
@@ -13542,17 +14334,13 @@ fn validate_arrivals_wire(v: &Value) -> Result<(), String> {
     if (n > 1 && (count != 1 || !ends_with_tail)) || (n == 1 && count != 0) {
         return fail("Agency unchecked marker");
     }
-    // Post-integration boundary review m1: obligation_debtor is pushed once,
-    // last, and only with ledger rows, whatever the case count. Closed: never
-    // twice, never before another marker, never without rows.
+    // obligation_debtor appears once and only with ledger rows. The known
+    // repetition marker, when declared, follows this otherwise final marker.
     let debtor = unchecked
         .iter()
         .filter(|x| *x == "obligation_debtor")
         .count();
-    if debtor != usize::from(ledger)
-        || (ledger && unchecked.last().is_none_or(|x| x != "obligation_debtor"))
-        || !ends_with_tail
-    {
+    if debtor != usize::from(ledger) || !ends_with_tail {
         return fail("Agency unchecked marker");
     }
     Ok(())
@@ -13930,6 +14718,121 @@ fn compare_set(expected: &[Value], actual: &[Value], key: &str, path: &str) -> R
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn repeat_compare_wire_accepts_c1() {
+        let src = include_str!("../../relca-core/tests/bounded_repetition/models/C1.relca");
+        let value = serde_json::to_value(relca_core::compare::compare(
+            src,
+            &["Loop3", "Loop2"],
+            relca_core::compare::Analysis::Exhaustive,
+        ))
+        .unwrap();
+        super::compare_compare_report(&serde_json::json!({}), &value).unwrap();
+    }
+
+    #[test]
+    fn repeat_diff_wire_accepts_c1() {
+        let src = include_str!("../../relca-core/tests/bounded_repetition/models/C1.relca");
+        let value = serde_json::to_value(relca_core::diff::diff(src, "Hand3", "Loop3")).unwrap();
+        super::compare_diff_report(&serde_json::json!({}), &value).unwrap();
+        let _: relca_core::diff::DiffReport = serde_json::from_value(value).unwrap();
+    }
+
+    #[test]
+    fn repeat_mutation_wire_requires_loop_context_and_unsupported_root() {
+        let src = include_str!("../../relca-core/tests/bounded_repetition/models/M3.relca");
+        let v = serde_json::to_value(relca_core::mutation::mutate(src)).unwrap();
+        super::validate_mutation_wire(&v).unwrap();
+        let expect = |bad: &serde_json::Value, message| {
+            assert_eq!(super::validate_mutation_wire(bad).unwrap_err(), message);
+        };
+        let mut bad = v.clone();
+        bad["verdict"] = serde_json::json!("violated");
+        expect(
+            &bad,
+            "completed mutation fold must preserve unsupported priority",
+        );
+
+        let set_path = |doc: &mut serde_json::Value, path: &str, direction: &str| {
+            let row = &mut doc["mutations"][2]["mutants"][0];
+            row["site"]["statement_path"] = serde_json::json!(path);
+            row["id"] = serde_json::json!(format!("hold_delayed:P:{path}:keep_{direction}"));
+        };
+        let mut malformed = v.clone();
+        set_path(&mut malformed, "body/repeat/1", "then");
+        expect(&malformed, "invalid mutation statement path");
+        let mut nested = v.clone();
+        set_path(&mut nested, "body/1/repeat/1/on_limit/0", "then");
+        expect(&nested, "mutation statement path has nested repeat steps");
+
+        let (before, body) = src.split_once("  process P {").unwrap();
+        let (_, tail) = body.split_once("  cut C").unwrap();
+        let written = format!(
+            "{before}  process P {{ entry = Reader.enter(); r = Rev.review(entry); if r == fail {{ end rejected }} else {{}}; p = Ledger.post(entry); end done }}\n  cut C{tail}"
+        );
+        let mut plain = serde_json::to_value(relca_core::mutation::mutate(&written)).unwrap();
+        super::validate_mutation_wire(&plain).unwrap();
+        set_path(&mut plain, "body/1/repeat/1", "else");
+        expect(&plain, "mutation statement path requires repeat context");
+
+        for i in [1, 3, 6] {
+            let mut family = v.clone();
+            family["mutations"][i]["status"] = serde_json::json!("not_applicable");
+            family["mutations"][i]["reason"] = serde_json::json!("no_matching_site");
+            family["mutations"][i]["candidates"] = serde_json::json!(0);
+            expect(&family, "repeat family must be explicitly refused");
+        }
+        let mut refusal = v;
+        refusal["mutations"][8]["mutants"][1]["result"] = serde_json::json!("undetected");
+        refusal["mutations"][8]["mutants"][1]["reason"] = serde_json::json!("no_worsening");
+        expect(
+            &refusal,
+            "mutant loop_control must match withdrawn process refusal",
+        );
+    }
+
+    #[test]
+    fn repeat_mutation_wire_does_not_count_physical_summary_lineage_as_undetected() {
+        let src = include_str!(
+            "../../relca-core/tests/bounded_repetition/models/summary-round-lineage.relca"
+        );
+        let mut v = serde_json::to_value(relca_core::mutation::mutate(src)).unwrap();
+        super::validate_mutation_wire(&v).unwrap();
+        let mutant = &mut v["mutations"][4]["mutants"][0];
+        assert_eq!(mutant["reason"], "loop_control");
+        mutant["result"] = serde_json::json!("undetected");
+        mutant["reason"] = serde_json::json!("no_assigned_check");
+        assert_eq!(
+            super::validate_mutation_wire(&v).unwrap_err(),
+            "mutant loop_control must match unavailable summary lineage"
+        );
+    }
+
+    #[test]
+    fn contract_comparison_wire_accepts_k1_and_k2() {
+        let k1 = include_str!("../../relca-core/tests/bounded_repetition/models/K1.relca");
+        let r0 = include_str!("../../relca-core/tests/record_provenance/r0.relca");
+        let start = r0.find("  process Main {").unwrap();
+        let end = r0.find("  bounds {").unwrap();
+        let other = r0[start..end]
+            .replace("process Main", "process NoRegister")
+            .replace("    r = Clerk.register()\n", "");
+        let k2 = format!(
+            "{}\n{other}\nconfiguration A {{ cut S; process Main }}\nconfiguration B {{ cut S; process NoRegister }}\n}}",
+            &r0[..r0.rfind('}').unwrap()]
+        );
+        for src in [k1, &k2] {
+            let cmp = serde_json::to_value(relca_core::compare::compare(
+                src,
+                &["A", "B"],
+                relca_core::compare::Analysis::Exhaustive,
+            ))
+            .unwrap();
+            super::compare_compare_report(&serde_json::json!({}), &cmp).unwrap();
+            let diff = serde_json::to_value(relca_core::diff::diff(src, "A", "B")).unwrap();
+            super::compare_diff_report(&serde_json::json!({}), &diff).unwrap();
+        }
+    }
     use super::*;
 
     fn complete_business_metrics() -> Value {
@@ -14835,7 +15738,7 @@ mod tests {
         abort["properties"] = serde_json::json!([{"id":"probability reached #1","verdict":"unsupported","cases":[{"case_id":1,"arrival":0,"verdict":"unsupported","basis":"sample","witness":null}]}]);
         abort["case_outcomes"] = serde_json::json!([{"case_id":1,"arrival":0,"terminals":[],"unfinished_count":null,"deadlocked_count":null}]);
         abort["admission"] = Value::Null;
-        abort["diagnostics"] = serde_json::json!([{"code":"U-SEM-0","severity":"error","message":"simulation encountered unresolved nondeterminism: replication 3, time 1, cases [1], sites [P.a]; at least two distinct successor actions remain","span":{"start":1,"end":2}}]);
+        abort["diagnostics"] = serde_json::json!([{"code":"U-SEM-0","severity":"error","message":"simulation encountered unresolved nondeterminism: replication 3, time 1, cases [1], sites [P.a]; at least two distinct successor actions remain","span":{"start":1,"end":2},"location":{"line":1,"column":2,"end_line":1,"end_column":3},"detail":null}]);
         validate_simulation_wire(&abort).unwrap();
         for (pointer, value) in [
             ("/verdict", serde_json::json!("violated")),
@@ -14890,7 +15793,7 @@ mod tests {
         for key in ["attempted_replications", "completed_replications"] {
             static_failure["simulation"][key] = serde_json::json!(0);
         }
-        static_failure["diagnostics"] = serde_json::json!([{"code":"E-SYN-0","severity":"error","message":"input syntax","span":null}]);
+        static_failure["diagnostics"] = serde_json::json!([{"code":"E-SYN-0","severity":"error","message":"input syntax","span":null,"location":null,"detail":null}]);
         validate_simulation_wire(&static_failure).unwrap();
         let mut bad = static_failure.clone();
         bad["bounds"]["cases"] = serde_json::json!(1);
@@ -15962,7 +16865,8 @@ mod tests {
             "model": {"name": "Example", "sha256": "abc"}, "cut": "undeclared",
             "assumptions": [{"field": "schedule", "value": "work-conserving", "affects": "time"}],
             "diagnostics": [{"code": "W-CUT-0", "severity": "warning", "message": "Cut undeclared",
-                             "span": {"start": 0, "end": 1}}],
+                             "span": {"start": 0, "end": 1},
+                             "location": {"line":1,"column":1,"end_line":1,"end_column":2}, "detail":null}],
             "bounds": {"cases": 1, "live_tasks": 2, "clock": 10, "truncated": false},
             "properties": [{"id": "reachable end.done", "verdict": "satisfied"}],
             "terminals": [{"end": "done", "elapsed": {"min": 4, "max": 4},
@@ -15984,6 +16888,58 @@ mod tests {
         let mut extra = good;
         extra["ledger"]["extra"] = serde_json::json!(0);
         assert!(compare_report(&serde_json::json!({}), &extra).is_err());
+    }
+
+    #[test]
+    fn diagnostic_location_and_detail_reject_each_single_wire_fault() {
+        let mut good = complete_report();
+        good["diagnostics"][0] = serde_json::json!({
+            "code":"W-CUT-0", "severity":"warning", "message":"Cut undeclared",
+            "span":{"start":0,"end":1},
+            "location":{"line":1,"column":1,"end_line":1,"end_column":2},
+            "detail":{"reason":"wire_shape_example","kind":"rewrite","cause":null,
+                      "blockers":[{"role":"declaration","name":null,"location":null}],
+                      "see":"docs/guide/dsl.md"}
+        });
+        let valid = |value: &Value| compare_report(&serde_json::json!({}), value);
+        valid(&good).unwrap();
+        for (pointer, key) in [
+            ("/diagnostics/0", "location"),
+            ("/diagnostics/0", "detail"),
+            ("/diagnostics/0/location", "end_column"),
+            ("/diagnostics/0/detail", "reason"),
+        ] {
+            let mut missing = good.clone();
+            missing
+                .pointer_mut(pointer)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(key)
+                .unwrap();
+            assert!(
+                valid(&missing)
+                    .unwrap_err()
+                    .contains(&format!("missing {key}"))
+            );
+        }
+        let mut wrong_type = good.clone();
+        wrong_type["diagnostics"][0]["location"]["line"] = serde_json::json!("1");
+        assert!(valid(&wrong_type).unwrap_err().contains("location.line"));
+        for pointer in [
+            "/diagnostics/0/location",
+            "/diagnostics/0/detail",
+            "/diagnostics/0/detail/blockers/0",
+        ] {
+            let mut unknown = good.clone();
+            unknown.pointer_mut(pointer).unwrap()["unexpected"] = serde_json::json!(null);
+            assert!(
+                valid(&unknown)
+                    .unwrap_err()
+                    .contains("unknown key unexpected"),
+                "{pointer}"
+            );
+        }
     }
 
     fn sync_completion_unchecked(v: &mut Value) {
@@ -16015,7 +16971,7 @@ mod tests {
             ],
             "terminals":[{"end":"done","from":{"elapsed":{"min":8,"max":8},"work":{"min":8,"max":8},"result_at":null},"to":null}],
             "properties":[{"id":"reachable end.done","from":"satisfied","to":"violated"}],
-            "diagnostics":[{"code":"U-SEM-0","severity":"error","message":"literal","span":null}],
+            "diagnostics":[{"code":"U-SEM-0","severity":"error","message":"literal","span":null,"location":null,"detail":null}],
             "checked":["comparison_mismatch"],"unchecked":["time_intent"]
         })
     }
@@ -16321,7 +17277,7 @@ mod tests {
         let mut actual = complete_diff();
         let expected = serde_json::json!({"from":{"report":{"absent_diagnostics":["W-DEADLOCK-0"]}},"absent_diagnostics":["W-DEADLOCK-0"]});
         assert!(compare_diff_report(&expected, &actual).is_ok());
-        let diagnostic = serde_json::json!({"code":"W-DEADLOCK-0","severity":"warning","message":"injected","span":null});
+        let diagnostic = serde_json::json!({"code":"W-DEADLOCK-0","severity":"warning","message":"injected","span":null,"location":null,"detail":null});
         actual["to"]["report"]["diagnostics"]
             .as_array_mut()
             .unwrap()
@@ -16654,7 +17610,8 @@ mod tests {
             let mut actual = complete_report();
             assert!(compare_report(&expected, &actual).is_ok());
             actual["diagnostics"].as_array_mut().unwrap().push(serde_json::json!({
-            "code": "W-DEADLOCK-0", "severity": "warning", "message": "fake deadlock", "span": null
+            "code": "W-DEADLOCK-0", "severity": "warning", "message": "fake deadlock", "span": null,
+            "location": null, "detail": null
         }));
             let error = compare_report(&expected, &actual).unwrap_err();
             assert_eq!(
@@ -16681,7 +17638,8 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .push(serde_json::json!({
-                "code": "W-DEADLOCK-0", "severity": "warning", "message": "deadlock", "span": null
+                "code": "W-DEADLOCK-0", "severity": "warning", "message": "deadlock", "span": null,
+                "location": null, "detail": null
             }));
         for expected in [
             serde_json::json!({}),
@@ -17270,7 +18228,37 @@ pub fn validate_conflict_properties(v: &Value) -> Result<(), String> {
 pub fn validate_caseset_notes(v: &Value) -> Result<(), String> {
     validate_conflict_properties(v)?;
     if let Some(rows) = v["properties"].as_array() {
+        let declarations = v["assumptions"].as_array().map_or(0, |a| {
+            a.iter()
+                .filter(|r| r["field"] == "scenario.contest_not_filed")
+                .count()
+        });
+        let marks = rows
+            .iter()
+            .filter(|row| row.get("excluded").is_some())
+            .count();
+        if declarations != marks {
+            return Err("contest exclusions do not match the scenario declarations".into());
+        }
         for row in rows {
+            if row.get("excluded").is_some()
+                && (row["excluded"] != "scenario_contest_not_filed"
+                    || !matches!(
+                        row["verdict"].as_str(),
+                        Some("inconclusive" | "unsupported")
+                    )
+                    || !row["id"].as_str().is_some_and(|id| {
+                        id.starts_with("contract ") && id.ends_with(" contest_response")
+                    })
+                    || !v["assumptions"].as_array().is_some_and(|a| {
+                        a.iter().any(|r| r["field"] == "scenario.contest_not_filed")
+                    }))
+            {
+                return Err(
+                    "excluded requires an inconclusive contest response in a not-filed scenario"
+                        .into(),
+                );
+            }
             if let Some(notes) = row.get("notes") {
                 let id = row["id"].as_str().ok_or("notes property id")?;
                 if !id.starts_with("contract ")

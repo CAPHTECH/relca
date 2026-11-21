@@ -78,13 +78,13 @@ pub(crate) const FIXTURES: [&str; 24] = [
     "done-within",
     "done-within.broken-tight-deadline",
 ];
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct Node {
     pub actions: Vec<Vec<(Rational, usize)>>,
     pub target: bool,
     pub unknown: bool,
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct Graph {
     pub nodes: Vec<Node>,
     pub edges: usize,
@@ -366,6 +366,7 @@ pub(crate) fn apply(out: &mut crate::outcome::Outcome, m: &ir::Model, g: &Graph,
         for v in &m.verify {
             if v.property.completion() {
                 out.postprocessing_diagnostics.push(diag::Diagnostic {
+                    presentation: Default::default(),
                     code: diag::U_SEM_0.into(),
                     severity: diag::Severity::Error,
                     message: "completion graph edge limit exceeded; completion_graph is unchecked"
@@ -488,6 +489,7 @@ impl Observed {
         let mut out = Vec::new();
         let mut warn = |code: &str, span, detail: String| {
             out.push(diag::Diagnostic {
+                presentation: Default::default(),
                 code: code.into(),
                 severity: diag::Severity::Warning,
                 span: Some(span),

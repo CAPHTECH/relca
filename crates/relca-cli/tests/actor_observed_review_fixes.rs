@@ -188,6 +188,8 @@ fn legacy(prefix: &str) {
         let (stdout, stderr, exit) = run(row.name, &source);
         let (current_stdout, current_stderr) =
             syntax_cut_expectations::current(row.stdout, row.stderr);
+        let current_stdout =
+            relca_test_support::diagnostic::extend_saved_stdout(&source, &current_stdout);
         let expected = ledger_shape::extend_raw(
             &current_stdout,
             &ledger_shape::Spec::prelower("exhaustive", false),
@@ -205,7 +207,7 @@ fn verdict(stdout: &str) -> Value {
 /// Fix 1: a bare requires name that is the owner's latent keeps the old
 /// diagnostics (E-NAME-0 for `==`, E-SYN-0 for `<`).
 #[test]
-fn fix1_legacy_bare_requires_on_owner_latent_matches_old_binary() {
+fn fix1_legacy_bare_requires_on_owner_latent_current_output() {
     legacy("fix1_");
 }
 
@@ -229,7 +231,7 @@ fn fix1_bare_requires_on_actor_observed_state_still_satisfied() {
 /// Fix 2: a qualified responsibility comparison other than `==` keeps the old
 /// parser diagnostic in models without Actor state.
 #[test]
-fn fix2_legacy_qualified_noneq_responsibility_matches_old_binary() {
+fn fix2_legacy_qualified_noneq_responsibility_current_output() {
     legacy("fix2_");
 }
 
@@ -264,12 +266,15 @@ fn fix2_state_qualified_noneq_responsibility_keeps_old_parse_diagnostic() {
             .collect();
         assert_eq!(
             errors,
-            vec![&serde_json::json!({
-                "code": "U-SYN-0",
-                "severity": "error",
-                "message": "unsupported syntax: responsibility target expression",
-                "span": {"start": at, "end": at + 1}
-            })],
+            vec![&relca_test_support::diagnostic::expected_row(
+                &source,
+                serde_json::json!({
+                    "code": "U-SYN-0",
+                    "severity": "error",
+                    "message": "unsupported syntax: responsibility target expression",
+                    "span": {"start": at, "end": at + 1}
+                })
+            )],
             "{to}"
         );
         assert!(
@@ -281,6 +286,6 @@ fn fix2_state_qualified_noneq_responsibility_keeps_old_parse_diagnostic() {
 
 /// Fix 3: an undefined name written twice keeps U-SEM-0 duplicate.
 #[test]
-fn fix3_legacy_undefined_duplicate_target_matches_old_binary() {
+fn fix3_legacy_undefined_duplicate_target_current_output() {
     legacy("fix3_");
 }

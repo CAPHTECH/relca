@@ -41,7 +41,7 @@ fn k4_report_pointer(name: &str) -> Option<&'static str> {
 pub fn assert_k4(name: &str, source: &str, actual: &Value) {
     if let Some(pointer) = k4_report_pointer(name) {
         let model = relca_core::lower::lower(&relca_core::syntax::parse(source).unwrap()).unwrap();
-        responsibility_oracle::assert_report(&model, actual.pointer(pointer).unwrap());
+        responsibility_oracle::assert_report(&model, source, actual.pointer(pointer).unwrap());
     }
 }
 
@@ -151,7 +151,7 @@ pub fn migrate_with_scenario(
     if let Some(pointer) = k4_report_pointer(name) {
         let model = relca_core::lower::lower(&relca_core::syntax::parse(source).unwrap()).unwrap();
         let report = expected.pointer_mut(pointer).unwrap();
-        *report = responsibility_oracle::with_diagnostics(&model, report);
+        *report = responsibility_oracle::with_diagnostics(&model, source, report);
     }
     if expected.get("from").is_some() && expected.get("to").is_some() {
         let (null, mismatch) = diff_state_with_scenario(

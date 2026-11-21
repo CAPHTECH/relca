@@ -31,16 +31,19 @@ pub(super) fn lower(
         return Ok(());
     }
     let mut errors = Vec::new();
-    let mut refuse = |code: &str, reason: &str, span: Span| {
-        errors.push(Diagnostic {
-            code: code.into(),
-            severity: diag::Severity::Error,
-            message: reason.into(),
-            span: Some(span),
-        });
+    let refusal = |code: &str, reason: &str, span: Span| Diagnostic {
+        presentation: Default::default(),
+        code: code.into(),
+        severity: diag::Severity::Error,
+        message: reason.into(),
+        span: Some(span),
     };
     if declarations.len() > 1 {
-        refuse(U_SEM_0, "duplicate_case_priority", declarations[1].span);
+        errors.push(refusal(
+            U_SEM_0,
+            "duplicate_case_priority",
+            declarations[1].span,
+        ));
     }
     let mut classes = ir::PolicyClasses::default();
     for (i, actor) in m.actors.iter().enumerate() {
@@ -57,12 +60,16 @@ pub(super) fn lower(
             "policy" => classes.policy.push(id),
             "environment" => classes.environment.push(id),
             "party" => classes.party.push(id),
-            _ => refuse(U_SEM_0, "invalid_priority_ir", actor.span),
+            _ => errors.push(refusal(U_SEM_0, "invalid_priority_ir", actor.span)),
         }
     }
     if let Some(table) = declarations.first() {
         if table.value.len() as u64 != m.bounds.cases {
-            refuse(diag::E_ARR_0, "priority_case_count_mismatch", table.span);
+            errors.push(refusal(
+                diag::E_ARR_0,
+                "priority_case_count_mismatch",
+                table.span,
+            ));
         }
         m.case_priority = Some(ir::CasePriority {
             ranks: table.value.iter().map(|n| n.value).collect(),
@@ -71,7 +78,7 @@ pub(super) fn lower(
         });
     }
     if used && m.case_priority.is_none() {
-        refuse(U_SEM_0, "priority_not_configured", source.span);
+        errors.push(refusal(U_SEM_0, "priority_not_configured", source.span));
     }
     for cap in &m.capabilities {
         let Some(check) = &cap.version_check else {
@@ -80,7 +87,20 @@ pub(super) fn lower(
         if check.resolve.is_some() && (!classes.policy.contains(&cap.actor)
             || check.variables.is_empty()
             || check.variables.iter().any(|v| !matches!(m.state_variables[v.0].kind, ir::StateKind::ActorObserved(a) if a == cap.actor && !m.actors[a.0].is_per_case()))) {
-            refuse(U_SEM_0, "priority_resolution_scope_unsupported", check.span);
+            let reason = "priority_resolution_scope_unsupported";
+            let actor = &m.actors[cap.actor.0];
+            let mut blockers = vec![diag::Blocker::at("feature", Some(format!("{}.{}", actor.name, cap.name)), Some(check.span))];
+            let non_policy = !classes.policy.contains(&cap.actor);
+            if non_policy {
+                blockers.push(diag::Blocker::at("feature", Some(actor.name.clone()), Some(actor.span)));
+            }
+            for variable in check.variables.iter().map(|v| &m.state_variables[v.0]) {
+                if !matches!(variable.kind, ir::StateKind::ActorObserved(a) if a == cap.actor && !actor.is_per_case()) {
+                    blockers.push(diag::Blocker::at("reference", Some(variable.name.clone()), Some(variable.span)));
+                }
+            }
+            let cause = if non_policy { "non_policy_actor" } else if check.variables.is_empty() { "empty_version_scope" } else { "unshared_version_scope" };
+            errors.push(refusal(U_SEM_0, reason, check.span).unconnected(reason, cause, blockers));
         }
         for other in &m.capabilities {
             if let Some(b) = &other.version_check
@@ -88,7 +108,7 @@ pub(super) fn lower(
                 && check.variables.iter().any(|v| b.variables.contains(v))
                 && check.resolve != b.resolve
             {
-                refuse(U_SEM_0, "priority_resolution_mismatch", check.span);
+                errors.push(refusal(U_SEM_0, "priority_resolution_mismatch", check.span));
             }
         }
     }
@@ -112,6 +132,9 @@ pub(super) fn lower(
                         if p.call_order { " then call_order" } else { "" }
                     );
                     a.affects = "policy_queued_only: compare current policy Queued Tasks by descending case rank, with only the explicit tie. Actor/uses predecessors block overtaking even when stopped; people are not reserved. Only executable candidates compete for the next start/refusal. environment/party and cross-class choices remain nondeterministic without an implicit FIFO. Running work and Tasks created later in the same instant are not reordered.".into();
+                    if p.dispatch_after_finishes {
+                        a.affects = a.affects.replace("Running work and Tasks created later in the same instant are not reordered.", "Running work is not reordered. Policy starts and refusals wait for due finishes and acknowledgments, including Tasks queued by those finishes.");
+                    }
                 }
             }
             m.assumptions.push(ir::Assumption {

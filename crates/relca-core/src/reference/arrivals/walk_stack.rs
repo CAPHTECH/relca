@@ -22,6 +22,7 @@ struct Series<'a> {
     base: Rc<World<'a>>,
     depth: usize,
     hits: Vec<Vec<Option<u128>>>,
+    rewards: Vec<Vec<Option<Rational>>>,
     closed: Vec<Vec<bool>>,
     make: Generate<'a>,
 }
@@ -70,6 +71,7 @@ enum Job<'a> {
         base: Rc<World<'a>>,
         depth: usize,
         hits: Vec<Vec<Option<u128>>>,
+        rewards: Vec<Vec<Option<Rational>>>,
         closed: Vec<Vec<bool>>,
         action: Action<'a>,
     },
@@ -78,6 +80,7 @@ enum Job<'a> {
         world: World<'a>,
         depth: usize,
         hits: Vec<Vec<Option<u128>>>,
+        rewards: Vec<Vec<Option<Rational>>>,
         closed: Vec<Vec<bool>>,
     },
     Reduce(usize),
@@ -116,6 +119,7 @@ impl<'a> Work<'a> {
         depth: usize,
         hits: Vec<Vec<Option<u128>>>,
         closed: Vec<Vec<bool>>,
+        rewards: Vec<Vec<Option<Rational>>>,
     ) -> Branch {
         let id = self.slot(None);
         self.jobs.push(Job::World {
@@ -124,6 +128,7 @@ impl<'a> Work<'a> {
             depth,
             hits,
             closed,
+            rewards,
         });
         Branch::Deferred(id)
     }
@@ -202,6 +207,7 @@ impl<'a> Tree<'a> {
                 base,
                 depth: self.depth,
                 hits: self.first_hits.clone(),
+                rewards: self.mean_hits.clone(),
                 closed: self.first_closed.clone(),
                 make: Box::new(make),
             })));
@@ -236,6 +242,7 @@ impl<'a> Tree<'a> {
                 base,
                 depth: self.depth,
                 hits: self.first_hits.clone(),
+                rewards: self.mean_hits.clone(),
                 closed: self.first_closed.clone(),
                 action: Box::new(action),
             });
@@ -271,6 +278,7 @@ impl<'a> Tree<'a> {
             self.depth,
             self.first_hits.clone(),
             self.first_closed.clone(),
+            self.mean_hits.clone(),
         );
         self.walk_work = Some(Work::default());
         let Branch::Deferred(root) = self.walk_work.as_mut().unwrap().enqueue(
@@ -278,12 +286,18 @@ impl<'a> Tree<'a> {
             self.depth + 1,
             self.first_hits.clone(),
             self.first_closed.clone(),
+            self.mean_hits.clone(),
         ) else {
             unreachable!()
         };
         let result = self.drain_worlds(root);
         self.walk_work = None;
-        (self.depth, self.first_hits, self.first_closed) = saved;
+        (
+            self.depth,
+            self.first_hits,
+            self.first_closed,
+            self.mean_hits,
+        ) = saved;
         result.map(Branch::Ready)
     }
     pub(super) fn walk_same_depth(&mut self, world: World<'a>) -> Result<Branch, StopReason> {
@@ -293,6 +307,7 @@ impl<'a> Tree<'a> {
                 self.depth,
                 self.first_hits.clone(),
                 self.first_closed.clone(),
+                self.mean_hits.clone(),
             ))
         } else {
             self.walk_inner(world)
@@ -313,6 +328,7 @@ impl<'a> Tree<'a> {
                     self.depth = series.depth;
                     self.first_hits = series.hits.clone();
                     self.first_closed = series.closed.clone();
+                    self.mean_hits = series.rewards.clone();
                     let work = self.walk_work.as_mut().unwrap();
                     work.base = None;
                     let start = work.jobs.len();
@@ -354,12 +370,14 @@ impl<'a> Tree<'a> {
                     base,
                     depth,
                     hits,
+                    rewards,
                     closed,
                     action,
                 } => {
                     self.depth = depth;
                     self.first_hits = hits;
                     self.first_closed = closed;
+                    self.mean_hits = rewards;
                     self.walk_work.as_mut().unwrap().base = None;
                     let start = self.walk_work.as_ref().unwrap().jobs.len();
                     let result = action(self, &base);
@@ -370,11 +388,13 @@ impl<'a> Tree<'a> {
                     world,
                     depth,
                     hits,
+                    rewards,
                     closed,
                 } => {
                     self.depth = depth;
                     self.first_hits = hits;
                     self.first_closed = closed;
+                    self.mean_hits = rewards;
                     self.walk_work.as_mut().unwrap().base = None;
                     let start = self.walk_work.as_ref().unwrap().jobs.len();
                     let result = self.walk_inner(world);

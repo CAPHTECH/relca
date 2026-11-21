@@ -41,11 +41,18 @@ impl FiniteFailure {
     pub(super) fn diagnostics(self, m: &ir::Model) -> Vec<diag::Diagnostic> {
         match self {
             Self::Actor(message) => vec![error(diag::U_SEM_0, &message, None)],
-            Self::StochasticArrivals => vec![error(
-                diag::U_SEM_0,
-                "stochastic_arrivals_mode_unsupported",
-                Some(m.process.span),
-            )],
+            Self::StochasticArrivals => vec![
+                error(
+                    diag::U_SEM_0,
+                    "stochastic_arrivals_mode_unsupported",
+                    Some(m.process.span),
+                )
+                .unconnected(
+                    "stochastic_arrivals_mode_unsupported",
+                    "exhaustive_stochastic_arrivals",
+                    arrival_blockers(m),
+                ),
+            ],
             Self::Diagnostics => m.diagnostics.clone(),
             Self::NoVerify => vec![error(
                 diag::U_SEM_0,
@@ -57,6 +64,7 @@ impl FiniteFailure {
 }
 fn error(code: &str, message: &str, span: Option<diag::Span>) -> diag::Diagnostic {
     diag::Diagnostic {
+        presentation: Default::default(),
         code: code.into(),
         severity: diag::Severity::Error,
         message: message.into(),
@@ -91,9 +99,7 @@ pub(super) fn simulation(
     if m.unsupported_stochastic_arrival_combination() {
         return Err(SimulationFailure::StochasticArrivals);
     }
-    let local_rows = u64::try_from(m.probability_queries.len())
-        .ok()
-        .and_then(|q| q.checked_mul(m.bounds.cases));
+    let local_rows = crate::evaluation::simulation_rows(m);
     if local_rows.is_none() || spec.replications.checked_mul(m.bounds.cases).is_none() {
         return Err(SimulationFailure::WireRange);
     }
@@ -129,11 +135,7 @@ impl SimulationFailure {
                 Some(source_span),
             )],
             Self::Diagnostics => m.diagnostics.clone(),
-            Self::StochasticArrivals => vec![error(
-                diag::U_SEM_0,
-                "stochastic_arrivals_feature_combination",
-                Some(m.process.span),
-            )],
+            Self::StochasticArrivals => vec![stochastic_combination(m)],
             Self::WireRange => vec![error(
                 diag::U_SEM_0,
                 "simulation aggregate counts exceed the integer wire range",
@@ -141,6 +143,75 @@ impl SimulationFailure {
             )],
             Self::Scope { error, .. } => vec![error.diagnostic()],
         }
+    }
+}
+
+fn arrival_blockers(m: &ir::Model) -> Vec<diag::Blocker> {
+    m.arrival_distribution
+        .iter()
+        .map(|a| diag::Blocker::at("feature", None, Some(a.span)))
+        .collect()
+}
+
+fn stochastic_combination(m: &ir::Model) -> diag::Diagnostic {
+    let reason = "stochastic_arrivals_feature_combination";
+    let mut blockers = arrival_blockers(m);
+    let mut cause = None;
+    if let Some(quality) = &m.quality {
+        cause = Some("quality");
+        // Quality IR retains names but has no declaration spans.
+        blockers.extend(
+            quality
+                .properties
+                .iter()
+                .map(|p| diag::Blocker::at("feature", Some(p.name.clone()), None)),
+        );
+        blockers.extend(
+            quality
+                .metrics
+                .iter()
+                .map(|p| diag::Blocker::at("feature", Some(p.name.clone()), None)),
+        );
+        blockers.extend(
+            quality
+                .means
+                .iter()
+                .map(|p| diag::Blocker::at("feature", Some(p.name.clone()), None)),
+        );
+        blockers.extend(
+            quality
+                .quantiles
+                .iter()
+                .map(|p| diag::Blocker::at("feature", Some(p.name.clone()), None)),
+        );
+    }
+    for (call, attempt) in m.response_attempts() {
+        cause.get_or_insert("response_or_retry");
+        blockers.push(diag::Blocker::for_call("call", m, call, attempt.command));
+    }
+    for contest in m.contests() {
+        cause.get_or_insert("contest");
+        blockers.push(diag::Blocker::at("contest", None, Some(contest.span)));
+    }
+    let waits = m.condition_wait_blockers();
+    if !waits.is_empty() {
+        cause.get_or_insert("condition_wait");
+        blockers.extend(waits);
+    }
+    if let Some(cut) = &m.cut {
+        for entry in &cut.defer {
+            cause.get_or_insert("cut_defer");
+            let name = match &entry.target {
+                ir::CutTarget::Actor(actor) => m.actors.get(actor.0).map(|a| a.name.clone()),
+                ir::CutTarget::Label(label) => Some(label.clone()),
+            };
+            blockers.push(diag::Blocker::at("feature", name, None));
+        }
+    }
+    let d = error(diag::U_SEM_0, reason, Some(m.process.span));
+    match cause {
+        Some(cause) => d.unconnected(reason, cause, blockers),
+        None => d,
     }
 }
 

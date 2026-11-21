@@ -164,7 +164,8 @@ fn t23_each_malformed_ir_and_report_is_rejected_without_partial_evaluation() {
                                 json!({"lower":"1","upper":"0"});
                         }
                         "cohort-index" => {
-                            m.comparison.as_mut().unwrap().hard[0].cohort = usize::MAX
+                            m.comparison.as_mut().unwrap().hard[0].constraint.target =
+                                ir::MetricRef::Cohort(usize::MAX)
                         }
                         "numerator-index" => {
                             m.quality.as_mut().unwrap().metrics[0].numerator = usize::MAX
@@ -174,8 +175,8 @@ fn t23_each_malformed_ir_and_report_is_rejected_without_partial_evaluation() {
                                 ir::Denominator::Property(usize::MAX)
                         }
                         "bound-range" => {
-                            m.comparison.as_mut().unwrap().hard[0].bound =
-                                crate::probability::Rational("3/2".parse().unwrap())
+                            m.comparison.as_mut().unwrap().hard[0].constraint.bound =
+                                crate::metrics::MetricNumber("3/2".parse().unwrap())
                         }
                         "plan-inconsistency" => m.comparison.as_mut().unwrap().plans.reverse(),
                         "multiplicity-overflow" => m.bounds.cases = u64::MAX,
