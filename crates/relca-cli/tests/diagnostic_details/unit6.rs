@@ -101,6 +101,30 @@ fn executor_identity_unavailable() {
 }
 
 #[test]
+fn simulation_priority_tie() {
+    // The single slot frees at minute 2. Cases 3 and 4 arrived at
+    // minute 1 and share rank 1; neither outranks the other for admission.
+    let source =
+        include_str!("../../../../fixtures/ld-priority-admission.broken-one-slot/model.relca");
+    let reason = "simulation_unresolved_nondeterminism";
+    rejected(
+        invoke("simulate", source, &[]),
+        "unresolved simulation nondeterminism: priority_tie_remaining: replication 1, time 2, cases [], sites []; at least two distinct successor actions remain",
+        reason,
+        "priority_tie_remaining",
+        location(4, 3, 4, 42),
+        vec![],
+        "  at 4:3\n  kind: analysis_not_connected\n  cause: priority_tie_remaining\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
+    );
+    accepts(
+        "simulate",
+        include_str!("../../../../fixtures/ld-priority-admission/model.relca"),
+        &[],
+        reason,
+    );
+}
+
+#[test]
 fn simulation_unresolved_nondeterminism() {
     let source = include_str!(
         "../../../../fixtures/sim-actor-initial.broken-missing-distribution/model.relca"

@@ -1286,7 +1286,11 @@ pub(super) fn runtime_diagnostic(
     if nondet && message != SAME_TIME_LIMIT_REASON {
         diagnostic.unconnected(
             "simulation_unresolved_nondeterminism",
-            "unresolved_choices",
+            if message == PRIORITY_TIE {
+                "priority_tie_remaining"
+            } else {
+                "unresolved_choices"
+            },
             provenance
                 .iter()
                 .map(|(_, site, span)| {

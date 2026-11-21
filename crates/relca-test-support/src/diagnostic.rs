@@ -124,10 +124,12 @@ pub fn stderr_facts(stderr: &[u8], report: &Value) -> Vec<u8> {
 #[cfg(test)]
 #[test]
 fn presentation_projection_keeps_even_single_byte_faults() {
-    let row = json!({"code":"U-SEM-0","severity":"error","message":"old","location":null,"span":null,
-        "detail":{"reason":"concurrent_writers","kind":"analysis_not_connected","cause":"fork_shared_write","blockers":[],"see":"guide"}});
+    let row = json!({"code":"U-SEM-0","severity":"error","message":"old","span":{"start":2,"end":5},
+        "location":{"line":2,"column":1,"end_line":2,"end_column":4},
+        "detail":{"reason":"concurrent_writers","kind":"analysis_not_connected","cause":"fork_shared_write",
+            "blockers":[{"role":"call","name":"w","rounds":[1,3],"location":{"line":4,"column":9,"end_line":4,"end_column":12}}],"see":"guide"}});
     let original = "owner: U-SEM-0: old\n";
-    let supplement = "  kind: analysis_not_connected\n  cause: fork_shared_write\n  see: guide\n";
+    let supplement = "  at 2:1\n  kind: analysis_not_connected\n  cause: fork_shared_write\n  blocked by: call w (rounds 1, 3) at 4:9\n  see: guide\n";
     let project = |text: String| stderr_facts(text.as_bytes(), &row);
     assert_eq!(
         project(format!("{original}{supplement}")),
@@ -142,8 +144,36 @@ fn presentation_projection_keeps_even_single_byte_faults() {
     ] {
         assert_ne!(project(faulty), original.as_bytes());
     }
+    for (good, bad) in [
+        ("at 2:1", "at 2:2"),
+        ("call w", "call W"),
+        ("1, 3", "1,3"),
+        ("at 4:9", "at 4:8"),
+    ] {
+        let faulty = format!("{original}{}", supplement.replace(good, bad));
+        assert_eq!(project(faulty.clone()), faulty.as_bytes());
+    }
+
+    let expected = json!({"code":"U-SEM-0","severity":"error","message":"old","span":{"start":2,"end":5},
+        "location":{"line":2,"column":1,"end_line":2,"end_column":4},"detail":null});
+    assert_eq!(row_facts(row.clone()), expected);
+    let mut faulty_row = row.clone();
+    faulty_row["message"] = json!("old!");
+    assert_ne!(row_facts(faulty_row), expected);
+
+    // An old reason with the same header and otherwise identical supplement
+    // is still part of both comparison channels.
+    let mut old_row = row.clone();
+    old_row["detail"]["reason"] = json!("policy_feature_combination");
+    assert_eq!(row_facts(old_row.clone()), old_row);
+    let full = format!("{original}{supplement}");
+    assert_eq!(stderr_facts(full.as_bytes(), &old_row), full.as_bytes());
+    let old_row: relca_core::diag::Diagnostic = serde_json::from_value(old_row).unwrap();
+    assert!(facts(std::slice::from_ref(&old_row)) == [old_row]);
+
     let row: relca_core::diag::Diagnostic = serde_json::from_value(row).unwrap();
     let projected = facts(std::slice::from_ref(&row));
+    assert!(projected[0].presentation.detail.is_none());
     let mut bad = row;
     bad.message.push('!');
     assert_ne!(facts(&[bad]), projected);

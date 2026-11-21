@@ -4,6 +4,8 @@
 計算上限、検査したい性質を書きます。改行とセミコロンで項目を区切れます。
 コメント構文、文字列外の非 ASCII、小数の時間は受け付けません。
 
+構文を引くときは[書き方の参照](dsl-reference.md)を使ってください。
+
 ## 最小モデル
 
 ```relca
@@ -66,6 +68,7 @@ relca check examples/evidence-basis.relca --agency-limit-scale 20
 結果の確率には `outcomes kernel K`、条件依存には `kernel ... given [...]` と
 操作側の `kernel_reads latent [...]` を使います。条件の行を省略して既定の分布に頼れません。
 入力例は `fixtures/prob-*`、`fixtures/duration-*` にあります。
+Actor の範囲、共有状態、版の照合は[宣言と状態](dsl-reference.md#宣言と状態)を参照してください。
 
 ## 分岐した値を先へ渡す
 
@@ -294,6 +297,7 @@ body では `fork` と直後の `join all`、および `wait until` も使えま
 `contract` には `invariant`、`at_most_once`、`response`、`separation` などを書けます。
 実行できる Permission、根拠を伴う Authority、責務、Standing は別々の宣言です。
 宣言のない授権を、実行可能という理由だけで補いません。
+免除、異議、委任、規則変更は[契約と権限](dsl-reference.md#契約と権限)を参照してください。
 
 `cut` では問い、`include`、`exclude`、`defer`、除外で扱えなくなる事項などを記述します。
 モデルにできない段を保留するときは、その段の名前で `defer` を書いてください。
@@ -727,9 +731,10 @@ Agency の判定行に出ていない操作にも使えますが、契約を足�
 - 応答喪失と有限再送には、呼出しの `response_loss` と `retry max_attempts ...` を使います。
   最初の呼出しも試行数に含みます。冪等なキーの atomic 処理と非冪等な `effect_scope modeled` は
   別の模型です。応答が不明のままの案件は完了扱いにしません。
-- calendar、明示 rank の priority、資格と backlog による performance、rates 付き contest は
-  限定した組合せだけを扱います。詳しい構文例は
-  [補助資料](../../skills/relca-model/references/dsl.md) と `crates/relca-core/tests/support/` を参照してください。
+  最後の応答が不明のときは、[照会と復旧の書き方](dsl-reference.md#結果不明を照会して復旧する)を参照してください。
+- カレンダー、流入制限、優先順位、資格・負荷による分布、縮退は
+  [作業を開始する条件](dsl-reference.md#作業を開始する条件)を参照してください。
+- 完了を求める性質と比較宣言の選択肢は[比較と指標](dsl-reference.md#比較と指標)を参照してください。
 
 Agency と O/F/P/J/U/E/L は入力で申告する値ではありません。
 JSON の構造欄として計算され、導けない項目は理由つきで残ります。

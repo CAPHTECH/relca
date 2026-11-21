@@ -37,21 +37,10 @@ warning は中立で、全体の判定には数えない。
 後段(ledger の完成処理)で全体が重くなる場合があるかは確かめていない [U]。examples/invoice の実出力では、全 report で計算し直した判定と一致した。
 
 compare と diff の最上位は、通常は各案(diff は from と to)の report の verdict と、compare・diff 自身の error の診断を同じ優先順でまとめる(`crates/relca-core/src/compare.rs` の `fold` と `diff.rs`)。
-**例外:** 次の拒否では、結果をまとめた後で最上位を unsupported に上書きする。各案の report が violated でも最上位は unsupported になり、単純にまとめた判定より軽い。
+合流モデルは例外。compare は案を分析する前に拒否する。diff は最上位を unsupported にする。各案の判定があるときは、最上位と両方を報告する。exit は最上位の verdict に対応する。
 
-- `priority_feature_combination`(compare・diff)
-- `retry_feature_combination`(compare・diff。再送を含むモデル)
-- `condition_wait_diff_unsupported`(diff だけ)
-- `merge_feature_combination`(compare・diff。合流を含むモデル)
-
-EC 試行(再送を含む 2 案)では、compare も diff も最上位 unsupported・exit 4、各案の report はどちらも violated だった(1 回)。各案の性質の verdict は `check --configuration` の結果と一致した。
-この拒否では、単に各案の最も重い判定を選ぶだけでは最上位を再計算できない。読むときは次のとおりにする。
-
-- 最上位の unsupported は「比較・差分をしていない」という意味で読む。
-- 案ごとの結論は `plans[].report.verdict`(diff は `from.report.verdict`・`to.report.verdict`)から読み、**両方を報告する**。案の violated を最上位の unsupported で打ち消さない。
-- exit は最上位の verdict に対応する(上の例は 4)。exit だけ見て案の違反を見落とさない。
-
-review_page は、check・explain・simulate・各案・mutate の original の全体の判定を `fold_verdict` と同じ規則で計算し直す。compare の最上位は各案の verdict の最も重いものと照合する(`scripts/review_page.py` の `scan` の `kind == "compare"` の分岐)。どちらも全体の verdict が軽ければ「全体の verdict を信用しない」と警告する。上の拒否では、この警告が出るのが正しい。
+確認用ページは、compare の最上位の verdict を、各案と必須条件などをまとめた判定と照合する。最上位が軽いという警告が出たら、その診断を読む。
+diff ではその照合をしない。変更前後の報告を個別に読むだけなので、合流を含む diff では警告の有無にかかわらず from.report と to.report の verdict を必ず読む。最上位の exit 4 だけを見て、各案の違反を見落とさない。
 review_page の端末・ページ冒頭・結論の未確認件数は、性質や入力の保留に加えて、
 Agency の `not_derived` と根拠不明、繰り返しの `coverage: not_derived` も同じ集計で数える。
 繰り返しは `repetition.coverage` の1項目として数え、出所と場所を含む項目単位で重複を除く。
@@ -447,13 +436,13 @@ basis は性質や中断の有無で異なり、確率性質の案件別推定�
 比較の宣言がなければ `compare.purpose = side-by-side-only` で、順位・総合点・Pareto は出さない。宣言つきの評価では `compare.purpose = declared-evaluation` と `evaluation.pareto` が出る。必須条件と性質の検査を通った案だけが目的の優劣比較の対象。simulation は標本推定のため優劣を計算しない。どちらも順位・総合点は出さない。
 `path_range`・`with_undetermined`、採否の状態、Pareto の理由語は、ガイドの[比較の採否と目的を読む](../../../docs/guide/results.md#比較の採否と目的を読む)を参照。
 exhaustive の invoice 3 案は全体 violated(ToBeA が violated)で exit 1、simulation は 3 案とも unsupported で exit 4 だった。
-再送を含む案があると、`plans[]` は入るが `checked` は空、`unchecked` に `configuration_selection`・`property_tables` 等が並び、最上位は unsupported・exit 4(EC 試行)。読み方は上の「全体の verdict」の例外。
+再送の有無だけで比較を拒否しない。応答不明の行と、片方の案で適用されない欄を分けて読む。
 
 ## diff
 
 `differences[]` に計算した構成差分、`diagnostics` の W-DIFF-1 は「計算にあって intent に無い差分」。
 `terminals / properties` に from/to の対。AsIs→ToBeA は exit 1。
-再送を含むと最上位は unsupported・exit 4、`from.report`・`to.report` はそれぞれの verdict を持つ(EC 試行で両方 violated)。
+再送の有無だけで差分を拒否しない。変更前後の判定と最上位の判定を分けて読む。
 
 ## mutate
 

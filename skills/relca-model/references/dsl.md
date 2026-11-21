@@ -44,8 +44,80 @@
 | 固定方策 | `policy observable fifo tie_by case_id assign first_idle`。業務の実際のやり方だという根拠があり、仮定一覧に書くときだけ使う。simulate を通すために置かない | [実](../../../fixtures/) |
 | 資源 | `resource R capacity 1` と Capability の `uses R: 1` | [実](../../../fixtures/) |
 | 構成 | `configuration ToBeA { cut InvoiceCut; process ToBeAFlow; intent { add Extractor reason "…" … } }` | [実] |
-| 応答喪失・再送・idempotency・Receipt unknown | 下の「応答喪失・再送」の節 | [試] / [U] |
-| カレンダー・優先度・技能と縮退・異議の発生率 | 限定した形を扱う。この早見表では構文を未確認 | [U] |
+| 応答喪失・再送・idempotency・結果不明からの復旧 | 下の「応答喪失・再送」の節 | [試] |
+| カレンダー・優先度・資格と縮退・異議の発生率 | 下の「書き方の参照」の表 | [試] |
+
+## 書き方の参照
+
+各リンク先に例と制約がある。`…` は入力には書かない。
+
+| 形 | 参照 |
+|---|---|
+| Actor の `boundary "…"` | [範囲の説明](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| Actor の `contains [Member]` | [包含](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| Actor の `overlaps [Member]` | [重複](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| `state holder: H = free last_write_wins` | [共有状態](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| `version_check [holder] else conflict` | [状態の版の照合](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| `version_check [holder] else conflict resolve priority descending` | [優先度での競合解決](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新) |
+| `wait until ready == true` | [条件待ち](../../../docs/guide/dsl-reference.md#待つ場合と取り消す場合を分ける) |
+| `join any … tie nondet …` | [同時採用の非決定](../../../docs/guide/dsl-reference.md#待つ場合と取り消す場合を分ける) |
+| `join any … remaining drain …` | [取り消さずに待つ](../../../docs/guide/dsl-reference.md#待つ場合と取り消す場合を分ける) |
+| `cancel immediate` | [即座に取り消す](../../../docs/guide/dsl-reference.md#待つ場合と取り消す場合を分ける) |
+| `calendar Always through 21min on_close continue { [0min, 21min) capacity 2 }` | [カレンダー本体](../../../docs/guide/dsl-reference.md#カレンダーで時刻ごとの容量を指定する) |
+| Actor 内の `calendar Always` | [Actor の枠](../../../docs/guide/dsl-reference.md#カレンダーで時刻ごとの容量を指定する) |
+| `resource Terminal capacity 1 calendar Day` | [資源の枠](../../../docs/guide/dsl-reference.md#カレンダーで時刻ごとの容量を指定する) |
+| `person_calendar p Early` | [人の勤務時間](../../../docs/guide/dsl-reference.md#カレンダーで時刻ごとの容量を指定する) |
+| `rate Desk overtime_per_minute 3` | [超過単価](../../../docs/guide/dsl-reference.md#カレンダーで時刻ごとの容量を指定する) |
+| `arrivals fixed [0min, 0min, 1min]` | [到着時刻列](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `case_priority fixed [0, 10, 20]` | [案件の順位](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `policy observable priority descending` | [開始の順位](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `concurrent cases 1 on_overflow wait_external fifo` | [外で待たせる](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `concurrent cases 2 on_overflow wait_external priority descending` | [待っている案件を順位で選ぶ](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `concurrent cases 2 on_overflow reject` | [枠がなければ拒否](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `concurrent cases 2 on_overflow end spill` | [枠がない場合の終端](../../../docs/guide/dsl-reference.md#流入の上限と優先順位を分ける) |
+| `qualified_executors [q]` | [操作に必要な資格](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `performance P basis "…" { … }` | [性能表と根拠](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `load queued_same_actor_at_start` | [負荷による選択](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `executor anonymous { [0,1): kernel Low; [1,infinity): kernel Half }` | [負荷帯ごとの分布](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `load none; executor p { kernel K }` | [負荷によらない分布](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `outcomes performance P` | [操作の結果源](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| `degrade Manual when status == fail { … } else { … }` | [既知の失敗からの代替](../../../docs/guide/dsl-reference.md#資格負荷と縮退経路を記述する) |
+| 授権の `scope approval == pass` | [授権の観測条件](../../../docs/guide/dsl-reference.md#授権の条件と委任) |
+| `not_by [z]` | [授権からの除外](../../../docs/guide/dsl-reference.md#授権の条件と委任) |
+| `expires 5min` | [授権の期限](../../../docs/guide/dsl-reference.md#授権の条件と委任) |
+| `revocable_by p` | [取消権者の記録](../../../docs/guide/dsl-reference.md#授権の条件と委任) |
+| `delegated_from Parent` | [委任元](../../../docs/guide/dsl-reference.md#授権の条件と委任) |
+| `requires_event Worker.run.start after Gate.check.finish(pass)` | [先行事象の要求](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `excludes A.stop.finish, B.run.start` | [開始を除く事象](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `excludes Slow.work.cancel_ack, After.run.start` | [取消応答を前件にする](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `invariant ok == true` | [到達状態の条件](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `permitted Runner.run` | [実行者の許可](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `response delivery: case.received -> …` | [応答義務の名前](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `response case.admitted -> … after case.admitted otherwise unresolved` | [受入を起点にした期限](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `otherwise unresolved non_waivable` | [免除できない応答義務](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `otherwise unresolved debtor q` | [義務を負う主体の記録](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `waive delivery on Officer.release.finish reason "…" authorized_by G` | [権限と免除](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `waive Controls.delivery on Officer.release.finish …` | [別契約の義務を指定](../../../docs/guide/dsl-reference.md#事象期限免除) |
+| `rates { occurrence probability 1 basis "…" … }` | [異議の起票確率](../../../docs/guide/dsl-reference.md#異議の発生率と観測の範囲) |
+| `rates { … service_time basis "…" … }` | [異議処理時間の根拠](../../../docs/guide/dsl-reference.md#異議の発生率と観測の範囲) |
+| `rates { … independence per_case_per_clause }` | [起票の独立性](../../../docs/guide/dsl-reference.md#異議の発生率と観測の範囲) |
+| `horizon contest within 5d structural_only` | [Cut の異議範囲](../../../docs/guide/dsl-reference.md#異議の発生率と観測の範囲) |
+| Actor の `version "r1"` | [規則の元の版](../../../docs/guide/dsl-reference.md#構成ごとに規則を改める) |
+| `decides approval_required: bool = true` | [規則の値](../../../docs/guide/dsl-reference.md#構成ごとに規則を改める) |
+| `grants cfo to change ApprovalRule` | [規則変更を許す授権](../../../docs/guide/dsl-reference.md#構成ごとに規則を改める) |
+| `requires ApprovalRule.approval_required == false … else held` | [規則を使う操作の条件](../../../docs/guide/dsl-reference.md#構成ごとに規則を改める) |
+| `amend ApprovalRule from "r1" to "r2" by cfo under RuleChange { approval_required = false }` | [規則の変更](../../../docs/guide/dsl-reference.md#構成ごとに規則を改める) |
+| `verify recoverable end` | [完了への道](../../../docs/guide/dsl-reference.md#完了を求める検査を選ぶ) |
+| `verify terminating end` | [すべての経路が完了](../../../docs/guide/dsl-reference.md#完了を求める検査を選ぶ) |
+| `verify almost_sure end` | [確率1で完了](../../../docs/guide/dsl-reference.md#完了を求める検査を選ぶ) |
+| `compare [Check, Fast] under [Day, Spare] …` | [比較する構成とシナリオ](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `compare … cut C hard { … }` | [比較する Cut](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `objectives { maximize cohort.CorrectPerArrival }` | [最大化する目的](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `minimize metrics.overall.work` | [占有作業時間](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `maximize metrics.overall.named_people_work` | [名前付き実行者の占有時間](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `minimize metrics.overall.peak_tasks` | [同時 Task の最大数](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `minimize metrics.overall.observed_cost_total` | [観測総費用](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
+| `minimize metrics.overall.observed_cost_per_arrival` | [流入あたりの観測費用](../../../docs/guide/dsl-reference.md#比較する範囲と目的を指定する) |
 
 ## Agency の導出の計算量 [実]
 
@@ -262,7 +334,7 @@ simulate では、同じ時刻の出来事の順序が結果に効かないこ�
 未対応(名前つきで拒否される):
 - `join any`、縮退経路、response_loss/retry/recovery、入れ子、`over`、再到着、無限反復。
 - contest 宣言との併用、conform。
-- repeat の結果を引数に取る、repeat の外の操作を対象にした evidence_basis。
+- 繰り返しの結果が、記録への登録と読取りを経由して `evidence_basis` の対象操作に届く形。結果を引数で直接渡す形は使える。詳しくは[根拠源を求める契約](../../../docs/guide/dsl.md#根拠源を求める契約)を参照。
 - mutate は種類で分かれる。使えるのは evidence_missing・hold_delayed・summary_reused・refusal_path_cut。
   authority_expired・command_resent・receipt_unknown・old_promise_denominator_removed・original_access_removed と、
   本体に fork がある構成、`wait until`・quantile・evidence_basis・registers との併用は `loop_feature_combination`。
@@ -359,11 +431,21 @@ pay = Psp.charge_keyed(case.id) response_loss nondet retry max_attempts 2 when r
 | `backoff fixed 0min` | 必須。欠けると E-SYN-0(同じ入力の `missing-backoff`) | [試](0min と 3min) |
 | `exhausted end E` | **必須**。欠けると E-SYN-0「expected exhausted」 | [試] |
 
-- `exhausted end` へ進むのは、最後の試行が**既知の失敗**のときだけ。最後まで unknown なら exhausted End にも後続の End にも進まず、Receipt unknown で止まる([複数案とその他の出力](../../../docs/guide/results.md#複数案とその他の出力))。`when receipt unknown` だけなら exhausted End に到達せず、W-UNREACH-2 が出ることがある [試](試行の途中版)。
+- `exhausted end` へ進むのは、最後の試行が**既知の失敗**のときだけ。`when receipt unknown` だけなら exhausted End に到達せず、W-UNREACH-2 が出ることがある [試](試行の途中版)。
 - **process で `unknown` を分岐に書けない。**`if ack == unknown { … }` は E-TYPE-0「unknown is not a member of Ack」、exit 3 [試]。unknown は戻り値の enum 値ではない。
-- **結果不明の後の段は書けない。**後ろに呼出しを書くことはできるが、最後の応答が unknown の経路では実行されない。`[unknown, unknown]` にすると後ろの呼出しは `W-UNREACH-0 … never_started`、案件は `receipt_unknown` で止まり、`receipt_resolution` が inconclusive・exit 2 [試]。人が照会して進める・返金する段は今は書けないので、その段の名前で例えば `defer ReceiptFollowup` とし、reason と loses を付ける。Actor や操作に解決しない opaque な defer による全体撤回と W-CUT-2 は意図した結果として報告する。無関係な操作の部分撤回で代用しない(SKILL.md「再送を含むモデル」)。
-- 再送を含むモデルは compare・diff・待ちの分解・分位点・contest と組めない(U-SEM-0 `retry_feature_combination`)。`references/unsupported.md`。
-- fork の枝そのものへの retry、`version_check` 付き Capability への retry は U-SEM-0 `retry_feature_combination`(`response_loss_inputs.rs` の `fork-retry`・`version-retry`)[U]。
+- 復旧を宣言しない場合、最後の応答が不明の経路では後続を実行しない。復旧する場合は次の表を参照する。
+- 応答喪失・再送と異議経路や分位点の組合せは未対応。[診断の理由語](../../../docs/guide/results.md#診断の理由語)を参照する。
+- `fork` の枝そのものへの `retry` と、`version_check` 付き Capability への `retry` は `U-SEM-0 retry_feature_combination`。後者は受入でも確認している。詳細は[版の照合](../../../docs/guide/dsl-reference.md#actor-の範囲と状態の更新)を参照。
+
+| 復旧の形 | 参照 |
+|---|---|
+| `receipt_query charge_keyed key key availability available` | [利用できる照会](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `availability unavailable` | [利用できない照会](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `availability nondet` | [利用の可否が非決定の照会](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `on receipt_unknown { … }` | [結果不明のときの枝](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `status = Psp.query_status(case.id) for command pay` | [元の呼出しを指定する照会](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `resolve effect pay using status` | [照会結果による解決](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
+| `stop receipt_unknown` | [未解決の停止](../../../docs/guide/dsl-reference.md#結果不明を照会して復旧する) [試] |
 
 ## 構成変更の理由
 

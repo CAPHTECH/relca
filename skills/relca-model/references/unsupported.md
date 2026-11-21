@@ -18,6 +18,45 @@ EC 試行は電子商取引の注文・決済を有限再送つきで記述し�
 
 `detail` がない、または `kind` が未知なら、書き方で直ると決めつけない。元の診断と利用ガイドを照合し、分からない範囲を報告に残す。
 
+## 理由語から対処を選ぶ
+
+[診断の理由語](../../../docs/guide/results.md#診断の理由語)で code と exit を照合する。書き方を変えると業務の意味も変わるなら、自分で直さず人に確認を求める。
+
+| 理由語 | モデルを作るときの対処 |
+|---|---|
+| concurrent_read_write、concurrent_writers | 読み書きの順序や案件ごとの分離を人に聞く。実際の順序・分離を表す場合だけ直す。 |
+| result_not_definitely_available | 利用先を結果が得られた経路に移せる場合だけ直す。 |
+| executor_identity_unavailable | 実行者と権限を人に聞く。匿名のまま職務分離を主張しない。 |
+| unsupported_scenario_item | 同じ条件を対応する指定に書き換える。条件を外す必要があるなら人に上げる。 |
+| unsupported_invariant_expression | 同じ不変条件を対応する式で表せる場合だけ書き直す。 |
+| unsupported_standing_target | `.start` のような未対応の指定は、原因箇所が `start` を指す。実際の対象を人に聞き、通るように別の対象に差し替えない。 |
+| unsupported_set_element_type | 原因箇所が `optional` なら、問題は要素の型ではなく集合の外側にある。要素の型と、値なしを区別する必要を人に聞く。 |
+| loop_feature_combination | 意味を保てる場合だけ回ごとに書き下す。元の組合せの未対応を報告する。 |
+| merge_feature_combination | 同じ値を渡せる場合だけ書き換える。別の分析を比較やログ処理の代わりにしない。 |
+| registration_result_dependent | 実際に登録する経路を確認し、登録の分岐を明示する。 |
+| registration_feature_combination | 記録の範囲と読取りを人に確認する。必要な登録を消さない。 |
+| same_version_feature_combination | rewrite なら実際の版の結果を参照する。未対応の組合せは人に上げる。 |
+| evidence_basis_feature_combination | 根拠源の要求を残し、確かめられない経路を人に上げる。 |
+| evidence_basis_conditional_snapshot | 候補源、書き手、操作、出口を人に示す。業務上の事実との違いだけを直す。 |
+| simulation_unresolved_nondeterminism | `priority_tie_remaining` なら、優先順位が同じ候補をどう扱うかを人に聞く。それ以外の `unresolved_choices` では、方策や確率の根拠を人に聞く。根拠が無ければ保留し、必要なら網羅探索を別に行う。 |
+| stochastic_arrivals_mode_unsupported | 分布を固定時刻で代用しない。標本推定で足りるか人に聞く。 |
+| stochastic_arrivals_feature_combination | 残すべき機能を人に確かめ、同時に分析できなかった範囲を報告する。 |
+| sensitivity_schema_unsupported | 指定の形式や対象を直す。別の問いになるなら先に人に聞く。 |
+| sensitivity_feature_combination | cause を人に示す。全点で同じ問いを保てなければ推定しない。 |
+| condition_wait_diff_unsupported | 案を個別に検査できても差分検査の代わりとしない。 |
+| condition_wait_contest_unsupported、contest_rates_effect_target | 待ちや異議の業務要件を人に聞く。異議の対象を勝手に変えない。 |
+| priority_resolution_scope_unsupported | 実際の共有状態と所有者を確かめる。対象を変えるなら事実に合わせる。 |
+| priority_feature_combination | 案で揃えるべき条件を確認する。verify では外部検証が未実施と伝える。 |
+| retry_feature_combination、recovery_feature_combination | cause を読み、未対応の組合せだけを報告する。応答不明を成功や失敗にしない。 |
+| policy_feature_combination | 方策を外すと問いが変わる。必要な順序と経路を人に示す。 |
+| mean_feature_combination | 期待値は保留する。別の指標を出して同じ量とは呼ばない。 |
+| scope、schema、time_unit、approval_spec_schema | 指定・記録形式・単位を採取元と照合する。変換や再採取の根拠が揃うまで待つ。 |
+| unsupported_q1_model_feature、unsupported_contract、unsupported_verify | 未検査の機能・契約・検査を列挙し、人に上げる。 |
+| unsupported_cancel_semantics、unsupported_capability_lifecycle | 照合できない取消や操作属性を報告する。検査を通すために記録を加工しない。 |
+| unsupported_approval_profiles、unsupported_approval_semantics | 照合の定義や操作・戻り値を人に確認する。モデルの合格に置き換えない。 |
+
+異議経路や分位点を外した別モデルを検査するなら、外したものと失う検査を Cut に宣言し、報告にも書く。元のモデルを検査したとは書かない。
+
 ## 診断別の例
 
 | 症状 | code / exit | 理由 | どうするか | 根拠 |
@@ -37,13 +76,10 @@ EC 試行は電子商取引の注文・決済を有限再送つきで記述し�
 | 判定したのに「止める判定なし」 | W-RESP-2 | `case.id` 以外の引数も追加の読取りも無い呼出しは判定と数えない | 業務で実際にデータを受け取る操作なら、その引数を書く(`review(claim)`)。警告を消すためだけに引数を足さない。実態として止めていないなら警告のまま報告する | 観測・`fixtures/agency-refusal/` |
 | 匿名実行者に職務分離 | unsupported | 実行者が分からないと分離を判定できない | `executors [...]` を書く | `fixtures/exec-anonymous.broken-no-executor/`、assumptions の `executors` 行 |
 | 計算上の上限に達した | `truncated: true`、inconclusive(exit 2) | 業務上の上限ではなく計算の切断 | 上限を見直す。未完了案件を成功・失敗へ変換しない | [上限と未完了](../../../docs/guide/guarantees.md#上限と未完了) |
-| 再送を含むモデルで compare / diff | U-SEM-0 `retry_feature_combination: compare(diff) with response receipts is unsupported`、exit 4 | Receipt unknown を比較・差分で扱えない組合せを明示的に拒否している。案の一つにでも再送があれば拒否 | 案ごとに `check --configuration` を回して人が並べ、「compare ではない」と明記する(SKILL.md「再送を含むモデル」)。全体の unsupported と各案の verdict を両方報告する | 観測(EC 試行)・[対応範囲](../../../docs/guide/guarantees.md#対応範囲を確認する) |
-| 再送を含むモデルで `breakdown waits` | U-SEM-0 `retry_feature_combination: receipt/retry with contest, waiting breakdown or quantiles is unsupported`、exit 4 | 待ちの内訳と Receipt unknown の交差は未対応 | `breakdown waits` を外して回し、時間は終端の elapsed の範囲だけを書く。内訳は「確かめていない」 | 観測(EC 試行) |
-| 再送を含むモデルで分位点・contest | 上と同じ文言 | 同上 | 分位点・contest を外すか、再送を外した別モデルにして、外したことを Cut と報告に書く | lower.rs の `retry_feature_combination` 診断。回していない |
 | 重複拒否の機構も `effect_scope modeled` も無い Capability を再送 | U-SEM-0 `response_loss_resend_mechanism_unmodeled`、exit 4 | 機構をモデル化していない外部 commit の再送は判定しない | 取引先が重複を拒むなら G の形、拒まないなら `effect_scope modeled` と具体的な counter。業務の事実で選ぶ | 観測・`response_loss_inputs.rs` の `r-resend` |
 | `idempotency key` を書いたが atomic の重複拒否の形でない | U-SEM-0 `idempotency_mechanism_unmodeled` | 宣言だけでは一回性を認めない | dsl.md の G の形に揃える | `response_loss_inputs.rs` の `idempotency-without-atomic`。ここでは回していない |
 | `retry` の `exhausted end` を省いた | E-SYN-0「expected exhausted」、exit 3 | 最後の失敗先は必須 | `exhausted end <End>` を書く | 観測 |
 | `if x == unknown` | E-TYPE-0「unknown is not a member of …」、exit 3 | unknown は戻り値の値ではない。結果不明の後で分岐できない | 分岐せず、結果不明の後の段をその名前で defer し、opaque による全体撤回と W-CUT-2 を報告する。無関係な操作の部分撤回で代用しない(SKILL.md「再送を含むモデル」) | 観測 |
-| 最後の応答が unknown になりうる | `receipt_resolution` inconclusive、exit 2(他に違反があれば exit 1) | 未完了を成功・失敗へ変換しない。`truncated` は false のまま | 合格扱いにしない。論点表に「判定不能」で残す | 観測・[上限と未完了](../../../docs/guide/guarantees.md#上限と未完了) |
+| 復旧で解決していない応答不明の経路が残る | receipt_resolution が inconclusive。終了コードは最上位の verdict に従う | 未完了を成功・失敗へ変換しない。計算切断とは別 | 合格扱いにしない。論点表に「判定不能」で残す | [上限と未完了](../../../docs/guide/guarantees.md#上限と未完了) |
 | 有限の `repeat` | 一律に unsupported ではない | `mean-repeat-policy` の `--configuration Loop` は check と simulate で平均 `15/2` 分を記録。mutate は組合せによって `unsupported / loop_control` または `unsupported / loop_feature_combination` の行を出す | 回数表と計算上の打切りを区別する。未対応の変異を未検出に数えない | 観測: [採取コマンド](../scripts/testdata/numerical/capture.py) |
 | 無限のループ・公平性・部分観測方策・実行中の規則改定 | [U] | 組合せごとの拒否理由と出力は今回確認していない | [対応範囲](../../../docs/guide/guarantees.md#対応範囲を確認する) と実際の診断を確認する | 文書 [U] |

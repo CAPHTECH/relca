@@ -71,6 +71,53 @@ fn syntax_refusals_name_the_first_token() {
 }
 
 #[test]
+fn standing_target_names_the_unsupported_suffix() {
+    for (target, token, loc, suffix_column) in [
+        ("A.b.start", "start", location(2, 32, 2, 37), 32),
+        ("A.b.commit()", "(", location(2, 38, 2, 39), 38),
+    ] {
+        let source = format!(
+            "model M version \"0.2\" {{\n  actor A {{ standing over [{target}] basis \"x\" }}\n}}\n"
+        );
+        rejected(
+            invoke("check", &source, &[]),
+            "unsupported syntax: standing supports only end and commit targets",
+            "unsupported_standing_target",
+            "unsupported_token",
+            location(2, 28, 2, 29),
+            vec![blocker("feature", Some(token), loc)],
+            &format!(
+                "  at 2:28\n  kind: analysis_not_connected\n  cause: unsupported_token\n  blocked by: feature {token} at 2:{suffix_column}\n  see: docs/guide/dsl.md#解析が未接続のとき\n"
+            ),
+        );
+    }
+}
+
+#[test]
+fn optional_set_marks_the_outer_constructor() {
+    let source = "model M version \"0.2\" {\n  actor A { state keys: optional<set<CaseId>> }\n  process P { end done }\n  bounds { cases 1; live_tasks 1; clock 1min }\n  verify reachable end.done\n}\n";
+    let result = invoke("check", source, &[]);
+    let d = &result.1["diagnostics"][0];
+    assert_eq!(d["code"], "U-SYN-0");
+    assert_eq!(d["span"], serde_json::json!({"start":61,"end":67}));
+    rejected(
+        result,
+        "unsupported syntax: set element type is unsupported",
+        "unsupported_set_element_type",
+        "unsupported_token",
+        location(2, 38, 2, 44),
+        vec![blocker("feature", Some("optional"), location(2, 25, 2, 33))],
+        "  at 2:38\n  kind: analysis_not_connected\n  cause: unsupported_token\n  blocked by: feature optional at 2:25\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
+    );
+    accepts(
+        "check",
+        &source.replace("optional<set<CaseId>>", "set<CaseId>"),
+        &[],
+        "unsupported_set_element_type",
+    );
+}
+
+#[test]
 fn conformance_scope_has_no_model_location() {
     let source = include_str!("../snapshots/inputs/r2-recovery.relca");
     let log = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

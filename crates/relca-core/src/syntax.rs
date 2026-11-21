@@ -476,7 +476,10 @@ impl<'s> Parser<'s> {
     }
 
     fn unsupported_form(&self, message: &str, reason: &str) -> Diagnostic {
-        let token = self.current();
+        self.unsupported_form_at(message, reason, self.current())
+    }
+
+    fn unsupported_form_at(&self, message: &str, reason: &str, token: Token<'s>) -> Diagnostic {
         self.unsupported(message).unconnected(
             reason,
             "unsupported_token",
@@ -859,8 +862,10 @@ impl<'s> Parser<'s> {
             names.push(self.ident()?);
         }
         self.expect(":")?;
-        let optional = self.take("optional");
+        let optional_token = self.at("optional").then(|| self.current());
+        let optional = optional_token.is_some();
         if optional {
+            self.pos += 1;
             self.expect("<")?;
         }
         let integer_max;
@@ -900,9 +905,10 @@ impl<'s> Parser<'s> {
             let ty = self.named_type()?;
             if ty.value == "set" && self.take("<") {
                 if optional || !self.at("CaseId") {
-                    return Err(self.unsupported_form(
+                    return Err(self.unsupported_form_at(
                         "set element type is unsupported",
                         "unsupported_set_element_type",
+                        optional_token.unwrap_or_else(|| self.current()),
                     ));
                 }
                 self.ident()?;
@@ -4914,6 +4920,7 @@ impl<'s> Parser<'s> {
         self.lines();
         if self.current().kind == Kind::Word && !self.at("end") {
             let saved = self.pos;
+            let mut blocker = self.current();
             let parsed = (|| {
                 let start = self.start();
                 let actor = self.ident()?;
@@ -4925,23 +4932,25 @@ impl<'s> Parser<'s> {
                     span: self.span(start),
                 };
                 self.expect(".")?;
+                self.lines();
+                blocker = self.current();
                 self.expect("commit")?;
                 path.span = self.span(start);
                 if self.at(".") || self.at("(") {
-                    return Err(self.unsupported_form(
-                        "standing supports only end and commit targets",
-                        "unsupported_standing_target",
-                    ));
+                    blocker = self.current();
+                    return Err(self.unsupported("standing supports only end and commit targets"));
                 }
                 Ok(StandingRef::Commit(path))
             })();
             if parsed.is_ok() {
                 return parsed;
             }
+            // Preserve the original diagnostic span for the whole rejection.
             self.pos = saved;
-            return Err(self.unsupported_form(
+            return Err(self.unsupported_form_at(
                 "standing supports only end and commit targets",
                 "unsupported_standing_target",
+                blocker,
             ));
         }
         self.expect("end")?;

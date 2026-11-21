@@ -26,6 +26,62 @@ CLI は標準出力に JSON を出し、診断は標準エラーにも書きま�
 | `unsupported` | 4 | 必要な機能や組合せが対応範囲外 |
 | `vacuous` | 5 | 性質の前件が発生せず、検査として働いていない |
 
+## 診断の理由語
+
+diagnostics[].detail.reason は診断を引くための語です。detail.cause はその内訳です。同じ語でも、cause と blockers で該当する箇所を確かめてください。message の文言や、conform の diagnostics[].reason とは別の欄です。
+
+表の「共通入力」は、モデルを読む check・explain・simulate・compare・diff・mutate・sensitivity・conform・estimate です。構成や先に見つかった拒否によっては、その判定まで進みません。exit は当該診断による判定です。各案・各性質の診断なら、最上位の verdict と exit も別に確認してください。
+
+| 語 | 意味 | コマンド・コード | exit | すること |
+|---|---|---|---|---|
+| `concurrent_read_write` | 並行する呼出しが同じ変数を読み書きする | 共通入力、U-SEM-0 | 4 | 読み手が参照する値と書込みとの順序を確かめる |
+| `concurrent_writers` | fork の兄弟、または重なりうる案件が同じ状態へ書く | 共通入力、U-SEM-0 | 4 | 書込みの順序、または案件ごとに分ける範囲を確かめる |
+| `result_not_definitely_available` | 参照する戻り値がすべての該当経路で得られるとは限らない | 共通入力、U-SEM-0 | 4 | 結果を得た経路だけで使えるか確認する |
+| `executor_identity_unavailable` | 契約や executor.id の参照に必要な実行者を宣言していない | 共通入力、U-SEM-0 | 4 | 実際に割当て可能な実行者を確認する |
+| `unsupported_scenario_item` | scenario 内の項目が対応範囲外 | 共通入力、U-SYN-0 | 4 | 項目の位置とシナリオの宣言を照合する |
+| `unsupported_invariant_expression` | 状態不変条件の式が対応範囲外 | 共通入力、U-SYN-0 | 4 | 対応する式で同じ制約を表せるか確認する |
+| `unsupported_standing_target` | standing の対象を終端または commit として読めない。たとえば操作の `.start` を対象にすると、原因箇所は `start` を指す | 共通入力、U-SYN-0 | 4 | 対象にする実際の終端または commit を確認する |
+| `unsupported_set_element_type` | set の要素が CaseId でないか、optional な set を書いた。後者の原因箇所は `optional` を指す | 共通入力、U-SYN-0 | 4 | 集合の要素と、値なしを区別する必要を確かめる |
+| `loop_feature_combination` | [繰り返し](dsl.md#繰り返し) | 共通入力、U-SEM-0。conform のログ照合は U-LOG-1 | 4 | cause を読み、同じ意味で回ごとに書き下せるか確認する |
+| `merge_feature_combination` | [分岐した値を先へ渡す](dsl.md#分岐した値を先へ渡す) | 共通入力、U-SEM-0。conform・estimate のログ処理は U-LOG-1 | 4 | 同じ問いを合流なしで検査できるか確認する |
+| `registration_result_dependent` | [知識を記録へ登録する](dsl.md#知識を記録へ登録する) | 共通入力、U-SEM-0 | 4 | 登録する経路としない経路を区別する |
+| `registration_feature_combination` | [知識を記録へ登録する](dsl.md#知識を記録へ登録する) | 共通入力、U-SEM-0 | 4 | 登録や読取りを外して確認済みにしない |
+| `same_version_feature_combination` | [確かめた版と使う版を揃える](dsl.md#確かめた版と使う版を揃える) | 共通入力、U-SEM-0 | 4 | cause と kind を見て、実際に確認して使う版を照合する |
+| `evidence_basis_feature_combination` | [根拠源を求める契約](dsl.md#根拠源を求める契約) | 共通入力、U-SEM-0 | 4 | 検査できなかった契約を報告する |
+| `evidence_basis_conditional_snapshot` | [根拠源を求める契約](dsl.md#根拠源を求める契約) | check・explain・simulate と、それらを使う案や点の分析、U-SEM-0 | 4。別の違反などが優先されることがある | 根拠の候補と確定した根拠を分ける |
+| `simulation_unresolved_nondeterminism` | [同じ時刻に残った行動の順序](#checksimulateexplain)を試しても未解決の選択が残った。優先順位が同じまま選べない場合は `cause: priority_tie_remaining`、それ以外は `cause: unresolved_choices`。同時刻の探索上限とは別 | simulate、compare・sensitivity の simulation、U-SEM-0 | 4 | 根拠なしに確率や順序を置かない |
+| `stochastic_arrivals_mode_unsupported` | 到着間隔の確率分布を網羅探索または比較に使おうとした | check・explain・diff の案の検査、compare、U-SEM-0 | 4 | 比較や網羅探索をしたとみなさず、標本推定で足りるか確認する |
+| `stochastic_arrivals_feature_combination` | 確率的な到着と、指標・再送・異議・条件待ち・Cut の保留などの組合せを標本推定できない | simulate・sensitivity の simulation、U-SEM-0 | 4 | cause で組合せを確認し、必要な機能は残す |
+| `sensitivity_schema_unsupported` | 指定ファイルのスキーマ、範囲の種類、または対象の種類が未対応 | sensitivity、U-SYN-0 | 4 | 指定の形式と対象を見直す |
+| `sensitivity_feature_combination` | 指定したモデルの機能を、同じ問いのまま点ごとに分析できない | sensitivity、U-SEM-0 | 4 | cause を確かめ、問いを変えずに分析できないなら報告する |
+| `condition_wait_diff_unsupported` | 条件待ちを含むモデルの構成差分は未対応 | diff、U-SEM-0 | 4。最上位では重い判定が優先 | 差分なしとみなさない |
+| `condition_wait_contest_unsupported` | 条件待ちと異議経路の組合せは未対応 | 共通入力、U-SEM-0 | 4 | どちらの機能も必要か確認する |
+| `contest_rates_effect_target` | commit を対象にした異議経路に率を指定した | 共通入力、U-SEM-0 | 4 | 業務で異議を起こす対象を確認する |
+| `priority_resolution_scope_unsupported` | 優先度で競合を解く対象が、方策 Actor 自身の共有観測変数に限られていないか、対象が空 | 共通入力、U-SEM-0 | 4 | 対象の所有者と共有範囲を確認する |
+| `priority_feature_combination` | 優先度の入力や規律が案間で異なる。または外部検証が未接続 | compare・diff・verify、U-SEM-0 | 4。比較の最上位では重い判定が優先 | 比較条件を確かめる。外部検証の代用としない |
+| `retry_feature_combination` | 応答喪失・再送と異議または分位点、版を確かめる操作への再送、あるいは fork の枝への応答チャネルが未対応 | 共通入力、U-SEM-0 | 4 | cause を確認する。比較や待ちの分解まで一律に諦めない |
+| `recovery_feature_combination` | 結果不明後の復旧と他の機能の組合せ、照会への応答チャネル指定、復旧を含むモデルの変異などが未対応 | 共通入力（変異の拒否は mutate）、U-SEM-0 | 4 | 未対応の経路や分析を残して報告する |
+| `policy_feature_combination` | 方策による順序づけと、合流または応答照会・復旧の組合せが未対応 | 共通入力、U-SEM-0 | 4 | 方策を外して同じ判定とみなさない |
+| `mean_feature_combination` | 期待値の指標と、合流または応答喪失・再送の組合せが未対応 | 共通入力、U-SEM-0 | 4 | 期待値の判定を保留する |
+
+### ログ照合の診断
+
+次の語は conform の `detail.reason` です。`log_` で始まる語は `detail.cause` に出ます。照合結果をまとめるときは、`U-LOG-1` があっても、ログの行長やイベント数の上限で入力を切断した場合は `inconclusive`（exit 2）です。入力の切断がなく、確定違反があれば `violated`（exit 1）が優先します。表の exit 4 は未対応の診断で判定が決まる場合です。
+
+| 語 | cause | 意味 | コマンド・コード | exit | すること |
+|---|---|---|---|---|---|
+| `scope` | `log_scope` | 指定したログ照合の範囲が未対応 | conform、U-LOG-0 | 4 | 照合する範囲を確認する |
+| `schema` | `log_schema` | ログのスキーマが未対応 | conform、U-LOG-0 | 4 | ログの形式を確認する |
+| `time_unit` | `log_time_unit` | ログの時刻単位が分でない | conform、U-LOG-0 | 4 | 元の単位を確認する |
+| `approval_spec_schema` | `log_approval_schema` | 承認の照合用指定ファイルのスキーマが未対応 | conform、U-LOG-0 | 4 | 指定ファイルの形式を確認する |
+| `unsupported_q1_model_feature` | `log_model_feature` | 再送・応答喪失などのモデル機能をログから照合できない | conform、U-LOG-1 | 4 | not_checked で照合しなかった対象を読む |
+| `unsupported_contract` | `log_contract_kind` | 指定した契約の種類や対象を照合できない | conform、U-LOG-1 | 4 | not_checked で対象の契約を確認する |
+| `unsupported_verify` | `log_verify_kind` | 指定した検査をログから判定できない | conform、U-LOG-1 | 4 | not_checked で対象の検査を確認する |
+| `unsupported_cancel_semantics` | `log_cancel_semantics` | 取消の意味をこの照合では扱わない | conform、U-LOG-1 | 4 | ログから確かめられない取消を報告する |
+| `unsupported_capability_lifecycle` | `log_capability_field` | 操作の属性をログから照合できない | conform、U-LOG-1 | 4 | diagnostics[].reason で対象の属性を確認する |
+| `unsupported_approval_profiles` | `log_approval_profiles` | 承認照合の定義を複数指定した | conform、U-LOG-1 | 4 | どの定義を照合するか決める |
+| `unsupported_approval_semantics` | `log_approval_semantics` | 承認照合の結果や操作を指定どおりに解釈できない | conform、U-LOG-1 | 4 | 操作と戻り値の対応を確かめる |
+
 ## check、simulate、explain
 
 最初に `mode` と `verdict` を確認し、次に以下を読みます。
@@ -569,6 +625,7 @@ body の並行作業では、合流と待ちの内訳も回ごとに分かれま
 
 `skills/relca-model/scripts/review_page.py` は source と Relca の JSON から確認用ページを作ります。
 表と流れ図は source の表示であり、Relca に代わってモデルの妥当性を検証するものではありません。
+ページは compare の最上位と各案などをまとめた判定を照合します。diff の最上位と変更前後の判定は照合しません。
 繰り返しの図には名前・回数上限・gap、body と `on_limit`、`again` の戻り先、`leave` の出口、
 `end` を出します。入れ子や `over` など拒否された形は「Relca が受け付けない形」として区別します。
 
@@ -609,12 +666,112 @@ target の `NAME` や `Actor` は宣言名に置き換えます。宣言に対�
 | `declared_vs_candidate` | 宣言値が候補と一致するか、区間内か。候補の採否には使えますが、exit は変えません |
 
 exit 0 は選んだ欄を導出でき、未知・打切り・未対応がなかったという意味です。業務の適合判定ではありません。
-exit 2 では `withheld` と `reason` を確認します。入力切断では候補も件数も null です。
-exit 3 は入力不正、exit 4 は構造上導けない要求などの未対応です。未対応の欄は `not_derivable` と理由が出ます。他の欄に使える候補が残る場合があるので、欄ごとの状態も読んでください。
+exit 2 では `withheld` のほか、`derived` でも `coverage` が `partial` の欄を読みます。欄に問題がなくても、ログ全体の対応づけや端点の申告が不十分なら exit 2 です。
+exit 3 は入力不正、exit 4 は未対応です。後者には、欄を作る前の拒否と、選んだ欄が `not_derivable` の場合があります。他の欄に候補が残ることがあるので、最上位の `verdict` だけで採否を決めないでください。
 
-確認用ページには `--estimate estimate.json --estimate-exit N` を渡せます。別モデルの結果は使わず、宣言値が区間から外れれば警告します。宣言値と候補が一致し、`derived`・`complete` で未知・打切りがともに0の場合に限り、ログを根拠として「出所の申告なし」から外します。一部未確定なら件数を添えて候補を表示するだけです。候補は観測窓の結果であり、別の期間や To-Be の確率ではありません。ログの真正性や代表性は人が確かめてください。
+確認用ページには `--estimate estimate.json --estimate-exit N` を渡せます。モデルの hash や構成が違う結果は使いません。宣言値と区間の比較欄に区間外とあれば警告します。同じ宣言に対応するすべての欄で、候補が宣言値と一致し、`derived`・`complete` で未知・打切りがともに0の場合に限り、ログを根拠として「出所の申告なし」から外します。一部未確定なら、使える候補を件数とともに表示します。候補は観測窓の結果であり、別の期間や To-Be の確率ではありません。ログの真正性や代表性は人が確かめてください。
 
 指定ファイルの例と転記時の確認は、[実績ログから候補を出す](../../skills/relca-model/references/estimate.md)にあります。
+
+### 推定の欄ごとの理由語
+
+同じ表を `slots[].reason` と `rounds[].reason` に使います。`withheld` は候補または転記用の値の保留です。`not_derivable` はモデルや要求の形からは導けないという意味です。`derived` でも部分的な観測からの候補はあります。`null` を 0 に置き換えないでください。
+
+exit 2 は、その欄が全体の判定を決めた場合です。選んだ別の欄が `not_derivable` なら exit 4 が優先します。
+
+表の「件数」は n・counts・unknown・censored です。「区間あり」は、n が正で区間を計算できる場合です。所要時間の要約は数えられた時間があれば残ります。回別の時間では、保留した最初の回の理由を親にも出します。まとめた件数・区間・候補は null なので、各回を読んでください。
+
+| 語 | status | 意味 | 件数・区間・候補 | exit | すること |
+|---|---|---|---|---|---|
+| `not_requested` | `not_requested` | 指定の対象外 | すべて null | 個々の対象外の欄は判定に数えない。全欄が対象外なら `no_evidence` で exit 2 | 必要なら ID を指定する |
+| `no_samples` | `withheld` | 数えられる標本がない | n は 0。区間・候補は null | 2 | 対応づけと観測窓を見直す |
+| `insufficient_samples` | `withheld` | 既知の件数が最低件数に届かない | 件数と計算できる区間は残る。候補は null | 2 | 必要な精度に合わせて観測を増やす |
+| `zero_count_branch` | `withheld` | 確率行に未観測の枝がある | 0 件の枝も区間あり。行の候補は null | 2 | 区間の上端を読む。確率 0 を転記しない |
+| `dsl_precision_insufficient` | `withheld` | [転記前の丸めの確認](../../skills/relca-model/references/estimate.md#モデルへの転記はレビューを通す) | 件数・区間・厳密値は残る。全枝の dsl と丸め誤差上限は null | 2 | 桁数を増やして再実行する |
+| `zero_duration_observed` | `withheld` | 0 分の所要を観測した | 件数と時間の要約は残る。区間・候補は null | 2 | 0 分に見える理由を確かめる |
+| `support_too_large` | `withheld` | 観測された所要時間の種類数が max_support を超えた | 件数と時間の要約は残る。区間・候補は null | 2 | 分布の粒度と上限を見直す |
+| `multiple_observations_per_case` | `withheld` | 回で区別しない欄に同じ案件の観測が複数ある | 件数・区間・候補は null | 2 | 同じ案件を独立な複数標本にしない |
+| `truncated` | `withheld` | ログ読取りの上限で切断した | 件数・区間・候補・出所は null | 2 | 下の全体の理由語を読む |
+
+次の語では、標本に使えた件数は残ります。区間や候補を残すかは、欄の種類と残る標本によります。確率行は未知を含んでも、既知の件数が足り、各枝が観測済みなら候補を出せます。所要時間は数えた標本に測れない時間があると候補を出しません。
+
+| 語 | status | 意味 | 件数・区間・候補 | exit | すること |
+|---|---|---|---|---|---|
+| `censored` | `withheld` / `derived` | 開始したが完了も取消確認も見えていない | 時間の候補は null。確率の候補と区間は残りうる | 2 | 完了まで観測する。打切りを完了にしない |
+| `time_precision` | `withheld` / `derived` | 開始か完了の時刻に幅がある | 時間の候補は null。確率の候補と区間は残りうる | 2 | 元の時刻精度を確認する |
+| `cancelled` | `withheld` / `derived` | 完了の代わりに取消が記録された | 時間の候補は null。確率の候補と区間は残りうる | 2 | 取消を通常の戻り値や完了扱いにしない |
+| `lifecycle` | `withheld` / `derived` | 開始と完了を時間・状態の整合する一組とみなせない | 時間の候補は null。確率の候補と区間は残りうる | 2 | 開始、完了、取消の対応を確認する |
+| `conflicting_terminal` | `withheld` / `derived` | 信頼できない Task に完了と取消確認がともにある | 時間の候補は null。確率の候補と区間は残りうる | 2 | 両方の記録を採取元に照会する |
+| `duplicate_phase` | `withheld` / `derived` | Task の段階を一意に対応づけられない | 時間の候補は null。確率の候補と区間は残りうる | 2 | 重複か別の操作かを採取元に照会する |
+| `missing_result` | `derived` | 完了の戻り値が欠ける | 確率の件数・区間・候補は残りうる。時刻から所要時間は数えられる | 2 | 元の結果を確認する。欠測を埋めない |
+| `result_domain` | `derived` | 戻り値を選んだ確率行の枝として数えられない | 確率の件数・区間・候補は残りうる。時刻から所要時間は数えられる場合がある | 2 | ログの値と戻り値の範囲を照合する |
+| `missing_start` | `withheld` / `derived` | 開始が見つからない | 該当 Task は n に足さない。通常の欄では区間・候補が残りうる | 2 | 観測窓と開始の採取漏れを確認する |
+| `task_identity_mismatch` | `withheld` / `derived` | 同じ Task のイベントで操作・Actor・実行者の対応が食い違う | 該当 Task は n に足さない。通常の欄では区間・候補が残りうる | 2 | 案件と Task の対応を確かめる |
+| `unmapped_actor` | `withheld` / `derived` | Actor または実行者を対応づけられない | 該当 Task は n に足さない。通常の欄では区間・候補が残りうる | 2 | 対応表を確認する |
+| `unmapped_operation` | `withheld` / `derived` | 操作を対応づけられない | 該当 Task は n に足さない。通常の欄では区間・候補が残りうる | 2 | ログの操作名とモデルの版を確認する |
+| `partial_coverage` | `withheld`、または全体のみ | 回の先頭側が欠ける。または全体に観測不足がある | 先頭側の欠落では該当案件を回に割り当てず、区間・候補は null | 2 | 先頭からの観測と端点の申告を確認する |
+| `round_order_ambiguous` | `withheld` / `derived` | 開始時刻が重なるか開始の重複があり、回の順序を決められない | 該当案件は割当て対象の回で未知。区間や確率の候補は残りうる | 2 | 行順で決めず、開始の順序を確かめる |
+| `rounds_exceed_model_limit` | `withheld` / `derived` | 案件の開始観測数がモデル上の回数を超えた | 該当案件は割当て対象の回で未知。区間や確率の候補は残りうる | 2 | 業務の上限とログの対応を照合する |
+
+回の先頭側が欠ける場合は、その案件を各回の n に入れません。残りの案件の件数は出ますが、その計算行の区間・候補は null です。開始を数えられない理由が分かれば partial_coverage の代わりに、その理由が出ます。
+
+選んだ欄が次の理由で `not_derivable` なら、その欄の件数・区間・候補は `null` です。最上位は `unsupported`（exit 4）です。残る情報は表のとおりです。
+
+| 語 | 意味 | 残る情報 | すること |
+|---|---|---|---|
+| `latent_condition` | 確率行が潜在値で条件づけられている | marginal_counts | 周辺件数を潜在条件別に配らない |
+| `observed_condition` | 確率行の条件がこの推定で扱える回の条件でない | marginal_counts | 周辺件数を条件別とみなさない |
+| `branches_not_distinguishable` | 枝が同じ結果を返すか、戻り値が record 型 | marginal_counts | 観測だけで枝を分けない |
+| `nondeterministic` | 非決定の結果宣言に確率候補を要求した | marginal_counts | 非決定に確率を補わない |
+| `ambiguous_call_site` | 同じ操作の呼出し箇所が複数あるか、異議経路の操作である | occurrences_per_case | 観測がどの呼出しに対応するか確認する |
+| `round_not_identifiable` | [回ごとの表](../../skills/relca-model/references/estimate.md#回ごとの表は混ぜずに読む) | occurrences_per_case | 出現順をそのまま回番号にしない |
+| `round_pooling_not_supported` | 反復中の無条件の確率行について複数の回を混ぜない | rounds の回別の件数・候補・区間 | 回で条件づけるか人が決める |
+| `no_call_site` | 選んだ手順に対象操作の呼出し箇所がない | 呼出し別の件数なし | 構成と対象を確かめる |
+| `query` | 対象が照会の呼出し | 呼出し別の件数なし | 照会の観測を通常の呼出しと混ぜない |
+| `recovery` | 対象が復旧を伴う呼出し | 呼出し別の件数なし | 復旧前後の扱いを確認する |
+| `retry` | 対象が再送を伴う呼出し | 呼出し別の件数なし | 試行を独立な案件として扱わない |
+| `response_loss` | 応答喪失を伴う呼出し、または応答喪失の宣言 | 呼出し別の件数なし | 応答の観測から操作の成否を推測しない |
+| `latent_initial` | 潜在変数の初期分布 | 追加統計なし | ログから初期の真値を推測しない |
+| `observed_initial` | 観測変数の初期分布 | 追加統計なし | 初期値の記録を別途確認する |
+| `arrival` | 到着の宣言 | 追加統計なし | 到着を開始 Task で代用しない |
+| `performance` | 実行者などの性能の宣言 | 追加統計なし | 宣言の根拠を別途確認する |
+| `business_rule` | 容量・資源・勤務表・回数上限・期限などの宣言 | 追加統計なし | 実績件数から業務の規則を決めない |
+| `contest_rates` | 異議の率の宣言 | 追加統計なし | 起票と応答の根拠を別途確認する |
+| `wait` | 手順内の待ちの宣言 | 追加統計なし | 操作の所要時間と待ちを分ける |
+| `gap` | 回の間隔の宣言 | 追加統計なし | 回間の待ちを操作の時間と混ぜない |
+| `backoff` | 再送の間隔の宣言 | 追加統計なし | 再送の間隔は採用している規則を確認する |
+
+### 推定全体の理由語
+
+推定の欄を評価した場合、最上位の `reason` は選んだ欄のうち最初の `not_derivable` の理由を優先します。それがなければ、保留または `partial` の最初の欄の理由を示すことがあります。全理由の一覧ではありません。該当する欄は上の表で読んでください。
+
+| 語 | verdict・exit | 意味 | 欄の出力 | すること |
+|---|---|---|---|---|
+| `no_evidence` | `inconclusive`・2 | 推定を計算する選択済みの欄がない | 欄がないか、すべて `not_requested` | 選んだ構成と対象を確かめる |
+| `partial_coverage` | `inconclusive`・2 | 理由を持たない部分的な欄があるか、案件の端点が両方とも確かとは申告されていない | 欄の結果は残る | `coverage` とログの端点を確かめる |
+| `unmapped_actor`、`unmapped_operation` | `inconclusive`・2 | ログ全体に対応づけられない Actor・実行者・操作がある | 欄の結果は残る | 同名の配列で該当する ID を探す |
+| `truncated` | `inconclusive`・2 | 先頭以外の行が上限を超えたか、イベント件数の上限を超えた | 全欄が `withheld`。ログ全体の hash は null | `log.limit` を確認する。切断前の分だけで候補を作らない |
+| `merge_feature_combination` | `unsupported`・4、U-LOG-1 | [診断の理由語](#診断の理由語) | 欄なし | 合流を取り除いて同じモデルとみなさない |
+| `argument` | `invalid`・3、E-LOG-0 | CLI の引数が不足、不正、または重複 | 欄なし | モデル・ログ・指定ファイルの指定を確かめる |
+| `input` | `invalid`・3、E-LOG-0 | モデルまたはログを開けないか、読み込めない | 欄なし | ローカルのファイルと読取り権限を確認する |
+| `spec_input` | `invalid`・3、E-LOG-0 | 指定ファイルを開けないか、読み込めない | 欄なし | 指定先と読取り権限を確認する |
+| `spec_bad_field` | `invalid`・3、E-LOG-0 | 指定ファイルの形式・欄・値・サイズに問題がある | 欄なし | [指定の例](../../skills/relca-model/references/estimate.md#モデルログ指定ファイルを固定する)と照合する |
+| `spec_hash_mismatch` | `invalid`・3、E-LOG-0 | 指定したモデルまたはログの hash が入力と一致しない | 欄なし | 比較する版とログを確認し、その実値を指定する |
+| `unknown_slot` | `invalid`・3、E-LOG-0 | 指定した欄の ID が選んだモデルにない | 欄なし | 構成を確認し、ID を選び直す |
+| `bad_field` | `invalid`・3、E-LOG-0 | ログの必須欄、型、値、組合せに問題がある | 欄なし | header とイベントの定義を照合する |
+| `bad_mapping` | `invalid`・3、E-LOG-0 | 対応表がモデルにない Actor や実行者を指す | 欄なし | 版と対応表を照合する |
+| `malformed_jsonl` | `invalid`・3、E-LOG-0 | JSONL として読めないか、ログが空 | 欄なし | 1 行ずつの JSON と先頭の header を確認する |
+| `duplicate_key` | `invalid`・3、E-LOG-0 | JSON オブジェクトのキーが重複 | 欄なし | 元データを照合して一意にする |
+| `duplicate_event_id` | `invalid`・3、E-LOG-0 | イベント ID が重複 | 欄なし | 元のイベントの識別子を確認する |
+| `header_line_limit` | `invalid`・3、E-LOG-0 | 先頭の行が長さの上限を超えた | 欄なし | header の長さを確認する |
+| `unknown_after` | `invalid`・3、E-LOG-0 | after がログにないイベントを指す | 欄なし | 参照先を元のログで確認する |
+| `order_cycle` | `invalid`・3、E-LOG-1 | 宣言した順序や操作から得た順序に循環がある | 欄なし | after と操作の段階を確認する |
+| `inconsistent_time_evidence` | `invalid`・3、E-LOG-1 | 宣言した順序と時刻の区間を両立できない | 欄なし | 時刻の基準と前後関係を確認する |
+| `schema`、`time_unit` | `unsupported`・4、U-LOG-0 | [ログ照合の診断](#ログ照合の診断)と同じ入力の制約。estimate では最上位の `reason` と `diagnostics[].reason` に出ます。`diagnostics[].detail` は `null` です | 欄なし | ログ形式または単位を確認する |
+
+入力不正などで候補を作らず止まる場合、slots は空の配列です。モデルの構文・意味の診断で止まった場合は、最上位の reason ではなく diagnostics を読みます。
+
+補足欄の sensitivity_reason が multi_branch_row なら、3 枝以上のため二枝用の参考点はありません。duration_summary の mean_interval_reason が no_statistical_bound なら、記述統計だけで平均の区間は null です。どちらの補足語も、それだけでは exit を変えません。
 
 ## 構造の出力
 
@@ -749,8 +906,9 @@ stages が無い旧出力は「段ごとの記録なし」と表示し、欠落�
 ## 複数案とその他の出力
 
 - compare は `plans[].report`、diff は `from.report` と `to.report` を持ちます。
-  最上位だけでなく各案の判定も報告してください。未対応の組合せでは、
-  案の report が violated でも比較自体は unsupported になります。
+  最上位だけでなく各案の判定も報告してください。合流を含むモデルの diff では、
+  案の report が `violated` でも最上位は `unsupported` になります。確認用ページはこの食い違いを照合しないため、`from.report.verdict` と `to.report.verdict` を直接読んでください。
+- 片方の案にだけ再送があり、再送が尽きた先の終端がもう片方に無ければ、compare は終端集合の不一致を `mismatch` に出し、`invalid`（exit 3）になります。同じ案を diff に渡したとき、応答不明が残り、優先される違反や不正がなければ `inconclusive`（exit 2）です。
 - compare の表、hard の採否、目的の比較を区別します。目的の良さで安全性違反を相殺しません。
   diff の `differences` は構造差分で、未計算の種類の不在を「変化なし」とは読めません。
 - mutate は `original` と生成した変更の結果を分けます。`run` が未完了のものや未対応種は

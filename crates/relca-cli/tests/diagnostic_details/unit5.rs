@@ -2,7 +2,7 @@ use super::{blocker, diagnostic, invoke, location};
 use serde_json::{Value, json};
 
 pub(super) const SEE: &str = "docs/guide/dsl.md#解析が未接続のとき";
-const BASE: &str = r#"model M version "0.2" {
+pub(super) const BASE: &str = r#"model M version "0.2" {
   type V = enum { ok }
   actor A { capacity 1; capability run() -> V { duration fixed 1min; result nondet { ok } } }
   cut C { include [A] }
@@ -13,7 +13,7 @@ const BASE: &str = r#"model M version "0.2" {
   verify safety no_resource_overcommit
 }
 "#;
-const DISTRIBUTION: &str = "arrivals distribution basis \"x\" { 1: fixed [0min] }";
+pub(super) const DISTRIBUTION: &str = "arrivals distribution basis \"x\" { 1: fixed [0min] }";
 
 fn row(role: &str, name: Option<&str>, line: usize, start: usize, end: usize) -> Value {
     blocker(role, name, location(line, start, line, end))
@@ -348,6 +348,56 @@ fn policy_merge() {
         "  at 1:1\n  kind: analysis_not_connected\n  cause: merge\n  blocked by: merge_binding v at 5:28\n  blocked by: feature at 6:3\n  see: docs/guide/dsl.md#解析が未接続のとき\n",
     );
     accepts("check", &control, &[], reason);
+}
+
+#[test]
+fn policy_merge_is_reported_once_across_scenarios() {
+    let source = BASE
+        .replace("r = A.run();", "r = A.run(); v = if r == ok { yield r } else { yield r };")
+        .replace("  bounds", "  case_priority fixed [0]\n  scenario S1 { policy observable priority descending }\n  scenario S2 {   policy observable priority descending }\n  bounds");
+    let message = "policy_feature_combination: policy ordering with merge is unsupported";
+    for args in [&[][..], &["--scenario", "S1"][..]] {
+        let result = invoke("check", &source, args);
+        let matching: Vec<_> = result.1["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["message"] == message)
+            .collect();
+        assert_eq!(matching.len(), 1, "{}", result.2);
+        assert_eq!(matching[0]["code"], "U-SEM-0");
+        assert_eq!(matching[0]["severity"], "error");
+        assert_eq!(matching[0]["span"], json!({"start":0,"end":550}));
+        assert_eq!(
+            result.2.matches(&format!("U-SEM-0: {message}\n")).count(),
+            1
+        );
+        assert_eq!(matching[0]["location"], location(1, 1, 13, 2));
+        assert_eq!(
+            matching[0]["detail"],
+            json!({
+                "reason":"policy_feature_combination", "cause":"merge", "kind":"analysis_not_connected", "see":SEE,
+                "blockers":[row("merge_binding", Some("v"), 5, 28, 29), row("feature", None, 7, 17, 54), row("feature", None, 8, 19, 56)]
+            })
+        );
+        let prefix = if args.is_empty() {
+            assert_eq!(result.0, 3);
+            assert_eq!(result.1["verdict"], "invalid");
+            assert_eq!(result.1["diagnostics"].as_array().unwrap().len(), 2);
+            "E-CONF-0: a scenario selector is required\n"
+        } else {
+            assert_eq!(result.0, 4);
+            assert_eq!(result.1["verdict"], "unsupported");
+            assert_eq!(result.1["diagnostics"].as_array().unwrap().len(), 1);
+            ""
+        };
+        assert_eq!(
+            result.2,
+            format!(
+                "{prefix}U-SEM-0: {message}\n  at 1:1\n  kind: analysis_not_connected\n  cause: merge\n  blocked by: merge_binding v at 5:28\n  blocked by: feature at 7:17\n  blocked by: feature at 8:19\n  see: {SEE}\n"
+            )
+        );
+    }
 }
 
 #[test]

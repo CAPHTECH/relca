@@ -343,9 +343,21 @@ fn lower_selected(
             Err(ds) => errors.extend(ds),
         }
     }
-    let mut unique = Vec::new();
-    for d in errors {
-        if !unique.contains(&d) {
+    let mut unique: Vec<Diagnostic> = Vec::new();
+    for mut d in errors {
+        // Presentation must not split a refusal that used to be shared across
+        // scenarios. Keep the first explanation and collect supporting sites;
+        // locate sorts and deduplicates the projected blockers.
+        if let Some(first) = unique.iter_mut().find(|first| {
+            (&first.code, first.severity, &first.message, first.span)
+                == (&d.code, d.severity, &d.message, d.span)
+        }) {
+            match (&mut first.presentation.detail, d.presentation.detail.take()) {
+                (Some(first), Some(mut other)) => first.blockers.append(&mut other.blockers),
+                (slot @ None, detail) => *slot = detail,
+                _ => (),
+            }
+        } else {
             unique.push(d);
         }
     }

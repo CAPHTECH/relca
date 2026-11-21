@@ -324,6 +324,7 @@ DIAGNOSTIC_CAUSES = {
     "sensitivity_fallback_projection": "感度分析の契約投影が代替操作に対応していない。",
     "sensitivity_contest_projection": "感度分析の契約投影が異議に対応していない。",
     "unresolved_choices": "標本実行の選択が解決されていない。",
+    "priority_tie_remaining": "優先順位が同じ候補が残り、標本実行の選択を決められない。",
     "fork_read_write": "並行分岐で読取りと書込みが競合している。",
     "fork_shared_write": "並行分岐の枝が同じ状態へ書き込む。",
     "cross_case_shared_write": "複数案件で共有する状態への競合書込みを解決できない。",

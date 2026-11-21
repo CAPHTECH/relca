@@ -9,6 +9,8 @@ mod unit5;
 mod unit6;
 #[path = "diagnostic_details/unit7.rs"]
 mod unit7;
+#[path = "diagnostic_details/unit8.rs"]
+mod unit8;
 
 fn check(source: &str, args: &[&str]) -> (i32, Value, String) {
     invoke("check", source, args)

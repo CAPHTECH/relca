@@ -1285,6 +1285,23 @@ class DiagnosticVocabularyTest(unittest.TestCase):
 class DiagnosticPageTest(unittest.TestCase):
     fixtures = HERE / 'testdata' / 'diagnostics'
 
+    def test_simulation_priority_tie_has_its_own_explanation(self):
+        model = ROOT / 'fixtures' / 'ld-priority-admission.broken-one-slot' / 'model.relca'
+        with tempfile.TemporaryDirectory() as tmp:
+            check, _, check_code = relca(tmp, 'priority-check', 'check', model)
+            out, err, code = relca(tmp, 'priority-tie', 'simulate', model)
+            self.assertEqual(code, 4)
+            with redirect_stdout(io.StringIO()):
+                text, _ = page(tmp, 'priority-tie', '--model', model, '--check', check,
+                               '--check-exit', check_code, '--simulate', out,
+                               '--simulate-exit', code, '--simulate-stderr', err, '--no-mermaid')
+        message = ('unresolved simulation nondeterminism: priority_tie_remaining: '
+                   'replication 1, time 2, cases [], sites []; at least two distinct successor actions remain')
+        detail = self.details(text, 'U-SEM-0', message, '4:3–4:42', origin='simulate')
+        rows = {plain(k): plain(v) for k, v in table_after(detail, '<h4')}
+        self.assertEqual(rows['原因'], 'priority_tie_remaining')
+        self.assertEqual(rows['原因の意味'], '優先順位が同じ候補が残り、標本実行の選択を決められない。')
+
     def capture(self, name, expected_exit, *opts, edit=None):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
